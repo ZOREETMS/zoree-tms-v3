@@ -1,0 +1,2687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Zoree OMS — Order Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root {
+  --bg:#f0f4ff; --bg2:#ffffff; --bg3:#f5f7ff; --bg4:#eef1fa;
+  --border:#e2e8f0; --border2:#d1d9ee;
+  --text:#1a1f36; --text2:#4a5578; --text3:#8b97bb;
+  --accent:#3b82f6; --accent2:#6366f1; --accent-glow:rgba(59,130,246,0.10);
+  --green:#059669; --green-dim:rgba(5,150,105,0.10);
+  --yellow:#d97706; --yellow-dim:rgba(217,119,6,0.10);
+  --red:#dc2626; --red-dim:rgba(220,38,38,0.10);
+  --cyan:#0891b2; --purple:#7c3aed;
+  --orange:#c2410c; --orange-dim:rgba(194,65,12,0.10);
+  --teal:#0f766e; --teal-dim:rgba(15,118,110,0.10);
+  --amber:#d97706; --amber2:#b45309;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;overflow:hidden;}
+
+/* ═══════════════ LOGIN SCREEN ═══════════════ */
+#login-screen{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a 0%,#1e2d6b 40%,#1a237e 70%,#283593 100%);}
+#login-screen.hidden{display:none;}
+.login-wrap{display:flex;flex-direction:column;align-items:center;gap:28px;}
+.login-brand{text-align:center;}
+.login-logo{font-family:'Syne',sans-serif;font-size:42px;font-weight:800;color:#fff;letter-spacing:-2px;}
+.login-logo span{background:linear-gradient(90deg,#93c5fd,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.login-tagline{font-size:12px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-top:6px;}
+.login-card{background:#fff;border-radius:16px;padding:36px 40px;width:400px;box-shadow:0 32px 80px rgba(0,0,0,0.4);}
+.login-card-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;margin-bottom:4px;}
+.login-card-sub{font-size:13px;color:var(--text3);margin-bottom:28px;}
+.lf{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
+.lf label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;}
+.lf input{background:var(--bg3);border:1.5px solid var(--border2);color:var(--text);border-radius:8px;padding:10px 14px;font-size:13.5px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s;width:100%;}
+.lf input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);background:#fff;}
+.login-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.3px;transition:all .2s;margin-top:4px;}
+.login-btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(59,130,246,.4);}
+.login-btn:active{transform:none;}
+.login-err{display:none;background:var(--red-dim);border:1px solid rgba(220,38,38,.2);color:var(--red);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;}
+.login-err.show{display:block;}
+.login-demo{margin-top:16px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text3);text-align:center;line-height:1.6;}
+.login-demo strong{color:var(--accent);}
+.login-footer{font-size:11px;color:rgba(255,255,255,.3);text-align:center;letter-spacing:.5px;}
+/* floating orbs */
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;pointer-events:none;}
+.orb1{width:400px;height:400px;background:#3b82f6;top:-100px;right:-100px;}
+.orb2{width:300px;height:300px;background:#6366f1;bottom:-80px;left:-80px;}
+.orb3{width:200px;height:200px;background:#8b5cf6;top:40%;left:20%;}
+
+/* ═══════════════ APP SHELL ═══════════════ */
+#app{display:flex;height:100vh;overflow:hidden;}
+#app.hidden{display:none;}
+
+/* ═══════════════ SIDEBAR ═══════════════ */
+.sidebar{width:220px;min-width:220px;background:linear-gradient(160deg,#1e2d6b 0%,#1a237e 40%,#283593 100%);border-right:none;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;box-shadow:4px 0 20px rgba(30,45,107,0.15);position:relative;}
+.sidebar-logo{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,0.1);}
+.logo-word{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px;}
+.logo-sub{font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;}
+.nav-section{padding:14px 10px 6px;}
+.nav-label{font-size:10px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1.2px;text-transform:uppercase;padding:0 8px 8px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,0.65);font-size:13.5px;transition:all 0.15s;margin-bottom:1px;position:relative;user-select:none;}
+.nav-item:hover{background:rgba(255,255,255,0.12);color:#fff;}
+.nav-item.active{background:rgba(255,255,255,0.18);color:#fff;font-weight:600;}
+.nav-item.active::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;background:#93c5fd;border-radius:0 2px 2px 0;}
+.nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;font-family:'JetBrains Mono',monospace;}
+.nav-badge.yellow{background:var(--yellow);}
+.nav-badge.red{background:var(--red);}
+.nav-badge.green{background:var(--green);}
+.sidebar-footer{margin-top:auto;padding:14px;border-top:1px solid rgba(255,255,255,0.1);}
+.user-chip{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.1);}
+.user-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+.user-name{font-size:12.5px;font-weight:600;color:#fff;}
+.user-role{font-size:10px;color:rgba(255,255,255,.4);margin-top:1px;}
+.signout-link{margin-top:8px;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,0.45);font-size:12px;transition:all .15s;}
+.signout-link:hover{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);}
+.tms-pill{display:flex;align-items:center;gap:7px;margin:8px 0 4px;padding:7px 10px;border-radius:8px;background:rgba(5,150,105,0.15);border:1px solid rgba(5,150,105,0.3);cursor:default;}
+.tled{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);flex-shrink:0;animation:tpulse 2s infinite;}
+.tled.off{background:var(--red);box-shadow:0 0 6px var(--red);animation:none;}
+@keyframes tpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ttxt{font-size:11px;color:rgba(255,255,255,.6);font-weight:500;}
+
+/* ═══════════════ MAIN ═══════════════ */
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg);}
+.page{display:none;flex-direction:column;flex:1;}
+.page.active{display:flex;}
+
+/* ═══════════════ PIPELINE BAR ═══════════════ */
+.pipeline{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid var(--border);overflow-x:auto;flex-shrink:0;}
+.ps{display:flex;align-items:center;gap:5px;padding:10px 11px;cursor:pointer;border-bottom:3px solid transparent;transition:all .15s;flex-shrink:0;white-space:nowrap;}
+.ps:hover{background:var(--bg3);}
+.ps.on{border-bottom-color:var(--accent);background:var(--accent-glow);}
+.ps-num{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);font-weight:600;opacity:.7;}
+.ps-lbl{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.2px;}
+.ps.on .ps-lbl{color:var(--accent);}
+.ps-cnt{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;background:var(--bg4);color:var(--text3);padding:1px 6px;border-radius:20px;}
+.ps.on .ps-cnt{background:var(--accent);color:#fff;}
+.ps-cnt.g{background:var(--green-dim);color:var(--green);}
+.pipe-div{width:1px;background:var(--border);flex-shrink:0;margin:8px 0;}
+
+/* ═══════════════ PAGE HEADER ═══════════════ */
+.page-header{padding:18px 28px 14px;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:10;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;box-shadow:0 1px 8px rgba(30,45,107,0.06);flex-wrap:wrap;flex-shrink:0;}
+.page-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;}
+.page-sub{font-size:12px;color:var(--text3);margin-top:2px;}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+/* ═══════════════ KPI ROW ═══════════════ */
+.kpi-row{display:flex;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;}
+.kpi{flex:1;min-width:100px;padding:14px 18px;border-right:1px solid var(--border);}
+.kpi:last-child{border-right:none;}
+.kl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin-bottom:3px;}
+.kv{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
+.ks{font-size:11px;color:var(--text3);margin-top:2px;}
+
+/* ═══════════════ TOOLBAR ═══════════════ */
+.tbar{display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);background:#fff;flex-wrap:wrap;flex-shrink:0;}
+.tbar-sp{flex:1;}
+.search-wrap{position:relative;display:flex;align-items:center;}
+.search-wrap svg{position:absolute;left:9px;pointer-events:none;color:var(--text3);}
+.search-input{background:#fff;border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:7px 12px 7px 30px;font-size:13px;font-family:inherit;width:210px;outline:none;box-shadow:0 1px 4px rgba(30,45,107,0.06);}
+.search-input:focus{border-color:var(--accent);}
+.fsel{background:#fff;border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;cursor:pointer;box-shadow:0 1px 4px rgba(30,45,107,0.06);}
+
+/* ═══════════════ BUTTONS ═══════════════ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all 0.15s;font-family:inherit;}
+.btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:#2563eb;}
+.btn-secondary{background:#f0f4ff;color:var(--text2);border:1px solid var(--border2);}.btn-secondary:hover{background:#e2e8f0;}
+.btn-ghost{background:transparent;color:var(--accent);padding:6px 10px;font-weight:500;}.btn-ghost:hover{color:var(--accent2);background:rgba(99,102,241,0.08);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+.btn-success{background:var(--green-dim);color:var(--green);border:1px solid rgba(5,150,105,0.2);}.btn-success:hover{background:rgba(5,150,105,0.18);}
+.btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.2);}.btn-danger:hover{background:rgba(220,38,38,0.18);}
+.btn-warn{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(217,119,6,0.2);}.btn-warn:hover{background:rgba(217,119,6,0.18);}
+.btn-purple{background:rgba(124,58,237,.1);color:var(--purple);border:1px solid rgba(124,58,237,.2);}.btn-purple:hover{background:rgba(124,58,237,.18);}
+
+/* ═══════════════ TABLE ═══════════════ */
+.tw{flex:1;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;}
+thead tr{border-bottom:2px solid var(--border);background:#f8faff;position:sticky;top:0;z-index:2;}
+th{text-align:left;padding:10px 14px;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;font-weight:700;white-space:nowrap;background:#f8faff;}
+td{padding:11px 14px;font-size:13px;color:var(--text2);border-bottom:1px solid var(--border);}
+tbody tr:hover td{background:var(--bg3);cursor:pointer;}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
+.acts{display:flex;gap:4px;flex-wrap:wrap;}
+.empty-state{display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px;color:var(--text3);gap:8px;flex:1;}
+.empty-state.show{display:flex;}
+.ei{font-size:40px;opacity:.25;}
+.et{font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;}
+
+/* ═══════════════ BADGES ═══════════════ */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;letter-spacing:.2px;}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;}
+/* O2S stage badges */
+.s1{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;}.s1::before{background:#94a3b8;}
+.s2{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;}.s2::before{background:#3b82f6;}
+.s3{background:#ede9fe;color:#4c1d95;border:1px solid #c4b5fd;}.s3::before{background:#7c3aed;}
+.s4{background:#fef3c7;color:#78350f;border:1px solid #fcd34d;}.s4::before{background:#d97706;}
+.s5{background:#e0f2fe;color:#0c4a6e;border:1px solid #7dd3fc;}.s5::before{background:#0891b2;}
+.s6{background:#ccfbf1;color:#064e3b;border:1px solid #6ee7b7;}.s6::before{background:#059669;}
+.s7{background:#ffedd5;color:#7c2d12;border:1px solid #fdba74;}.s7::before{background:#ea580c;}
+.s8{background:#fef9c3;color:#713f12;border:1px solid #fde047;}.s8::before{background:#ca8a04;}
+.s9{background:#ede9fe;color:#3730a3;border:1px solid #a5b4fc;}.s9::before{background:#6366f1;}
+.s10{background:#d1fae5;color:#064e3b;border:1px solid #6ee7b7;}.s10::before{background:#059669;}
+.s11{background:#dcfce7;color:#14532d;border:1px solid #86efac;}.s11::before{background:#16a34a;}
+.s-hold{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5;}.s-hold::before{background:#dc2626;}
+/* inv badges */
+.stg-ok{background:#d1fae5;color:#064e3b;border:1px solid #6ee7b7;}.stg-ok::before{background:#059669;}
+.stg-lo{background:#fef9c3;color:#713f12;border:1px solid #fde047;}.stg-lo::before{background:#ca8a04;}
+.stg-ot{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5;}.stg-ot::before{background:#dc2626;}
+/* credit */
+.stg-appr{background:#d1fae5;color:#064e3b;border:1px solid #6ee7b7;}.stg-appr::before{background:#059669;}
+.stg-hold{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5;}.stg-hold::before{background:#dc2626;}
+.stg-pre{background:#fef9c3;color:#713f12;border:1px solid #fde047;}.stg-pre::before{background:#ca8a04;}
+
+/* ═══════════════ MODAL ═══════════════ */
+.ov{display:none;position:fixed;inset:0;background:rgba(30,45,107,.45);backdrop-filter:blur(6px);z-index:100;align-items:center;justify-content:center;}
+.ov.on{display:flex;}
+.modal{background:#fff;border:1px solid var(--border);border-radius:16px;width:620px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(30,45,107,0.22);animation:mslide .2s ease;}
+@keyframes mslide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.modal-header{padding:20px 24px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#fff;z-index:2;}
+.modal-icon{font-size:20px;}
+.modal-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;flex:1;}
+.modal-stage{font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:'JetBrains Mono',monospace;font-weight:600;}
+.modal-close{background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1;padding:4px;border-radius:6px;font-family:inherit;}
+.modal-close:hover{color:var(--text);background:var(--bg4);}
+.modal-body{padding:22px 24px;display:flex;flex-direction:column;gap:14px;}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:var(--bg3);border-radius:0 0 16px 16px;position:sticky;bottom:0;}
+/* forms */
+.fr{display:grid;gap:12px;}
+.f2{grid-template-columns:1fr 1fr;}.f3{grid-template-columns:1fr 1fr 1fr;}.f4{grid-template-columns:1fr 1fr 1fr 1fr;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;}
+input,select,textarea{background:#f8faff;border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);background:#fff;}
+input::placeholder{color:var(--text3);}
+input:read-only{background:var(--bg4);color:var(--text3);cursor:default;}
+textarea{resize:vertical;min-height:60px;}
+/* note boxes */
+.note{border-radius:10px;padding:11px 14px;font-size:12.5px;line-height:1.7;border-left:3px solid;}
+.note-blue{background:var(--accent-glow);border-left-color:var(--accent);color:#1e3a8a;}
+.note-green{background:var(--green-dim);border-left-color:var(--green);color:#064e3b;}
+.note-yellow{background:var(--yellow-dim);border-left-color:var(--yellow);color:#78350f;}
+.note-red{background:var(--red-dim);border-left-color:var(--red);color:#7f1d1d;}
+/* info grid */
+.ifg{display:grid;gap:8px;}.ifg2{grid-template-columns:1fr 1fr;}.ifg3{grid-template-columns:1fr 1fr 1fr;}.ifg4{grid-template-columns:repeat(4,1fr);}
+.ifc{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;}
+.ifl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:3px;}
+.ifv{font-weight:600;font-size:13px;color:var(--text);}
+/* line items table */
+.lit{width:100%;border-collapse:collapse;font-size:12px;}
+.lit th{padding:7px 10px;background:var(--bg4);color:var(--text3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);}
+.lit td{padding:5px 7px;border-bottom:1px solid var(--border);}
+.lit input,.lit select{padding:5px 8px;font-size:12px;border-radius:6px;}
+.avok{color:var(--green);font-weight:700;font-family:'JetBrains Mono',monospace;}
+.avlo{color:var(--yellow);font-weight:700;font-family:'JetBrains Mono',monospace;}
+.avno{color:var(--red);font-weight:700;font-family:'JetBrains Mono',monospace;}
+
+/* ═══════════════ KANBAN ═══════════════ */
+.kanban{display:flex;gap:14px;padding:18px 20px;overflow-x:auto;align-items:flex-start;flex:1;}
+.kcol{flex-shrink:0;width:270px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(30,45,107,.06);}
+.kch{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--bg3);}
+.kct{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;flex:1;}
+.kcn{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--accent-glow);color:var(--accent);font-family:'JetBrains Mono',monospace;}
+.kcards{padding:8px;display:flex;flex-direction:column;gap:6px;min-height:50px;}
+.kcard{background:#fff;border:1px solid var(--border2);border-radius:10px;padding:11px 12px;cursor:pointer;transition:all .15s;box-shadow:0 1px 3px rgba(30,45,107,.05);}
+.kcard:hover{box-shadow:0 4px 12px rgba(30,45,107,.12);transform:translateY(-1px);}
+.kcard.s6{border-left:3px solid #059669;}.kcard.s7{border-left:3px solid #ea580c;}.kcard.s8{border-left:3px solid #ca8a04;}.kcard.s9{border-left:3px solid #6366f1;}
+.kid{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);margin-bottom:4px;}
+.kcu{font-weight:700;font-size:13px;}
+.kde{font-size:11px;color:var(--text3);margin:2px 0 8px;}
+.kft{display:flex;justify-content:space-between;align-items:center;}
+.km{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+
+/* ═══════════════ INVENTORY GRID ═══════════════ */
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:12px;padding:18px 20px;}
+.icard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;box-shadow:0 2px 8px rgba(30,45,107,.05);position:relative;overflow:hidden;}
+.icard:hover{box-shadow:0 6px 18px rgba(30,45,107,.1);transform:translateY(-2px);}
+.icard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;}
+.ic-ok::before{background:var(--green);}
+.ic-lo::before{background:var(--yellow);}
+.ic-ot::before{background:var(--red);}
+.iid{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px;}
+.inm{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;line-height:1.3;margin-bottom:2px;}
+.icu{font-size:11px;color:var(--text3);margin-bottom:10px;}
+.ibar{background:var(--bg4);border-radius:3px;height:5px;margin-bottom:4px;overflow:hidden;}
+.ifill{height:100%;border-radius:3px;}
+.inum{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+.ift{display:flex;justify-content:space-between;align-items:center;}
+.ibin{font-size:9px;font-family:'JetBrains Mono',monospace;background:var(--bg3);color:var(--text3);border:1px solid var(--border);padding:2px 6px;border-radius:4px;}
+
+/* ═══════════════ TOAST ═══════════════ */
+.toast-wrap{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:6px;z-index:9999;}
+.toast{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(30,45,107,0.15);min-width:260px;animation:tsIn .2s ease;font-size:13px;}
+@keyframes tsIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+.tok{border-left:3px solid var(--green);}
+.ter{border-left:3px solid var(--red);}
+.tin{border-left:3px solid var(--accent);}
+.twn{border-left:3px solid var(--yellow);}
+
+/* ═══════════════ PICK CHECKLIST ═══════════════ */
+.chk-item{display:flex;align-items:flex-start;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border);}
+.chk-item:last-child{border-bottom:none;}
+.chk-cb{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-top:2px;}
+.chk-nm{font-weight:600;font-size:13px;}
+.chk-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.chk-qty{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--accent);}
+
+/* ═══════════════ SCROLLBAR ═══════════════ */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+/* ── Order Detail Drawer ── */
+#ord-detail-drawer.open { right: 0 !important; }
+#ord-detail-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:2999;backdrop-filter:blur(1px); }
+#ord-detail-overlay.show { display:block; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN ══════════════ -->
+<div id="login-screen">
+  <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+  <div class="login-wrap">
+    <div class="login-brand">
+      <div class="login-logo">zoree <span>OMS</span></div>
+      <div class="login-tagline">Order Management System</div>
+    </div>
+    <div class="login-card">
+      <div class="login-card-title">Welcome back</div>
+      <div class="login-card-sub">Sign in to access your operations dashboard</div>
+      <div class="login-err" id="lerr">Invalid email or password. Please try again.</div>
+      <div class="lf"><label>Username</label><input type="text" id="lem" placeholder="admin" autocomplete="off"></div>
+      <div class="lf"><label>Password</label><input type="password" id="lpw" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="login-btn" onclick="doLogin()">Sign In →</button>
+      <div class="login-demo">Username: <strong>admin</strong> &nbsp;·&nbsp; Password: <strong>zoree2024</strong></div>
+    </div>
+    <div class="login-footer">© 2024 Zoree LLC · Smarter Logistics. Closer Teams.</div>
+  </div>
+</div>
+
+<!-- ══════════════ APP ══════════════ -->
+<div id="app" class="hidden">
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-word">zoree</div>
+    <div class="logo-sub">OMS PLATFORM &nbsp;<span style="font-size:9px;opacity:.4">v2.0</span></div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Overview</div>
+    <div class="nav-item active" data-page="orders" onclick="gp('orders')"><span class="nav-icon">📊</span> Dashboard</div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Order Management</div>
+    <div class="nav-item" data-page="orders" onclick="gp('orders')"><span class="nav-icon">🧾</span> Sales Orders <span class="nav-badge yellow" id="b-o">0</span></div>
+    <div class="nav-item" data-page="inventory" onclick="gp('inventory')"><span class="nav-icon">📦</span> Inventory <span class="nav-badge" id="b-i">0</span></div>
+    <div class="nav-item" data-page="customers" onclick="gp('customers')"><span class="nav-icon">🏢</span> Customers</div>
+    <div class="nav-item" data-page="locations" onclick="gp('locations')"><span class="nav-icon">📍</span> Locations</div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Warehouse & Delivery</div>
+    <div class="nav-item" data-page="warehouse" onclick="gp('warehouse')"><span class="nav-icon">🏭</span> Warehouse Ops <span class="nav-badge" id="b-w">0</span></div>
+    <div class="nav-item" data-page="delivery" onclick="gp('delivery')"><span class="nav-icon">🗺️</span> Delivery Track <span class="nav-badge red" id="b-d">0</span></div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">System</div>
+    <div class="nav-item" data-page="middleware" onclick="gp('middleware')"><span class="nav-icon">🔗</span> Middleware Config</div>
+  </div>
+
+  <div class="sidebar-footer">
+    <!-- Dual connection status -->
+    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px">
+      <div class="tms-pill" style="gap:7px">
+        <div class="tled" id="tled-oms"></div>
+        <div class="ttxt" id="ttxt-oms">OMS DB</div>
+      </div>
+      <div class="tms-pill" style="gap:7px">
+        <div class="tled" id="tled-tms"></div>
+        <div class="ttxt" id="ttxt-tms">TMS DB</div>
+      </div>
+    </div>
+    <div class="signout-link" onclick="doSignOut()"><span>⬡</span> Sign out</div>
+    <div class="user-chip" style="margin-top:8px;">
+      <div class="user-avatar" id="uavt">AU</div>
+      <div>
+        <div class="user-name" id="uname">Admin User</div>
+        <div class="user-role" id="urole">OMS Administrator</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+
+<!-- ══ PIPELINE BAR (always visible) ══ -->
+<div class="pipeline" id="pipeline">
+  <div class="ps on" data-stage="0" onclick="filterStage(0)"><span class="ps-lbl" style="color:var(--accent);font-weight:700">All</span></div>
+  <div class="pipe-div"></div>
+  <div class="ps" data-stage="1"  onclick="filterStage(1)"><span class="ps-num">01</span><span class="ps-lbl">Draft</span><span class="ps-cnt" id="ps1">0</span></div>
+  <div class="ps" data-stage="2"  onclick="filterStage(2)"><span class="ps-num">02</span><span class="ps-lbl">Booked</span><span class="ps-cnt" id="ps2">0</span></div>
+  <div class="ps" data-stage="3"  onclick="filterStage(3)"><span class="ps-num">03</span><span class="ps-lbl">Reserved</span><span class="ps-cnt" id="ps3">0</span></div>
+  <div class="pipe-div"></div>
+  <div class="ps" data-stage="4"  onclick="filterStage(4)"><span class="ps-num">04</span><span class="ps-lbl">Rel. TMS</span><span class="ps-cnt" id="ps4">0</span></div>
+  <div class="ps" data-stage="5"  onclick="filterStage(5)"><span class="ps-num">05</span><span class="ps-lbl">TMS Planned</span><span class="ps-cnt" id="ps5">0</span></div>
+  <div class="pipe-div"></div>
+  <div class="ps" data-stage="6"  onclick="filterStage(6)"><span class="ps-num">06</span><span class="ps-lbl">BOL Confirmed</span><span class="ps-cnt" id="ps6">0</span></div>
+  <div class="ps" data-stage="7"  onclick="filterStage(7)"><span class="ps-num">07</span><span class="ps-lbl">Picking</span><span class="ps-cnt" id="ps7">0</span></div>
+  <div class="ps" data-stage="8"  onclick="filterStage(8)"><span class="ps-num">08</span><span class="ps-lbl">Packed</span><span class="ps-cnt" id="ps8">0</span></div>
+  <div class="ps" data-stage="9"  onclick="filterStage(9)"><span class="ps-num">09</span><span class="ps-lbl">Staged</span><span class="ps-cnt" id="ps9">0</span></div>
+  <div class="pipe-div"></div>
+  <div class="ps" data-stage="10" onclick="filterStage(10)"><span class="ps-num">10</span><span class="ps-lbl">Shipped</span><span class="ps-cnt g" id="ps10">0</span></div>
+  <div class="ps" data-stage="11" onclick="filterStage(11)"><span class="ps-num">11</span><span class="ps-lbl">Delivered</span><span class="ps-cnt g" id="ps11">0</span></div>
+</div>
+
+<!-- ══ ORDERS PAGE ══ -->
+<div class="page active" id="pg-orders">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Sales Orders</div>
+      <div class="page-sub" id="stg-lbl">Order-to-Ship · All Stages</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="doSync()">↻ Sync TMS</button>
+      <button class="btn btn-primary btn-sm" onclick="openOM(null)">+ New Order</button>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kl">Total</div><div class="kv" id="k-tot">0</div></div>
+    <div class="kpi"><div class="kl">Draft</div><div class="kv" id="k-d" style="color:var(--text3)">0</div></div>
+    <div class="kpi"><div class="kl">In Progress</div><div class="kv" id="k-ip" style="color:var(--accent)">0</div></div>
+    <div class="kpi"><div class="kl">With TMS</div><div class="kv" id="k-tms" style="color:var(--cyan)">0</div></div>
+    <div class="kpi"><div class="kl">Warehouse</div><div class="kv" id="k-wh" style="color:var(--orange)">0</div></div>
+    <div class="kpi"><div class="kl">Shipped</div><div class="kv" id="k-sh" style="color:var(--green)">0</div></div>
+    <div class="kpi"><div class="kl">On Hold</div><div class="kv" id="k-ho" style="color:var(--red)">0</div></div>
+  </div>
+  <div class="tbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search-input" id="sq" placeholder="Search orders, customer, dest…" oninput="ro()">
+    </div>
+    <select class="fsel" id="fc" onchange="ro()"><option value="">All Customers</option></select>
+    <div class="tbar-sp"></div>
+    <span style="font-size:12px;color:var(--text3)" id="o-count"></span>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>Order #</th><th>Customer</th><th>Ship To</th><th>Lines</th>
+        <th>Weight</th><th>Due Date</th><th>Stage</th>
+        <th>BOL / PRO</th><th>TMS Ref</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="otb"></tbody>
+    </table>
+    <div class="empty-state" id="oe"><div class="ei">🧾</div><div class="et">No orders found</div></div>
+  </div>
+</div>
+
+<!-- ══ INVENTORY PAGE ══ -->
+<div class="page" id="pg-inventory">
+  <div class="page-header">
+    <div><div class="page-title">Inventory</div><div class="page-sub">Item Master · Stock Levels · Reservations</div></div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="syncItems()">↻ Sync TMS Items</button>
+      <button class="btn btn-primary btn-sm" onclick="openIM(null)">+ Add Item</button>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kl">Total SKUs</div><div class="kv" id="ik-t">0</div></div>
+    <div class="kpi"><div class="kl">In Stock</div><div class="kv" id="ik-o" style="color:var(--green)">0</div></div>
+    <div class="kpi"><div class="kl">Low Stock</div><div class="kv" id="ik-l" style="color:var(--yellow)">0</div></div>
+    <div class="kpi"><div class="kl">Out of Stock</div><div class="kv" id="ik-x" style="color:var(--red)">0</div></div>
+    <div class="kpi"><div class="kl">Reserved Units</div><div class="kv" id="ik-r" style="color:var(--purple)">0</div></div>
+    <div class="kpi"><div class="kl">Total Value</div><div class="kv" id="ik-v" style="color:var(--accent);font-size:16px">$0</div></div>
+  </div>
+  <div class="tbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search-input" id="si" placeholder="Search items…" oninput="ri()">
+    </div>
+    <select class="fsel" id="fi" onchange="ri()">
+      <option value="">All Stock</option><option value="ok">In Stock</option>
+      <option value="lo">Low Stock</option><option value="ot">Out of Stock</option>
+    </select>
+    <div class="tbar-sp"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;"><div id="igr" class="igrid"></div></div>
+  <div class="empty-state" id="ie"><div class="ei">📦</div><div class="et">No items found</div></div>
+</div>
+
+<!-- ══ WAREHOUSE PAGE ══ -->
+<div class="page" id="pg-warehouse">
+  <div class="page-header">
+    <div><div class="page-title">Warehouse Operations</div><div class="page-sub">Pick · Pack · Stage · Load</div></div>
+    <div class="header-actions">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="search-input" id="sw" placeholder="Search…" oninput="rw()">
+      </div>
+    </div>
+  </div>
+  <div id="kb" class="kanban"></div>
+</div>
+
+<!-- ══ DELIVERY PAGE ══ -->
+<div class="page" id="pg-delivery">
+  <div class="page-header">
+    <div><div class="page-title">Delivery Tracking</div><div class="page-sub">In Transit · POD · EDI Events</div></div>
+    <div class="header-actions">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="search-input" id="sd" placeholder="Search…" oninput="rd()">
+      </div>
+    </div>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Order #</th><th>Customer</th><th>Destination</th><th>Carrier</th><th>BOL #</th><th>PRO #</th><th>Ship Date</th><th>Est. Delivery</th><th>Stage</th><th>EDI Events</th><th>Actions</th></tr></thead>
+      <tbody id="dtb"></tbody>
+    </table>
+    <div class="empty-state" id="de"><div class="ei">🗺️</div><div class="et">No active deliveries</div></div>
+  </div>
+</div>
+
+<!-- ══ CUSTOMERS PAGE ══ -->
+<div class="page" id="pg-customers">
+  <div class="page-header">
+    <div><div class="page-title">Customers</div><div class="page-sub">Customer Master · Credit · Contacts</div></div>
+    <div class="header-actions">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="search-input" id="sc" placeholder="Search customers…" oninput="rc()">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openCM(null)">+ Add Customer</button>
+    </div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>City / State</th><th>Credit Status</th><th>Orders</th><th>Actions</th></tr></thead>
+    <tbody id="ctb"></tbody>
+  </table></div>
+</div>
+
+<!-- ══ LOCATIONS PAGE ══ -->
+<div class="page" id="pg-locations">
+  <div class="page-header">
+    <div><div class="page-title">Warehouse Locations</div><div class="page-sub">DCs · Warehouses · Cross-Docks</div></div>
+    <div class="header-actions">
+      <button class="btn btn-primary btn-sm" onclick="openLM(null)">+ Add Location</button>
+    </div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Address</th><th>City</th><th>State</th><th>ZIP</th><th>Dock Doors</th><th>Actions</th></tr></thead>
+    <tbody id="ltb"></tbody>
+  </table></div>
+</div>
+
+
+</div><!-- .main ends pg-locations -->
+
+<!-- ══════════════ MIDDLEWARE CONFIG PAGE ══════════════ -->
+<div class="page" id="pg-middleware">
+  <div class="page-header">
+    <div>
+      <div class="page-title">🔗 Middleware Configuration</div>
+      <div class="page-sub">OMS ↔ TMS integration · Field mappings · Connection health</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="mwTestConnections()">⚡ Test Connections</button>
+      <button class="btn btn-primary btn-sm" onclick="mwSaveConfig()">💾 Save Config</button>
+    </div>
+  </div>
+
+  <!-- Connection cards -->
+  <div style="padding:24px;display:flex;flex-direction:column;gap:20px;overflow-y:auto">
+
+    <!-- Status row -->
+    <div class="kpi-row" style="gap:14px">
+      <div class="stat-card" id="mw-oms-card">
+        <div class="stat-label">OMS Database</div>
+        <div class="stat-val" id="mw-oms-status" style="font-size:16px">—</div>
+        <div class="stat-sub" id="mw-oms-url" style="font-family:monospace;font-size:10px;word-break:break-all">Not tested</div>
+      </div>
+      <div class="stat-card" id="mw-tms-card">
+        <div class="stat-label">TMS Database</div>
+        <div class="stat-val" id="mw-tms-status" style="font-size:16px">—</div>
+        <div class="stat-sub" id="mw-tms-url" style="font-family:monospace;font-size:10px;word-break:break-all">Not tested</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Last Sync</div>
+        <div class="stat-val" id="mw-last-sync" style="font-size:16px">—</div>
+        <div class="stat-sub" id="mw-sync-detail">Never</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Middleware Version</div>
+        <div class="stat-val" style="font-size:16px;color:var(--accent)">v1.0</div>
+        <div class="stat-sub">ZoreeMiddleware class</div>
+      </div>
+    </div>
+
+    <!-- Config panels -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <!-- OMS DB config -->
+      <div class="card" style="padding:20px">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+          OMS Database (oms_* tables)
+        </div>
+        <div class="fg"><label>Supabase Project URL</label>
+          <input id="cfg-oms-url" placeholder="https://xxxx.supabase.co" style="font-family:monospace;font-size:12px">
+        </div>
+        <div class="fg"><label>Anon / Service Key</label>
+          <input id="cfg-oms-key" type="password" placeholder="eyJhbGci..." style="font-family:monospace;font-size:11px">
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:6px;font-size:11px;color:var(--text2)">
+          <strong>Tables owned:</strong> oms_orders · oms_order_lines · oms_customers · oms_locations · oms_inventory · oms_stage_log · oms_inv_transactions · oms_dock_schedule
+        </div>
+      </div>
+
+      <!-- TMS DB config -->
+      <div class="card" style="padding:20px">
+        <div style="font-weight:700;color:var(--teal);margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--teal);display:inline-block"></span>
+          TMS Database (read + status writes)
+        </div>
+        <div class="fg"><label>Supabase Project URL</label>
+          <input id="cfg-tms-url" placeholder="https://yyyy.supabase.co" style="font-family:monospace;font-size:12px">
+        </div>
+        <div class="fg"><label>Anon / Service Key</label>
+          <input id="cfg-tms-key" type="password" placeholder="eyJhbGci..." style="font-family:monospace;font-size:11px">
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:6px;font-size:11px;color:var(--text2)">
+          <strong>OMS reads:</strong> orders · shipments · items<br>
+          <strong>OMS writes:</strong> orders.status (release) · shipments.status (ship/POD)
+        </div>
+      </div>
+    </div>
+
+    <!-- Field mapping reference table -->
+    <div class="card" style="padding:20px">
+      <div style="font-weight:700;margin-bottom:14px;font-size:13px">📋 Field Mapping Contract</div>
+      <table style="font-size:12px;width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--bg2)">
+            <th style="padding:8px;text-align:left;color:var(--text2);font-weight:600;border-bottom:1px solid var(--border)">Direction</th>
+            <th style="padding:8px;text-align:left;color:var(--accent);font-weight:600;border-bottom:1px solid var(--border)">OMS Field (oms_orders)</th>
+            <th style="padding:8px;text-align:left;color:var(--teal);font-weight:600;border-bottom:1px solid var(--border)">TMS Field</th>
+            <th style="padding:8px;text-align:left;color:var(--text2);font-weight:600;border-bottom:1px solid var(--border)">Transform</th>
+            <th style="padding:8px;text-align:left;color:var(--text2);font-weight:600;border-bottom:1px solid var(--border)">Trigger</th>
+          </tr>
+        </thead>
+        <tbody id="mw-map-table">
+          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct (shared natural key)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
+          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">customer_id (UUID)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.customer</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">UUID → custName() lookup</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
+          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">origin_location</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.origin</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
+          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">lines[].qty × lines[].wt</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.weight</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Sum of line weights</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
+          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">lines[].qty (sum)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.pieces</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Sum of line quantities</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
+          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">tms_shipment_id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.shipment_id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct — triggers Stage 4→5</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
+          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">carrier</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.carrier</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
+          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">pickup_date</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.pickup_date</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
+          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">estimated_delivery</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.delivery_date</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
+          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">'In Transit' (derived)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.status</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Hardcoded status string</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 9 → 10</td></tr>
+          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">'Delivered' + delivered_at</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.status + delivered_at</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Hardcoded status string</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 10 → 11</td></tr>
+          <tr style="background:var(--bg2)"><td style="padding:7px 8px"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;font-family:monospace;color:var(--accent)">inv weight/value (enrich only)</td><td style="padding:7px 8px;font-family:monospace;color:var(--teal)">items.weight_unit / value_unit</td><td style="padding:7px 8px;color:var(--text2)">Enriches matching OMS items only</td><td style="padding:7px 8px">Sync</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Middleware log -->
+    <div class="card" style="padding:20px">
+      <div style="font-weight:700;margin-bottom:12px;font-size:13px;display:flex;align-items:center;justify-content:space-between">
+        📟 Middleware Event Log
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('mw-log').innerHTML=''">Clear</button>
+      </div>
+      <div id="mw-log" style="font-family:monospace;font-size:11px;background:var(--bg2);border-radius:6px;padding:12px;min-height:80px;max-height:200px;overflow-y:auto;color:var(--text2);line-height:1.8">
+        <span style="color:var(--text3)">No events yet — run a sync or perform a stage action</span>
+      </div>
+    </div>
+
+  </div>
+</div><!-- pg-middleware -->
+
+</div><!-- .main -->
+</div><!-- #app -->
+
+<!-- ══════════════ MODALS ══════════════ -->
+<!-- ORDER ENTRY -->
+<div class="ov" id="m-o"><div class="modal" style="width:720px">
+  <div class="modal-header"><span class="modal-icon">🧾</span><span class="modal-title" id="om-ti">New Sales Order</span><span class="modal-stage">Stage 1 — Entry</span><button class="modal-close" onclick="cl('m-o')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-blue"><strong>Stage 1 — Sales Order Entry:</strong> Enter ship-to, line items and delivery date. Click <em>Book Order</em> to confirm and check availability.</div>
+    <div class="fr f3">
+      <div class="fg"><label>Order #</label><input id="oi" readonly></div>
+      <div class="fg"><label>Customer *</label><select id="oc"></select></div>
+      <div class="fg"><label>PO Number</label><input id="opo" placeholder="Customer PO#"></div>
+    </div>
+    <div class="fr f3">
+      <div class="fg"><label>Ship From</label><select id="og" onchange="onShipFromChange(this.value)"></select><div id="og-zip" style="font-size:11px;color:var(--text3);margin-top:4px;font-family:monospace;min-height:16px"></div></div>
+      <div class="fg"><label>Ship To *</label>
+        <div style="position:relative" id="shipto-wrap">
+          <!-- Search input -->
+          <div style="position:relative;display:flex;align-items:center;gap:6px">
+            <div style="position:relative;flex:1">
+              <input id="odt-search" placeholder="🔍 Search locations or type address…"
+                autocomplete="off"
+                oninput="shipToSearch(this.value)"
+                onfocus="shipToSearch(this.value)"
+                style="width:100%;padding-right:28px"
+              >
+              <span id="odt-clear" onclick="shipToClear()" title="Clear"
+                style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:#94a3b8;font-size:14px;display:none">✕</span>
+            </div>
+          </div>
+          <!-- Selected badge -->
+          <div id="odt-badge" style="display:none;margin-top:5px;padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;display:none;align-items:center;justify-content:space-between">
+            <div>
+              <span id="odt-badge-name" style="font-weight:600;color:#1e40af"></span>
+              <span id="odt-badge-addr" style="color:#64748b;margin-left:6px"></span>
+            </div>
+            <span onclick="shipToClear()" style="cursor:pointer;color:#94a3b8;font-size:13px;margin-left:8px">✕</span>
+          </div>
+          <!-- Dropdown results -->
+          <div id="odt-results"
+            style="display:none;position:absolute;z-index:999;width:100%;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);margin-top:2px;left:0">
+          </div>
+          <!-- Hidden value fields -->
+          <input type="hidden" id="odt" value="">
+          <input type="hidden" id="odt-loc-id" value="">
+        </div>
+      </div>
+      <div class="fg"><label>Ready to Ship Date</label><input id="ords" type="date" title="Date goods are ready to ship from origin"></div>
+      <div class="fg"><label>Required Delivery Date *</label><input id="odd" type="date"></div>
+    </div>
+    <div class="fr f3">
+      <div class="fg"><label>Ship Mode <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></label><select id="omd"><option value="">— TMS selects —</option><option>TL</option><option>LTL</option><option>Parcel</option><option>Rail</option></select></div>
+      <div class="fg"><label>Incoterms</label><select id="oic"><option>FOB Origin</option><option>FOB Destination</option><option>CIF</option><option>DDP</option></select></div>
+      <div class="fg"><label>Priority <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></label><select id="opri"><option value="">— Select —</option><option>Standard</option><option>Expedite</option><option>Critical</option></select></div>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <label style="margin:0">Line Items</label><button class="btn btn-secondary btn-sm" onclick="addLn()">+ Add Line</button>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+        <table class="lit"><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit Wt (lbs)</th><th>Total Wt</th><th>Available</th><th></th></tr></thead><tbody id="litb"></tbody></table>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:20px;margin-top:6px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;">
+        <span>Total Weight: <strong id="owt" style="color:var(--accent)">0 lbs</strong></span>
+        <span>Pieces: <strong id="ops" style="color:var(--text)">0</strong></span>
+      </div>
+    </div>
+    <div class="fr f2">
+      <div class="fg"><label>Commodity</label><input id="ocm" placeholder="Electronics, Machinery…"></div>
+      <div class="fg"><label>Special Instructions</label><input id="ont" placeholder="Hazmat, temperature, fragile…"></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="cl('m-o')">Cancel</button>
+    <button class="btn btn-ghost" onclick="svO('draft')">Save Draft</button>
+    <button class="btn btn-primary" onclick="svO('book')">Book Order →</button>
+  </div>
+</div></div>
+
+<!-- AVAILABILITY -->
+<div class="ov" id="m-avail"><div class="modal" style="width:600px">
+  <div class="modal-header"><span class="modal-icon">🔍</span><span class="modal-title">Availability Check</span><span class="modal-stage">Stage 2 → 3</span><button class="modal-close" onclick="cl('m-avail')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-blue">Verifying on-hand inventory against ordered quantities. Confirmed stock will be reserved for this order.</div>
+    <div id="avail-lines" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;"></div>
+    <div id="avail-result"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-avail')">Cancel</button><button class="btn btn-primary" id="avail-btn" onclick="confirmAvail()">✓ Confirm & Reserve Stock</button></div>
+</div></div>
+
+<!-- RELEASE TO TMS -->
+<div class="ov" id="m-tms"><div class="modal" style="width:520px">
+  <div class="modal-header"><span class="modal-icon">📤</span><span class="modal-title">Release to TMS</span><span class="modal-stage">Stage 3 → 4</span><button class="modal-close" onclick="cl('m-tms')">✕</button></div>
+  <div class="modal-body">
+    <div id="tms-prev" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;"></div>
+    <div class="note note-yellow"><strong>TMS / OTM Planning:</strong> Shipment request sent as <strong>Unplanned</strong>. OTM rates carriers, selects optimal option by cost and SLA, and creates a <strong>Planned Shipment</strong> with carrier assignment, pickup/delivery dates, and freight rate.</div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-tms')">Cancel</button><button class="btn btn-primary" id="tms-go" onclick="doTMS()">📤 Send to Middleware → TMS</button></div>
+</div></div>
+
+<!-- CARRIER TENDER -->
+<div class="ov" id="m-tender"><div class="modal" style="width:580px">
+  <div class="modal-header"><span class="modal-icon">📋</span><span class="modal-title">Confirm Shipment Details</span><span class="modal-stage">Stage 5 → 6</span><button class="modal-close" onclick="cl('m-tender')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-blue">TMS has assigned a carrier and planned this shipment. Enter BOL &amp; PRO numbers below to generate shipping docs and release to warehouse for picking.</div>
+    <div id="tender-info" class="ifg ifg2" style="margin-bottom:4px;"></div>
+    <div class="fr f2">
+      <div class="fg"><label>BOL Number</label><input id="bol-in" placeholder="BOL-2024-00001"></div>
+      <div class="fg"><label>PRO Number (Carrier)</label><input id="pro-in" placeholder="PRO-123456"></div>
+    </div>
+    <div class="fr f2">
+      <div class="fg"><label>Confirmed Pickup Date</label><input id="pu-date" type="date"></div>
+      <div class="fg"><label>Estimated Delivery Date</label><input id="del-date" type="date"></div>
+    </div>
+    <div class="fr f2">
+      <div class="fg"><label>Driver Name</label><input id="drv-name" placeholder="Driver name"></div>
+      <div class="fg"><label>Truck / Trailer #</label><input id="drv-truck" placeholder="Trailer number"></div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-tender')">Cancel</button><button class="btn btn-primary" onclick="doTender()">✓ Confirm &amp; Release to Warehouse</button></div>
+</div></div>
+
+<!-- PICK -->
+<div class="ov" id="m-pick"><div class="modal" style="width:540px">
+  <div class="modal-header"><span class="modal-icon">🔎</span><span class="modal-title" id="pick-ti">Pick Order</span><span class="modal-stage">Stage 6 → 7</span><button class="modal-close" onclick="cl('m-pick')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-yellow"><strong>Stage 7 — Picking:</strong> Picker retrieves items from bin locations per pick list. Confirm each line when picked.</div>
+    <div id="pick-hdr" class="ifg ifg3" style="margin-bottom:4px;"></div>
+    <div id="pick-lines" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-pick')">Cancel</button><button class="btn btn-primary" id="pick-btn" onclick="confirmPick()">✓ Mark All Picked</button></div>
+</div></div>
+
+<!-- PACK -->
+<div class="ov" id="m-pack"><div class="modal" style="width:520px">
+  <div class="modal-header"><span class="modal-icon">📦</span><span class="modal-title">Pack Order</span><span class="modal-stage">Stage 7 → 8</span><button class="modal-close" onclick="cl('m-pack')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-yellow"><strong>Stage 8 — Packing:</strong> Items packed into cartons. Enter carton count, final weight, and generate shipping labels.</div>
+    <div id="pack-hdr" class="ifg ifg3" style="margin-bottom:4px;"></div>
+    <div class="fr f3">
+      <div class="fg"><label>Carton Count</label><input id="pk-cartons" type="number" placeholder="1" min="1"></div>
+      <div class="fg"><label>Packed Weight (lbs)</label><input id="pk-weight" type="number" placeholder="0"></div>
+      <div class="fg"><label>Pallet Count</label><input id="pk-pallets" type="number" placeholder="1" min="1"></div>
+    </div>
+    <div class="fr f2">
+      <div class="fg"><label>Label Type</label><select id="pk-lbl"><option>GS1-128 Barcode</option><option>ZPL Thermal</option><option>4×6 Shipping Label</option></select></div>
+      <div class="fg"><label>Packing Slip #</label><input id="pk-slip" placeholder="PS-2024-00001"></div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-pack')">Cancel</button><button class="btn btn-primary" onclick="confirmPack()">📦 Confirm Packed</button></div>
+</div></div>
+
+<!-- DOCK -->
+<div class="ov" id="m-dock"><div class="modal" style="width:480px">
+  <div class="modal-header"><span class="modal-icon">🚪</span><span class="modal-title">Dock Assignment</span><span class="modal-stage">Stage 8 → 9</span><button class="modal-close" onclick="cl('m-dock')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-blue"><strong>Stage 9 — Staged:</strong> Assign packed pallet(s) to a dock door. Carrier will be spotted at the assigned dock for loading.</div>
+    <div id="dock-hdr" class="ifg ifg2" style="margin-bottom:4px;"></div>
+    <div class="fr f2">
+      <div class="fg"><label>Dock Door #</label><select id="dk-door"><option>Dock 1</option><option>Dock 2</option><option>Dock 3</option><option>Dock 4</option><option>Dock 5</option><option>Dock 6</option><option>Dock 7</option><option>Dock 8</option></select></div>
+      <div class="fg"><label>Staging Lane</label><input id="dk-lane" placeholder="Lane A-3"></div>
+    </div>
+    <div class="fg"><label>Carrier ETA at Dock</label><input id="dk-eta" type="datetime-local"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-dock')">Cancel</button><button class="btn btn-primary" onclick="confirmDock()">🚪 Confirm Staged</button></div>
+</div></div>
+
+<!-- SHIP -->
+<div class="ov" id="m-ship"><div class="modal" style="width:520px">
+  <div class="modal-header"><span class="modal-icon">🚛</span><span class="modal-title">Load & Ship</span><span class="modal-stage">Stage 9 → 10</span><button class="modal-close" onclick="cl('m-ship')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-green"><strong>Stage 10 — Shipped:</strong> Cartons loaded and scanned to trailer. BOL signed by driver. TMS updated to <em>In Transit</em>. Inventory deducted.</div>
+    <div id="ship-hdr" class="ifg ifg3" style="margin-bottom:4px;"></div>
+    <div class="fr f3">
+      <div class="fg"><label>Ship Date</label><input id="sh-date" type="date"></div>
+      <div class="fg"><label>Ship Time</label><input id="sh-time" type="time"></div>
+      <div class="fg"><label>Seal #</label><input id="sh-seal" placeholder="Seal number"></div>
+    </div>
+    <div class="fr f2">
+      <div class="fg"><label>Driver Signature / Name</label><input id="sh-driver" placeholder="Driver name"></div>
+      <div class="fg"><label>Pieces Loaded</label><input id="sh-pcs" type="number" placeholder="0"></div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-ship')">Cancel</button><button class="btn btn-success" onclick="confirmShip()">🚛 Ship — Update TMS to In Transit</button></div>
+</div></div>
+
+<!-- POD -->
+<div class="ov" id="m-pod"><div class="modal" style="width:560px">
+  <div class="modal-header"><span class="modal-icon">✅</span><span class="modal-title">Proof of Delivery</span><span class="modal-stage">Stage 10 → 11</span><button class="modal-close" onclick="cl('m-pod')">✕</button></div>
+  <div class="modal-body">
+    <div class="note note-green"><strong>Stage 11 — Delivered / POD:</strong> Capture proof of delivery. Triggers EDI 210 freight invoice generation.</div>
+    <div id="pod-hdr" class="ifg ifg3" style="margin-bottom:4px;"></div>
+    <div id="pod-timeline" style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:4px;"></div>
+    <div class="fr f2">
+      <div class="fg"><label>Delivery Date</label><input id="pod-date" type="date"></div>
+      <div class="fg"><label>Delivery Time</label><input id="pod-time" type="time"></div>
+    </div>
+    <div class="fr f2">
+      <div class="fg"><label>Received By</label><input id="pod-recv" placeholder="Consignee name"></div>
+      <div class="fg"><label>Condition</label><select id="pod-cond"><option>Clean — No exceptions</option><option>Shortage noted</option><option>Damage noted</option><option>Refused</option></select></div>
+    </div>
+    <div class="fg"><label>Delivery Notes</label><textarea id="pod-notes" placeholder="Exceptions, damage notes…"></textarea></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-pod')">Cancel</button><button class="btn btn-success" onclick="confirmPOD()">✅ Confirm Delivery — Close Order</button></div>
+</div></div>
+
+<!-- INVENTORY ITEM -->
+<div class="ov" id="m-i"><div class="modal" style="width:580px">
+  <div class="modal-header"><span class="modal-icon">📦</span><span class="modal-title" id="im-ti">Add Item</span><button class="modal-close" onclick="cl('m-i')">✕</button></div>
+  <div class="modal-body">
+    <div class="fr f3">
+      <div class="fg"><label>Item ID</label><input id="ii-d" placeholder="ITM-1011"></div>
+      <div class="fg" style="grid-column:span 2"><label>Description *</label><input id="ii-n" placeholder="Item name"></div>
+    <iv class="fg"><label>Category</label><select id="ii-cat"><option>Electronics</option><option>Industrial</option><option>Perishable</option><option>Hazmat</option><option>General</option></select></div>
+    </div>
+    <div class="fr f4">
+      <div class="fg"><label>On Hand</label><input id="ii-q" type="number" placeholder="0"></div>
+      <div class="fg"><label>Reserved</label><input id="ii-res" type="number" placeholder="0" readonly></div>
+      <div class="fg"><label>Reorder Pt</label><input id="ii-r" type="number" placeholder="10"></div>
+      <div class="fg"><label>Max Qty</label><input id="ii-m" type="number" placeholder="200"></div>
+    </div>
+    <div class="fr f4">
+      <div class="fg"><label>Unit Wt (lbs)</label><input id="ii-w" type="number" placeholder="0"></div>
+      <div class="fg"><label>Unit Value ($)</label><input id="ii-v" type="number" placeholder="0"></div>
+      <div class="fg"><label>Freight Class</label><input id="ii-f" placeholder="85"></div>
+      <div class="fg"><label>Bin Location</label><input id="ii-b" placeholder="A-01-1"></div>
+    </div>
+    <div class="fg"><label>NMFC</label><input id="ii-nmfc" placeholder="123456"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-i')">Cancel</button><button class="btn btn-primary" onclick="svI()">Save Item</button></div>
+</div></div>
+
+<!-- CUSTOMER -->
+<div class="ov" id="m-c"><div class="modal" style="width:480px">
+  <div class="modal-header"><span class="modal-icon">🏢</span><span class="modal-title" id="cm-ti">Add Customer</span><button class="modal-close" onclick="cl('m-c')">✕</button></div>
+  <div class="modal-body">
+    <div class="fr f2">
+      <div class="fg"><label>Company Name *</label><input id="cn"></div>
+      <div class="fg"><label>Contact</label><input id="cc"></div>
+      <div class="fg"><label>Email</label><input id="ce" type="email"></div>
+      <div class="fg"><label>Phone</label><input id="cp"></div>
+      <div class="fg"><label>City</label><input id="cy"></div>
+      <div class="fg"><label>State</label><input id="cst"></div>
+    </div>
+    <div class="fg"><label>Credit Status</label><select id="ccs"><option>Approved</option><option>On Hold</option><option>Prepay Only</option></select></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-c')">Cancel</button><button class="btn btn-primary" onclick="svC()">Save Customer</button></div>
+</div></div>
+
+<!-- LOCATION -->
+<div class="ov" id="m-l"><div class="modal" style="width:520px">
+  <div class="modal-header"><span class="modal-icon">📍</span><span class="modal-title" id="lm-ti">Add Location</span><button class="modal-close" onclick="cl('m-l')">✕</button></div>
+  <div class="modal-body">
+    <div class="fr f2">
+      <div class="fg"><label>Location ID</label><input id="lid" placeholder="WH-NYC-001"></div>
+      <div class="fg"><label>Name *</label><input id="lnm"></div>
+      <div class="fg"><label>Type</label><select id="lty"><option>Warehouse</option><option>Distribution Center</option><option>Cross-Dock</option><option>Plant</option></select></div>
+      <div class="fg"><label>Address</label><input id="lad"></div>
+      <div class="fg"><label>City</label><input id="lci"></div>
+      <div class="fg"><label>State</label><input id="lst"></div>
+      <div class="fg"><label>ZIP</label><input id="lzp"></div>
+      <div class="fg"><label>Dock Doors</label><input id="ldk" type="number" placeholder="8"></div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="cl('m-l')">Cancel</button><button class="btn btn-primary" onclick="svL()">Save Location</button></div>
+</div></div>
+
+<div class="toast-wrap" id="twr"></div>
+
+<script>
+// ─── LOGIN ──────────────────────────────────────
+var DEMO_USERS=[
+  {email:'admin',      pass:'zoree2024',name:'Admin User',    init:'AU',role:'OMS Administrator'},
+  {email:'sridhar',    pass:'zoree2024',name:'Sridhar T',     init:'SR',role:'OMS Administrator'},
+  {email:'ops',        pass:'zoree2024',name:'Ops Manager',   init:'OM',role:'Operations Manager'},
+  {email:'warehouse',  pass:'zoree2024',name:'WH Supervisor', init:'WS',role:'WH Supervisor'},
+];
+var _user=null;
+
+// ── OMS session helpers ────────────────────────────────────────────
+function _omsApplyUser(u) {
+  _user = u;
+  document.getElementById('uname').textContent = u.name;
+  document.getElementById('uavt').textContent  = u.init;
+  document.getElementById('urole').textContent = u.role;
+}
+
+function _omsRestoreSession() {
+  try {
+    var raw = localStorage.getItem('zoree_oms_session');
+    if (!raw) return false;
+    var sess = JSON.parse(raw);
+    if (!sess || Date.now() > sess.expiresAt) {
+      localStorage.removeItem('zoree_oms_session');
+      return false;
+    }
+    var u = DEMO_USERS.find(x => x.email.toLowerCase() === sess.email.toLowerCase());
+    if (!u) return false;
+    _omsApplyUser(u);
+    return true;
+  } catch(e) { return false; }
+}
+
+function doLogin(){
+  var em=document.getElementById('lem').value.trim().toLowerCase();
+  var pw=document.getElementById('lpw').value;
+  var u=DEMO_USERS.find(x=>x.email.toLowerCase()===em&&x.pass===pw);
+  if(!u){document.getElementById('lerr').classList.add('show');return;}
+  document.getElementById('lerr').classList.remove('show');
+  _user=u;
+  // Persist session so refresh doesn't require re-login (8 hours)
+  try {
+    localStorage.setItem('zoree_oms_session', JSON.stringify({
+      email: u.email, name: u.name, init: u.init, role: u.role,
+      loginAt: Date.now(), expiresAt: Date.now() + (8 * 60 * 60 * 1000)
+    }));
+  } catch(e) {}
+  _omsApplyUser(u);
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  boot();
+}
+
+document.getElementById('lpw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('lem').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('lpw').focus();});
+
+// ── Auto-restore session on page refresh ─────────────────────────
+// Use window.onload to guarantee ALL scripts (including Supabase SDK) are loaded
+window.addEventListener('load', function() {
+  if (_omsRestoreSession()) {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    boot();
+  }
+});
+
+function doSignOut(){
+  try { localStorage.removeItem('zoree_oms_session'); } catch(e) {}
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('lpw').value='';
+  _user = null;
+}
+
+async function boot(){
+  setToday(); showLoading(true);
+  await loadFromDB();
+  showLoading(false);
+  renderAll();
+  mwInitConfigUI();
+  await syncTMS();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DATABASE CONFIGURATION — Two separate Supabase projects
+// OMS DB  → owns all oms_* tables (orders, inventory, customers, locations…)
+// TMS DB  → owns all TMS tables  (orders, shipments, items, carriers…)
+// These two clients must NEVER be swapped. All cross-system work goes through
+// ZoreeMiddleware below.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── OMS Database (your OMS-dedicated Supabase project) ───────────────────
+var OMS_URL = 'https://ljbeihotrmyqthxptcgp.supabase.co';   // ← replace with OMS project URL
+var OMS_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE'; // ← replace with OMS anon key
+var _omsDb = null;
+function omsDb(){ if(!_omsDb) _omsDb=supabase.createClient(OMS_URL,OMS_KEY,{auth:{persistSession:false}}); return _omsDb; }
+
+// ── TMS Database access is FORBIDDEN in OMS ──────────────────────────
+// All OMS ↔ TMS communication must go through Zoree Middleware.
+// OMS writes requests to mw_requests table; Middleware processes them.
+// tmsDb() is intentionally not defined here.
+function tmsDb(){ throw new Error('Direct TMS DB access is not allowed from OMS. Use ZoreeMiddleware methods instead.'); }
+
+// Legacy alias — OMS internal code still calls db() for oms_* tables only
+function db(){ return omsDb(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ZOREE MIDDLEWARE — All cross-system operations live here.
+//
+// Responsibilities:
+//   1. pushOrderToTMS()   — OMS order → TMS orders table (Stage 3→4)
+//   2. pullTMSPlanning()  — Read TMS shipments → update OMS order stage (4→5)
+//   3. pushShipStatus()   — OMS ship confirm → TMS shipments status update
+//   4. pushPODStatus()    — OMS POD confirm  → TMS shipments Delivered
+//   5. pullTMSItems()     — Sync TMS item catalog → OMS inventory (read-only pull)
+//   6. syncAll()          — Full bidirectional sync (called on boot + manual)
+//
+// Field mapping contract (OMS field → TMS field):
+//   OMS oms_orders.id          → TMS orders.id          (shared natural key)
+//   OMS oms_orders.customer_id → TMS orders.customer    (UUID → name string)
+//   OMS oms_orders.origin_loc  → TMS orders.origin
+//   OMS oms_orders.destination → TMS orders.dest
+//   OMS oms_orders.ship_mode   → TMS orders.mode
+//   OMS calc weight (lines)    → TMS orders.weight
+//   OMS calc pieces (lines)    → TMS orders.pieces
+//   OMS oms_orders.commodity   → TMS orders.commodity
+//   OMS oms_orders.required_date→TMS orders.due / ready
+//   ── ship direction ──
+//   OMS tms_shipment_id        → TMS shipments.id
+//   TMS shipments.carrier      → OMS oms_orders.carrier  (pull)
+//   TMS shipments.pickup_date  → OMS oms_orders.pickup_date (pull)
+//   TMS shipments.delivery_date→ OMS oms_orders.estimated_delivery (pull)
+//   TMS shipments.status       ← 'In Transit' / 'Delivered' (push)
+// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// ZOREE MIDDLEWARE INTERFACE (OMS side)
+//
+// Architecture: OMS never touches TMS DB directly.
+// All OMS ↔ TMS operations are queued via mw_requests table in OMS DB.
+// Middleware portal polls mw_requests, executes TMS operations, writes results back.
+//
+// Queue flow:
+//   OMS → INSERT mw_requests (cmd, payload, status=pending)
+//   Middleware polls → executes TMS operation → UPDATE mw_requests (status=done, result)
+//   OMS polls result → applies to oms_orders
+// ═══════════════════════════════════════════════════════════════════════════
+var ZoreeMiddleware = {
+
+  // ─── Internal: Check if mw_requests table exists ────────────────────────
+  _queueAvailable: null, // null=unknown, true=available, false=not available
+
+  async _checkQueue() {
+    if (this._queueAvailable !== null) return this._queueAvailable;
+    try {
+      var { error } = await omsDb().from('mw_requests').select('id').limit(1);
+      this._queueAvailable = !error;
+      if (!this._queueAvailable) console.warn('[MW] mw_requests table not found — running in direct mode');
+      return this._queueAvailable;
+    } catch(e) { this._queueAvailable = false; return false; }
+  },
+
+  // ─── Internal: Enqueue a command for Middleware to execute ──────────────
+  async _enqueue(cmd, payload, omsOrderId) {
+    try {
+      var row = {
+        cmd:          cmd,
+        oms_order_id: omsOrderId || null,
+        payload:      JSON.stringify(payload),
+        status:       'pending',
+        created_at:   new Date().toISOString(),
+      };
+      var { data, error } = await omsDb().from('mw_requests').insert(row).select('id').single();
+      if (error) throw error;
+      console.log('[MW Queue] Enqueued', cmd, 'id:', data?.id);
+      return { requestId: data?.id, error: null };
+    } catch(e) {
+      console.error('[MW Queue] Enqueue failed:', e.message);
+      return { requestId: null, error: e };
+    }
+  },
+
+  // ─── Internal: Poll mw_requests until done/error or timeout ─────────────
+  async _pollResult(requestId, timeoutMs) {
+    var deadline = Date.now() + (timeoutMs || 20000);
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 800));
+      try {
+        var { data } = await omsDb().from('mw_requests')
+          .select('status,result,error_msg').eq('id', requestId).single();
+        if (data && data.status === 'done')
+          return { result: data.result ? JSON.parse(data.result) : {}, error: null };
+        if (data && data.status === 'error')
+          return { result: null, error: new Error(data.error_msg || 'Middleware processing error') };
+      } catch(e) { /* keep polling */ }
+    }
+    return { result: null, error: new Error('Middleware timeout — ensure the Middleware portal is open and auto-sync is running.') };
+  },
+
+  // ─── Internal: Direct TMS execution (fallback when mw_requests not set up) ─
+  _tmsUrl: null, _tmsKey: null, _tmsClient: null,
+  _tmsDb() {
+    // TMS credentials stored in OMS DB config table or localStorage
+    var url = this._tmsUrl || localStorage.getItem('zoree_tms_url');
+    var key = this._tmsKey || localStorage.getItem('zoree_tms_key');
+    if (!url || !key) throw new Error('TMS credentials not configured. Create mw_requests table or set TMS URL/Key in Settings.');
+    if (!this._tmsClient) this._tmsClient = supabase.createClient(url, key, {auth:{persistSession:false}});
+    return this._tmsClient;
+  },
+
+  async _execDirect(cmd, payload) {
+    switch(cmd) {
+      case 'PUSH_ORDER_TO_TMS': {
+        var { error } = await this._tmsDb().from('orders').upsert(payload, {onConflict:'id'});
+        if (error) throw error;
+        return { tmsOrderId: payload.id };
+      }
+      case 'PULL_TMS_PLANNING': {
+        var ids = payload.omsOrderIds || [];
+        if (!ids.length) return { mapped: [], ships: [] };
+        var [or, sr] = await Promise.all([
+          this._tmsDb().from('orders').select('id,shipment_id,status').in('id', ids),
+          this._tmsDb().from('shipments').select('id,carrier,pickup_date,delivery_date,pickup,delivery,status,mode,trailer,pro_number,bol_number').order('created_at',{ascending:false}).limit(500),
+        ]);
+        if (or.error) throw or.error;
+        var ships = sr.data || [];
+        var mapped = (or.data||[]).map(t => {
+          var s = t.shipment_id ? ships.find(x=>x.id===t.shipment_id) : null;
+          return { omsOrderId:t.id, tmsShipmentId:t.shipment_id||null, carrier:s?.carrier||null,
+            pickupDate:s?.pickup_date||s?.pickup||null, deliveryDate:s?.delivery_date||s?.delivery||null,
+            proNumber:s?.pro_number||null, bolNumber:s?.bol_number||null,
+            tmsStatus:t.status||null, shipStatus:s?.status||null };
+        });
+        return { mapped, ships };
+      }
+      case 'PUSH_SHIP_STATUS': {
+        var { error } = await this._tmsDb().from('shipments')
+          .update({status:'In Transit', shipped_at: payload.shippedAt}).eq('id', payload.tmsShipmentId);
+        if (error) throw error;
+        return {};
+      }
+      case 'PUSH_POD_STATUS': {
+        var { error } = await this._tmsDb().from('shipments')
+          .update({status:'Delivered', delivered_at: payload.deliveredAt}).eq('id', payload.tmsShipmentId);
+        if (error) throw error;
+        return {};
+      }
+      case 'PULL_TMS_ITEMS': {
+        var { data, error } = await this._tmsDb().from('items').select('*').limit(1000);
+        if (error) throw error;
+        var items = (data||[]).map(t => ({id:t.id, desc:t.description||t.name||t.id,
+          wt:parseFloat(t.weight_unit)||parseFloat(t.weight)||0,
+          val:parseFloat(t.value_unit)||parseFloat(t.value)||0,
+          fc:t.freight_class||null, nmfc:t.nmfc||null, hazmat:t.hazmat||false}));
+        return { items };
+      }
+      default: throw new Error('Unknown cmd: ' + cmd);
+    }
+  },
+
+  // ─── Internal: Fire-and-forget dispatch ─────────────────────────────────
+  // Writes to mw_requests queue and returns immediately.
+  // Middleware processes asynchronously in the background.
+  // If mw_requests table doesn't exist, falls back to direct execution.
+  async _dispatch(cmd, payload, omsOrderId) {
+    var hasQueue = await this._checkQueue();
+    if (hasQueue) {
+      // Fire-and-forget — enqueue and return immediately
+      var { requestId, error } = await this._enqueue(cmd, payload, omsOrderId);
+      if (error) throw error;
+      mwLog('📤 Queued → Middleware: ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
+        flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
+        src: 'OMS', dst: 'MW', recordId: omsOrderId, rowCount: 1, payload
+      });
+      // Return a stub result — Middleware will update OMS orders table when done
+      return { result: { queued: true, requestId }, error: null };
+    } else {
+      // No queue table — execute directly (legacy/setup mode)
+      try {
+        var result = await this._execDirect(cmd, payload);
+        mwLog('→ [direct] ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
+          flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
+          src: cmd.startsWith('PULL') ? 'TMS' : 'OMS',
+          dst: cmd.startsWith('PULL') ? 'OMS' : 'TMS',
+          recordId: omsOrderId, rowCount: 1, payload
+        });
+        return { result, error: null };
+      } catch(e) {
+        mwLog('✗ [direct] ' + cmd + ': ' + e.message, false);
+        throw e;
+      }
+    }
+  },
+
+  // ─── 1. OMS → TMS: Release order (Stage 3→4) ───────────────────────────
+  async pushOrderToTMS(omsOrder, omsLines, custName) {
+    try {
+      var wt  = (omsLines||[]).reduce((s,l) => s + (l.qty * l.wt), 0);
+      var pcs = (omsLines||[]).reduce((s,l) => s + l.qty, 0);
+      var notes = omsOrder.notes || null;
+      if (omsOrder.mode) notes = (notes ? notes + ' | ' : '') + 'MODE_CONSTRAINT:' + omsOrder.mode;
+      var payload = {
+        id: omsOrder.id, customer: custName || omsOrder.customer_id,
+        origin: omsOrder.orig || null, dest: omsOrder.dest,
+        weight: wt, pieces: pcs, commodity: omsOrder.comm || 'General',
+        ready: omsOrder.due || null, due: omsOrder.due || null,
+        status: 'Unplanned', notes: notes, incoterms: omsOrder.inco || null, hazmat: false,
+      };
+      var { error: pollErr } = await this._dispatch('PUSH_ORDER_TO_TMS', payload, omsOrder.id).then(r=>({error:r.error})).catch(e=>({error:e}));
+      if (pollErr) throw pollErr;
+      // Fire-and-forget: OMS stage advances immediately, MW processes in background
+      return { tmsOrderId: omsOrder.id, error: null };
+    } catch(e) {
+      return { tmsOrderId: null, error: e };
+    }
+  },
+
+  // ─── 2. TMS → OMS: Pull planning data (Stage 4→5) ──────────────────────
+  // Reads directly from oms_orders — Middleware already writes TMS results there
+  // during its sync cycle. No need to go through the queue for a read operation.
+  async pullTMSPlanning(omsOrderIds) {
+    try {
+      var { data, error } = await omsDb().from('oms_orders')
+        .select('id,stage,tms_shipment_id,carrier,pickup_date,estimated_delivery,tms_planned_at')
+        .in('id', omsOrderIds);
+      if (error) throw error;
+      var mapped = (data||[]).filter(function(r){ return r.tms_shipment_id; }).map(function(r){
+        return {
+          omsOrderId:    r.id,
+          tmsShipmentId: r.tms_shipment_id,
+          carrier:       r.carrier            || null,
+          pickupDate:    r.pickup_date        || null,
+          deliveryDate:  r.estimated_delivery || null,
+          tmsStatus:     r.stage >= 5 ? 'Planned' : null,
+          shipStatus:    null, proNumber: null, bolNumber: null,
+        };
+      });
+      return { data: mapped, ships: [], error: null };
+    } catch(e) {
+      return { data: [], ships: [], error: e };
+    }
+  },
+
+  // ─── 3. OMS → TMS: Ship confirmation (Stage 9→10) ──────────────────────
+  async pushShipStatus(tmsShipmentId) {
+    if (!tmsShipmentId) return { error: null };
+    try {
+      var { error: pollErr } = await this._dispatch('PUSH_SHIP_STATUS',
+        { tmsShipmentId, status: 'In Transit', shippedAt: new Date().toISOString() }, null).then(r=>({error:r.error})).catch(e=>({error:e}));
+      if (pollErr) throw pollErr;
+      return { error: null };
+    } catch(e) { return { error: e }; }
+  },
+
+  // ─── 4. OMS → TMS: POD / Delivered (Stage 10→11) ───────────────────────
+  async pushPODStatus(tmsShipmentId, deliveredAt) {
+    if (!tmsShipmentId) return { error: null };
+    try {
+      var { error: pollErr } = await this._dispatch('PUSH_POD_STATUS',
+        { tmsShipmentId, status: 'Delivered', deliveredAt: deliveredAt || new Date().toISOString() }, null).then(r=>({error:r.error})).catch(e=>({error:e}));
+      if (pollErr) throw pollErr;
+      return { error: null };
+    } catch(e) { return { error: e }; }
+  },
+
+  // ─── 5. TMS → OMS: Pull item catalog ────────────────────────────────────
+  async pullTMSItems() {
+    try {
+      var { result, error: pollErr } = await this._dispatch('PULL_TMS_ITEMS', {}, null);
+      if (pollErr) throw pollErr;
+      return { data: result.items || [], error: null };
+    } catch(e) { return { data: [], error: e }; }
+  },
+
+};
+
+// ─── STAGE DEFINITIONS ──────────────────────────
+var STAGES = {
+  1:  {lbl:'Draft',           cls:'s1',  page:'orders'},
+  2:  {lbl:'Booked',          cls:'s2',  page:'orders'},
+  3:  {lbl:'Stock Reserved',  cls:'s3',  page:'orders'},
+  4:  {lbl:'Released to TMS', cls:'s4',  page:'orders'},
+  5:  {lbl:'TMS Planned',     cls:'s5',  page:'orders'},
+  6:  {lbl:'BOL Confirmed',cls:'s6',  page:'warehouse'},
+  7:  {lbl:'Picking',         cls:'s7',  page:'warehouse'},
+  8:  {lbl:'Packed',          cls:'s8',  page:'warehouse'},
+  9:  {lbl:'Staged',          cls:'s9',  page:'warehouse'},
+  10: {lbl:'Shipped',         cls:'s10', page:'delivery'},
+  11: {lbl:'Delivered/POD',   cls:'s11', page:'delivery'},
+};
+
+// ─── IN-MEMORY STATE (loaded from DB) ───────────
+var orders=[],inv=[],custs=[],locs=[],tmsO=[],tmsS=[];
+var _sf=0;
+var _eo=null,_ei=null,_ec=null,_el=null,_pt=null,_pa=null;
+var _loading=false;
+
+// ─── BOOT ─────────────────────────────────────────
+function custName(id){var c=custs.find(x=>x.id===id);return c?c.name:id||'—';}
+function locName(id){var l=locs.find(x=>x.id===id);return l?l.name+' ('+l.city+', '+l.state+')':id||'—';};
+function onShipFromChange(locId){
+  var l=locs.find(x=>x.id===locId);
+  var el=document.getElementById('og-zip');
+  if(el) el.textContent = l && l.zip ? '📍 ZIP: '+l.zip+(l.city?'  '+l.city+', '+l.state:'') : '';
+}
+
+function setToday(){
+  var t=new Date().toISOString().slice(0,10);
+  document.getElementById('sh-date').value=t;
+  document.getElementById('pod-date').value=t;
+}
+
+function showLoading(on){
+  var el=document.getElementById('ttxt');
+  if(el) el.textContent=on?'Loading…':'TMS Connected';
+}
+
+// ─── DB LOAD ──────────────────────────────────────
+async function loadFromDB(){
+  try{
+    var[cr,lr,ir,or]=await Promise.all([
+      db().from('oms_customers').select('*').eq('active',true).order('name'),
+      db().from('oms_locations').select('*').eq('active',true).order('name'),
+      db().from('oms_inventory').select('*').eq('active',true).order('id'),
+      db().from('oms_orders').select('*, oms_order_lines(*)').order('created_at',{ascending:false}).limit(500),
+    ]);
+    if(cr.error) throw cr.error;
+    if(lr.error) throw lr.error;
+    if(ir.error) throw ir.error;
+    if(or.error) throw or.error;
+    custs=cr.data.map(dbCust);
+    locs=lr.data.map(dbLoc);
+    inv=ir.data.map(dbInv);
+    orders=or.data.map(dbOrder);
+    setLED(true);
+  }catch(e){
+    setLED(false);
+    if (document.getElementById('app') && !document.getElementById('app').classList.contains('hidden')) { toast('⚠ DB load failed: '+e.message,'ter'); } else { console.warn('[OMS] DB load failed (pre-login):', e.message); }
+    console.error(e);
+  }
+}
+
+// ─── DB ↔ APP FIELD MAPPERS ──────────────────────
+function dbCust(r){return{id:r.id,name:r.name,contact:r.contact||'',email:r.email||'',phone:r.phone||'',city:r.city||'',state:r.state||'',credit:r.credit_status||'Approved',creditLimit:r.credit_limit,paymentTerms:r.payment_terms,notes:r.notes};}
+function dbLoc(r){return{id:r.id,name:r.name,type:r.type,addr:r.address||'',city:r.city||'',state:r.state||'',zip:r.zip||'',docks:r.dock_doors||8};}
+function dbInv(r){return{id:r.id,desc:r.description,cust:r.customer_id||'',cat:r.category||'General',fc:r.freight_class||'',nmfc:r.nmfc||'',wt:parseFloat(r.unit_weight)||0,val:parseFloat(r.unit_value)||0,qty:r.qty_on_hand||0,reserved:r.qty_reserved||0,reorder:r.reorder_point||10,maxQty:r.max_qty||200,bin:r.bin_location||'',hazmat:r.hazmat,fragile:r.fragile};}
+function dbOrder(r){
+  var lines=(r.oms_order_lines||[]).map(l=>({itemId:l.item_id||'',desc:l.description,qty:l.qty_ordered,wt:parseFloat(l.unit_weight)||0,val:parseFloat(l.unit_value)||0,lineNum:l.line_num})).sort((a,b)=>a.lineNum-b.lineNum);
+  return{
+    id:r.id, cust:r.customer_id, po:r.po_number||'', orig:r.origin_location||'', dest:r.destination,
+    ready:r.ready_date||'', due:r.required_date||'', mode:r.ship_mode||'', inco:r.incoterms||'FOB Origin',
+    priority:(r.priority==='Standard'?'':r.priority)||'', comm:r.commodity||'', notes:r.special_instructions||'',
+    stage:r.stage||1, hold:r.on_hold||false, holdReason:r.hold_reason||'',
+    reservedAt:r.reserved_at, tmsId:r.tms_order_id, tmsShipId:r.tms_shipment_id,
+    carrier:r.carrier||'', serviceLevel:r.service_level||'', tmsReleasedAt:r.tms_released_at, tmsPlannedAt:r.tms_planned_at,
+    bol:r.bol_number||'', pro:r.pro_number||'', pickupDate:r.pickup_date||'',
+    deliveryDate:r.estimated_delivery||'', driverName:r.driver_name||'', truckNum:r.truck_trailer||'',
+    tenderedAt:r.tendered_at, pickedAt:r.picked_at,
+    cartons:r.carton_count, pallets:r.pallet_count, packWt:r.packed_weight,
+    labelType:r.label_type||'', packingSlip:r.packing_slip||'', packedAt:r.packed_at,
+    dockDoor:r.dock_door||'', stageLane:r.stage_lane||'', dockETA:r.carrier_eta, stagedAt:r.staged_at,
+    shipDate:r.ship_date||'', shipTime:r.ship_time||'', sealNum:r.seal_number||'',
+    driverSign:r.driver_signature||'', piecesLoaded:r.pieces_loaded, shippedAt:r.shipped_at,
+    deliveredAt:r.delivered_at, podRecv:r.pod_received_by||'', podCond:r.pod_condition||'',
+    podNotes:r.pod_notes||'', createdAt:r.created_at,
+    lines
+  };
+}
+
+// ─── DB WRITE HELPERS ────────────────────────────
+async function saveOrder(o){
+  var row={
+    id:o.id, customer_id:o.cust, po_number:o.po||null,
+    origin_location:o.orig||null, destination:o.dest,
+    origin_zip:(function(){ var l=locs.find(x=>x.id===o.orig); return l&&l.zip?l.zip:null; })(),
+    dest_zip:(o.dest||('')).match(/(\d{5})/)?((o.dest||'').match(/(\d{5})/))[1]:null,
+    required_date:o.due||null,
+    ready_date:   o.ready||null, ship_mode:o.mode||'TL',  // NOT NULL sentinel
+    incoterms:o.inco||'FOB Origin', priority:o.priority||'Standard',
+    commodity:o.comm||null, special_instructions:o.notes||null,
+    stage:o.stage, on_hold:o.hold||false, hold_reason:o.holdReason||null,
+    tms_order_id:o.tmsId||null, tms_shipment_id:o.tmsShipId||null,
+    carrier:o.carrier||null, tms_released_at:o.tmsReleasedAt||null, tms_planned_at:o.tmsPlannedAt||null,
+    bol_number:o.bol||null, pro_number:o.pro||null, pickup_date:o.pickupDate||null,
+    estimated_delivery:o.deliveryDate||null, driver_name:o.driverName||null, truck_trailer:o.truckNum||null,
+    tendered_at:o.tenderedAt||null, picked_at:o.pickedAt||null,
+    carton_count:o.cartons||null, pallet_count:o.pallets||null, packed_weight:o.packWt||null,
+    label_type:o.labelType||null, packing_slip:o.packingSlip||null, packed_at:o.packedAt||null,
+    dock_door:o.dockDoor||null, stage_lane:o.stageLane||null, carrier_eta:o.dockETA||null, staged_at:o.stagedAt||null,
+    ship_date:o.shipDate||null, ship_time:o.shipTime||null, seal_number:o.sealNum||null,
+    driver_signature:o.driverSign||null, pieces_loaded:o.piecesLoaded||null, shipped_at:o.shippedAt||null,
+    delivered_at:o.deliveredAt||null, pod_received_by:o.podRecv||null,
+    pod_condition:o.podCond||null, pod_notes:o.podNotes||null,
+    reserved_at:o.reservedAt||null,
+  };
+  var{error}=await db().from('oms_orders').upsert(row,{onConflict:'id'});
+  if(error)throw error;
+}
+
+async function saveLines(orderId, lines){
+  // Delete existing lines then re-insert
+  await db().from('oms_order_lines').delete().eq('order_id',orderId);
+  if(!lines.length) return;
+  var rows=lines.map((l,i)=>({
+    order_id:orderId, line_num:i+1, item_id:l.itemId||null,
+    description:l.desc||l.itemId||'', qty_ordered:l.qty||1,
+    unit_weight:l.wt||0, unit_value:l.val||0
+  }));
+  var{error}=await db().from('oms_order_lines').insert(rows);
+  if(error)throw error;
+}
+
+async function logStage(orderId, fromStage, toStage){
+  var lbl=STAGES[toStage]?.lbl||('Stage '+toStage);
+  await db().from('oms_stage_log').insert({order_id:orderId,from_stage:fromStage,to_stage:toStage,stage_label:lbl});
+}
+
+async function logInvTxn(itemId, orderId, type, qtyChange, qtyAfter, ref){
+  await db().from('oms_inv_transactions').insert({item_id:itemId,order_id:orderId,txn_type:type,qty_change:qtyChange,qty_after:qtyAfter,reference:ref||null});
+}
+
+async function saveInvItem(it){
+  var row={id:it.id,description:it.desc,customer_id:it.cust||null,category:it.cat||'General',
+    freight_class:it.fc||null,nmfc:it.nmfc||null,unit_weight:it.wt||0,unit_value:it.val||0,
+    qty_on_hand:it.qty||0,qty_reserved:it.reserved||0,reorder_point:it.reorder||10,max_qty:it.maxQty||200,
+    bin_location:it.bin||null,hazmat:it.hazmat||false,fragile:it.fragile||false};
+  var{error}=await db().from('oms_inventory').upsert(row,{onConflict:'id'});
+  if(error)throw error;
+}
+
+async function saveCust(c){
+  var row={id:c.id,name:c.name,contact:c.contact||null,email:c.email||null,phone:c.phone||null,
+    city:c.city||null,state:c.state||null,credit_status:c.credit||'Approved'};
+  var{error}=await db().from('oms_customers').upsert(row,{onConflict:'id'});
+  if(error)throw error;
+}
+
+async function saveLoc(l){
+  var row={id:l.id,name:l.name,type:l.type||'Warehouse',address:l.addr||null,city:l.city||null,
+    state:l.state||null,zip:l.zip||null,dock_doors:l.docks||8};
+  var{error}=await db().from('oms_locations').upsert(row,{onConflict:'id'});
+  if(error)throw error;
+}
+
+// ─── TMS SYNC (reads from existing TMS tables) ───
+async function syncTMS(){
+  try{
+    // Guard: skip sync if TMS URL not configured
+    var tmsUrl = ZoreeMiddleware._tmsUrl || localStorage.getItem('zoree_tms_url');
+    if (!tmsUrl) {
+      mwLog('TMS sync skipped — no TMS URL configured yet', false);
+      return;
+    }
+    mwLog('Starting TMS sync…');
+    // Pull TMS item catalog and enrich matching OMS inventory items (read-only pull)
+    var itemRes = await ZoreeMiddleware.pullTMSItems();
+    if(!itemRes.error && itemRes.data.length){
+      await mergeTMSItems(itemRes.data);
+      mwLog('← Pulled ' + itemRes.data.length + ' items from TMS catalog', true, {flow:'TMS → OMS', src:'TMS', dst:'OMS', rowCount:itemRes.data.length, fields:['id','description','weight_unit','value_unit']});
+    }
+
+    // Pull TMS planning data and promote OMS order stages
+    var stageOrders = orders.filter(o => o.stage >= 4 && o.stage <= 9);
+    var stageIds = stageOrders.map(o => o.id);
+    var updated = 0;
+    var ships = [];
+
+    if (stageIds.length) {
+      var { data: mapped, ships: tmsShips, error: planErr } = await ZoreeMiddleware.pullTMSPlanning(stageIds);
+      if (planErr) throw planErr;
+      ships = tmsShips || [];
+
+      // Apply TMS planning results to OMS orders
+      for (var m of (mapped || [])) {
+        var ord = orders.find(o => o.id === m.omsOrderId);
+        if (!ord) continue;
+        var changed = false;
+        if (m.tmsShipmentId && ord.tmsShipId !== m.tmsShipmentId) { ord.tmsShipId = m.tmsShipmentId; changed = true; }
+        if (m.carrier       && ord.carrier    !== m.carrier)       { ord.carrier    = m.carrier;       changed = true; }
+        if (m.pickupDate    && ord.pickupDate  !== m.pickupDate)    { ord.pickupDate  = m.pickupDate;   changed = true; }
+        if (m.deliveryDate  && ord.deliveryDate!== m.deliveryDate)  { ord.deliveryDate= m.deliveryDate; changed = true; }
+        if (m.proNumber     && !ord.pro)                            { ord.pro         = m.proNumber;    changed = true; }
+        if (m.bolNumber     && !ord.bol)                            { ord.bol         = m.bolNumber;    changed = true; }
+        if (m.shipStatus === 'Delivered') { ord.tmsDelivered = true; changed = true; }
+        // Stage promotion: 4→5 when TMS has planned the shipment
+        if (ord.stage === 4 && m.tmsShipmentId && (m.tmsStatus === 'Planned' || m.tmsStatus === 'Consolidated' || m.shipStatus)) {
+          ord.stage = 5; ord.tmsPlannedAt = new Date().toISOString();
+          await logStage(ord.id, 4, 5);
+          changed = true; updated++;
+          // Log TMS shipment ID flowing back to OMS
+          mwLog('← TMS shipment assigned: ' + m.tmsShipmentId + ' → OMS order ' + ord.id + ' | Carrier: ' + (m.carrier||'TBD') + ' | Stage: 4→5',
+            true, {
+              flow: 'TMS → OMS',
+              src: 'TMS', dst: 'OMS',
+              recordId: m.tmsShipmentId,
+              rowCount: 1,
+              fields: ['tms_shipment_id', 'carrier', 'pickup_date', 'delivery_date', 'stage'],
+              payload: {
+                omsOrderId:    ord.id,
+                tmsShipmentId: m.tmsShipmentId,
+                carrier:       m.carrier       || null,
+                pickupDate:    m.pickupDate    || null,
+                deliveryDate:  m.deliveryDate  || null,
+                stagePromotion:'4→5',
+              }
+            }
+          );
+        }
+        if (changed) await saveOrder(ord);
+      }
+    }
+
+    // Cache TMS shipments for display in stage modals
+    tmsS = ships;
+
+    // Update last sync time
+    var now = new Date().toLocaleTimeString();
+    var ls = document.getElementById('mw-last-sync');
+    var ld = document.getElementById('mw-sync-detail');
+    if(ls) ls.textContent = now;
+    if(ld) ld.textContent = updated + ' stage promotion(s)';
+
+    setLED(true); renderAll();
+    mwLog('✅ Sync complete — ' + updated + ' stage promotion(s) · ' + ships.length + ' TMS shipments cached', true, {flow:'TMS → OMS', src:'TMS', dst:'OMS', rowCount:updated+ships.length, fields:['stage','carrier','pickup_date','delivery_date','tms_shipment_id']});
+    toast('↻ Synced from TMS' + (updated ? ' · ' + updated + ' stage update(s)' : ''), 'tin');
+  }catch(e){
+    setLED(false);
+    mwLog('❌ Sync failed: ' + e.message, false);
+    toast('⚠ TMS sync failed — ' + e.message, 'twn');
+    console.error('[syncTMS]', e);
+  }
+}
+
+async function doSync(){ await loadFromDB(); await syncTMS(); }
+
+async function mergeTMSItems(items){
+  for(var t of items){
+    var ex=inv.find(i=>i.id===t.id);
+    if(ex){
+      ex.desc=t.description||ex.desc;ex.wt=parseFloat(t.weight_unit)||ex.wt;ex.val=parseFloat(t.value_unit)||ex.val;
+      try{await saveInvItem(ex);}catch(e){}
+    }
+  }
+  ri();
+}
+
+function setLED(tmsOk, omsOk){
+  // OMS LED
+  var omsOkFinal = omsOk !== undefined ? omsOk : true; // assume OMS ok if not specified
+  var oLed = document.getElementById('tled-oms');
+  var oTxt = document.getElementById('ttxt-oms');
+  if(oLed){ oLed.className = 'tled' + (omsOkFinal ? '' : ' off'); }
+  if(oTxt){ oTxt.textContent = omsOkFinal ? 'OMS DB ✓' : 'OMS DB ✗'; }
+  // TMS LED
+  var tLed = document.getElementById('tled-tms');
+  var tTxt = document.getElementById('ttxt-tms');
+  if(tLed){ tLed.className = 'tled' + (tmsOk ? '' : ' off'); }
+  if(tTxt){ tTxt.textContent = tmsOk ? 'TMS DB ✓' : 'TMS DB ✗'; }
+  // Update middleware config page cards
+  var oCard = document.getElementById('mw-oms-card');
+  var tCard = document.getElementById('mw-tms-card');
+  if(oCard) oCard.style.borderTop = '3px solid ' + (omsOkFinal ? 'var(--green)' : 'var(--red)');
+  if(tCard) tCard.style.borderTop = '3px solid ' + (tmsOk ? 'var(--green)' : 'var(--red)');
+  var oSt = document.getElementById('mw-oms-status');
+  var tSt = document.getElementById('mw-tms-status');
+  if(oSt) oSt.textContent = omsOkFinal ? '🟢 Connected' : '🔴 Offline';
+  if(tSt) tSt.textContent = tmsOk     ? '🟢 Connected' : '🔴 Offline';
+  var oU = document.getElementById('mw-oms-url');
+  var tU = document.getElementById('mw-tms-url');
+  if(oU) oU.textContent = OMS_URL;
+  // TMS URL is managed by Middleware only — not configurable in OMS
+}
+
+// Populate middleware config inputs on page load
+function mwInitConfigUI(){
+  var u1 = document.getElementById('cfg-oms-url'); if(u1) u1.value = OMS_URL;
+  var k1 = document.getElementById('cfg-oms-key'); if(k1) k1.value = OMS_KEY;
+  var u2 = document.getElementById('cfg-tms-url'); 
+  if(u2) { 
+    u2.value = localStorage.getItem('zoree_tms_url') || '';
+    u2.disabled = false;
+    u2.placeholder = 'https://tms-project.supabase.co (for direct fallback)';
+  }
+  var k2 = document.getElementById('cfg-tms-key'); if(k2) k2.value = localStorage.getItem('zoree_tms_key') || '';
+}
+
+// Save config: update module-level vars and reinitialise clients
+function mwSaveConfig(){
+  var u1 = document.getElementById('cfg-oms-url').value.trim();
+  var k1 = document.getElementById('cfg-oms-key').value.trim();
+  var u2 = document.getElementById('cfg-tms-url').value.trim();
+  var k2 = document.getElementById('cfg-tms-key').value.trim();
+  if(!u1||!k1||!u2||!k2){ toast('All four fields required','twn'); return; }
+  OMS_URL = u1; OMS_KEY = k1; _omsDb = null; // force client re-init
+  // Save TMS credentials to localStorage for direct fallback mode
+  var tmsU = document.getElementById('cfg-tms-url'); 
+  var tmsK = document.getElementById('cfg-tms-key');
+  if(tmsU && tmsU.value && tmsU.value !== '(managed by Middleware)') {
+    localStorage.setItem('zoree_tms_url', tmsU.value);
+    localStorage.setItem('zoree_tms_key', tmsK?.value || '');
+    ZoreeMiddleware._tmsClient = null; // reset client
+    mwLog('TMS credentials saved for direct fallback mode', true);
+  }
+  mwLog('Config saved — OMS: ' + u1 + ' | TMS: ' + u2);
+  toast('✅ Config saved — reconnecting…','tok');
+  mwTestConnections();
+}
+
+// Test both connections
+async function mwTestConnections(){
+  mwLog('Testing OMS connection → ' + OMS_URL + '…');
+  mwLog('TMS connection is tested via Middleware portal only.');
+  var omsOk = false, tmsOk = false;
+  try {
+    var r = await omsDb().from('oms_customers').select('id').limit(1);
+    omsOk = !r.error;
+    mwLog(omsOk ? '✅ OMS DB connected (' + OMS_URL.split('.')[0].replace('https://','') + ')' : '❌ OMS DB error: ' + r.error?.message, omsOk);
+  } catch(e) { mwLog('❌ OMS DB exception: ' + e.message, false); }
+  try {
+    var r2 = await tmsDb().from('orders').select('id').limit(1);
+    tmsOk = !r2.error;
+    mwLog(tmsOk ? '✅ TMS DB connected (' + TMS_URL.split('.')[0].replace('https://','') + ')' : '❌ TMS DB error: ' + r2.error?.message, tmsOk);
+  } catch(e) { mwLog('❌ TMS DB exception: ' + e.message, false); }
+  setLED(tmsOk, omsOk);
+  // Update last tested
+  var ls = document.getElementById('mw-last-sync');
+  var ld = document.getElementById('mw-sync-detail');
+  if(ls) ls.textContent = new Date().toLocaleTimeString();
+  if(ld) ld.textContent = (omsOk && tmsOk) ? 'Both systems online' : 'Check connection above';
+}
+
+// Append a line to the middleware event log
+function mwLog(msg, ok, opts){
+  // ── Write to DOM log panel ──────────────────────────────────────
+  var el = document.getElementById('mw-log');
+  if(el){
+    var color = ok === false ? 'var(--red)' : ok === true ? 'var(--green)' : 'var(--text2)';
+    var ts = new Date().toLocaleTimeString();
+    el.querySelectorAll('span[style]').forEach(s => { if(s.textContent.includes('No events yet')) s.remove(); });
+    var line = document.createElement('div');
+    line.style.cssText = 'color:' + color + ';border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:3px';
+    line.textContent = '[' + ts + '] ' + msg;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+  // ── Persist to mw_event_log so Middleware portal sees it ────────
+  try {
+    var dbClient = typeof db === 'function' ? db() : null;
+    if(!dbClient) return;
+    var level = ok === false ? 'err' : ok === true ? 'ok' : 'info';
+    var row = {
+      session_id:  'oms-' + (window._omsMWSession = window._omsMWSession || Date.now().toString(36)),
+      level:       level,
+      flow:        opts && opts.flow   ? opts.flow   : (msg.startsWith('→') ? 'OMS → TMS' : msg.startsWith('←') ? 'TMS → OMS' : 'OMS'),
+      msg:         msg,
+      src_system:  opts && opts.src    ? opts.src    : (msg.startsWith('←') ? 'TMS' : 'OMS'),
+      dst_system:  opts && opts.dst    ? opts.dst    : (msg.includes('→ TMS') ? 'TMS' : msg.includes('← OMS') || msg.includes('→ OMS') ? 'OMS' : null),
+      record_id:   opts && opts.recordId ? opts.recordId : null,
+      row_count:   opts && opts.rowCount ? opts.rowCount : null,
+      bytes:       opts && opts.bytes  ? opts.bytes  : null,
+      fields:      opts && opts.fields ? JSON.stringify(opts.fields) : null,
+      payload:     opts && opts.payload? JSON.stringify(opts.payload).substring(0,10000) : null,
+    };
+    dbClient.from('mw_event_log').insert(row).then(function(){}).catch(function(){});
+  } catch(e) { /* silent */ }
+}
+
+async function syncItems(){toast('↻ Syncing…','tin');await doSync();ri();toast('Items synced','tok');}
+
+// ─── NAVIGATION ──────────────────────────────────
+function gp(p){
+  document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+  var pg=document.getElementById('pg-'+p);
+  if(pg)pg.classList.add('active');
+  var ni=document.querySelector('[data-page="'+p+'"]');
+  if(ni)ni.classList.add('active');
+}
+
+// ─── PIPELINE FILTER ────────────────────────────
+function filterStage(n){
+  _sf=n;
+  document.querySelectorAll('.ps').forEach(el=>el.classList.remove('on'));
+  var el=document.querySelector('[data-stage="'+n+'"]');if(el)el.classList.add('on');
+  var lbl=n===0?'— All Stages':('— Stage '+n+': '+(STAGES[n]?.lbl||''));
+  document.getElementById('stg-lbl').textContent='Order-to-Ship · '+lbl;
+  if(n>=6&&n<=9)gp('warehouse');
+  else if(n>=10)gp('delivery');
+  else gp('orders');
+  ro();rw();rd();
+}
+
+// ─── RENDER ALL ──────────────────────────────────
+function renderAll(){ro();ri();rw();rd();rc();rl();updateBadges();updatePipelineCounts();}
+function updateBadges(){
+  document.getElementById('b-o').textContent=orders.filter(o=>o.stage>=1&&o.stage<=5).length;
+  document.getElementById('b-w').textContent=orders.filter(o=>o.stage>=6&&o.stage<=9).length;
+  document.getElementById('b-d').textContent=orders.filter(o=>o.stage>=10).length;
+  document.getElementById('b-i').textContent=inv.length;
+}
+function updatePipelineCounts(){
+  for(var i=1;i<=11;i++){var el=document.getElementById('ps'+i);if(el)el.textContent=orders.filter(o=>o.stage===i).length;}
+}
+
+// ─── RENDER ORDERS ──────────────────────────────
+function ro(){
+  var q=(document.getElementById('sq').value||'').toLowerCase();
+  var cf=document.getElementById('fc').value;
+  // Populate customer filter
+  var sel=document.getElementById('fc');
+  if(sel.options.length<=1)custs.forEach(c=>{var o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
+  var rows=orders.filter(o=>{
+    if(_sf>0&&o.stage!==_sf)return false;
+    if(cf&&o.cust!==cf)return false;
+    if(q&&!(o.id+o.cust+(o.dest||'')+o.stage).toLowerCase().includes(q))return false;
+    return true;
+  });
+  // KPI counts
+  document.getElementById('k-tot').textContent=orders.length;
+  document.getElementById('k-d').textContent=orders.filter(o=>o.stage<=1).length;
+  document.getElementById('k-ip').textContent=orders.filter(o=>o.stage>=2&&o.stage<=3).length;
+  document.getElementById('k-tms').textContent=orders.filter(o=>o.stage>=4&&o.stage<=5).length;
+  document.getElementById('k-wh').textContent=orders.filter(o=>o.stage>=6&&o.stage<=9).length;
+  document.getElementById('k-sh').textContent=orders.filter(o=>o.stage>=10).length;
+  document.getElementById('k-ho').textContent=orders.filter(o=>o.hold).length;
+
+  var tb=document.getElementById('otb');
+  document.getElementById('oe').style.display=rows.length?'none':'flex';
+  tb.innerHTML=rows.map(o=>{
+    var wt=(o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
+    var ship=o.tmsShipId?tmsS.find(s=>s.id===o.tmsShipId):null;
+    var bol=o.bol?`<span class="mono" style="color:var(--teal)">${o.bol}</span>`:'—';
+    var tref=o.tmsShipId?`<span class="mono" style="color:var(--cyan);font-size:10px">${o.tmsShipId}</span>`:o.stage>=4?`<span class="mono" style="color:var(--purple);font-size:10px">${o.id}</span>`:'—';
+    // Action button based on stage
+    var a=stageAction(o);
+    return `<tr onclick="openStageModal('${o.id}')">
+      <td><span class="mono" style="color:var(--amber);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();openOM('${o.id}')" title="Click to edit order">${o.id}</span>${o.po?`<div style="font-size:10px;color:var(--text3)">PO: ${o.po}</div>`:''}</td>
+      <td><strong>${custName(o.cust)}</strong><div style="font-size:10px;color:var(--text3)">${o.mode||'TL'} · ${o.priority||'Standard'}</div></td>
+      <td>${o.dest||'—'}</td>
+      <td class="mono">${(o.lines||[]).length}</td>
+      <td class="mono">${wt.toLocaleString()} lbs</td>
+      <td class="mono">${o.due||'—'}</td>
+      <td>${stgBadge(o.stage)}${o.hold?`<span class="stg s-hold" style="margin-left:4px">Hold</span>`:''}</td>
+      <td>${bol}${o.pro?`<div class="mono" style="color:var(--text3);font-size:10px">PRO: ${o.pro}</div>`:''}</td>
+      <td>${tref}</td>
+      <td onclick="event.stopPropagation()"><div class="acts">${a}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function stageAction(o){
+  var id=o.id;
+  if(o.hold) return `<button class="btn btn-danger btn-sm" onclick="toggleHold('${id}')">▶ Release Hold</button>`;
+  switch(o.stage){
+    case 1: return `<button class="btn btn-secondary btn-sm" onclick="openOM('${id}')">✏ Edit</button><button class="btn btn-primary btn-sm" onclick="openAvail('${id}')">Book →</button>`;
+    case 2: return `<button class="btn btn-primary btn-sm" onclick="openAvail('${id}')">🔍 Check Avail</button>`;
+    case 3: return `<button class="btn btn-primary btn-sm" onclick="openTMSSend('${id}')">📤 Release TMS</button>`;
+    case 4: return `<button class="btn btn-secondary btn-sm" onclick="doSync()">↻ Await TMS</button>`;
+    case 5: return `<button class="btn btn-primary btn-sm" onclick="openTender('${id}')">📋 Confirm BOL/PRO</button>`;;
+    case 6: return `<button class="btn btn-warn btn-sm" onclick="openPickModal('${id}')">🔎 Pick</button>`;
+    case 7: return `<button class="btn btn-warn btn-sm" onclick="openPackModal('${id}')">📦 Pack</button>`;
+    case 8: return `<button class="btn btn-purple btn-sm" onclick="openDockModal('${id}')">🚪 Stage</button>`;
+    case 9: return `<button class="btn btn-success btn-sm" onclick="openShipModal('${id}')">🚛 Ship</button>`;
+    case 10: return `<button class="btn btn-success btn-sm" onclick="openPODModal('${id}')">✅ POD</button>`;
+    case 11: return `<span class="badge" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(5,150,105,.2)">✓ CLOSED</span>`;
+    default: return '';
+  }
+}
+
+// Clicking a row opens the appropriate stage modal
+function openStageModal(id){
+  var o=orders.find(x=>x.id===id);if(!o) return;
+  switch(o.stage){
+    case 1: case 2: openOM(id); break;
+    case 3: openTMSSend(id); break;
+    case 5: openTender(id); break;
+    case 6: openPickModal(id); break;
+    case 7: openPackModal(id); break;
+    case 8: openDockModal(id); break;
+    case 9: openShipModal(id); break;
+    case 10: openPODModal(id); break;
+  }
+}
+
+// ─── ORDER ENTRY (Stage 1) ───────────────────────
+function openOM(id){
+  _eo=id;
+  var o=id?orders.find(x=>x.id===id):null;
+  document.getElementById('om-ti').textContent=o?'Edit Order — '+id:'New Sales Order';
+  var nid='ORD-'+Date.now().toString().slice(-6);
+  document.getElementById('oi').value=o?.id||nid;
+  document.getElementById('opo').value=o?.po||'';
+  document.getElementById('odt').value=o?.dest||'';
+  document.getElementById('ords') && (document.getElementById('ords').value=o?.ready||'');
+  document.getElementById('odd').value=o?.due||'';
+  document.getElementById('omd').value=o?.mode||'';
+  document.getElementById('oic').value=o?.inco||'FOB Origin';
+  document.getElementById('opri').value=o?.priority||'';
+  document.getElementById('ocm').value=o?.comm||'';
+  document.getElementById('ont').value=o?.notes||'';
+  var cs=document.getElementById('oc');
+  cs.innerHTML=custs.map(c=>`<option value="${c.id}"${o?.cust===c.id?' selected':''}>${c.name}</option>`).join('');
+  var og=document.getElementById('og');
+  og.innerHTML=locs.map(l=>{var v=l.city+', '+l.state;return`<option value="${l.id}"${o?.orig===l.id?' selected':''}>${l.name} (${v})</option>`;}).join('');
+  // Show zip for selected location
+  var selLoc = o ? locs.find(x=>x.id===o.orig) : locs[0];
+  var zipEl = document.getElementById('og-zip');
+  if(zipEl && selLoc) zipEl.textContent = selLoc.zip ? '📍 ZIP: '+selLoc.zip+'  '+selLoc.city+', '+selLoc.state : '';
+  // Reset Ship To picker, then populate if editing existing order
+  shipToClear();
+  if (o && o.dest) populateShipToDropdown(o.dest);
+  rnLines(o?.lines||[{itemId:'',desc:'',qty:1,wt:0}]);
+  openM('m-o');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHIP TO — Searchable Location Picker
+// Works with 1000s of locations: type to filter, click to select
+// ═══════════════════════════════════════════════════════════════
+
+var _shipToSelected = null; // { id, name, display, addr }
+
+function shipToSearch(q) {
+  var results = document.getElementById('odt-results');
+  var clearBtn = document.getElementById('odt-clear');
+  if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+  var query = (q || '').toLowerCase().trim();
+
+  // Build filtered list — show all if empty query, filter if typed
+  var filtered = query
+    ? locs.filter(function(l) {
+        return (l.name  || '').toLowerCase().includes(query) ||
+               (l.city  || '').toLowerCase().includes(query) ||
+               (l.state || '').toLowerCase().includes(query) ||
+               (l.id    || '').toLowerCase().includes(query) ||
+               (l.zip   || '').toLowerCase().includes(query) ||
+               (l.type  || '').toLowerCase().includes(query);
+      })
+    : locs.slice(0, 50); // show first 50 when no query
+
+  if (!results) return;
+
+  if (!filtered.length && query) {
+    results.style.display = 'block';
+    results.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:#94a3b8;text-align:center">' +
+      'No locations match "<strong>' + q + '</strong>"' +
+      '<br><span style="font-size:11px">This will be saved as a custom address</span></div>';
+    return;
+  }
+
+  if (!filtered.length) {
+    results.style.display = 'none';
+    return;
+  }
+
+  results.style.display = 'block';
+  results.innerHTML = filtered.slice(0, 100).map(function(l) {
+    var addr = [l.address, l.city, l.state, l.zip].filter(Boolean).join(', ');
+    var highlight = function(text) {
+      if (!query || !text) return text || '';
+      var re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      return text.replace(re, '<mark style="background:#fef08a;padding:0 1px;border-radius:2px">$1</mark>');
+    };
+    return '<div class="shipto-opt" onclick="shipToSelect(' + "'" + l.id + "'" + ')" ' +
+      'onmouseenter="this.style.background=\"#f8fafc\"" onmouseleave="this.style.background=\"\"" ' +
+      'style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .1s">' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div style="width:28px;height:28px;border-radius:6px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">📍</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:600;color:#1e293b">' + highlight(l.name) + ' ' +
+            '<span style="font-size:10px;font-weight:500;background:#f1f5f9;color:#64748b;padding:1px 5px;border-radius:4px">' + (l.type || '') + '</span>' +
+          '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + highlight(addr) + '</div>' +
+          '<div style="font-size:10px;color:#cbd5e1;font-family:monospace;margin-top:1px">' + highlight(l.id) + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('') +
+  (filtered.length > 100 ? '<div style="padding:8px 14px;font-size:11px;color:#94a3b8;text-align:center">Showing 100 of ' + filtered.length + ' — type to narrow results</div>' : '');
+}
+
+function shipToSelect(locId) {
+  var loc = locs.find(function(l) { return l.id === locId; });
+  if (!loc) return;
+
+  var addr = [loc.city, loc.state, loc.zip].filter(Boolean).join(', ');
+  var display = addr || loc.name;
+
+  _shipToSelected = { id: loc.id, name: loc.name, display: display, addr: addr };
+
+  // Set hidden value fields
+  var odtInput = document.getElementById('odt');
+  var odtLocId = document.getElementById('odt-loc-id');
+  if (odtInput)  odtInput.value  = display;
+  if (odtLocId)  odtLocId.value  = loc.id;
+
+  // Update search input
+  var search = document.getElementById('odt-search');
+  if (search) search.value = loc.name + ' — ' + addr;
+
+  // Show badge
+  var badge    = document.getElementById('odt-badge');
+  var badgeName = document.getElementById('odt-badge-name');
+  var badgeAddr = document.getElementById('odt-badge-addr');
+  if (badge)     { badge.style.display = 'flex'; }
+  if (badgeName) badgeName.textContent = loc.name;
+  if (badgeAddr) badgeAddr.textContent = addr;
+
+  // Hide results
+  var results = document.getElementById('odt-results');
+  if (results) results.style.display = 'none';
+
+  var clearBtn = document.getElementById('odt-clear');
+  if (clearBtn) clearBtn.style.display = 'block';
+}
+
+function shipToClear() {
+  _shipToSelected = null;
+  var odtInput  = document.getElementById('odt');
+  var odtLocId  = document.getElementById('odt-loc-id');
+  var search    = document.getElementById('odt-search');
+  var badge     = document.getElementById('odt-badge');
+  var results   = document.getElementById('odt-results');
+  var clearBtn  = document.getElementById('odt-clear');
+  if (odtInput)  odtInput.value  = '';
+  if (odtLocId)  odtLocId.value  = '';
+  if (search)    { search.value = ''; search.focus(); }
+  if (badge)     badge.style.display = 'none';
+  if (results)   results.style.display = 'none';
+  if (clearBtn)  clearBtn.style.display = 'none';
+}
+
+function populateShipToDropdown(selectedDest) {
+  // Pre-select if editing existing order
+  if (!selectedDest) return;
+  var loc = locs.find(function(l) {
+    var addr = [l.city, l.state].filter(Boolean).join(', ').toLowerCase();
+    return l.id === selectedDest ||
+           selectedDest.toLowerCase().includes((l.city||'').toLowerCase()) ||
+           selectedDest.toLowerCase() === l.name.toLowerCase();
+  });
+  if (loc) {
+    shipToSelect(loc.id);
+  } else {
+    // Custom address
+    var odtInput = document.getElementById('odt');
+    var search   = document.getElementById('odt-search');
+    if (odtInput) odtInput.value  = selectedDest;
+    if (search)   search.value = selectedDest;
+  }
+}
+
+// Close picker when clicking outside
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('shipto-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    var results = document.getElementById('odt-results');
+    if (results) results.style.display = 'none';
+    // If nothing selected and text typed — save as custom address
+    var search  = document.getElementById('odt-search');
+    var odtInput = document.getElementById('odt');
+    if (search && odtInput && !_shipToSelected && search.value.trim()) {
+      odtInput.value = search.value.trim();
+    }
+  }
+});
+
+function rnLines(ls){
+  var opts=inv.map(it=>`<option value="${it.id}">${it.id} — ${it.desc}</option>`).join('');
+  document.getElementById('litb').innerHTML=ls.map((l,i)=>{
+    var avail=l.itemId?inv.find(v=>v.id===l.itemId):null;
+    var avQty=avail?(avail.qty-(avail.reserved||0)):null;
+    var avHtml=avail?`<span class="${avQty>=l.qty?'avail-ok':avQty>0?'avail-lo':'avail-no'}">${avQty>=0?avQty:'?'}</span>`:'—';
+    return`<tr>
+      <td><select class="fi" onchange="onIS(this,${i})" style="min-width:140px"><option value="">Select…</option>${opts.replace(`value="${l.itemId}"`,`value="${l.itemId}" selected`)}</select></td>
+      <td><input class="fi" id="ld${i}" value="${l.desc||''}" readonly style="color:var(--text2)"></td>
+      <td><input class="fi" id="lq${i}" type="number" min="1" value="${l.qty||1}" oninput="cL()" style="width:65px"></td>
+      <td><input class="fi" id="lw${i}" type="number" value="${l.wt||0}" oninput="cL()" style="width:65px"></td>
+      <td class="mono" id="lt${i}" style="color:var(--text2)">${((l.qty||0)*(l.wt||0)).toLocaleString()}</td>
+      <td id="lav${i}">${avHtml}</td>
+      <td><button onclick="rmLn(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 5px">✕</button></td>
+    </tr>`;
+  }).join('');
+  cL();
+}
+function onIS(sel,i){var it=inv.find(x=>x.id===sel.value);if(it){document.getElementById('ld'+i).value=it.desc;document.getElementById('lw'+i).value=it.wt;cL();rnLines(gLines());}}
+function cL(){
+  var rows=document.getElementById('litb').rows;var tw=0,tp=0;
+  for(var i=0;i<rows.length;i++){var q=parseFloat(document.getElementById('lq'+i)?.value)||0;var w=parseFloat(document.getElementById('lw'+i)?.value)||0;var t=document.getElementById('lt'+i);if(t)t.textContent=(q*w).toLocaleString();tw+=q*w;tp+=q;}
+  document.getElementById('owt').textContent=tw.toLocaleString()+' lbs';
+  document.getElementById('ops').textContent=tp;
+}
+function addLn(){var ls=gLines();ls.push({itemId:'',desc:'',qty:1,wt:0});rnLines(ls);}
+function rmLn(i){var ls=gLines();ls.splice(i,1);if(!ls.length)ls=[{itemId:'',desc:'',qty:1,wt:0}];rnLines(ls);}
+function gLines(){
+  var rows=document.getElementById('litb').rows;var ls=[];
+  for(var i=0;i<rows.length;i++){var sel=rows[i].querySelector('select');ls.push({itemId:sel?.value||'',desc:document.getElementById('ld'+i)?.value||'',qty:parseFloat(document.getElementById('lq'+i)?.value)||1,wt:parseFloat(document.getElementById('lw'+i)?.value)||0});}
+  return ls.filter(l=>l.itemId||l.desc);
+}
+
+async function svO(action){
+  var id=document.getElementById('oi').value.trim();
+  var cust=document.getElementById('oc').value;
+  var og=document.getElementById('og');var orig=og.options[og.selectedIndex]?.value||'';
+  // Ship To: read from hidden input (set by searchable picker) + capture location ID
+  var destText  = (document.getElementById('odt') || {}).value || '';
+  var destLocId = (document.getElementById('odt-loc-id') || {}).value || '';
+  // If nothing selected in picker, use search input as custom address
+  if (!destText) {
+    var searchInput = document.getElementById('odt-search');
+    destText = searchInput ? searchInput.value.trim() : '';
+  }
+  var dest = destText;
+  var lines=gLines();
+  if(!cust||!dest){toast('Customer and destination required','twn');return;}
+  var existing=_eo?orders.find(x=>x.id===_eo):null;
+  var ord={
+    id, cust, orig, dest,
+    po:   document.getElementById('opo').value,
+    ready: document.getElementById('ords') ? document.getElementById('ords').value : '',
+    due:  document.getElementById('odd').value,
+    mode: document.getElementById('omd').value,
+    inco: document.getElementById('oic').value,
+    priority: document.getElementById('opri').value,
+    comm: document.getElementById('ocm').value,
+    notes:document.getElementById('ont').value,
+    lines, stage:action==='book'?2:1,
+    createdAt:existing?.createdAt||new Date().toISOString(),
+    // preserve existing stage-specific fields
+    tmsId:existing?.tmsId, tmsShipId:existing?.tmsShipId,
+    bol:existing?.bol, pro:existing?.pro, carrier:existing?.carrier, hold:existing?.hold||false,
+    reservedAt:existing?.reservedAt, tmsReleasedAt:existing?.tmsReleasedAt, tmsPlannedAt:existing?.tmsPlannedAt,
+    tenderedAt:existing?.tenderedAt, pickedAt:existing?.pickedAt, packedAt:existing?.packedAt,
+    stagedAt:existing?.stagedAt, shippedAt:existing?.shippedAt, deliveredAt:existing?.deliveredAt,
+    driverName:existing?.driverName, truckNum:existing?.truckNum,
+    pickupDate:existing?.pickupDate, deliveryDate:existing?.deliveryDate,
+    cartons:existing?.cartons, pallets:existing?.pallets, packWt:existing?.packWt,
+    packingSlip:existing?.packingSlip, labelType:existing?.labelType,
+    dockDoor:existing?.dockDoor, stageLane:existing?.stageLane,
+    shipDate:existing?.shipDate, sealNum:existing?.sealNum, driverSign:existing?.driverSign,
+    podRecv:existing?.podRecv, podCond:existing?.podCond, podNotes:existing?.podNotes,
+  };
+  try{
+    await saveOrder(ord);
+    await saveLines(id,lines);
+    if(action==='book') await logStage(id,existing?.stage||1,2);
+    if(_eo){var ix=orders.findIndex(x=>x.id===_eo);if(ix>-1)orders[ix]=ord;}
+    else orders.push(ord);
+    cl('m-o');ro();updateBadges();updatePipelineCounts();
+    if(action==='book'){toast('✅ Order booked — '+id+' · Stage 2','tok');openAvail(id);}
+    else toast('📝 Draft saved — '+id,'tin');
+  }catch(e){toast('❌ '+e.message,'ter');console.error(e);}
+}
+
+// ─── AVAILABILITY CHECK (Stage 2→3) ─────────────
+function openAvail(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pa=id;
+  var lines=o.lines||[];
+  var allOk=true;
+  document.getElementById('avail-lines').innerHTML=
+    `<table class="lit"><thead><tr><th>Item</th><th>Description</th><th>Ordered</th><th>On Hand</th><th>Reserved</th><th>Available</th><th>Result</th></tr></thead><tbody>`+
+    lines.map(l=>{
+      var it=inv.find(v=>v.id===l.itemId);
+      var onHand=it?it.qty:0;
+      var reserved=it?it.reserved||0:0;
+      var avail=onHand-reserved;
+      var ok=avail>=l.qty;
+      if(!ok)allOk=false;
+      return`<tr>
+        <td class="mono">${l.itemId||'—'}</td>
+        <td>${l.desc||'—'}</td>
+        <td class="mono">${l.qty}</td>
+        <td class="mono">${onHand}</td>
+        <td class="mono">${reserved}</td>
+        <td class="mono ${ok?'avail-ok':avail>0?'avail-lo':'avail-no'}">${avail}</td>
+        <td>${ok?`<span class="stg sg">OK</span>`:`<span class="stg sr2">${avail<=0?'OUT OF STOCK':'PARTIAL'}</span>`}</td>
+      </tr>`;
+    }).join('')+
+    `</tbody></table>`;
+  var res=document.getElementById('avail-result');
+  if(allOk){res.innerHTML=`<div class="note note-g">✅ All items available. Click confirm to reserve stock and advance to Stage 3.</div>`;document.getElementById('avail-btn').disabled=false;}
+  else{res.innerHTML=`<div class="note note-r">⚠ Some items are short. You can still confirm and accept partial allocation, or place on hold to wait for restock.</div>`;document.getElementById('avail-btn').disabled=false;}
+  openM('m-avail');
+}
+
+async function confirmAvail(){
+  var o=orders.find(x=>x.id===_pa);if(!o)return;
+  var btn=document.getElementById('avail-btn');btn.textContent='Reserving…';btn.disabled=true;
+  try{
+    // Reserve inventory in DB
+    for(var l of (o.lines||[])){
+      var it=inv.find(v=>v.id===l.itemId);
+      if(it){
+        var reserve=Math.min(l.qty,it.qty-(it.reserved||0));
+        it.reserved=(it.reserved||0)+reserve;
+        await db().from('oms_inventory').update({qty_reserved:it.reserved}).eq('id',it.id);
+        await logInvTxn(it.id,o.id,'RESERVE',reserve,it.qty-it.reserved,'Order '+o.id);
+      }
+    }
+    o.stage=3; o.reservedAt=new Date().toISOString();
+    await saveOrder(o);
+    await logStage(o.id,2,3);
+    cl('m-avail');ro();ri();updateBadges();updatePipelineCounts();
+    toast('🔒 Stock reserved — '+o.id+' · Stage 3','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+  finally{btn.textContent='✓ Confirm & Reserve Stock';btn.disabled=false;}
+}
+
+// ─── RELEASE TO TMS (Stage 3→4) ──────────────────
+function openTMSSend(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  var wt=(o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
+  var pcs=(o.lines||[]).reduce((s,l)=>s+l.qty,0);
+  document.getElementById('tms-prev').innerHTML=
+    `<div class="ifg ifg3">${ifc('Order #',o.id)}${ifc('Customer',o.cust)}${ifc('PO #',o.po||'—')}${ifc('Origin',locName(o.orig))}${ifc('Destination',o.dest)}${ifc('Mode',o.mode||'— TMS selects —')}${ifc('Weight',wt.toLocaleString()+' lbs')}${ifc('Pieces',pcs)}${ifc('Required',o.due||'—')}</div>` +
+    /* Line Items */
+    (o.lines&&o.lines.length ? `<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">📦 Line Items</div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f8fafc"><th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">#</th><th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Item ID</th><th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Description</th><th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Qty</th><th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Unit Wt</th><th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Total Wt</th></tr></thead><tbody>${(o.lines||[]).map(l=>`<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#94a3b8">${l.lineNum||'-'}</td><td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#3b82f6">${l.itemId||'—'}</td><td style="padding:6px 10px">${l.desc||'—'}</td><td style="padding:6px 10px;text-align:right;font-weight:600">${l.qty||0}</td><td style="padding:6px 10px;text-align:right;font-family:monospace">${l.wt||0} lbs</td><td style="padding:6px 10px;text-align:right;font-family:monospace;font-weight:600">${((l.qty||0)*(l.wt||0)).toLocaleString()} lbs</td></tr>`).join('')}</tbody></table></div>` : '');
+  openM('m-tms');
+}
+
+async function doTMS(){
+  var id=_pt; var o=orders.find(x=>x.id===id); if(!o) return;
+  var btn=document.getElementById('tms-go'); btn.textContent='Sending…'; btn.disabled=true;
+  try{
+    var cName = custName(o.cust);
+    var _pWt  = (o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
+    var _pPcs = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
+
+    // ── Advance stage immediately — no waiting ────────────────────────
+    o.stage=4; o.tmsId=o.id; o.tmsReleasedAt=new Date().toISOString();
+    await saveOrder(o);
+    await logStage(o.id,3,4);
+    cl('m-tms'); ro(); updateBadges(); updatePipelineCounts();
+    toast('📤 Sent to Middleware — TMS will plan shortly (Stage 4)','tok');
+
+    // ── Fire-and-forget to Middleware queue ───────────────────────────
+    ZoreeMiddleware.pushOrderToTMS(o, o.lines, cName).catch(function(e){
+      console.warn('[doTMS] MW queue error (non-blocking):', e.message);
+    });
+
+  }catch(e){ toast('❌ '+e.message,'ter'); console.error('[doTMS]',e); }
+  finally{ btn.textContent='📤 Release to TMS'; btn.disabled=false; }
+}
+
+// ─── CARRIER TENDER (Stage 5→6) ──────────────────
+function openTender(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  var ship=o.tmsShipId?tmsS.find(s=>s.id===o.tmsShipId):null;
+  document.getElementById('tender-info').innerHTML=
+    ifc('Order',o.id)+ifc('Carrier',o.carrier||ship?.carrier||'TMS Assigned')+
+    ifc('Mode',o.mode||ship?.mode||'TL')+ifc('Origin',locName(o.orig))+
+    ifc('Destination',o.dest)+ifc('Pickup',ship?.pickup_date||o.pickupDate||'—')+
+    ifc('TMS Shipment',o.tmsShipId||'—')+ifc('Est. Delivery',ship?.delivery_date||o.deliveryDate||'—');
+  document.getElementById('bol-in').value=o.bol||('BOL-'+Date.now().toString().slice(-6));
+  document.getElementById('pro-in').value=o.pro||'';
+  document.getElementById('pu-date').value=o.pickupDate||ship?.pickup_date||'';
+  document.getElementById('del-date').value=o.deliveryDate||ship?.delivery_date||'';
+  openM('m-tender');
+}
+async function doTender(){
+  var o=orders.find(x=>x.id===_pt);if(!o)return;
+  o.bol=document.getElementById('bol-in').value;
+  o.pro=document.getElementById('pro-in').value;
+  o.pickupDate=document.getElementById('pu-date').value;
+  o.deliveryDate=document.getElementById('del-date').value;
+  o.driverName=document.getElementById('drv-name').value;
+  o.truckNum=document.getElementById('drv-truck').value;
+  o.stage=6; o.tenderedAt=new Date().toISOString();
+  try{
+    await saveOrder(o);
+    await logStage(o.id,5,6);
+    cl('m-tender');ro();rw();updateBadges();updatePipelineCounts();
+    toast('📋 Carrier tendered — BOL: '+o.bol+' · Stage 6','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── PICK (Stage 6→7) ────────────────────────────
+function openPickModal(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  document.getElementById('pick-ti').textContent='Pick Order — '+id;
+  document.getElementById('pick-hdr').innerHTML=ifc('Order',o.id)+ifc('Customer',o.cust)+ifc('Destination',o.dest)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Pickup',o.pickupDate||'—');
+  document.getElementById('pick-lines').innerHTML=
+    `<div style="padding:4px 12px;background:var(--bg4);border-bottom:1px solid var(--border)"><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">PICK LIST — confirm each line when picked</span></div>`+
+    (o.lines||[]).map((l,i)=>{
+      var it=inv.find(v=>v.id===l.itemId);
+      return`<div class="chk-item">
+        <input type="checkbox" class="chk-cb" id="pk${i}" ${o.stage>6?'checked disabled':''}>
+        <div class="chk-info"><div class="chk-name">${l.desc||l.itemId}</div><div class="chk-sub">Bin: ${it?.bin||'N/A'} · Item: ${l.itemId}</div></div>
+        <div class="chk-right" style="color:var(--amber)">×${l.qty}</div>
+      </div>`;
+    }).join('');
+  openM('m-pick');
+}
+async function confirmPick(){
+  var o=orders.find(x=>x.id===_pt);if(!o)return;
+  o.stage=7;o.pickedAt=new Date().toISOString();
+  try{await saveOrder(o);await logStage(o.id,6,7);cl('m-pick');rw();ro();updateBadges();updatePipelineCounts();toast('🔎 Picked — '+o.id+' · Stage 7','tok');}
+  catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── PACK (Stage 7→8) ────────────────────────────
+function openPackModal(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  var wt=(o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
+  document.getElementById('pack-hdr').innerHTML=ifc('Order',o.id)+ifc('Customer',o.cust)+ifc('Total Wt',wt.toLocaleString()+' lbs');
+  document.getElementById('pk-cartons').value=o.cartons||1;
+  document.getElementById('pk-weight').value=o.packWt||wt;
+  document.getElementById('pk-pallets').value=o.pallets||1;
+  document.getElementById('pk-slip').value=o.packingSlip||('PS-'+Date.now().toString().slice(-6));
+  openM('m-pack');
+}
+async function confirmPack(){
+  var o=orders.find(x=>x.id===_pt);if(!o)return;
+  o.cartons=parseInt(document.getElementById('pk-cartons').value)||1;
+  o.packWt=parseFloat(document.getElementById('pk-weight').value)||0;
+  o.pallets=parseInt(document.getElementById('pk-pallets').value)||1;
+  o.packingSlip=document.getElementById('pk-slip').value;
+  o.labelType=document.getElementById('pk-lbl').value;
+  o.stage=8;o.packedAt=new Date().toISOString();
+  try{await saveOrder(o);await logStage(o.id,7,8);cl('m-pack');rw();ro();updateBadges();updatePipelineCounts();toast('📦 Packed — '+o.id+' · '+o.cartons+' carton(s) · Stage 8','tok');}
+  catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── STAGE / DOCK (Stage 8→9) ────────────────────
+function openDockModal(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  document.getElementById('dock-hdr').innerHTML=ifc('Order',o.id)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Cartons',o.cartons||'—');
+  document.getElementById('dk-door').value=o.dockDoor||'Dock 1';
+  document.getElementById('dk-lane').value=o.stageLane||'Lane A-1';
+  openM('m-dock');
+}
+async function confirmDock(){
+  var o=orders.find(x=>x.id===_pt);if(!o)return;
+  o.dockDoor=document.getElementById('dk-door').value;
+  o.stageLane=document.getElementById('dk-lane').value;
+  o.dockETA=document.getElementById('dk-eta').value||null;
+  o.stage=9;o.stagedAt=new Date().toISOString();
+  try{
+    await saveOrder(o);
+    await logStage(o.id,8,9);
+    // Log dock schedule
+    var loc=locs.find(l=>l.id===o.orig)||locs[0];
+    if(loc) await db().from('oms_dock_schedule').insert({location_id:loc.id,order_id:o.id,dock_door:o.dockDoor,stage_lane:o.stageLane||null,carrier:o.carrier||null,scheduled_at:o.dockETA||null,status:'Scheduled'});
+    cl('m-dock');rw();ro();updateBadges();updatePipelineCounts();
+    toast('🚪 Staged at '+o.dockDoor+' — '+o.id+' · Stage 9','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── LOAD & SHIP (Stage 9→10) ────────────────────
+function openShipModal(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  document.getElementById('ship-hdr').innerHTML=ifc('Order',o.id)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Dock',o.dockDoor||'—')+ifc('Cartons',o.cartons||'—')+ifc('Pallets',o.pallets||'—');
+  document.getElementById('sh-pcs').value=(o.lines||[]).reduce((s,l)=>s+l.qty,0);
+  document.getElementById('sh-driver').value=o.driverName||'';
+  openM('m-ship');
+}
+async function confirmShip(){
+  var o=orders.find(x=>x.id===_pt);if(!o)return;
+  o.shipDate=document.getElementById('sh-date').value;
+  o.shipTime=document.getElementById('sh-time').value;
+  o.sealNum=document.getElementById('sh-seal').value;
+  o.driverSign=document.getElementById('sh-driver').value;
+  o.piecesLoaded=parseInt(document.getElementById('sh-pcs').value)||0;
+  o.stage=10;o.shippedAt=new Date().toISOString();
+  try{
+    // Deduct inventory (unreserve + reduce qty)
+    for(var l of (o.lines||[])){
+      var it=inv.find(v=>v.id===l.itemId);
+      if(it){
+        it.reserved=Math.max(0,(it.reserved||0)-l.qty);
+        it.qty=Math.max(0,it.qty-l.qty);
+        await db().from('oms_inventory').update({qty_on_hand:it.qty,qty_reserved:it.reserved}).eq('id',it.id);
+        await logInvTxn(it.id,o.id,'SHIP',-l.qty,it.qty,'BOL:'+o.bol);
+      }
+    }
+    await saveOrder(o);
+    await logStage(o.id,9,10);
+    // ── Middleware: push ship status to TMS DB ────────────────────────
+    var mwRes = await ZoreeMiddleware.pushShipStatus(o.tmsShipId);
+    if(mwRes.error) console.warn('[confirmShip] TMS status push failed:', mwRes.error.message);
+    mwLog(mwRes.error ? '⚠ pushShipStatus failed for ' + o.tmsShipId : '→ pushShipStatus: ' + o.tmsShipId + ' → In Transit', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','shipped_at'], payload:{tmsShipmentId:o.tmsShipId, status:'In Transit', shippedAt:o.shippedAt}});
+    cl('m-ship');rd();ro();ri();updateBadges();updatePipelineCounts();
+    toast('🚛 Shipped — '+o.id+(o.tmsShipId?' · TMS → In Transit':''),'tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── POD / DELIVERY (Stage 10→11) ─────────────────
+function openPODModal(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  var events=[
+    {e:'Order Booked',t:o.createdAt,done:o.stage>=2,cur:o.stage===2},
+    {e:'Stock Reserved',t:o.reservedAt||'',done:o.stage>=3,cur:o.stage===3},
+    {e:'Released to TMS',t:o.tmsReleasedAt||'',done:o.stage>=4,cur:o.stage===4},
+    {e:'TMS Planned / Carrier Assigned',t:o.tmsPlannedAt||'',done:o.stage>=5,cur:o.stage===5},
+    {e:'BOL Confirmed — BOL: '+(o.bol||'—'),t:o.tenderedAt||'',done:o.stage>=6,cur:o.stage===6},
+    {e:'Picked',t:o.pickedAt||'',done:o.stage>=7,cur:o.stage===7},
+    {e:'Packed — '+(o.cartons||'?')+' cartons',t:o.packedAt||'',done:o.stage>=8,cur:o.stage===8},
+    {e:'Staged at '+(o.dockDoor||'Dock'),t:o.stagedAt||'',done:o.stage>=9,cur:o.stage===9},
+    {e:'Loaded & Shipped',t:o.shippedAt||'',done:o.stage>=10,cur:o.stage===10},
+    {e:'Delivered / POD',t:o.deliveredAt||'',done:o.stage>=11,cur:false},
+  ];
+  document.getElementById('pod-hdr').innerHTML=ifc('Order',o.id)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Ship Date',o.shipDate||'—')+ifc('Est. Delivery',o.deliveryDate||'—')+ifc('PRO #',o.pro||'—');
+  document.getElementById('pod-timeline').innerHTML=
+    `<div class="track-timeline">`+
+    events.map(ev=>`<div class="track-event">
+      <div class="track-dot ${ev.done?'ok':ev.cur?'cur':'pend'}">${ev.done?'✓':ev.cur?'→':'○'}</div>
+      <div class="track-info"><div class="track-evt">${ev.e}</div><div class="track-time">${ev.t?new Date(ev.t).toLocaleString():'Pending'}</div></div>
+    </div>`).join('')+
+    `</div>`;
+  openM('m-pod');
+}
+async function confirmPOD(){
+  var o=orders.find(x=>x.id===_pt);if(!o)return;
+  o.deliveredAt=new Date(document.getElementById('pod-date').value+'T'+(document.getElementById('pod-time').value||'12:00')).toISOString();
+  o.podRecv=document.getElementById('pod-recv').value;
+  o.podCond=document.getElementById('pod-cond').value;
+  o.podNotes=document.getElementById('pod-notes').value;
+  o.stage=11;
+  try{
+    await saveOrder(o);
+    await logStage(o.id,10,11);
+    // ── Middleware: push POD / Delivered status to TMS DB ─────────────
+    var mwRes = await ZoreeMiddleware.pushPODStatus(o.tmsShipId, o.deliveredAt);
+    if(mwRes.error) console.warn('[confirmPOD] TMS status push failed:', mwRes.error.message);
+    mwLog(mwRes.error ? '⚠ pushPODStatus failed for ' + o.tmsShipId : '→ pushPODStatus: ' + o.tmsShipId + ' → Delivered', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','delivered_at'], payload:{tmsShipmentId:o.tmsShipId, status:'Delivered', deliveredAt:o.deliveredAt, podRecv:o.podRecv, podCond:o.podCond}});
+    cl('m-pod');rd();ro();updateBadges();updatePipelineCounts();
+    toast('✅ Delivered & POD confirmed — '+o.id+' — Trigger: EDI 210 Invoice','tok');
+    cl('m-pod');rd();ro();updateBadges();updatePipelineCounts();
+    toast('✅ Delivered & POD confirmed — '+o.id+' — Trigger: EDI 210 Invoice','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── WAREHOUSE KANBAN (Stages 6–9) ───────────────
+function rw(){
+  var q=(document.getElementById('sw').value||'').toLowerCase();
+  var cols=[
+    {s:6,lbl:'📋 BOL Confirmed',col:'var(--teal)',   kc:'s6',btnLbl:'Start Pick →',fn:id=>`openPickModal('${id}')`},
+    {s:7,lbl:'🔎 Picking',          col:'var(--orange)', kc:'s7',btnLbl:'Mark Packed →',fn:id=>`openPackModal('${id}')`},
+    {s:8,lbl:'📦 Packed',            col:'var(--amber2)', kc:'s8',btnLbl:'Assign Dock →',fn:id=>`openDockModal('${id}')`},
+    {s:9,lbl:'🚪 Staged at Dock',    col:'var(--purple)', kc:'s9',btnLbl:'Load & Ship →',fn:id=>`openShipModal('${id}')`},
+  ];
+  document.getElementById('kb').innerHTML=cols.map(col=>{
+    var cards=orders.filter(o=>o.stage===col.s&&(!q||(o.id+custName(o.cust)+(o.dest||'')).toLowerCase().includes(q)));
+    return`<div class="kcol">
+      <div class="kch"><span style="width:7px;height:7px;border-radius:50%;background:${col.col};flex-shrink:0;display:inline-block"></span><span class="kct" style="margin-left:4px">${col.lbl}</span><span class="kcn">${cards.length}</span></div>
+      <div class="kcards">${cards.length?cards.map(o=>`<div class="kcard kcard-${col.s}" onclick="openStageModal('${o.id}')">
+        <div class="kid">${o.id}${o.bol?` · <span style="color:var(--teal)">${o.bol}</span>`:''}</div>
+        <div class="kcu">${custName(o.cust)}</div><div class="kde">→ ${o.dest||'—'}${o.dockDoor?' · '+o.dockDoor:''}</div>
+        <div class="kft"><span class="km">${(o.lines||[]).length} lines · ${o.carrier||o.mode||'TL'}${o.cartons?' · '+o.cartons+' ctns':''}</span>
+        <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();${col.fn(o.id)}">${col.btnLbl}</button></div>
+      </div>`).join(''):'<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Empty</div>'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── DELIVERY TRACKING (Stages 10–11) ────────────
+function rd(){
+  var q=(document.getElementById('sd').value||'').toLowerCase();
+  var rows=orders.filter(o=>o.stage>=10&&(!q||(o.id+custName(o.cust)+(o.dest||'')+o.bol).toLowerCase().includes(q)));
+  var tb=document.getElementById('dtb');
+  document.getElementById('de').style.display=rows.length?'none':'flex';
+  tb.innerHTML=rows.map(o=>{
+    var ediEvents=o.stage>=11?
+      `<span class="stg sg" style="margin-right:3px">EDI 214</span><span class="stg sg">EDI 210</span>`:
+      `<span class="stg s6">EDI 214</span>`;
+    var a=o.stage===10?`<button class="btn btn-success btn-sm" onclick="openPODModal('${o.id}')">✅ POD</button>`:
+      `<span class="badge" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(5,150,105,.2)">✓ CLOSED</span>`;
+    return`<tr onclick="openPODModal('${o.id}')">
+      <td><span class="mono" style="color:var(--amber);font-weight:700">${o.id}</span></td>
+      <td><strong>${custName(o.cust)}</strong></td>
+      <td>${o.dest||'—'}</td>
+      <td>${o.carrier||'—'}</td>
+      <td class="mono" style="color:var(--teal)">${o.bol||'—'}</td>
+      <td class="mono">${o.pro||'—'}</td>
+      <td class="mono">${o.shipDate||'—'}</td>
+      <td class="mono">${o.deliveryDate||'—'}</td>
+      <td>${stgBadge(o.stage)}</td>
+      <td>${ediEvents}</td>
+      <td onclick="event.stopPropagation()">${a}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── INVENTORY RENDER ───────────────────────────
+function ri(){
+  var q=(document.getElementById('si').value||'').toLowerCase();
+  var f=document.getElementById('fi').value;
+  var rows=inv.filter(it=>{var st=it.qty<=0?'ot':it.qty<=it.reorder?'lo':'ok';if(f&&st!==f)return false;if(q&&!(it.id+it.desc+it.cust+it.cat).toLowerCase().includes(q))return false;return true;});
+  document.getElementById('ik-t').textContent=inv.length;
+  document.getElementById('ik-o').textContent=inv.filter(i=>i.qty>i.reorder).length;
+  document.getElementById('ik-l').textContent=inv.filter(i=>i.qty>0&&i.qty<=i.reorder).length;
+  document.getElementById('ik-x').textContent=inv.filter(i=>i.qty<=0).length;
+  document.getElementById('ik-r').textContent=inv.filter(i=>(i.reserved||0)>0).length;
+  document.getElementById('ik-v').textContent='$'+Math.round(inv.reduce((s,i)=>s+i.qty*i.val,0)).toLocaleString();
+  var g=document.getElementById('igr');
+  document.getElementById('ie').style.display=rows.length?'none':'flex';
+  var cc={Electronics:'#3b82f6',Industrial:'#f59e0b',Perishable:'#22c55e',Hazmat:'#ef4444',General:'#6b7280'};
+  g.innerHTML=rows.map(it=>{
+    var pct=it.maxQty>0?Math.min(100,Math.round(it.qty/it.maxQty*100)):0;
+    var st=it.qty<=0?'ot':it.qty<=it.reorder?'lo':'ok';
+    var bc=st==='ok'?'var(--green)':st==='lo'?'var(--amber)':'var(--red)';
+    return`<div class="icard ic-${st}" onclick="openIM('${it.id}')">
+      <div class="iid">${it.id} · <span style="color:${cc[it.cat]||'#6b7280'};font-size:9px;font-weight:700">${it.cat||''}</span></div>
+      <div class="inm">${it.desc}</div><div class="icu">${custName(it.cust)||'—'}</div>
+      <div class="ibar"><div class="ifill" style="width:${pct}%;background:${bc}"></div></div>
+      <div class="inum"><span>${it.qty} on hand${(it.reserved||0)>0?` · <span style="color:var(--purple)">${it.reserved} reserved</span>`:''}</span><span>Max: ${it.maxQty}</span></div>
+      <div class="ift">${stgBadge(st==='ok'?'ok':st==='lo'?'lo':'ot',true)}<span class="ibin">${it.bin}</span></div>
+    </div>`;
+  }).join('');
+}
+function openIM(id){
+  _ei=id;var it=id?inv.find(x=>x.id===id):null;
+  document.getElementById('im-ti').textContent=it?'Edit Item — '+id:'Add Item';
+  document.getElementById('ii-d').value=it?.id||'ITM-'+Date.now().toString().slice(-4);
+  document.getElementById('ii-n').value=it?.desc||'';
+  document.getElementById('ii-q').value=it?.qty||0;
+  document.getElementById('ii-res').value=it?.reserved||0;
+  document.getElementById('ii-r').value=it?.reorder||10;
+  document.getElementById('ii-m').value=it?.maxQty||200;
+  document.getElementById('ii-w').value=it?.wt||0;
+  document.getElementById('ii-v').value=it?.val||0;
+  document.getElementById('ii-f').value=it?.fc||'';
+  document.getElementById('ii-b').value=it?.bin||'';
+  document.getElementById('ii-cat').value=it?.cat||'General';
+  document.getElementById('ii-nmfc').value=it?.nmfc||'';
+  var cs=document.getElementById('ii-c');
+  cs.innerHTML='<option value="">No Customer</option>'+custs.map(c=>`<option value="${c.id}"${it?.cust===c.id?' selected':''}>${c.name}</option>`).join('');
+  openM('m-i');
+}
+async function svI(){
+  var id=document.getElementById('ii-d').value.trim();var desc=document.getElementById('ii-n').value.trim();
+  if(!id||!desc){toast('ID and description required','twn');return;}
+  var item={id,desc,cust:document.getElementById('ii-c').value,qty:parseInt(document.getElementById('ii-q').value)||0,reserved:parseInt(document.getElementById('ii-res').value)||0,reorder:parseInt(document.getElementById('ii-r').value)||10,maxQty:parseInt(document.getElementById('ii-m').value)||200,bin:document.getElementById('ii-b').value,wt:parseFloat(document.getElementById('ii-w').value)||0,val:parseFloat(document.getElementById('ii-v').value)||0,fc:document.getElementById('ii-f').value,cat:document.getElementById('ii-cat').value,nmfc:document.getElementById('ii-nmfc').value};
+  try{
+    await saveInvItem(item);
+    if(_ei){var ix=inv.findIndex(x=>x.id===_ei);if(ix>-1)inv[ix]=item;}else inv.push(item);
+    cl('m-i');ri();updateBadges();toast('✅ Item saved','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── CUSTOMERS ──────────────────────────────────
+function rc(){
+  var q=(document.getElementById('sc').value||'').toLowerCase();
+  var cnt={};orders.forEach(o=>{cnt[o.cust]=(cnt[o.cust]||0)+1;});
+  document.getElementById('ctb').innerHTML=custs.filter(c=>!q||(c.name+c.contact+c.email).toLowerCase().includes(q)).map(c=>
+    `<tr><td><strong>${c.name}</strong></td><td>${c.contact||'—'}</td><td style="color:var(--text2)">${c.email||'—'}</td>
+    <td class="mono">${c.phone||'—'}</td><td>${c.city||'—'}, ${c.state||'—'}</td>
+    <td>${stgBadge(c.credit||'Approved',true)}</td>
+    <td class="mono" style="color:var(--amber)">${cnt[c.id]||0}</td>
+    <td><div class="acts"><button class="btn btn-secondary btn-sm" onclick="openCM('${c.id}')">✏ Edit</button><button class="btn btn-danger btn-sm" onclick="delC('${c.id}')">🗑</button></div></td>
+    </tr>`).join('');
+}
+function openCM(id){
+  _ec=id;var c=id?custs.find(x=>x.id===id):null;
+  document.getElementById('cm-ti').textContent=c?'Edit Customer':'Add Customer';
+  document.getElementById('cn').value=c?.name||'';document.getElementById('cc').value=c?.contact||'';
+  document.getElementById('ce').value=c?.email||'';document.getElementById('cp').value=c?.phone||'';
+  document.getElementById('cy').value=c?.city||'';document.getElementById('cst').value=c?.state||'';
+  document.getElementById('ccs').value=c?.credit||'Approved';
+  openM('m-c');
+}
+async function svC(){
+  var name=document.getElementById('cn').value.trim();if(!name){toast('Name required','twn');return;}
+  var c={id:_ec||'C-'+Date.now().toString().slice(-5),name,contact:document.getElementById('cc').value,email:document.getElementById('ce').value,phone:document.getElementById('cp').value,city:document.getElementById('cy').value,state:document.getElementById('cst').value,credit:document.getElementById('ccs').value};
+  try{
+    await saveCust(c);
+    if(_ec){var ix=custs.findIndex(x=>x.id===_ec);if(ix>-1)custs[ix]=c;}else custs.push(c);
+    cl('m-c');rc();toast('✅ Saved','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+async function delC(id){if(!confirm('Delete customer?'))return;
+  try{await db().from('oms_customers').update({active:false}).eq('id',id);custs=custs.filter(x=>x.id!==id);rc();toast('Deleted','tin');}
+  catch(e){toast('❌ '+e.message,'ter');}
+}
+
+// ─── LOCATIONS ──────────────────────────────────
+function rl(){
+  document.getElementById('ltb').innerHTML=locs.map(l=>
+    `<tr><td><span class="ibin">${l.id}</span></td><td><strong>${l.name}</strong></td><td>${l.type}</td>
+    <td style="color:var(--text2)">${l.addr||'—'}</td><td>${l.city||'—'}</td>
+    <td class="mono">${l.state||'—'}</td><td class="mono">${l.zip||'—'}</td>
+    <td class="mono">${l.docks||8}</td>
+    <td><div class="acts"><button class="btn btn-secondary btn-sm" onclick="openLM('${l.id}')">✏ Edit</button><button class="btn btn-danger btn-sm" onclick="delL('${l.id}')">🗑</button></div></td>
+    </tr>`).join('');
+}
+function openLM(id){
+  _el=id;var l=id?locs.find(x=>x.id===id):null;
+  document.getElementById('lm-ti').textContent=l?'Edit Location':'Add Location';
+  document.getElementById('lid').value=l?.id||'WH-'+Date.now().toString().slice(-4);
+  document.getElementById('lnm').value=l?.name||'';document.getElementById('lty').value=l?.type||'Warehouse';
+  document.getElementById('lad').value=l?.addr||'';document.getElementById('lci').value=l?.city||'';
+  document.getElementById('lst').value=l?.state||'';document.getElementById('lzp').value=l?.zip||'';
+  document.getElementById('ldk').value=l?.docks||8;
+  openM('m-l');
+}
+async function svL(){
+  var name=document.getElementById('lnm').value.trim();if(!name){toast('Name required','twn');return;}
+  var l={id:document.getElementById('lid').value.trim()||'WH-'+Date.now().toString().slice(-4),name,type:document.getElementById('lty').value,addr:document.getElementById('lad').value,city:document.getElementById('lci').value,state:document.getElementById('lst').value,zip:document.getElementById('lzp').value,docks:parseInt(document.getElementById('ldk').value)||8};
+  try{
+    await saveLoc(l);
+    if(_el){var ix=locs.findIndex(x=>x.id===_el);if(ix>-1)locs[ix]=l;}else locs.push(l);
+    cl('m-l');rl();toast('✅ Saved','tok');
+  }catch(e){toast('❌ '+e.message,'ter');}
+}
+async function delL(id){if(!confirm('Delete location?'))return;
+  try{await db().from('oms_locations').update({active:false}).eq('id',id);locs=locs.filter(x=>x.id!==id);rl();toast('Deleted','tin');}
+  catch(e){toast('❌ '+e.message,'ter');}
+}
+
+async function toggleHold(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  o.hold=!o.hold;
+  try{await saveOrder(o);ro();toast(o.hold?'⚠ Order placed on hold':'▶ Hold released','twn');}
+  catch(e){o.hold=!o.hold;toast('❌ '+e.message,'ter');}
+}
+
+// ─── HELPERS ────────────────────────────────────
+function openM(id){document.getElementById(id).classList.add('on');}
+function cl(id){document.getElementById(id).classList.remove('on');}
+document.addEventListener('click',e=>{if(e.target.classList.contains('ov'))e.target.classList.remove('on');});
+
+var INVBADGE={'ok':'sg','lo':'blo','ot':'sr2'};
+var INVLBL={'ok':'In Stock','lo':'Low Stock','ot':'Out of Stock'};
+var CUSTBADGE={'Approved':'sg','On Hold':'s-hold','Prepay Only':'s5'};
+function stgBadge(stageOrKey,inv){
+  if(inv){var c=INVBADGE[stageOrKey]||CUSTBADGE[stageOrKey]||'s1';var l=INVLBL[stageOrKey]||stageOrKey;return`<span class="stg ${c}">${l}</span>`;}
+  var n=typeof stageOrKey==='number'?stageOrKey:0;
+  var s=STAGES[n];
+  return`<span class="stg ${s?s.cls:'s1'}">${s?s.lbl:stageOrKey}</span>`;
+}
+function ifc(l,v){return`<div class="ifc"><div class="ifl">${l}</div><div class="ifv">${v}</div></div>`;}
+function toast(msg,cls){
+  var w=document.getElementById('twr');var t=document.createElement('div');
+  t.className='toast '+(cls||'tin');t.textContent=msg;w.appendChild(t);
+  setTimeout(()=>{t.style.cssText='opacity:0;transition:opacity .3s';setTimeout(()=>t.remove(),300);},3500);
+}
+
+// ─── ORDER DETAIL DRAWER ──────────────────────────────────────────
+function openOrderDetail(id) {
+  var o = orders.find(x => x.id === id);
+  if (!o) return;
+  var dr = document.getElementById('ord-detail-drawer');
+  if (!dr) return;
+
+  var stageLabels = ['','Draft','Booked','Reserved','Released to TMS','TMS Planned','Tendered','Picking','Packed','Staged','Shipped','Delivered'];
+
+  function row(label, val) {
+    if (!val && val !== 0) return '';
+    return `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">${label}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--text);text-align:right;max-width:60%">${val}</span>
+    </div>`;
+  }
+
+  var lines = (o.lines||[]).map(l => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f8faff;border-radius:6px;margin-bottom:4px">
+    <span style="font-size:12px;font-weight:600;color:var(--text)">${l.itemId||'—'}</span>
+    <span style="font-size:12px;color:var(--text3)">${l.qty||0} units · ${((l.wt||0)*(l.qty||0)).toLocaleString()} lbs</span>
+  </div>`).join('');
+
+  var totalWt = (o.lines||[]).reduce((s,l)=>s+((l.wt||0)*(l.qty||0)),0);
+
+  dr.querySelector('#odd-body').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <span class="mono" style="font-size:18px;font-weight:800;color:var(--amber)">${o.id}</span>
+      ${stgBadge(o.stage)}
+      ${o.hold ? '<span class="stg s-hold">On Hold</span>' : ''}
+    </div>
+
+    <div style="background:#f8faff;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Order Info</div>
+      ${row('Customer', custName(o.cust))}
+      ${row('Stage', stageLabels[o.stage]||o.stage)}
+      ${row('PO Number', o.po)}
+      ${row('Mode', o.mode)}
+      ${row('Priority', o.priority)}
+      ${row('Incoterms', o.inco)}
+      ${row('Commodity', o.comm)}
+      ${row('Created', o.createdAt ? o.createdAt.slice(0,10) : '')}
+    </div>
+
+    <div style="background:#f8faff;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Routing</div>
+      ${row('Origin', locName ? locName(o.orig) : o.orig)}
+      ${row('Destination', o.dest)}
+      ${row('Due Date', o.due)}
+    </div>
+
+    <div style="background:#f8faff;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Shipment</div>
+      ${row('Carrier', o.carrier)}
+      ${row('TMS Order Ref', o.tmsId)}
+      ${row('TMS Shipment', o.tmsShipId)}
+      ${row('Pickup Date', o.pickupDate)}
+      ${row('Est. Delivery', o.deliveryDate)}
+      ${row('BOL #', o.bol)}
+      ${row('PRO #', o.pro)}
+      ${row('Seal #', o.sealNum)}
+      ${row('Driver', o.driverName)}
+      ${row('Truck / Trailer', o.truckNum)}
+      ${row('Ship Date', o.shipDate)}
+      ${row('Shipped At', o.shippedAt ? o.shippedAt.slice(0,16).replace('T',' ') : '')}
+      ${row('Delivered At', o.deliveredAt ? o.deliveredAt.slice(0,16).replace('T',' ') : '')}
+    </div>
+
+    <div style="background:#f8faff;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Weight & Freight</div>
+      ${row('Total Weight', totalWt.toLocaleString() + ' lbs')}
+      ${row('Cartons', o.cartons)}
+      ${row('Pallets', o.pallets)}
+      ${row('Packed Weight', o.packWt ? o.packWt + ' lbs' : '')}
+      ${row('Dock Door', o.dockDoor)}
+      ${row('Stage Lane', o.stageLane)}
+    </div>
+
+    ${o.notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Notes</div>
+      <div style="font-size:13px;color:var(--text)">${o.notes}</div>
+    </div>` : ''}
+    ${o.stage >= 4 ? `<div style="background:${o.tmsShipId ? '#f0fdf4' : '#f8faff'};border:1px solid ${o.tmsShipId ? '#86efac' : 'var(--border)'};border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">🔗 TMS / Load Plan Details</div>
+      ${o.tmsShipId ? '' : '<div style="font-size:12px;color:#92400e;background:#fef9c3;border-radius:6px;padding:7px 10px;margin-bottom:8px">⏳ Awaiting TMS shipment assignment — run <strong>Pull TMS Planning</strong> in Middleware</div>'}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${o.tmsShipId ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid #86efac"><div style="font-size:10px;color:#16a34a;font-weight:700;text-transform:uppercase">Shipment ID</div><div style="font-weight:700;color:#15803d;font-family:monospace;margin-top:2px">' + o.tmsShipId + '</div></div>' : ''}
+        ${o.carrier ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">🚛 Carrier</div><div style="font-weight:600;color:var(--text);margin-top:2px">' + o.carrier + '</div></div>' : ''}
+        ${o.pickupDate ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">📅 Pickup Date</div><div style="font-weight:600;color:var(--text);margin-top:2px">' + o.pickupDate + '</div></div>' : ''}
+        ${o.deliveryDate ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">🏁 Est. Delivery</div><div style="font-weight:600;color:var(--text);margin-top:2px">' + o.deliveryDate + '</div></div>' : ''}
+        ${o.pro ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">🔢 PRO Number</div><div style="font-weight:600;color:var(--accent);font-family:monospace;margin-top:2px">' + o.pro + '</div></div>' : ''}
+        ${o.bol ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">📋 BOL Number</div><div style="font-weight:600;color:var(--text);font-family:monospace;margin-top:2px">' + o.bol + '</div></div>' : ''}
+        ${o.dockDoor ? '<div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">🏭 Dock Assigned</div><div style="font-weight:600;color:var(--text);margin-top:2px">' + o.dockDoor + '</div></div>' : ''}
+      </div>
+    </div>` : ''}
+
+    <div style="background:#f8faff;border-radius:10px;padding:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Order Lines (${(o.lines||[]).length})</div>
+      ${lines || '<div style="font-size:12px;color:var(--text3);font-style:italic">No lines on this order</div>'}
+    </div>
+  `;
+
+  dr.style.right = '0';
+  var ov = document.getElementById('ord-detail-overlay');
+  if(ov) ov.classList.add('show');
+}
+
+function closeOrderDetail() {
+  var dr = document.getElementById('ord-detail-drawer');
+  if (dr) dr.style.right = '-440px';
+  var ov = document.getElementById('ord-detail-overlay');
+  if (ov) ov.classList.remove('show');
+}
+
+
+// Data is loaded from Supabase — no local defaults needed
+
+
+</script>
+<!-- ORDER DETAIL DRAWER -->
+<div id="ord-detail-drawer" style="position:fixed;top:0;right:-440px;width:420px;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:3000;transition:right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column">
+  <div style=

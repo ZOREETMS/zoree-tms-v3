@@ -1,0 +1,118 @@
+// ═══════════════════════════════════════════════════════════════════
+// Shipment Service — Business Logic (Tier 2)
+// ═══════════════════════════════════════════════════════════════════
+
+const db = require('./supabase');
+
+function dbToShipment(r) {
+  return {
+    id:                 r.id,
+    carrier:            r.carrier,
+    mode:               r.mode           || 'TL',
+    origin:             r.origin,
+    destination:        r.dest,
+    weight:             r.weight,
+    pieces:             r.pieces,
+    status:             r.status         || 'Planned',
+    pickupDate:         r.pickup_date    || null,
+    deliveryDate:       r.delivery_date  || null,
+    cost:               r.total_cost     || 0,
+    bolNumber:          r.bol_number     || null,
+    proNumber:          r.pro_number     || null,
+    trackingNumber:     r.tracking_number|| null,
+    consolidatedOrders: r.order_ids      || [],
+    spotRate:           r.spot_rate      || false,
+    czarliteRate:       r.czarlite_rate  || false,
+    notes:              r.notes          || null,
+    createdAt:          r.created_at,
+    updatedAt:          r.updated_at,
+  };
+}
+
+function shipmentToDb(s) {
+  const cost = parseFloat(String(s.cost || '0').replace(/[$,]/g, '')) || 0;
+  return {
+    id:               s.id,
+    carrier:          s.carrier         || '',
+    mode:             s.mode            || 'TL',
+    origin:           s.origin,
+    dest:             s.destination,
+    weight:           parseInt(String(s.weight || 0).replace(/,/g, '')) || 0,
+    pieces:           parseInt(s.pieces) || 0,
+    status:           s.status          || 'Planned',
+    pickup_date:      s.pickupDate      || null,
+    delivery_date:    s.deliveryDate    || null,
+    total_cost:       cost,
+    bol_number:       s.bolNumber       || null,
+    pro_number:       s.proNumber       || null,
+    tracking_number:  s.trackingNumber  || null,
+    order_ids:        s.consolidatedOrders || [],
+    spot_rate:        !!s.spotRate,
+    czarlite_rate:    !!s.czarliteRate,
+    notes:            s.notes           || null,
+  };
+}
+
+// ── Business Logic: calculate freight cost estimate ───────────────
+function estimateCost(weight, miles, ratePerMile = 2.50, fscPct = 20) {
+  const base = weight * ratePerMile / 100; // rate per CWT
+  const fsc  = base * (fscPct / 100);
+  return Math.round((base + fsc) * 100) / 100;
+}
+
+// ── Business Logic: determine if shipment is late ─────────────────
+function isLate(shipment) {
+  if (!shipment.deliveryDate) return false;
+  return new Date() > new Date(shipment.deliveryDate) &&
+         !['Delivered', 'Cancelled'].includes(shipment.status);
+}
+
+async function listShipments(filters = {}, tenantConfig = null) {
+  const dbFilters = [];
+  if (filters.status)   dbFilters.push(['status', 'eq',  filters.status]);
+  if (filters.carrier)  dbFilters.push(['carrier','ilike',`%${filters.carrier}%`]);
+
+  const rows = await db.dbSelect('shipments', {
+    filters: dbFilters,
+    order:   { col: 'created_at', asc: false },
+    limit:   filters.limit || 500,
+  }, tenantConfig);
+
+  const shipments = rows.map(dbToShipment);
+  return {
+    shipments,
+    stats: {
+      total:     shipments.length,
+      inTransit: shipments.filter(s => s.status === 'In Transit').length,
+      planned:   shipments.filter(s => s.status === 'Planned').length,
+      delivered: shipments.filter(s => s.status === 'Delivered').length,
+      late:      shipments.filter(isLate).length,
+    },
+  };
+}
+
+async function getShipment(id, tenantConfig = null) {
+  const rows = await db.dbSelect('shipments', {
+    filters: [['id', 'eq', id]], limit: 1,
+  }, tenantConfig);
+  if (!rows.length) throw Object.assign(new Error('Shipment not found'), { status: 404 });
+  return dbToShipment(rows[0]);
+}
+
+async function createShipment(payload, tenantConfig = null) {
+  if (!payload.id) {
+    const year = new Date().getFullYear();
+    payload.id = `SHP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+  const row = await db.dbUpsert('shipments', shipmentToDb(payload), 'id', tenantConfig);
+  return dbToShipment(row);
+}
+
+async function updateShipment(id, updates, tenantConfig = null) {
+  const existing = await getShipment(id, tenantConfig);
+  const merged   = { ...existing, ...updates, id };
+  const row = await db.dbUpdate('shipments', id, shipmentToDb(merged), tenantConfig);
+  return dbToShipment(row || merged);
+}
+
+module.exports = { listShipments, getShipment, createShipment, updateShipment, estimateCost };

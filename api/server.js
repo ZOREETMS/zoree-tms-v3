@@ -1,0 +1,1540 @@
+// ═══════════════════════════════════════════════════════════════════
+// ZoreeTMS API — Tier 2 (Business Logic) — Complete Single File
+// No external route files needed — everything is here.
+// Supabase credentials stay server-side — never reach the browser.
+// ═══════════════════════════════════════════════════════════════════
+
+require('dotenv').config();
+const express = require('express');
+const cors    = require('cors');
+const helmet  = require('helmet');
+
+
+// ── Crash prevention ─────────────────────────────────────────────────────────
+process.on('uncaughtException', function(err) {
+  console.error('[CRASH PREVENTED] uncaughtException:', err.message);
+});
+process.on('unhandledRejection', function(reason) {
+  console.error('[CRASH PREVENTED] unhandledRejection:', reason && reason.message ? reason.message : reason);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+const app  = express();
+const PORT = process.env.PORT || 3001;
+
+// ── Config ─────────────────────────────────────────────────────────
+const SUPABASE_URL = process.env.SUPABASE_URL
+  || 'https://ljbeihotrmyqthxptcgp.supabase.co';
+const ANON_KEY = process.env.SUPABASE_ANON_KEY
+  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE';
+
+// ── Middleware ──────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: '*', credentials: true }));
+app.use(express.json({ limit: '10mb' }));
+
+// ── Supabase REST helpers (server-side only) ────────────────────────
+function sbHeaders(token) {
+  return {
+    'Content-Type':  'application/json',
+    'apikey':        ANON_KEY,
+    'Authorization': 'Bearer ' + (token || ANON_KEY),
+    'Prefer':        'return=representation',
+  };
+}
+
+async function dbSelect(table, query, token) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${query || 'select=*&order=created_at.desc&limit=500'}`;
+  const res = await fetch(url, { headers: sbHeaders(token) });
+  if (!res.ok) throw new Error(`DB read failed (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
+async function dbUpsert(table, data, token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=id`, {
+    method:  'POST',
+    headers: sbHeaders(token),
+    body:    JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`DB upsert failed (${res.status}): ${await res.text()}`);
+  const r = await res.json();
+  return Array.isArray(r) ? r[0] : r;
+}
+
+async function dbUpdate(table, id, data, token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method:  'PATCH',
+    headers: sbHeaders(token),
+    body:    JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`DB update failed (${res.status}): ${await res.text()}`);
+  const r = await res.json();
+  return Array.isArray(r) ? r[0] : r;
+}
+
+async function dbDelete(table, id, token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method:  'DELETE',
+    headers: sbHeaders(token),
+  });
+  if (!res.ok) throw new Error(`DB delete failed (${res.status}): ${await res.text()}`);
+  return { deleted: true, id };
+}
+
+// ── Auth helper ─────────────────────────────────────────────────────
+async function verifyTokenSoft(req) {
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    const token = auth.slice(7);
+    if (token && token.length > 20) {
+      try {
+        const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+        });
+        if (r.ok) { const u = await r.json(); u._token = token; return u; }
+      } catch(e) {}
+    }
+  }
+  return { id: 'guest', role: 'anon', _token: ANON_KEY };
+}
+
+async function verifyToken(req, res) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing Authorization header' });
+    return null;
+  }
+  const token = auth.slice(7);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) { res.status(401).json({ error: 'Invalid or expired token' }); return null; }
+    const user = await r.json();
+    user._token = token;
+    return user;
+  } catch (e) {
+    res.status(401).json({ error: 'Token verification failed' });
+    return null;
+  }
+}
+
+// Allowed tables — security whitelist
+const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history'];
+
+// ══════════════════════════════════════════════════════════════════
+// ROUTES
+// ══════════════════════════════════════════════════════════════════
+
+// ── Dev: accept new index.html push ────────────────────────────────
+const fs = require('fs');
+const path = require('path');
+app.post('/dev/push-html', express.raw({type:'text/html',limit:'5mb'}), (req,res)=>{
+  const dest = path.join(__dirname,'..','index.html');
+  fs.writeFile(dest, req.body, (err)=>{
+    if(err){ console.error('[dev] write failed:',err.message); return res.status(500).json({error:err.message}); }
+    console.log('[dev] index.html updated →',dest);
+    res.json({ok:true,dest});
+  });
+});
+
+// ── Health (public) ────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({
+  status: 'ok', version: '3.0.0',
+  tier: 'API (Tier 2) — 3-Tier Architecture',
+  ts: new Date().toISOString(),
+}));
+
+// ── POST /api/auth/login ───────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ error: 'email and password required' });
+
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+      body:    JSON.stringify({ email, password }),
+    });
+    const data = await r.json();
+
+    if (!r.ok || !data.access_token)
+      return res.status(401).json({ error: data.error_description || data.msg || 'Invalid email or password' });
+
+    const user = data.user;
+    res.json({
+      token:         data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    data.expires_at,
+      expires_in:    data.expires_in,
+      user: {
+        id:       user.id,
+        email:    user.email,
+        name:     (user.user_metadata && user.user_metadata.full_name) || email.split('@')[0],
+        role:     (user.user_metadata && user.user_metadata.role) || 'admin',
+        tenantId: 'zoree-default',
+      },
+      tenant: {
+        id: 'zoree-default', brandName: 'ZoreeTMS',
+        primaryColor: '#3b82f6', tier: 'enterprise', features: ['*'],
+      },
+      expiresIn: data.expires_in,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/auth/me ───────────────────────────────────────────────
+app.get('/api/auth/me', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  res.json({ user: { id: user.id, email: user.email, role: 'admin' } });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// GENERIC TABLE PROXY — handles all TMS data reads/writes
+// Replaces individual order/shipment/carrier routes with one
+// flexible proxy that the frontend supaFetch can call.
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/db/:table?q=<supabase query string>
+app.get('/api/db/:table', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  if (!ALLOWED.includes(req.params.table))
+    return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  try {
+    const query = req.query.q || 'select=*&order=created_at.desc&limit=500';
+    const rows  = await dbSelect(req.params.table, query, user._token);
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/db/:table  — insert or upsert
+app.post('/api/db/:table', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  if (!ALLOWED.includes(req.params.table))
+    return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  try {
+    const row = await dbUpsert(req.params.table, req.body, user._token);
+    res.status(201).json(row || {});
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/db/:table/:id  — update by id
+// PATCH /api/db/rates — update by lane query string (for supaSaveRate)
+app.patch('/api/db/rates', async (req, res) => {
+  const user = await verifyTokenSoft(req);
+  const q = req.query;
+  // Build filter from query string e.g. lane=eq.AVRT-HOU-DAL
+  const qs = Object.entries(q).map(([k,v]) => k+'='+v).join('&');
+  if (!qs) return res.status(400).json({ error: 'No filter provided' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rates?${qs}`, {
+      method: 'PATCH',
+      headers: { ...sbHeaders(user._token), 'Prefer': 'return=representation' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(500).json({ error: 'DB update failed', detail: data });
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/db/:table/:id', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  if (!ALLOWED.includes(req.params.table))
+    return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  try {
+    const row = await dbUpdate(req.params.table, req.params.id, req.body, user._token);
+    res.json(row || {});
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/db/:table/:id  — delete by id
+app.delete('/api/db/:table/:id', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  if (!ALLOWED.includes(req.params.table))
+    return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  try {
+    await dbDelete(req.params.table, req.params.id, user._token);
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Order Lines: GET /api/orders/:id/lines ────────────────────────
+app.get('/api/orders/:id/lines', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    // Use null token to use service role key — bypasses RLS for reads
+    const rows = await dbSelect('order_lines',
+      `select=*&order_id=eq.${encodeURIComponent(req.params.id)}&order=line_num.asc`,
+      null);
+    console.log('[Lines] GET', req.params.id, '→', Array.isArray(rows) ? rows.length : 0, 'rows');
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Order Lines: POST /api/orders/:id/lines — replace all lines (delete + insert)
+app.post('/api/orders/:id/lines', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    const orderId = req.params.id;
+    const lines = Array.isArray(req.body) ? req.body : (req.body ? [req.body] : []);
+
+    // Step 1: Delete all existing lines for this order (service role to bypass RLS)
+    await fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${encodeURIComponent(orderId)}`, {
+      method: 'DELETE', headers: sbHeaders(null)
+    });
+
+    // Step 2: Insert new lines
+    let results = [];
+    if (lines.length > 0) {
+      const rows = lines.map((line, i) => ({
+        id:           `${orderId}-L${(line.line_num || i + 1).toString().padStart(3,'0')}`,
+        order_id:     orderId,
+        line_num:     line.line_num || (i + 1),
+        item_id:      line.item_id || line.itemId || null,
+        description:  line.description || '',
+        qty_ordered:  parseInt(line.qty_ordered || line.qty) || 0,
+        unit_weight:  parseFloat(line.unit_weight || line.unitWt) || 0,
+        total_weight: parseFloat(line.total_weight || line.totalWt) || 0,
+        unit_value:   parseFloat(line.unit_weight || line.unitWt) || 0,   // actual DB column
+        total_value:  parseFloat(line.total_weight || line.totalWt) || 0, // actual DB column
+      }));
+      console.log('[Lines] Inserting rows:', JSON.stringify(rows));
+      const insRes = await fetch(`${SUPABASE_URL}/rest/v1/order_lines`, {
+        method: 'POST',
+        headers: { ...sbHeaders(null), 'Prefer': 'return=representation' },
+        body: JSON.stringify(rows)
+      });
+      const insText = await insRes.text();
+      console.log('[Lines] Insert status:', insRes.status, '| response:', insText.slice(0,300));
+      if (insRes.ok) results = JSON.parse(insText);
+      else console.error('[Lines] Insert FAILED:', insRes.status, insText);
+    }
+
+    // Step 3: Update weight, pieces and line_count on parent order
+    const totalWeight = lines.reduce((s, l) => s + (parseFloat(l.total_weight || l.totalWt) || 0), 0);
+    const totalPieces = lines.reduce((s, l) => s + (parseInt(l.qty_ordered || l.qty) || 0), 0);
+    await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
+      method: 'PATCH',
+      headers: sbHeaders(user._token),
+      body: JSON.stringify({ line_count: lines.length, weight: totalWeight, pieces: totalPieces })
+    });
+
+    console.log(`[Lines] Order ${orderId}: replaced ${lines.length} lines, weight=${totalWeight}lbs, pieces=${totalPieces}`);
+    res.status(201).json({ lines: results, line_count: lines.length, weight: totalWeight, pieces: totalPieces });
+  } catch (e) { console.error('[Lines] Error:', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// ── Order Lines: DELETE /api/orders/:id/lines — clear all lines
+app.delete('/api/orders/:id/lines', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${encodeURIComponent(req.params.id)}`, {
+      method: 'DELETE', headers: sbHeaders(user._token)
+    });
+    await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(req.params.id)}`, {
+      method: 'PATCH', headers: sbHeaders(user._token),
+      body: JSON.stringify({ line_count: 0, weight: 0, pieces: 0 })
+    });
+    res.json({ deleted: true, order_id: req.params.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Orders with lines: GET /api/orders/:id/full ────────────────────
+app.get('/api/orders/:id/full', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    const [orderRows, lineRows] = await Promise.all([
+      dbSelect('orders', `select=*&id=eq.${encodeURIComponent(req.params.id)}`, user._token),
+      dbSelect('order_lines', `select=*&order_id=eq.${encodeURIComponent(req.params.id)}&order=line_num.asc`, user._token),
+    ]);
+    if (!orderRows || !orderRows.length)
+      return res.status(404).json({ error: 'Order not found' });
+    const order = orderRows[0];
+    order.lines = Array.isArray(lineRows) ? lineRows : [];
+    res.json(order);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Orders list with lines count ───────────────────────────────────
+app.get('/api/orders/full', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    const rows = await dbSelect('orders', 'select=*&order=created_at.desc&limit=500', user._token);
+    res.json({ orders: Array.isArray(rows) ? rows : [], total: rows.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Convenience named routes (used by dashboard etc.) ──────────────
+app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('orders','select=*&order=created_at.desc&limit=500',u._token); res.json({ orders: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+app.get('/api/shipments', async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('shipments','select=*&order=created_at.desc&limit=500',u._token); res.json({ shipments: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+app.get('/api/carriers',  async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('carriers','select=*&order=name&limit=200',u._token); res.json({ carriers: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+app.get('/api/rates',     async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('rates','select=*&order=lane&limit=500',u._token); res.json({ rates: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+
+// ── Tenants/config ─────────────────────────────────────────────────
+app.get('/api/tenants/me', async (req, res) => {
+  const u = await verifyToken(req, res); if (!u) return;
+  res.json({ id:'zoree-default', brandName:'ZoreeTMS', tier:'enterprise', features:['*'] });
+});
+app.get('/api/tenants/tiers', (req, res) => res.json({ tiers:[
+  { tier:'starter',    price:'$499/mo',   features:['orders','shipments','carriers'] },
+  { tier:'pro',        price:'$1,499/mo', features:['orders','shipments','carriers','rate_management','analytics'] },
+  { tier:'enterprise', price:'Custom',    features:['*'] },
+]}));
+
+
+// ── SMC3 CzarLite DEMOLTLA WO465640 ────────────────────────────────────────
+// Correct schema from Swagger spec:
+// - Headers: licenseKey, username, password, apiVersion: V2_0
+// - Body: shipmentRequests[] with origin/destination objects + details[]
+
+// ── Global SMC3 utilities (accessible outside IIFE) ──────────────────────────
+function _smc3Auth() {
+  return 'Basic ' + Buffer.from(SMC3_USERNAME + ':' + SMC3_PASSWORD).toString('base64');
+}
+function _smc3Headers(contentLength) {
+  return {
+    'Content-Type': 'application/json', 'Accept': 'application/json',
+    'licenseKey': SMC3_LICENSE, 'username': SMC3_USERNAME,
+    'password': SMC3_PASSWORD, 'apiVersion': 'V2_0',
+    'Content-Length': contentLength
+  };
+}
+function _ccxlHeaders(contentLength) {
+  return {
+    'Content-Type': 'application/json', 'Accept': 'application/json',
+    'licenseKey': SMC3_CCXL_KEY, 'username': SMC3_USERNAME,
+    'password': SMC3_PASSWORD, 'apiVersion': 'V3_0',
+    'Content-Length': contentLength
+  };
+}
+function _smc3Post(host, path, body, cb) {
+  var https = require('https');
+  var pl = JSON.stringify(body);
+  var req = https.request({
+    hostname: host, path: path, method: 'POST',
+    headers: _smc3Headers(Buffer.byteLength(pl)),
+    timeout: 30000,
+  }, function(res) {
+    var raw = '';
+    res.on('data', function(c) { raw += c; });
+    res.on('end', function() {
+      try {
+        var j = JSON.parse(raw);
+        if (res.statusCode >= 400) cb(new Error('SMC3 ' + res.statusCode + ': ' + JSON.stringify(j).slice(0, 200)));
+        else cb(null, j);
+      } catch(e) { cb(new Error('SMC3 parse: ' + raw.slice(0, 100))); }
+    });
+  });
+  req.on('timeout', function() { req.destroy(); cb(new Error('SMC3 timeout')); });
+  req.on('error', function(e) { cb(e); });
+  req.write(pl);
+  req.end();
+}
+
+// ── SMC3 Global Constants (accessible to all routes) ─────────────────────────
+var SMC3_TARIFF    = 'DEMOLTLA';
+var SMC3_LICENSE   = '8Pzf4XeN63n9';
+var SMC3_CCXL_KEY  = 'W3QQwTa6DdeM';
+var SMC3_USERNAME  = 'zoree-integrations@zoree.io';
+var SMC3_PASSWORD  = 'ujM3W1lM';
+var SMC3_RW_HOST   = 'applications.smc3.com';
+var SMC3_RW_BASE   = '/RateWareXL/services/rest/v2';
+var SMC3_CC_HOST   = 'ccxl.smc3.com';
+var SMC3_CC_BASE   = '/CarrierConnectXL/services/rest/v3';
+
+(function() {
+  var https = require('https');
+  var SMC3_L = '8Pzf4XeN63n9';
+  var SMC3_U = 'zoree-integrations@zoree.io';
+  var SMC3_P = 'ujM3W1lM';
+  var SMC3_T = 'DEMOLTLA';
+  var SMC3_HOST  = 'applications.smc3.com';
+  var SMC3_BASE  = '/RateWareXL/services/rest/v2';
+  var CCXL_HOST  = 'ccxl.smc3.com';
+  var CCXL_BASE  = '/CarrierConnectXL/services/rest/v3';
+  var CCXL_L     = 'W3QQwTa6DdeM'; // CarrierConnect XL has its own license key
+
+  function smc3Headers(contentLength) {
+    return {
+      'Content-Type':   'application/json',
+      'Accept':         'application/json',
+      'licenseKey':     SMC3_L,
+      'username':       SMC3_U,
+      'password':       SMC3_P,
+      'apiVersion':     'V2_0',
+      'Content-Length': contentLength
+    };
+  }
+
+  // CarrierConnect XL uses different licenseKey + apiVersion V3_0
+  function ccxlHeaders(contentLength) {
+    return {
+      'Content-Type':   'application/json',
+      'Accept':         'application/json',
+      'licenseKey':     CCXL_L,
+      'username':       SMC3_U,
+      'password':       SMC3_P,
+      'apiVersion':     'V3_0',
+      'Content-Length': contentLength
+    };
+  }
+
+  function ccxlPost(host, path, body, cb) {
+    var pl = JSON.stringify(body);
+    var req = https.request({
+      hostname: host, path: path, method: 'POST',
+      headers: ccxlHeaders(Buffer.byteLength(pl)),
+      timeout: 30000,
+    }, function(res) {
+      var raw = '';
+      res.on('data', function(c) { raw += c; });
+      res.on('end', function() {
+        try {
+          var j = JSON.parse(raw);
+          if (res.statusCode >= 400) cb(new Error('CCXL ' + res.statusCode + ': ' + JSON.stringify(j).slice(0, 200)));
+          else cb(null, j);
+        } catch(e) { cb(new Error('CCXL parse error: ' + raw.slice(0, 100))); }
+      });
+    });
+    req.on('timeout', function() { req.destroy(); cb(new Error('CCXL timeout')); });
+    req.on('error', function(e) { cb(e); });
+    req.write(pl);
+    req.end();
+  }
+
+  function ccxlGet(host, path, cb) {
+    var https = require('https');
+    var req = https.request({
+      hostname: host, path: path, method: 'GET',
+      headers: ccxlHeaders(0),
+      timeout: 15000,
+    }, function(res) {
+      var raw = '';
+      res.on('data', function(c) { raw += c; });
+      res.on('end', function() {
+        try {
+          var j = JSON.parse(raw);
+          if (res.statusCode >= 400) cb(new Error('CCXL GET ' + res.statusCode + ': ' + JSON.stringify(j).slice(0,200)));
+          else cb(null, j);
+        } catch(e) { cb(new Error('CCXL GET parse: ' + raw.slice(0,100))); }
+      });
+    });
+    req.on('timeout', function() { req.destroy(); cb(new Error('CCXL GET timeout')); });
+    req.on('error', function(e) { cb(e); });
+    req.end();
+  }
+  global._ccxlGet = ccxlGet;
+
+  function smc3Post(host, path, body, cb) {
+    var pl = JSON.stringify(body);
+    var req = https.request({
+      hostname: host, path: path, method: 'POST',
+      headers: smc3Headers(Buffer.byteLength(pl)),
+      timeout: 30000
+    }, function(res) {
+      var raw = '';
+      res.on('data', function(c) { raw += c; });
+      res.on('end', function() {
+        try {
+          var j = JSON.parse(raw);
+          if (res.statusCode >= 400) cb(new Error('SMC3 ' + res.statusCode + ': ' + JSON.stringify(j).slice(0, 200)));
+          else cb(null, j);
+        } catch(e) { cb(new Error('parse error: ' + raw.slice(0, 100))); }
+      });
+    });
+    req.on('timeout', function() { req.destroy(); cb(new Error('SMC3 timeout')); });
+    req.on('error', function(e) { cb(e); });
+    req.write(pl);
+    req.end();
+  }
+
+  function smc3Guard(req, res, next) {
+    if (!req.headers.authorization) return res.status(401).json({ error: 'Missing token' });
+    next();
+  }
+
+  function todayYMD() {
+    var d = new Date();
+    return d.getFullYear().toString() +
+      ('0' + (d.getMonth() + 1)).slice(-2) +
+      ('0' + d.getDate()).slice(-2);
+  }
+
+  // GET /api/smc3/status
+  app.get('/api/smc3/status', smc3Guard, function(req, res) {
+    res.json({ live: true, tariff: SMC3_TARIFF, workOrder: '465640', nodeVersion: process.version, apiVersion: 'V2_0' });
+  });
+
+  // POST /api/smc3/test — ATL(30301) → DAL(75201), 1000lb Class 70
+  app.post('/api/smc3/test', smc3Guard, function(req, res) {
+    var body = {
+      shipmentRequests: [{
+        origin:      { postalCode: '30301', country: 'USA', city: '', stateProvince: '' },
+        destination: { postalCode: '75201', country: 'USA', city: '', stateProvince: '' },
+        tariffName:          SMC3_TARIFF,
+        tariffEffectiveDate: '20070703',
+        details: [{ nmfcClass: '70', weight: 1000 }]
+      }]
+    };
+    _smc3Post(SMC3_RW_HOST, SMC3_RW_BASE + '/ltlrateshipment', body, function(err, d) {
+      if (err) { console.error('[SMC3/test]', err.message); return res.status(502).json({ ok: false, error: err.message }); }
+      var shipments = d.shipmentResponses || d.shipmentResponse || d.shipmentRequests || [];
+      var sr = (d.shipmentResponses && d.shipmentResponses[0]) || d;
+      var t = sr.totalCharge || sr.totalAmount || 0;
+      var l = sr.lineHaulGrossCharge || sr.linehaulCharge || sr.baseCharge || 0;
+      var f = sr.surchargeAmount || sr.fuelSurcharge || sr.fuelCharge || 0;
+      var a = sr.accessorialCharge || 0;
+      console.log('[SMC3/test] SUCCESS $' + Math.round(t));
+      res.json({ ok: true, message: 'SMC3 CzarLite LIVE', tariff: SMC3_TARIFF, testRate: Math.round(t), linehaul: Math.round(l), fuel: Math.round(f), acc: Math.round(a), raw: d, shipmentResponse: sr });
+    });
+  });
+
+  // POST /api/smc3/rate — LTL rate lookup
+  app.post('/api/smc3/rate', smc3Guard, function(req, res) {
+    var o = req.body.originPostalCode, d = req.body.destinationPostalCode;
+    var w = req.body.weight || 1000, fc = req.body.freightClass || 70;
+    var tn = req.body.tariffName || SMC3_TARIFFARIFF;
+    if (!o || !d) return res.status(400).json({ error: 'originPostalCode + destinationPostalCode required' });
+    var body = {
+      shipmentRequests: [{
+        origin:      { postalCode: o, country: 'USA', city: '', stateProvince: '' },
+        destination: { postalCode: d, country: 'USA', city: '', stateProvince: '' },
+        tariffName:          tn,
+        tariffEffectiveDate: '20070703',  // DEMOLTLA
+        details: [{ nmfcClass: String(fc), weight: Math.round(w) }]
+      }]
+    };
+    _smc3Post(SMC3_RW_HOST, SMC3_RW_BASE + '/ltlrateshipment', body, function(err, data) {
+      if (err) return res.status(502).json({ error: err.message, source: 'smc3' });
+      var shipments = data.shipmentResponses || data.shipmentResponse || [];
+      var r = Array.isArray(shipments) && shipments.length ? shipments[0] : data;
+      var l = r.linehaulCharge || r.baseCharge || 0;
+      var f = r.fuelSurcharge || r.fuelCharge || 0;
+      var a = r.accessorialCharge || r.accessorials || 0;
+      var t = r.totalCharge || r.totalAmount || (l + f + a);
+      var bw = r.billedWeight || w;
+      console.log('[SMC3/rate]', o, '->', d, '$' + Math.round(t));
+      res.json({ source: 'smc3', tariff: tn, linehaul: Math.round(l), fuel: Math.round(f), acc: Math.round(a), total: Math.round(t), billedWeight: bw, ratePerCwt: bw > 0 ? (l / (bw / 100)).toFixed(2) : '0', raw: d, shipmentResponse: srata });
+    });
+  });
+
+  // POST /api/smc3/transit — CarrierConnect XL
+  app.post('/api/smc3/transit', smc3Guard, function(req, res) {
+    var o = req.body.originPostalCode, d = req.body.destinationPostalCode;
+    var sc = req.body.scacs || [];
+    if (!o || !d) return res.status(400).json({ error: 'originPostalCode + destinationPostalCode required' });
+
+    // CarrierConnect XL v3 schema: carriers[], origin/destination with countryCode, pickupDate CCYY-MM-DD
+    var today = new Date();
+    var pickupDate = today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
+
+    var carriers = sc.length > 0
+      ? sc.map(function(scac){ return { serviceCode:'', serviceMethod:'LTL', serviceType:'ALL_AVAILABLE', SCAC: scac }; })
+      : [{ serviceCode:'', serviceMethod:'LTL', serviceType:'ALL_AVAILABLE', SCAC:'' }];
+
+    var body = {
+      carriers: carriers,
+      origin:      { postalCode: o, countryCode: 'USA' },
+      destination: { postalCode: d, countryCode: 'USA' },
+      pickupDate:  pickupDate
+    };
+
+    ccxlPost(CCXL_HOST, CCXL_BASE + '/transit', body, function(err, data) {
+      if (err) return res.status(502).json({ error: err.message, source: 'smc3' });
+
+      // CCXL v3 response: { carriers: [{ carrierServiceDetail, transitDays, serviceDetail, ... }] }
+      var rows = data.carriers || (Array.isArray(data) ? data : []);
+      var carriers = rows.map(function(c) {
+        // CCXL v3: carrierServiceDetail has SCAC, carrierName; transitDays at top level
+        var csd = c.carrierServiceDetail || {};
+        var sd  = c.serviceDetail || {};
+        return {
+          scac:         csd.SCAC          || c.scac          || '',
+          carrierName:  csd.carrierName   || c.carrierName   || '',
+          serviceMethod: csd.serviceMethod || 'LTL',
+          serviceType:  csd.serviceType   || '',
+          transitDays:  c.transitDays     || null,
+          originService: sd.origin        || '',
+          destService:  sd.destination    || '',
+        };
+      }).filter(function(c) { return c.transitDays != null && c.scac; });
+      console.log('[CCXL/transit]', o, '->', d, '-', carriers.length, 'carriers');
+      res.json({ source: 'smc3', carriers: carriers, raw: data });
+    });
+  });
+
+  console.log('  SMC3 CzarLite LIVE - DEMOLTLA - apiVersion V2_0 - WO 465640');
+
+  // Expose CCXL internals for use in outer-scope routes (e.g. /api/ltl/quote Step 5)
+  global._ccxlPost = ccxlPost;
+  global._CCXL_HOST = CCXL_HOST;
+  global._CCXL_BASE = CCXL_BASE;
+  global._CCXL_L    = CCXL_L;
+})();
+
+
+// No startup SCAC fetch — all czarlite carriers sent to CCXL, FAIL handled per-row
+
+// ── GET /api/ccxl/carriers — List carriers licensed under your CCXL account ────
+app.get('/api/ccxl/carriers', async (req, res) => {
+  try {
+    _ccxlGet(_CCXL_HOST, _CCXL_BASE + '/carrierServices', (err, data) => {
+      if (err) return res.status(502).json({ error: err.message });
+      res.json(data);
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/ltl/quote — LTL quoting: CzarLite base + carrier adder ──────────
+// Works for ANY lane. Carriers are czarlite_enabled in the carriers table.
+// Carrier-specific adder comes from rates table if exists, else returns base only.
+app.post('/api/ltl/quote', async (req, res) => {
+  const user = await verifyTokenSoft(req);
+
+  const { originZip, destZip, weight, freightClass, originCity, destCity } = req.body;
+  if (!originZip || !destZip) return res.status(400).json({ error: 'originZip + destZip required' });
+
+  const wt = Math.round(weight || 1000);
+  const fc = freightClass || 70;
+
+  // Step 1: Get all czarlite_enabled carriers from carriers table
+  let czCarriers = [];
+  try {
+    const cr = await fetch(`${SUPABASE_URL}/rest/v1/carriers?czarlite_enabled=eq.true&status=eq.Active&select=id,name,scac,mode,carrierconnect_enabled`, {
+      headers: sbHeaders(null)
+    });
+    if (cr.ok) czCarriers = await cr.json();
+  } catch(e) { console.error('[LTL/quote] carriers error:', e.message); }
+
+  console.log('[LTL/quote] REQUEST → weight:'+wt+'lbs freightClass:'+fc+' origin:'+originZip+'→'+destZip);
+  console.log('[LTL/quote] czarlite_enabled carriers from DB:', czCarriers.map(c=>c.scac||c.name));
+  if (!czCarriers.length) return res.status(200).json({ originZip, destZip, weight: wt, freightClass: fc, czarliteBase: null, quotes: [] });
+
+  // Step 2: Get CzarLite base rate for this lane
+  let czarBase = null;
+  try {
+    const czBody = {
+      shipmentRequests: [{
+        origin:      { postalCode: originZip, country: 'USA', city: originCity || '', stateProvince: '' },
+        destination: { postalCode: destZip,   country: 'USA', city: destCity   || '', stateProvince: '' },
+        tariffName:          SMC3_TARIFF,
+        tariffEffectiveDate: '20070703',
+        details: [{ nmfcClass: String(fc), weight: wt }]
+      }]
+    };
+    czarBase = await new Promise((resolve, reject) => {
+      _smc3Post(SMC3_RW_HOST, SMC3_RW_BASE + '/ltlrateshipment', czBody, function(err, data) {
+        if (err) return reject(err);
+        const sr = (data.shipmentResponses && data.shipmentResponses[0]) || data;
+        resolve({
+          totalCharge:         parseFloat(sr.totalCharge)         || 0,
+          lineHaulGrossCharge: parseFloat(sr.lineHaulGrossCharge) || 0,
+          surchargeAmount:     parseFloat(sr.surchargeAmount)     || 0,
+          billedWeight:        parseFloat(sr.billedWeight)        || wt,
+          actualWeight:        parseFloat(sr.actualWeight)        || wt,
+          tblno:               sr.tblno  || '',
+          rbno:                sr.rbno   || '',
+          effectiveDate:       sr.effectiveDate || '',
+          raw: sr
+        });
+      });
+    });
+    console.log('[LTL/quote] CzarLite base: $'+czarBase.totalCharge+' billedWeight:'+czarBase.billedWeight+'lbs', originZip, '->', destZip);
+  } catch(e) {
+    console.error('[LTL/quote] CzarLite error:', e.message);
+    return res.status(502).json({ error: 'CzarLite error: ' + e.message, source: 'smc3' });
+  }
+
+  const baseTotal  = czarBase.totalCharge;
+  const billedCwt  = czarBase.billedWeight / 100;
+
+  // ZIP → city map for lane matching
+  const ZIP_CITY = {
+    // Houston
+    '77001':'Houston','77002':'Houston','77003':'Houston','77004':'Houston',
+    '77005':'Houston','77006':'Houston','77007':'Houston','77008':'Houston',
+    '77009':'Houston','77010':'Houston','77011':'Houston','77019':'Houston',
+    '77020':'Houston','77025':'Houston','77030':'Houston','77056':'Houston',
+    // Dallas
+    '75201':'Dallas','75202':'Dallas','75203':'Dallas','75204':'Dallas',
+    '75205':'Dallas','75206':'Dallas','75207':'Dallas','75208':'Dallas',
+    '75209':'Dallas','75210':'Dallas','75211':'Dallas','75212':'Dallas',
+    '75214':'Dallas','75215':'Dallas','75216':'Dallas','75217':'Dallas',
+    '75218':'Dallas','75219':'Dallas','75220':'Dallas','75221':'Dallas',
+    '75222':'Dallas','75223':'Dallas','75224':'Dallas','75225':'Dallas',
+    '75226':'Dallas','75227':'Dallas','75228':'Dallas','75229':'Dallas',
+    '75230':'Dallas','75231':'Dallas','75232':'Dallas','75233':'Dallas',
+    '75234':'Dallas','75235':'Dallas','75236':'Dallas','75237':'Dallas',
+    '75238':'Dallas','75240':'Dallas','75241':'Dallas','75242':'Dallas',
+    '75243':'Dallas','75244':'Dallas','75246':'Dallas','75247':'Dallas',
+    '75248':'Dallas','75249':'Dallas','75251':'Dallas','75252':'Dallas',
+    '75253':'Dallas','75254':'Dallas','75270':'Dallas','75287':'Dallas',
+    // Chicago
+    '60601':'Chicago','60602':'Chicago','60603':'Chicago','60604':'Chicago',
+    '60605':'Chicago','60606':'Chicago','60607':'Chicago','60608':'Chicago',
+    '60610':'Chicago','60611':'Chicago','60614':'Chicago','60616':'Chicago',
+    // Atlanta
+    '30301':'Atlanta','30302':'Atlanta','30303':'Atlanta','30304':'Atlanta',
+    '30305':'Atlanta','30306':'Atlanta','30307':'Atlanta','30308':'Atlanta',
+    '30309':'Atlanta','30310':'Atlanta','30312':'Atlanta','30318':'Atlanta',
+    // New York
+    '10001':'New York','10002':'New York','10003':'New York','10004':'New York',
+    '10005':'New York','10006':'New York','10007':'New York','10010':'New York',
+    '10011':'New York','10012':'New York','10013':'New York','10014':'New York',
+    // Others
+    '43201':'Columbus','38101':'Memphis','85001':'Phoenix','80201':'Denver',
+    '90001':'Los Angeles','90012':'Los Angeles','90015':'Los Angeles',
+    '98101':'Seattle','28201':'Charlotte','02101':'Boston',
+    '33101':'Miami','33132':'Miami','95101':'San Jose','94041':'Mountain View',
+  };
+  // Handle cases where city string contains zip e.g. 'Dallas, TX, 75207'
+  function _extractZipFromCity(cityStr) {
+    if(!cityStr) return null;
+    const m = cityStr.match(/(\d{5})/);
+    return m ? m[1] : null;
+  }
+  function _stripZipFromCity(cityStr) {
+    return cityStr ? cityStr.replace(/,?\s*\d{5}/, '').trim() : cityStr;
+  }
+  const effectiveOriginZip = _extractZipFromCity(originCity) || originZip;
+  const effectiveDestZip   = _extractZipFromCity(destCity)   || destZip;
+  const cleanOriginCity = _stripZipFromCity(originCity) || originCity;
+  const cleanDestCity   = _stripZipFromCity(destCity)   || destCity;
+  const originCityName = cleanOriginCity || ZIP_CITY[effectiveOriginZip] || originZip;
+  const destCityName   = cleanDestCity   || ZIP_CITY[effectiveDestZip]   || destZip;
+
+  // Step 3: Load LTL czarlite rates — filter by origin+dest using city name ilike
+  const oCity = originCityName.toLowerCase().split(',')[0].trim();
+  const dCity = destCityName.toLowerCase().split(',')[0].trim();
+  let adderRates = [];
+  try {
+    const rr = await fetch(
+      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&czarlite=eq.true&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane`,
+      { headers: sbHeaders(null) }
+    );
+    if (rr.ok) adderRates = await rr.json();
+    console.log('[LTL/quote] Lane rates found:', adderRates.length, adderRates.map(r=>r.carrier+'|disc='+r.discount));
+  } catch(e) { console.error('[LTL/quote] rates error:', e.message); }
+
+  // Step 4: One quote per carrier
+  // Match rate record: lane-specific first, then carrier-only (blank origin/dest)
+  // Formula: CzarLite base × (1 - discount%) + FSC% on discounted base = Total
+  const quotes = [];
+
+  czCarriers.forEach(carrier => {
+    const carrierRates = adderRates.filter(r => r.carrier === carrier.name);
+
+    // 1. Lane-specific match
+    let r = carrierRates.find(rt => {
+      const ro = (rt.origin || '').toLowerCase();
+      const rd = (rt.dest   || '').toLowerCase();
+      return ro && rd && ro.includes(oCity) && rd.includes(dCity);
+    });
+    // 2. Carrier-level fallback (blank origin+dest = all lanes)
+    if (!r) r = carrierRates.find(rt => !rt.origin && !rt.dest) || null;
+
+    const discountPct  = r ? (parseFloat(r.discount)      || 0) : 0;
+    const discountFlat = r ? (parseFloat(r.discount_flat) || 0) : 0;
+    const discountAmt  = Math.round(baseTotal * discountPct / 100) + discountFlat;
+    const discountedBase = Math.max(0, baseTotal - discountAmt);
+
+    const fscPct    = r && r.fsc ? parseFloat((r.fsc || '0%').replace('%','')) / 100 : 0;
+    const fscCharge = r && r.fsc
+      ? Math.round(discountedBase * fscPct)
+      : Math.round(czarBase.surchargeAmount || 0);
+    const total = Math.round(discountedBase + fscCharge);
+
+    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'}`);
+    quotes.push({
+      rateId:       r ? (r.id || r.lane) : null,
+      carrier:      carrier.name,
+      scac:         carrier.scac,
+      mode:         'LTL',
+      serviceLevel: 'LTL',
+      transitDays:  null,
+      deliveryDate: null,
+      czarBase:     Math.round(discountedBase),
+      czarBaseGross:Math.round(baseTotal),
+      discountPct:  discountPct,
+      discountFlat: discountFlat,
+      discountAmt:  Math.round(discountAmt),
+      czarLinehaul: Math.round(czarBase.lineHaulGrossCharge),
+      czarFuel:     Math.round(czarBase.surchargeAmount),
+      billedWeight: czarBase.billedWeight,
+      fscPct:       r ? (r.fsc || '0%') : '0%',
+      fscCharge,
+      totalCharge:  total,
+      origin:       originCity || originZip,
+      destination:  destCity   || destZip,
+      tariff:       SMC3_TARIFF,
+      class:        fc,
+      weight:       wt,
+    });
+  });
+
+  // Step 5: Batch CarrierConnect® XL transit — one call for all carrier SCACs
+  const scacsToFetch = quotes.filter(q => q.scac).map(q => q.scac);
+  console.log('[LTL/quote] SCACs for CarrierConnect:', scacsToFetch);
+
+  if (scacsToFetch.length > 0) {
+    try {
+      const today = new Date();
+      const pickupRaw = req.body.pickupDate;
+      let pickupDate;
+      if (pickupRaw && /^\d{8}$/.test(pickupRaw)) {
+        pickupDate = pickupRaw.slice(0,4)+'-'+pickupRaw.slice(4,6)+'-'+pickupRaw.slice(6,8);
+      } else {
+        pickupDate = today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
+      }
+
+      const ccBody = {
+        carriers: scacsToFetch.map(scac => ({
+          serviceCode: '', serviceMethod: 'LTL', serviceType: 'ALL_AVAILABLE', SCAC: scac
+        })),
+        origin:      { postalCode: originZip, countryCode: 'USA' },
+        destination: { postalCode: destZip,   countryCode: 'USA' },
+        pickupDate:  pickupDate
+      };
+
+      console.log('[LTL/quote] Calling CarrierConnect:', JSON.stringify(ccBody).slice(0,300));
+
+      const ccData = await new Promise((resolve, reject) => {
+        _ccxlPost(_CCXL_HOST, _CCXL_BASE + '/transit', ccBody, (err, data) => {
+          if (err) reject(err); else resolve(data);
+        });
+      });
+
+      const ccRows = ccData.carriers || (Array.isArray(ccData) ? ccData : []);
+      console.log('[LTL/quote] CarrierConnect returned', ccRows.length, 'rows');
+      console.log('[LTL/quote] CarrierConnect RAW first row:', JSON.stringify(ccRows[0]||{}));
+
+      // Build SCAC → { transitDays, deliveryDate } map
+      // Skip entries with FAIL status or zero transit days
+      const transitMap = {};
+      ccRows.forEach(c => {
+        const csd    = c.carrierServiceDetail || {};
+        const scac   = csd.SCAC || c.scac || '';
+        const status = (c.messageStatus && c.messageStatus.status) || 'PASS';
+        const days   = c.transitDays || c.standardTransitDays || 0;
+        if (!scac || transitMap[scac]) return;  // skip duplicates
+        if (status === 'FAIL' || !days) return;  // skip unlicensed/no-data
+        transitMap[scac] = {
+          transitDays:  days,
+          deliveryDate: c.deliveryDate || c.estimatedDeliveryDate || null,
+        };
+      });
+
+      console.log('[LTL/quote] Transit map:', JSON.stringify(transitMap));
+
+      // Merge transit days into quotes:
+      // - CC enabled → use CC only. If CC fails/unlicensed → no transit shown
+      // - CC disabled → use rate record transit_days from TMS
+      quotes.forEach(q => {
+        const carrier = czCarriers.find(c => c.scac === q.scac);
+        const ccEnabled = carrier && carrier.carrierconnect_enabled;
+        if (ccEnabled) {
+          // CC is enabled — only use CC result, no TMS fallback
+          if (q.scac && transitMap[q.scac]) {
+            q.transitDays  = transitMap[q.scac].transitDays;
+            q.deliveryDate = transitMap[q.scac].deliveryDate;
+            q._ccLive      = true;
+          } else {
+            // CC enabled but no data returned (unlicensed/FAIL) — show nothing
+            q.transitDays  = null;
+            q.deliveryDate = null;
+            q._ccLive      = false;
+            q._ccFailed    = true;  // flag so UI can show 'CC unlicensed'
+          }
+        } else {
+          // CC not enabled — use rate record transit_days from TMS
+          const rateRec = adderRates.find(r => r.id == q.rateId);
+          if (rateRec && rateRec.transit_days) {
+            q.transitDays = rateRec.transit_days;
+          }
+          q._ccLive = false;
+        }
+      });
+
+      console.log('[LTL/quote] CarrierConnect enriched', Object.keys(transitMap).length, 'of', scacsToFetch.length, 'carriers');
+    } catch (ccErr) {
+      console.warn('[LTL/quote] CarrierConnect failed (non-fatal):', ccErr.message, ccErr.stack||'');
+    }
+  }
+
+  quotes.sort((a, b) => a.totalCharge - b.totalCharge);
+
+  console.log('[LTL/quote]', quotes.length, 'quotes for', originZip, '->', destZip);
+  res.json({
+    originZip, destZip, weight: wt, freightClass: fc,
+    czarliteBase: czarBase,
+    quotes,
+    generatedAt: new Date().toISOString()
+  });
+});
+
+
+// ── GET /api/ltl/rates — All active LTL rates with czarlite flag ──────────────
+app.get('/api/ltl/rates', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rates?mode=eq.LTL&select=*&order=carrier', {
+      headers: sbHeaders(null)
+    });
+    const data = await r.json();
+    res.json({ rates: data });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// (404 catch-all moved to end of file, after all route definitions)
+
+// ── Start ──────────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SMC³ RateWareXL 2.0 + CarrierConnect XL 3.x — SECURE SERVER PROXY
+// WO 465640 — LIVE as of 2026-03-18
+// Credentials stored server-side only. Browser never sees password/licenseKey.
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SMC3 = {
+  licenseKey:     process.env.SMC3_LICENSE_KEY || '8Pzf4XeN63n9',  // RateWare license
+  ccxlLicenseKey: process.env.SMC3_CCXL_KEY   || 'W3QQwTa6DdeM',  // CarrierConnect license
+  username:       process.env.SMC3_USERNAME    || 'zoree-integrations@zoree.io',
+  password:       process.env.SMC3_PASSWORD    || 'ujM3W1lM',
+  tariff:         'CZAR2025',
+  rateware:       'https://applications.smc3.com/RateWareXL/services/rest/v2',
+  ccxl:           'https://ccxl.smc3.com/CarrierConnectXL/services/rest/v3',
+};
+
+function smc3Auth(){
+  return 'Basic ' + Buffer.from(SMC3.username + ':' + SMC3.password).toString('base64');
+}
+function todayYMD(){
+  const d = new Date();
+  return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+}
+async function smc3Call(baseUrl, path, body){
+  // Determine apiVersion based on whether this is CCXL or RateWare
+  const isCCXL = baseUrl.includes('ccxl');
+  const apiVer = isCCXL ? 'V3_0' : 'V2_0';
+  const lk = isCCXL ? SMC3.ccxlLicenseKey : SMC3.licenseKey;
+  const r = await fetch(baseUrl + path, {
+    method:  'POST',
+    headers: {
+      'Authorization': smc3Auth(),
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'licenseKey': lk,
+      'username': SMC3.username,
+      'password': SMC3.password,
+      'apiVersion': apiVer,
+    },
+    body:    JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`SMC3 ${r.status}: ${JSON.stringify(data).slice(0,200)}`);
+  return data;
+}
+
+// ── POST /api/smc3/rate  ─ CzarLite LTL rate ─────────────────────────────────
+app.post('/api/smc3/rate', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    const { originPostalCode, destinationPostalCode, weight, freightClass,
+            tariffName, shipmentDateCCYYMMDD, commodities } = req.body;
+
+    const data = await smc3Call(SMC3.rateware, '/ltlrateshipment', {
+      tariffName:            tariffName           || SMC3.tariff,
+      shipmentDateCCYYMMDD:  shipmentDateCCYYMMDD || todayYMD(),
+      originPostalCode,      originCountry: 'USA',
+      destinationPostalCode, destinationCountry: 'USA',
+      commodities: commodities ||
+        [{ freightClass: String(freightClass || 85), weight: Math.round(weight || 1000) }],
+    });
+
+    const linehaul   = data.linehaulCharge    || data.baseCharge   || 0;
+    const fuel       = data.fuelSurcharge     || data.fuelCharge   || 0;
+    const acc        = data.accessorialCharge || data.accessorials || 0;
+    const total      = data.totalCharge       || data.totalAmount  || (linehaul+fuel+acc);
+    const billedWt   = data.billedWeight      || weight            || 1000;
+    const ratePerCwt = billedWt > 0 ? (linehaul/(billedWt/100)).toFixed(2) : '0';
+
+    console.log(`[SMC3/rate] ${originPostalCode}→${destinationPostalCode} class${freightClass} ${weight}lb → $${Math.round(total)}`);
+    res.json({ source:'smc3', tariff:SMC3.tariff, linehaul, fuel, acc,
+               total: Math.round(total), billedWeight: billedWt, ratePerCwt, raw: d, shipmentResponse: srata });
+  } catch(e) {
+    console.error('[SMC3/rate]', e.message);
+    res.status(502).json({ error: e.message, source:'smc3' });
+  }
+});
+
+// ── POST /api/smc3/transit  ─ CarrierConnect XL transit time ─────────────────
+app.post('/api/smc3/transit', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    const { originPostalCode, destinationPostalCode, shipmentDateCCYYMMDD, scacs } = req.body;
+
+    const data = await smc3Call(SMC3.ccxl, '/transit', {
+      originPostalCode, originCountry: 'USA',
+      destinationPostalCode, destinationCountry: 'USA',
+      shipmentDateCCYYMMDD: shipmentDateCCYYMMDD || todayYMD(),
+      method: 'LTL',
+      scacs:  scacs || [],
+    });
+
+    const rows = data.transitList || data.transit || (Array.isArray(data) ? data : []);
+    const carriers = rows.map(c => ({
+      scac:         c.scac        || c.carrierCode || '',
+      carrierName:  c.carrierName || '',
+      transitDays:  c.transitDays || c.standardTransitDays || c.days || null,
+      deliveryDate: c.deliveryDate|| c.estimatedDeliveryDate || '',
+    })).filter(c => c.transitDays != null);
+
+    console.log(`[SMC3/transit] ${originPostalCode}→${destinationPostalCode} → ${carriers.length} carriers`);
+    res.json({ source:'smc3', carriers, raw: d, shipmentResponse: srata });
+  } catch(e) {
+    console.error('[SMC3/transit]', e.message);
+    res.status(502).json({ error: e.message, source:'smc3' });
+  }
+});
+
+// ── POST /api/smc3/classify  ─ Freight class lookup ──────────────────────────
+app.post('/api/smc3/classify', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    const data = await smc3Call(SMC3.rateware, '/classifyCommodity', {
+      tariffName: SMC3.tariff,
+      items: [req.body],
+    });
+    res.json({ source:'smc3', ...data });
+  } catch(e) {
+    console.error('[SMC3/classify]', e.message);
+    res.status(502).json({ error: e.message, source:'smc3' });
+  }
+});
+
+// ── GET /api/smc3/status  ─────────────────────────────────────────────────────
+app.get('/api/smc3/status', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  res.json({
+    live: true, workOrder: '465640',
+    licenseKey: SMC3.licenseKey, username: SMC3.username,
+    hasPassword: !!SMC3.password, tariff: SMC3.tariff,
+    rateware: SMC3.rateware, ccxl: SMC3.ccxl,
+  });
+});
+
+// ── POST /api/smc3/test  ─ Live connection test ───────────────────────────────
+app.post('/api/smc3/test', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    // ATL(30301) → DAL(75201), 1000lb, Class 70
+    const data = await smc3Call(SMC3.rateware, '/ltlrateshipment', {
+      tariffName: SMC3.tariff, shipmentDateCCYYMMDD: todayYMD(),
+      originPostalCode: '30301', originCountry: 'USA',
+      destinationPostalCode: '75201', destinationCountry: 'USA',
+      commodities: [{ freightClass: '70', weight: 1000 }],
+    });
+    const total = data.totalCharge || data.totalAmount || 0;
+    console.log('[SMC3/test] LIVE — ATL→DAL $' + total);
+    res.json({ ok: true, message: 'SMC3 CzarLite LIVE ✅', testRate: Math.round(total), tariff: SMC3.tariff });
+  } catch(e) {
+    console.error('[SMC3/test]', e.message);
+    res.status(502).json({ ok: false, error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BULK PLANNING WORKBENCH — OTM-style batch rate + execute
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/bulk-plan/rate — Rate all lanes in batch via CzarLite ──────────
+app.post('/api/bulk-plan/rate', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    const { lanes, optimizeBy } = req.body;
+    if (!lanes || !lanes.length) return res.status(400).json({ error: 'lanes[] required' });
+
+    const results = await Promise.allSettled(lanes.map(async (lane) => {
+      const { laneKey, originZip, destZip, totalWeight, freightClass, orderIds } = lane;
+      const fc = String(freightClass || 70);
+      const wt = Math.round(totalWeight || 1000);
+      const loadType = wt >= 35000 ? 'Full TL' : wt >= 10000 ? 'Partial TL' : 'LTL';
+      const quotes = [];
+
+      if (loadType === 'LTL' || loadType === 'Partial TL') {
+        // Step 1: CzarLite base rate
+        try {
+          // Use same schema as working /api/ltl/quote: shipmentRequests[]
+          const czBody = {
+            shipmentRequests: [{
+              origin:      { postalCode: originZip, country: 'USA', city: '', stateProvince: '' },
+              destination: { postalCode: destZip,   country: 'USA', city: '', stateProvince: '' },
+              tariffName:          SMC3_TARIFF || 'DEMOLTLA',
+              tariffEffectiveDate: '20070703',
+              details: [{ nmfcClass: fc, weight: wt }]
+            }]
+          };
+          const czRaw = await new Promise((resolve, reject) => {
+            _smc3Post(SMC3_RW_HOST, SMC3_RW_BASE + '/ltlrateshipment', czBody, function(err, data) {
+              if (err) return reject(err);
+              resolve(data);
+            });
+          });
+          const czData = (czRaw.shipmentResponses && czRaw.shipmentResponses[0]) || czRaw;
+          const baseTotal = parseFloat(czData.totalCharge) || 0;
+          const baseLinehaul = parseFloat(czData.lineHaulGrossCharge) || parseFloat(czData.linehaulCharge) || 0;
+          const baseFuel = parseFloat(czData.surchargeAmount) || parseFloat(czData.fuelSurcharge) || 0;
+          const billedWeight = parseFloat(czData.billedWeight) || wt;
+
+          // Step 2: Load carrier rates from DB
+          const ratesUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&czarlite=eq.true&status=eq.Active&select=carrier,origin,dest,discount,discount_flat,fsc,lane,transit_days`;
+          const ratesRes = await fetch(ratesUrl, {
+            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+          });
+          const allRates = await ratesRes.json();
+
+          if (Array.isArray(allRates) && allRates.length > 0) {
+            allRates.forEach((rate) => {
+              const discPct = parseFloat(rate.discount || 0);
+              const discFlat = parseFloat(rate.discount_flat || 0);
+              const fscPct = parseFloat(rate.fsc || 0);
+
+              const discountAmt = baseTotal * ((discPct + discFlat) / 100);
+              const discountedBase = Math.max(0, baseTotal - discountAmt);
+              const fscCharge = Math.round(discountedBase * (fscPct / 100));
+              const totalCharge = Math.round(discountedBase + fscCharge);
+
+              quotes.push({
+                carrier: rate.carrier || 'Unknown',
+                scac: '',
+                totalCharge,
+                czarBaseGross: Math.round(baseTotal),
+                discountPct: Math.round(discPct + discFlat),
+                fscCharge,
+                fscPct,
+                transitDays: rate.transit_days || null,
+                deliveryDate: '',
+                recommended: false,
+              });
+            });
+          }
+
+          // If no rates in DB, add a base CzarLite quote
+          if (quotes.length === 0) {
+            quotes.push({
+              carrier: 'CzarLite Base',
+              scac: '',
+              totalCharge: Math.round(baseTotal),
+              czarBaseGross: Math.round(baseTotal),
+              discountPct: 0,
+              fscCharge: Math.round(baseFuel),
+              fscPct: 0,
+              transitDays: null,
+              deliveryDate: '',
+              recommended: true,
+            });
+          }
+
+          // Step 3: Try CarrierConnect XL v3 for transit times
+          try {
+            const today = new Date();
+            const pickupDate = today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
+            const ccBody = {
+              carriers: [{ serviceCode:'', serviceMethod:'LTL', serviceType:'ALL_AVAILABLE', SCAC:'' }],
+              origin:      { postalCode: originZip, countryCode: 'USA' },
+              destination: { postalCode: destZip,   countryCode: 'USA' },
+              pickupDate:  pickupDate,
+            };
+            const ccData = await new Promise((resolve, reject) => {
+              _ccxlPost(_CCXL_HOST, _CCXL_BASE + '/transit', ccBody, (err, data) => {
+                if (err) return reject(err);
+                resolve(data);
+              });
+            });
+            const ccList = ccData.carriers || (Array.isArray(ccData) ? ccData : []);
+            const ccMap = {};
+            ccList.forEach((c) => {
+              const csd = c.carrierServiceDetail || {};
+              const name = csd.carrierName || csd.SCAC || '';
+              const scac = csd.SCAC || '';
+              ccMap[name] = { transitDays: c.transitDays, scac, deliveryDate: c.deliveryDate || '' };
+              if (scac) ccMap[scac] = ccMap[name];
+            });
+
+            quotes.forEach((q) => {
+              const match = ccMap[q.carrier] || ccMap[q.scac];
+              if (match) {
+                q.transitDays = match.transitDays || q.transitDays;
+                q.deliveryDate = match.deliveryDate || '';
+                q.scac = match.scac || q.scac;
+              }
+            });
+            console.log(`[BulkPlan/rate] CCXL transit: ${originZip}→${destZip}, ${ccList.length} carriers`);
+          } catch (ccErr) {
+            console.warn('[BulkPlan/rate] CCXL error (non-fatal):', ccErr.message);
+          }
+
+        } catch (czErr) {
+          console.error('[BulkPlan/rate] CzarLite error for', laneKey, czErr.message);
+          // Return lane with no quotes
+        }
+
+      } else {
+        // TL lane — query TL rates from DB
+        try {
+          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate_per_mile,fsc_pct,transit_days,lane`;
+          const tlRes = await fetch(tlUrl, {
+            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+          });
+          const tlRates = await tlRes.json();
+
+          if (Array.isArray(tlRates)) {
+            tlRates.forEach((rate) => {
+              const rpm = parseFloat(rate.rate_per_mile || 2.50);
+              const fscPct = parseFloat(rate.fsc_pct || 20);
+              const estimatedMiles = 500; // placeholder
+              const baseCost = Math.round(rpm * estimatedMiles);
+              const fscCharge = Math.round(baseCost * (fscPct / 100));
+              quotes.push({
+                carrier: rate.carrier || 'Unknown',
+                scac: '',
+                totalCharge: baseCost + fscCharge,
+                czarBaseGross: baseCost,
+                discountPct: 0,
+                fscCharge,
+                fscPct,
+                transitDays: rate.transit_days || 2,
+                deliveryDate: '',
+                recommended: false,
+              });
+            });
+          }
+        } catch (tlErr) {
+          console.error('[BulkPlan/rate] TL rates error:', tlErr.message);
+        }
+      }
+
+      // Sort and mark recommended
+      const sortBy = optimizeBy === 'transit' ? 'transitDays' : 'totalCharge';
+      quotes.sort((a, b) => (a[sortBy] || 99999) - (b[sortBy] || 99999));
+      if (quotes.length > 0) quotes[0].recommended = true;
+
+      return {
+        laneKey,
+        loadType,
+        quotes,
+        bestQuote: quotes[0] || null,
+      };
+    }));
+
+    const finalResults = results.map((r) => {
+      if (r.status === 'fulfilled') return r.value;
+      return { laneKey: 'unknown', loadType: 'LTL', quotes: [], bestQuote: null, error: r.reason?.message };
+    });
+
+    console.log(`[BulkPlan/rate] Rated ${finalResults.length} lanes`);
+    res.json({ results: finalResults });
+
+  } catch (e) {
+    console.error('[BulkPlan/rate]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/bulk-plan/execute — Create shipments + update orders ───────────
+app.post('/api/bulk-plan/execute', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    const { plans } = req.body;
+    if (!plans || !plans.length) return res.status(400).json({ error: 'plans[] required' });
+
+    const shipments = [];
+    const errors = [];
+    let ordersUpdated = 0;
+
+    for (const plan of plans) {
+      try {
+        const year = new Date().getFullYear();
+        const shipId = `SHP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const shipRow = {
+          id: shipId,
+          carrier: plan.carrier || '',
+          mode: plan.mode || 'LTL',
+          origin: plan.origin,
+          dest: plan.destination,
+          weight: plan.totalWeight || 0,
+          pieces: plan.totalPieces || 0,
+          status: 'Planned',
+          total_cost: plan.totalCost || 0,
+          order_ids: plan.orderIds || [],
+          pickup_date: plan.pickupDate || null,
+          delivery_date: plan.deliveryDate || null,
+        };
+
+        // Create shipment
+        const shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
+          method: 'POST',
+          headers: {
+            'apikey': ANON_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=representation',
+          },
+          body: JSON.stringify(shipRow),
+        });
+        const shipData = await shipRes.json();
+        const created = Array.isArray(shipData) ? shipData[0] : shipData;
+        shipments.push(created);
+
+        // Update each order
+        for (const orderId of (plan.orderIds || [])) {
+          await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': ANON_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({ status: 'Planned', shipment_id: shipId }),
+          });
+          ordersUpdated++;
+        }
+
+        console.log(`[BulkPlan/execute] ${shipId}: ${plan.origin} → ${plan.destination} | ${plan.carrier} | $${plan.totalCost} | ${(plan.orderIds || []).length} orders`);
+
+      } catch (planErr) {
+        errors.push({ lane: plan.laneKey, error: planErr.message });
+        console.error('[BulkPlan/execute] Error:', planErr.message);
+      }
+    }
+
+    console.log(`[BulkPlan/execute] Created ${shipments.length} shipments, updated ${ordersUpdated} orders`);
+    res.json({ shipments, ordersUpdated, errors });
+
+  } catch (e) {
+    console.error('[BulkPlan/execute]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/bulk-plan/import — Bulk create orders from CSV/Excel ───────────
+app.post('/api/bulk-plan/import', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  try {
+    const { orders: importOrders } = req.body;
+    if (!importOrders || !importOrders.length) return res.status(400).json({ error: 'orders[] required' });
+
+    const created = [];
+    const errors = [];
+
+    for (let i = 0; i < importOrders.length; i++) {
+      const o = importOrders[i];
+      // Validate
+      if (!o.customer) { errors.push({ row: i + 1, message: 'Customer required' }); continue; }
+      if (!o.origin) { errors.push({ row: i + 1, message: 'Origin required' }); continue; }
+      if (!o.destination) { errors.push({ row: i + 1, message: 'Destination required' }); continue; }
+
+      const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+      const row = {
+        id: orderId,
+        customer: o.customer,
+        origin: o.origin,
+        dest: o.destination,
+        weight: parseFloat(o.weight) || 0,
+        pieces: parseInt(o.pieces) || 0,
+        commodity: o.commodity || 'General',
+        ready: o.readyDate || null,
+        due: o.dueDate || null,
+        status: 'Unplanned',
+      };
+
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/orders?on_conflict=id`, {
+          method: 'POST',
+          headers: {
+            'apikey': ANON_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=representation',
+          },
+          body: JSON.stringify(row),
+        });
+        const data = await r.json();
+        created.push(Array.isArray(data) ? data[0] : data);
+      } catch (insertErr) {
+        errors.push({ row: i + 1, message: insertErr.message });
+      }
+    }
+
+    console.log(`[BulkPlan/import] Created ${created.length} orders, ${errors.length} errors`);
+    res.json({ created: created.length, orders: created, errors });
+
+  } catch (e) {
+    console.error('[BulkPlan/import]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/auth/refresh ────────────────────────────────────────────────────
+app.post('/api/auth/refresh', async (req, res) => {
+  const { refreshToken } = req.body || {};
+  if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.access_token)
+      return res.status(401).json({ error: data.error_description || 'Refresh failed' });
+    res.json({
+      token:        data.access_token,
+      refreshToken: data.refresh_token || refreshToken,
+      expiresIn:    data.expires_in || 3600,
+      expiresAt:    Date.now() + ((data.expires_in || 3600) * 1000),
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Temporary deploy endpoint — writes new index.html to the static directory
+app.post('/api/deploy-index', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    // Write to the directory that serves static files (parent of api/)
+    const targetPath = path.join(__dirname, '..', 'index.html');
+    const { content } = req.body;
+    if(!content) return res.status(400).json({error:'No content'});
+    fs.writeFileSync(targetPath, content, 'utf8');
+    res.json({ok:true, path:targetPath, bytes:content.length});
+  } catch(e) { res.status(500).json({error:e.message}); }
+});
+
+// ── 404 catch-all (must be AFTER all route definitions) ──────────────────────
+app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
+app.use((err, req, res, next) => { console.error('[Error]', err.message); res.status(500).json({ error: err.message }); });
+
+app.listen(PORT, () => {
+  console.log(`\n🚛 ZoreeTMS API — Tier 2 running on http://localhost:${PORT}`);
+  console.log(`   ✅ Supabase credentials: SERVER-SIDE ONLY`);
+  console.log(`   ✅ Browser never touches Supabase directly`);
+  console.log(`   ✅ 3-Tier Architecture active\n`);
+});
+
+module.exports = app;

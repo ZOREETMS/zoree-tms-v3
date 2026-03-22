@@ -1,0 +1,22 @@
+{
+  "name": "zoree-tms",
+  "version": "3.0.0",
+  "description": "ZoreeTMS — 3-Tier Transportation Management System",
+  "private": true,
+  "workspaces": [
+    "api",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=api\" \"npm run dev --workspace=frontend\"",
+    "start": "npm run start --workspace=api",
+    "install:all": "npm install && npm install --workspace=api && npm install --workspace=frontend",
+    "build": "npm run build --workspace=frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "serve": "^14.2.6"
+  }
+}
