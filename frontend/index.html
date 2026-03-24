@@ -18,9 +18,12 @@
   --cyan:#0891b2; --purple:#7c3aed;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;}
-input[type="text"],input:not([type]),textarea,select{text-transform:uppercase;}
-input[type="text"]::placeholder,input:not([type])::placeholder,textarea::placeholder{text-transform:none;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;text-transform:uppercase;}
+.modal,.toast-wrap,#chat-panel{text-transform:uppercase;}
+input,select,textarea,.search-input,select.fsel{text-transform:uppercase !important;}
+input::placeholder,textarea::placeholder{text-transform:uppercase !important;}
+pre,code,.dbe-sql-editor,.dbe-results-empty{text-transform:none;}
+.dbe-results-table td,.dbe-results-table th{text-transform:uppercase;}
 .app{display:flex;height:100vh;}
 /* SIDEBAR */
 .sidebar{width:220px;min-width:220px;background:linear-gradient(160deg,#1e2d6b 0%,#1a237e 40%,#283593 100%);border-right:none;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;box-shadow:4px 0 20px rgba(30,45,107,0.15);position:relative;}
@@ -161,7 +164,7 @@ tbody tr:hover{filter:brightness(.96);}
 .form-group.full{grid-column:span 2;}
 label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;}
 input,select,textarea{background:#f8faff;border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;text-transform:uppercase;}
-input::placeholder,textarea::placeholder{text-transform:none;}
+input::placeholder,textarea::placeholder{text-transform:uppercase !important;}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 textarea{resize:vertical;min-height:70px;}
 /* TOAST */
@@ -2521,7 +2524,7 @@ function onRouteWeightChange(val) {
       </div>
       <!-- Constraints section -->
       <div style="margin-top:14px;padding:14px 16px;background:#f8faff;border-radius:10px;border:1px solid var(--border)">
-        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">⚙️ Planning Constraints <span style="font-weight:400;color:var(--text3);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">⚙️ PLANNING CONSTRAINTS <span style="font-weight:400;color:var(--text3);font-size:10px;letter-spacing:0">(OPTIONAL)</span></div>
         <div class="form-grid" style="margin-bottom:10px">
           <div class="form-group">
             <label>Preferred Carrier</label>
@@ -2549,21 +2552,21 @@ function onRouteWeightChange(val) {
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;color:var(--text)">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;letter-spacing:0;font-size:13px;font-weight:400;color:var(--text)">
             <input type="checkbox" id="no-no-consolidate" style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent)">
             <div>
               <div style="font-weight:600;color:var(--text)">Do not consolidate</div>
               <div style="font-size:11px;color:var(--text3);margin-top:1px">This order must ship as a standalone load — it will not be grouped with other orders on the same lane</div>
             </div>
           </label>
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;color:var(--text)">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;letter-spacing:0;font-size:13px;font-weight:400;color:var(--text)">
             <input type="checkbox" id="no-dedicated-equipment" style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent)">
             <div>
               <div style="font-weight:600;color:var(--text)">Dedicated equipment required</div>
               <div style="font-size:11px;color:var(--text3);margin-top:1px">Requires a dedicated trailer — cannot share equipment with other shipments</div>
             </div>
           </label>
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;color:var(--text)">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;letter-spacing:0;font-size:13px;font-weight:400;color:var(--text)">
             <input type="checkbox" id="no-hazmat" style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent)">
             <div>
               <div style="font-weight:600;color:var(--text)">Hazmat / Restricted commodity</div>
@@ -3065,21 +3068,21 @@ function onRouteWeightChange(val) {
         <div style="padding:14px 16px;background:#f8faff;border-radius:10px;border:1px solid var(--border)">
           <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">📋 Load Restrictions</div>
           <div style="display:flex;flex-direction:column;gap:12px">
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text)">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;letter-spacing:0;font-weight:400;color:var(--text)">
               <input type="checkbox" id="ce-no-consolidate" style="width:16px;height:16px;margin-top:2px;accent-color:var(--red)">
               <div>
                 <div style="font-weight:600;color:var(--text)">🚫 Do not consolidate</div>
                 <div style="font-size:11px;color:var(--text3);margin-top:1px">Ship as a standalone load — will not be grouped with other orders on the same lane</div>
               </div>
             </label>
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text)">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;letter-spacing:0;font-weight:400;color:var(--text)">
               <input type="checkbox" id="ce-dedicated-equipment" style="width:16px;height:16px;margin-top:2px;accent-color:var(--yellow)">
               <div>
                 <div style="font-weight:600;color:var(--text)">🚛 Dedicated equipment required</div>
                 <div style="font-size:11px;color:var(--text3);margin-top:1px">Requires a dedicated trailer — implies no consolidation</div>
               </div>
             </label>
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text)">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;letter-spacing:0;font-weight:400;color:var(--text)">
               <input type="checkbox" id="ce-hazmat" style="width:16px;height:16px;margin-top:2px;accent-color:var(--red)">
               <div>
                 <div style="font-weight:600;color:var(--text)">☢️ Hazmat / Restricted commodity</div>
@@ -4436,7 +4439,7 @@ function onRouteWeightChange(val) {
 
 <div class="toast-wrap" id="toasts"></div>
 
-<script src="pages/bulk-plan.js?v=20260324b"></script>
+<script src="pages/bulk-plan.js?v=20260324c"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // SUPABASE INTEGRATION
@@ -4964,6 +4967,8 @@ function shipmentToDb(s) {
     service_level:   _uc(s.serviceLevel   || null),
     dock_assigned:   _uc(s.dockAssigned   || null),
     dock_time:       s.dockTime       || null,
+    loading_start:   s.loadingStart   || null,
+    loading_end:     s.loadingEnd     || null,
     notes: _uc(s.notes || null),
     order_ids: s.consolidatedOrders || []
   };
@@ -4985,6 +4990,8 @@ function dbToShipment(r) {
     serviceLevel: r.service_level || null,
     dockAssigned: r.dock_assigned || null,
     dockTime:     r.dock_time     || null,
+    loadingStart: r.loading_start || null,
+    loadingEnd:   r.loading_end   || null,
     consolidatedOrders: r.order_ids || [],
     commodity: r.notes || ''
   };
@@ -5606,12 +5613,12 @@ var laneDistances = {
 function getDist(o,d){ return laneDistances[o+'|'+d] || xdockDistances[o+'|'+d] || 750; }
 
 function getRates(o,d){
-  var oCity = _stripCityName(o);
-  var dCity = _stripCityName(d);
+  var oCity = _normLaneCity(o);
+  var dCity = _normLaneCity(d);
   return rates.filter(function(r){
     if(r.status !== 'Active') return false;
-    var rOCity = _stripCityName(r.origin);
-    var rDCity = _stripCityName(r.dest);
+    var rOCity = _normLaneCity(r.origin);
+    var rDCity = _normLaneCity(r.dest);
     return rOCity === oCity && rDCity === dCity;
   });
 }
@@ -5622,12 +5629,22 @@ function _stripCityName(s) {
   // "CHICAGO 60602" → "chicago", "Chicago, IL 60601" → "chicago", "Atlanta, GA 30303" → "atlanta"
   return (s||'').toLowerCase().split(',')[0].replace(/\s*\d{5}(-\d{4})?\s*$/,'').trim();
 }
+/** Common city typos → canonical token for lane/rate and dock matching (e.g. ATLANATA → atlanta). */
+var CITY_MATCH_ALIASES = {
+  'atlanata': 'atlanta', 'atlantas': 'atlanta', 'atlnta': 'atlanta',
+  'los angelos': 'los angeles', 'losangles': 'los angeles', 'la ca': 'los angeles',
+  'chicago il': 'chicago', 'dalls': 'dallas', 'columubs': 'columbus'
+};
+function _normLaneCity(addr) {
+  var t = _stripCityName(addr);
+  return CITY_MATCH_ALIASES[t] || t;
+}
 function laneHasActiveRate(o, d) {
-  var oL = _stripCityName(o);
-  var dL = _stripCityName(d);
+  var oL = _normLaneCity(o);
+  var dL = _normLaneCity(d);
   return rates.some(function(r) {
     if (r.status !== 'Active') return false;
-    return _stripCityName(r.origin) === oL && _stripCityName(r.dest) === dL;
+    return _normLaneCity(r.origin) === oL && _normLaneCity(r.dest) === dL;
   });
 }
 
@@ -6695,7 +6712,7 @@ function renderOrders(){
       +(o.status==='Unplanned'&&inGroup?'':'')
       +(o.status==='Consolidated'?'<button class="btn btn-secondary btn-sm" onclick="unassignOrderFromShipment(\''+o.id+'\',\''+(o.shipmentId||'')+'\',true)" title="Remove from shipment and return to Unplanned" style="background:rgba(245,158,11,.08);color:#b45309;border-color:rgba(245,158,11,.35);font-size:11px">🔓 Unplan</button>':'')
       +(o.status==='Planned'?'<button class="btn btn-secondary btn-sm" onclick="tenderOrder(\''+o.id+'\',\''+(o.shipmentId||'')+'\')" title="Tender to carrier" style="background:rgba(16,185,129,.08);color:#059669;border-color:rgba(16,185,129,.35);font-size:11px">📤 Tender</button> <button class="btn btn-secondary btn-sm" onclick="unassignOrderFromShipment(\''+o.id+'\',\''+(o.shipmentId||'')+'\',true)" title="Remove from shipment and return to Unplanned" style="background:rgba(245,158,11,.08);color:#b45309;border-color:rgba(245,158,11,.35);font-size:11px">🔓 Unplan</button>':'')
-      +(o.status==='Unplanned'?'<button class="btn btn-sm" onclick="deleteOrder(\''+o.id+'\')" title="Delete order" style="background:rgba(220,38,38,.08);color:#dc2626;border:1px solid rgba(220,38,38,.2);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:4px">🗑️</button>':'')
+      +(o.status==='Unplanned'?'<button class="btn btn-sm" onclick="cancelOrder(\''+o.id+'\')" title="Cancel order" style="background:rgba(245,158,11,.10);color:#b45309;border:1px solid rgba(245,158,11,.35);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:4px">🚫</button> <button class="btn btn-sm" onclick="deleteOrder(\''+o.id+'\')" title="Delete order" style="background:rgba(220,38,38,.08);color:#dc2626;border:1px solid rgba(220,38,38,.2);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:4px">🗑️</button>':'')
       +'</td>'
   });
   document.getElementById('ord-tbody').innerHTML=html;
@@ -7333,6 +7350,420 @@ function renderCarrierBars(){
 // PLAN MODAL
 // ─────────────────────────────────────────────
 var _planSibs=[], _planPriced=[], _planSelIdx=0;
+var _planDockPrefs = { enabled:true, location:'', door:'AUTO', start:'08:00', duration:60 };
+var _planDockDurationManual = false;
+var _planWeight = 0, _planPieces = 0;
+
+function snapPlanDockDurationMinutes(mins) {
+  var opts = [30,45,60,90,120,150,180];
+  var m = parseInt(mins, 10);
+  if(isNaN(m) || m < 30) m = 60;
+  if(m > 180) m = 180;
+  var best = opts[0], bestDiff = Math.abs(m - best);
+  for(var i=1;i<opts.length;i++){
+    var d = Math.abs(m - opts[i]);
+    if(d < bestDiff){ best = opts[i]; bestDiff = d; }
+  }
+  return best;
+}
+
+function estimateDockDurationMinutes(weightLbs, pieces, mode, isCzarlite) {
+  var w = Math.max(0, parseInt(weightLbs, 10) || 0);
+  var p = Math.max(1, parseInt(pieces, 10) || 1);
+  var m = String(mode || '').toUpperCase();
+  var isLtl = isCzarlite || m === 'LTL';
+
+  // Simple operational heuristic: base handling + weight + piece complexity.
+  var base = isLtl ? 45 : 60;
+  var weightAdj = Math.ceil(w / (isLtl ? 8000 : 12000)) * 10;
+  var pieceAdj = Math.ceil(p / 12) * 5;
+  var raw = base + weightAdj + pieceAdj;
+  if (raw < 30) raw = 30;
+  if (raw > 180) raw = 180;
+
+  // Round to 30-minute blocks to match dock slot planning.
+  return Math.ceil(raw / 30) * 30;
+}
+
+/** Map a free-text origin/dest to a dockLocationConfig key (same city as _stripCityName). */
+function resolveDockConfigKey(addr) {
+  if (!addr || !dockLocationConfig) return '';
+  if (dockLocationConfig[addr]) return addr;
+  var norm = _stripCityName(addr);
+  if (!norm) return '';
+  if (CITY_MATCH_ALIASES[norm]) norm = CITY_MATCH_ALIASES[norm];
+  var keys = Object.keys(dockLocationConfig);
+  for (var i = 0; i < keys.length; i++) {
+    if (_stripCityName(keys[i]) === norm) return keys[i];
+  }
+  // One-edit fuzzy match for longer tokens (e.g. transposed letters in city names)
+  if (norm.length >= 6) {
+    var bestK = '', bestD = 99;
+    for (var j = 0; j < keys.length; j++) {
+      var kn = _stripCityName(keys[j]);
+      if (kn.length < 4) continue;
+      var d = _dockCityEditDistance(norm, kn);
+      if (d < bestD && d <= 2) { bestD = d; bestK = keys[j]; }
+    }
+    if (bestK) return bestK;
+  }
+  return '';
+}
+
+/** Levenshtein capped for small strings (dock city names). */
+function _dockCityEditDistance(a, b) {
+  if (a === b) return 0;
+  var la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > 2) return 99;
+  var row = [], i, j, prev, cur;
+  for (j = 0; j <= lb; j++) row[j] = j;
+  for (i = 1; i <= la; i++) {
+    prev = row[0];
+    row[0] = i;
+    for (j = 1; j <= lb; j++) {
+      cur = Math.min(
+        row[j] + 1,
+        row[j - 1] + 1,
+        prev + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1)
+      );
+      prev = row[j];
+      row[j] = cur;
+    }
+  }
+  return row[lb];
+}
+
+function getDockLocationForShipment(s) {
+  if (!s) return '';
+  var o = resolveDockConfigKey(s.origin || '');
+  if (o) return o;
+  var d = resolveDockConfigKey(s.dest || '');
+  if (d) return d;
+  return '';
+}
+
+function findAvailableDockDoor(location, date, start, duration, preferredDoor) {
+  if (!location || !dockLocationConfig[location]) return '';
+  var doors = dockLocationConfig[location].doors || [];
+  if (!doors.length) return '';
+  var startM = toMins(start);
+  var endM = startM + duration;
+
+  function doorHasConflict(door) {
+    return dockAppointments.some(function(a){
+      if (a.location !== location) return false;
+      if (a.date !== date) return false;
+      if (a.door !== door) return false;
+      if (['Cancelled','No Show'].includes(a.status)) return false;
+      var aS = toMins(a.start), aE = aS + (parseInt(a.duration,10)||0);
+      return startM < aE && aS < endM;
+    });
+  }
+
+  if (preferredDoor && preferredDoor !== 'AUTO' && doors.includes(preferredDoor) && !doorHasConflict(preferredDoor)) {
+    return preferredDoor;
+  }
+  for (var i=0; i<doors.length; i++) {
+    if (!doorHasConflict(doors[i])) return doors[i];
+  }
+  return preferredDoor && preferredDoor !== 'AUTO' ? preferredDoor : doors[0];
+}
+
+/** Wall-clock timezone for ship-from dock (not browser local). */
+var DOCK_LOCATION_TZ = {
+  'Atlanta, GA': 'America/New_York',
+  'Columbus, OH': 'America/New_York',
+  'Chicago, IL': 'America/Chicago',
+  'Dallas, TX': 'America/Chicago',
+  'Los Angeles, CA': 'America/Los_Angeles',
+};
+
+function dockTimeZoneForLocation(locationKey) {
+  if (locationKey && DOCK_LOCATION_TZ[locationKey]) return DOCK_LOCATION_TZ[locationKey];
+  return (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : 'UTC';
+}
+
+/** Today's YYYY-MM-DD and minutes-from-midnight in `timeZone` (facility wall clock). */
+function getFacilityWallClockNow(timeZone) {
+  var now = new Date();
+  var tz = timeZone || 'UTC';
+  try {
+    var parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(now);
+    var y = '', mo = '', d = '', h = '', mi = '';
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') mo = p.value;
+      if (p.type === 'day') d = p.value;
+      if (p.type === 'hour') h = p.value;
+      if (p.type === 'minute') mi = p.value;
+    }
+    var ymd = y + '-' + mo + '-' + d;
+    var mins = parseInt(h, 10) * 60 + parseInt(mi, 10);
+    return { ymd: ymd, minutes: mins };
+  } catch (e) {
+    var loc = new Date();
+    return {
+      ymd: loc.getFullYear() + '-' + String(loc.getMonth() + 1).padStart(2, '0') + '-' + String(loc.getDate()).padStart(2, '0'),
+      minutes: loc.getHours() * 60 + loc.getMinutes()
+    };
+  }
+}
+
+/** Same grid as dock UI; defined here so plan modal can run before global dockTimeSlots init. */
+function getDockTimeSlotsForPlan() {
+  if (typeof dockTimeSlots !== 'undefined' && dockTimeSlots && dockTimeSlots.length) return dockTimeSlots;
+  var slots = [];
+  for (var h = 6; h < 21; h++) {
+    slots.push(String(h).padStart(2, '0') + ':00');
+    if (h < 20) slots.push(String(h).padStart(2, '0') + ':30');
+  }
+  return slots;
+}
+
+/** Earliest (door, start) with no overlap vs existing dockAppointments for this date.
+ *  On the pickup **calendar day** at the **facility**, only start times **after** that facility's wall-clock now. */
+function findFirstAvailableDockSlot(location, date, durationMin) {
+  if (!location || !dockLocationConfig[location]) return null;
+  var doors = dockLocationConfig[location].doors || [];
+  if (!doors.length) return null;
+  var dur = parseInt(durationMin, 10) || 60;
+  var timeSlots = getDockTimeSlotsForPlan();
+  function _mins(t) {
+    var p = (t || '00:00').split(':');
+    return parseInt(p[0], 10) * 60 + parseInt(p[1] || '0', 10);
+  }
+  var facTz = dockTimeZoneForLocation(location);
+  var wall = getFacilityWallClockNow(facTz);
+  var slotsToTry = (date === wall.ymd)
+    ? timeSlots.filter(function(st) { return _mins(st) > wall.minutes; })
+    : timeSlots;
+  if (slotsToTry.length === 0) return null;
+
+  function slotFree(door, start) {
+    var sm = _mins(start);
+    var em = sm + dur;
+    return !dockAppointments.some(function(a) {
+      if (a.location !== location || a.date !== date || a.door !== door) return false;
+      if (['Cancelled', 'No Show'].includes(a.status)) return false;
+      var as = _mins(a.start), ae = as + (parseInt(a.duration, 10) || 0);
+      return sm < ae && as < em;
+    });
+  }
+  for (var ti = 0; ti < slotsToTry.length; ti++) {
+    var st = slotsToTry[ti];
+    for (var di = 0; di < doors.length; di++) {
+      if (slotFree(doors[di], st)) return { door: doors[di], start: st };
+    }
+  }
+  return { door: doors[0], start: slotsToTry[0] || '08:00' };
+}
+
+function formatPlanDockEndTime(startHHMM, durMin) {
+  var p = (startHHMM || '08:00').split(':');
+  var h = parseInt(p[0], 10) || 0, mi = parseInt(p[1] || '0', 10) || 0;
+  var t = new Date(2000, 0, 1, h, mi, 0);
+  t.setMinutes(t.getMinutes() + (parseInt(durMin, 10) || 0));
+  return String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+}
+
+/** Set ship-from dock location + first free door/time for pickup date (no manual picks). */
+function applyDockAutoPlanFromShipFrom(origin, dest, pickupDate, durationMin) {
+  var date = pickupDate || new Date().toISOString().slice(0, 10);
+  window._planDockContext = { origin: origin, dest: dest, pickupDate: date };
+  var loc = resolveDockConfigKey(origin || '');
+  if (!loc) {
+    _planDockPrefs.location = '';
+    _planDockPrefs.door = '';
+    _planDockPrefs.start = '';
+    return;
+  }
+  var slot = findFirstAvailableDockSlot(loc, date, durationMin);
+  _planDockPrefs.location = loc;
+  if (slot) {
+    _planDockPrefs.door = slot.door;
+    _planDockPrefs.start = slot.start;
+  } else {
+    _planDockPrefs.door = '';
+    _planDockPrefs.start = '';
+  }
+}
+
+function syncPlanDockHiddenFields() {
+  var loc = document.getElementById('plan-dock-location');
+  if (loc && loc.tagName === 'INPUT') loc.value = _planDockPrefs.location || '';
+  var door = document.getElementById('plan-dock-door');
+  if (door && door.tagName === 'INPUT') door.value = _planDockPrefs.door || '';
+  var st = document.getElementById('plan-dock-start');
+  if (st && st.tagName === 'INPUT') st.value = _planDockPrefs.start || '';
+}
+
+function formatPlanDockSummaryLine() {
+  var origin = (window._planDockContext && window._planDockContext.origin) ? window._planDockContext.origin : '';
+  var resolved = _planDockPrefs.location || resolveDockConfigKey(origin || '');
+  if (!resolved) {
+    return '⚠️ No dock facility matched ship-from "' + String(origin || '—').replace(/</g, '') + '". Use a standard address (e.g. Atlanta, GA) or add the site to dock locations.';
+  }
+  if (!_planDockPrefs.start) {
+    return '⚠️ ' + resolved + ' — no open slot on pickup date after the facility’s current time (or grid is full). Try another pickup date or duration.';
+  }
+  var endT = formatPlanDockEndTime(_planDockPrefs.start, _planDockPrefs.duration);
+  return resolved + ' · ' + _planDockPrefs.door + ' · ' + _planDockPrefs.start + '–' + endT
+    + ' (' + _planDockPrefs.duration + ' min)';
+}
+
+function refreshPlanDockSlotAuto() {
+  var ctx = window._planDockContext;
+  if (!ctx || !ctx.origin) return;
+  applyDockAutoPlanFromShipFrom(ctx.origin, ctx.dest, ctx.pickupDate, _planDockPrefs.duration);
+  var sum = document.getElementById('plan-dock-auto-summary');
+  if (sum) sum.textContent = formatPlanDockSummaryLine();
+  syncPlanDockHiddenFields();
+}
+
+/** @returns {{ start: string, end: string }} ISO-like local datetimes `YYYY-MM-DD HH:mm` */
+function computeLoadingWindowFromDock(dateStr, startHHMM, durationMin) {
+  var p = (startHHMM || '08:00').split(':');
+  var h = parseInt(p[0], 10) || 0, mi = parseInt(p[1], 10) || 0;
+  var dParts = (dateStr || new Date().toISOString().slice(0, 10)).split('-');
+  var y = parseInt(dParts[0], 10), mo = parseInt(dParts[1], 10) - 1, da = parseInt(dParts[2], 10);
+  var startDt = new Date(y, mo, da, h, mi, 0, 0);
+  var dur = parseInt(durationMin, 10) || 0;
+  var endDt = new Date(startDt.getTime() + dur * 60 * 1000);
+  function fmt(d) {
+    var Y = d.getFullYear(), M = String(d.getMonth() + 1).padStart(2, '0'), D = String(d.getDate()).padStart(2, '0');
+    var H = String(d.getHours()).padStart(2, '0'), Mi = String(d.getMinutes()).padStart(2, '0');
+    return Y + '-' + M + '-' + D + ' ' + H + ':' + Mi;
+  }
+  return { start: fmt(startDt), end: fmt(endDt) };
+}
+
+/** Derive loading window from a dock appointment (for display when shipment fields missing). */
+function loadingWindowFromDockAppt(appt) {
+  if (!appt || !appt.date || !appt.start) return null;
+  return computeLoadingWindowFromDock(appt.date, appt.start, appt.duration || 60);
+}
+
+function createDockApptForShipment(s, opts) {
+  if (!opts || !opts.enabled) return null;
+  var location = opts.location || resolveDockConfigKey(s.origin || '') || resolveDockConfigKey(s.dest || '');
+  if (!location) return null;
+  var date = s.pickup || new Date().toISOString().slice(0,10);
+  var start = opts.start || '08:00';
+  var duration = parseInt(opts.duration, 10) || 60;
+  var door = findAvailableDockDoor(location, date, start, duration, opts.door || 'AUTO');
+  if (!door) return null;
+
+  var loadWin = computeLoadingWindowFromDock(date, start, duration);
+
+  var appt = {
+    id: 'DA-'+String(Date.now()).slice(-5)+'-'+Math.floor(Math.random()*90+10),
+    location: location,
+    door: door,
+    date: date,
+    start: start,
+    duration: duration,
+    loadingEnd: loadWin.end,
+    type: 'Outbound',
+    carrier: s.carrier || 'TBD Carrier',
+    driver: '',
+    trailer: '',
+    shipmentId: s.id || '',
+    status: 'Scheduled',
+    notes: 'Auto-booked from planning for shipment ' + (s.id || '')
+  };
+  dockAppointments.push(appt);
+
+  s.dockAssigned = door;
+  s.dockTime = date + ' ' + start;
+  s.loadingStart = loadWin.start;
+  s.loadingEnd = loadWin.end;
+  return appt;
+}
+
+function planDockLocationChanged(loc) {
+  _planDockPrefs.location = loc || _planDockPrefs.location;
+  var doorSel = document.getElementById('plan-dock-door');
+  if(!doorSel) return;
+  var doors = (dockLocationConfig[_planDockPrefs.location] && dockLocationConfig[_planDockPrefs.location].doors)
+    ? dockLocationConfig[_planDockPrefs.location].doors
+    : ['Door 1','Door 2','Door 3','Door 4'];
+  var current = _planDockPrefs.door || 'AUTO';
+  doorSel.innerHTML = '<option value="AUTO">Auto-select</option>' + doors.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
+  doorSel.value = (current !== 'AUTO' && doors.indexOf(current) >= 0) ? current : 'AUTO';
+  _planDockPrefs.door = doorSel.value;
+}
+
+function onPlanDockDurationChange(el) {
+  _planDockDurationManual = true;
+  _planDockPrefs.duration = parseInt(el.value, 10) || 60;
+  refreshPlanDockSlotAuto();
+}
+
+/** Shared dock block for legacy rate cards and compact group plan modal. */
+function htmlPlanDockReservation(origin, dest, tw, tp, selectedRate) {
+  selectedRate = selectedRate || {};
+  if (window._planDockContext && origin && dest) {
+    applyDockAutoPlanFromShipFrom(origin, dest, window._planDockContext.pickupDate, _planDockPrefs.duration);
+  }
+  var estDur = estimateDockDurationMinutes(tw, tp, (selectedRate.mode || (selectedRate._czarlite ? 'LTL' : 'TL')) || 'TL', !!(selectedRate && selectedRate._czarlite));
+  var durSelected = _planDockPrefs.duration || snapPlanDockDurationMinutes(estDur);
+  var durationOptions = [30,45,60,90,120,150,180].map(function(m){
+    var sel = (durSelected === m) ? 'selected' : '';
+    return '<option value="'+m+'" '+sel+'>'+m+' min</option>';
+  }).join('');
+  if(!_planDockPrefs.duration) _planDockPrefs.duration = snapPlanDockDurationMinutes(estDur);
+  var summaryText = formatPlanDockSummaryLine();
+  var vLoc = String(_planDockPrefs.location || '').replace(/"/g, '&quot;');
+  var vDoor = String(_planDockPrefs.door || '').replace(/"/g, '&quot;');
+  var vStart = String(_planDockPrefs.start || '').replace(/"/g, '&quot;');
+  return '<div style="margin-bottom:14px;padding:12px 14px;background:linear-gradient(135deg,rgba(14,116,144,.08),rgba(6,182,212,.04));border:1px solid rgba(14,116,144,.25);border-radius:10px">'
+    + '<input type="hidden" id="plan-dock-location" value="'+vLoc+'">'
+    + '<input type="hidden" id="plan-dock-door" value="'+vDoor+'">'
+    + '<input type="hidden" id="plan-dock-start" value="'+vStart+'">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
+    + '<input id="plan-dock-enable" type="checkbox" '+(_planDockPrefs.enabled?'checked':'')+' onchange="_planDockPrefs.enabled=this.checked; if(this.checked) refreshPlanDockSlotAuto();" style="width:16px;height:16px;accent-color:#0e7490;cursor:pointer">'
+    + '<span style="font-size:12px;font-weight:700;color:#155e75">Reserve dock door during planning</span>'
+    + '</label>'
+    + '<span style="font-size:11px;color:#0f766e">Estimated load time: <strong id="plan-dock-est">'+estDur+' min</strong> <button class="btn btn-secondary btn-sm" onclick="refreshPlanDockEstimate(true)" style="margin-left:8px;border-color:rgba(14,116,144,.35);color:#0f766e">Use estimator</button></span>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;align-items:end">'
+    + '<div style="grid-column:1/-1">'
+    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase">Ship-from dock (auto)</div>'
+    + '<div id="plan-dock-auto-summary" style="margin-top:4px;padding:8px 10px;background:var(--bg3);border-radius:8px;font-size:12px;font-weight:600;color:#155e75;border:1px solid rgba(14,116,144,.2)">'+summaryText+'</div>'
+    + '<div style="font-size:10px;color:var(--text3);margin-top:6px">Location, door, and start time are chosen from the first available slot on your pickup date.</div>'
+    + '</div>'
+    + '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Loading duration</div><select id="plan-dock-duration" onchange="onPlanDockDurationChange(this)" style="width:100%;margin-top:4px">'+durationOptions+'</select></div>'
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--text3);margin-top:8px">Rule of thumb: TL usually 60–120 min, LTL 45–90 min. Auto-estimate uses weight, pieces, and mode. Changing duration re-checks dock availability.</div>'
+    + '</div>';
+}
+
+/** @param {boolean} forceApply - true: "Use estimator" — clear manual and set duration to estimate */
+function refreshPlanDockEstimate(forceApply) {
+  var selected = _planPriced[_planSelIdx];
+  if(!selected || !selected.carrier) selected = window._groupDockEstimatorRate || {};
+  var mode = selected._czarlite ? 'LTL' : (selected.mode || 'TL');
+  var est = estimateDockDurationMinutes(_planWeight, _planPieces, mode, !!selected._czarlite);
+  var estEl = document.getElementById('plan-dock-est');
+  if(estEl) estEl.textContent = est + ' min';
+  var applyDuration = !!forceApply || !_planDockDurationManual;
+  if(applyDuration) {
+    if(forceApply) _planDockDurationManual = false;
+    var snapped = snapPlanDockDurationMinutes(est);
+    _planDockPrefs.duration = snapped;
+    var durSel = document.getElementById('plan-dock-duration');
+    if(durSel) durSel.value = String(snapped);
+  }
+  refreshPlanDockSlotAuto();
+}
 var _planShipmentGroups=[], _planEquipMaxWt=44000, _ratesByLane={}, _ccxlTransitMaps=null;
 var _selectedOrders = new Set();
 
@@ -7511,6 +7942,29 @@ function openPlanWithGroup(selOrds) {
   });
   _ratesByLane = ratesByLane;
 
+  // Dock prefs default (group plan has no _planPriced — estimator uses _groupDockEstimatorRate)
+  _planDockDurationManual = false;
+  if(shipmentPlans.length && shipmentPlans[0]) {
+    var _lk0 = shipmentPlans[0].laneKey;
+    var _sp0 = _lk0.split('||');
+    var _rate0 = (ratesByLane[_lk0] || [])[0];
+    var _tw0 = shipmentPlans[0].weight || 5000;
+    var _tp0 = shipmentPlans[0].orders.reduce(function(s,o){ return s+(parseInt(o.pieces,10)||0); }, 0) || 1;
+    var _readies = shipmentPlans[0].orders.map(function(o){ return o.ready || o.readyDate || ''; }).filter(Boolean);
+    var _pickupPlan = _readies.length ? _readies.sort().reverse()[0] : new Date().toISOString().slice(0, 10);
+    var _dur0 = snapPlanDockDurationMinutes(estimateDockDurationMinutes(_tw0, _tp0, _rate0 ? (_rate0._czarlite ? 'LTL' : (_rate0.mode || 'TL')) : 'TL', !!(_rate0 && _rate0._czarlite)));
+    _planDockPrefs = {
+      enabled: true,
+      location: '',
+      door: '',
+      start: '',
+      duration: _dur0
+    };
+    applyDockAutoPlanFromShipFrom(_sp0[0], _sp0[1], _pickupPlan, _dur0);
+    _planWeight = _tw0;
+    _planPieces = _tp0;
+  }
+
   // Default: cheapest carrier per lane
   _planPriced   = [];
   _planSelIdx   = 0;
@@ -7606,6 +8060,21 @@ function openPlanWithGroup(selOrds) {
   html += '</select>';
   html += '<span style="font-size:11px;color:var(--text3);margin-left:auto">Max: <strong style="color:var(--accent)">'+maxWt.toLocaleString()+' lbs</strong> per trailer</span>';
   html += '</div>';
+
+  var fp0 = shipmentPlans[0];
+  if(fp0) {
+    var _p0 = fp0.laneKey.split('||');
+    var _r0 = (ratesByLane[fp0.laneKey] || [])[0] || {};
+    var tw0 = fp0.weight;
+    var tp0 = fp0.orders.reduce(function(s,o){ return s+(parseInt(o.pieces,10)||0); }, 0) || 1;
+    window._groupDockEstimatorRate = _r0;
+    _planWeight = tw0;
+    _planPieces = tp0;
+    html += htmlPlanDockReservation(_p0[0], _p0[1], tw0, tp0, _r0);
+    if(totalShipments > 1) {
+      html += '<div style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:12px">Load-time estimate uses the first shipment’s lane and selected carrier; when enabled, each confirmed shipment receives this dock reservation.</div>';
+    }
+  }
 
   // ── Summary banners ─────────────────────────────────────────────────────
   if(hasMultiLane || hasOverflow) {
@@ -7824,6 +8293,7 @@ function openPlanWithGroup(selOrds) {
   }
 
   document.getElementById('plan-body').innerHTML = html;
+  refreshPlanDockEstimate(false);
   // Only open modal on first call; on re-render it's already open
   if(document.getElementById('modal-plan').style.display === 'none' ||
      document.getElementById('modal-plan').style.display === '') {
@@ -7982,6 +8452,19 @@ function openPlan(orderId){
     return a.total-b.total;
   });
   _planSelIdx=0;
+  _planDockDurationManual = false;
+  var defaultMode = _planPriced[0] ? (_planPriced[0]._czarlite ? 'LTL' : (_planPriced[0].mode || 'TL')) : 'TL';
+  var _durLeg = snapPlanDockDurationMinutes(estimateDockDurationMinutes(tw, tp, defaultMode, !!(_planPriced[0] && _planPriced[0]._czarlite)));
+  var _readiesLeg = sibs.map(function(x){ return x.ready || ''; }).filter(Boolean);
+  var _pickupLeg = _readiesLeg.length ? _readiesLeg.sort().reverse()[0] : new Date().toISOString().slice(0, 10);
+  _planDockPrefs = {
+    enabled: true,
+    location: '',
+    door: '',
+    start: '',
+    duration: _durLeg
+  };
+  applyDockAutoPlanFromShipFrom(o.origin, o.dest, _pickupLeg, _durLeg);
   var isGroup=sibs.length>1;
   document.getElementById('plan-title').textContent=isGroup?'Plan & Consolidate — '+sibs.length+' Orders':'Plan Order — '+o.id;
   _renderPlanCards(o, sibs, tw, tp, util, miles, isGroup, allPreferred, allExcluded, preferred, hasContractRate);
@@ -7989,6 +8472,9 @@ function openPlan(orderId){
 
 function _renderPlanCards(o, sibs, tw, tp, util, miles, isGroup, allPreferred, allExcluded, preferred, hasContractRate) {
   var html='';
+  window._groupDockEstimatorRate = null;
+  _planWeight = tw;
+  _planPieces = tp;
 
   // ── Compute pickup/delivery dates and feasibility ─────────────────────────
   var _dates = { pickup: o.ready || '—', delivery: o.due || '—' };
@@ -8088,6 +8574,7 @@ function _renderPlanCards(o, sibs, tw, tp, util, miles, isGroup, allPreferred, a
     html += '</div><button onclick="switchRatesTab(\'prefs\')" style="font-size:11px;color:var(--accent);text-decoration:underline;background:none;border:none;cursor:pointer;white-space:nowrap">Manage ↗</button>';
     html += '</div>';
   }
+  html += htmlPlanDockReservation(o.origin, o.dest, tw, tp, _planPriced[_planSelIdx] || {});
   // Rate cards
   html+='<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Available Rates — Cheapest Auto-Selected</div>';
   _planPriced.forEach(function(r,i){
@@ -8146,6 +8633,7 @@ function _renderPlanCards(o, sibs, tw, tp, util, miles, isGroup, allPreferred, a
   });
   document.getElementById('plan-body').innerHTML=html;
   openModal('modal-plan');
+  refreshPlanDockEstimate(false);
 }
 
 
@@ -8161,6 +8649,7 @@ function selRate(i){
   document.querySelectorAll('.rate-card').forEach(function(c,j){
     c.classList.toggle('selected',j===i);
   });
+  refreshPlanDockEstimate(false);
 }
 
 
@@ -8955,6 +9444,13 @@ function _bpPickRate(planIdx, rateIdx) {
 }
 
 function confirmPlan(){
+  if(document.getElementById('plan-dock-enable')) {
+    _planDockPrefs.enabled  = !!document.getElementById('plan-dock-enable').checked;
+    _planDockPrefs.location = (document.getElementById('plan-dock-location')||{}).value || _planDockPrefs.location;
+    _planDockPrefs.door     = (document.getElementById('plan-dock-door')||{}).value || _planDockPrefs.door;
+    _planDockPrefs.start    = (document.getElementById('plan-dock-start')||{}).value || _planDockPrefs.start;
+    _planDockPrefs.duration = parseInt((document.getElementById('plan-dock-duration')||{}).value, 10) || _planDockPrefs.duration || 60;
+  }
   // Multi-shipment plan (from openPlanWithGroup)
   if(_planShipmentGroups && _planShipmentGroups.length > 0) {
     var created = 0;
@@ -8988,6 +9484,7 @@ function confirmPlan(){
         czarliteRate: !!best._czarlite,
         czarliteClass: best._czarlite ? best._czarliteClass : null,
       });
+      createDockApptForShipment(shipments[0], _planDockPrefs);
       var bulkStatus = plan.orders.length > 1 ? 'Consolidated' : 'Planned';
       plan.orders.forEach(function(o){
         var ord = orders.find(function(x){ return x.id===o.id; });
@@ -9055,6 +9552,7 @@ function confirmPlan(){
     czarliteRate: !!chosen._czarlite,
     czarliteClass: chosen._czarlite ? chosen._czarliteClass : null,
   });
+  createDockApptForShipment(shipments[0], _planDockPrefs);
   var newStatus = sibs.length > 1 ? 'Consolidated' : 'Planned';
   sibs.forEach(function(s){
     var ord=orders.find(function(x){ return x.id===s.id; });
@@ -10154,7 +10652,7 @@ function openShipDetail(id) {
       var shpRows = results[0], ordRows = results[1];
       if (shpRows && shpRows.length) {
         var fresh = dbToShipment(shpRows[0]);
-        var idx = shipments.findIndex(function(s){ return s.id === id; });
+        var idx = shipments.findIndex(function(sh){ return String(sh.id) === String(id); });
         if (idx >= 0) shipments[idx] = fresh; else shipments.unshift(fresh);
       }
       if (ordRows && ordRows.length) {
@@ -10172,8 +10670,59 @@ function openShipDetail(id) {
 }
 
 function _openShipDetailRender(id) {
-  var s = shipments.find(function(x){ return x.id===id; });
-  if(!s) return;
+  var sid = String(id == null ? '' : id).trim();
+  if (!sid) {
+    document.getElementById('sd-title').textContent = '—';
+    document.getElementById('sd-body').innerHTML = '<div style="padding:24px;color:var(--text3);text-align:center">No shipment id.</div>';
+    return;
+  }
+  var s = shipments.find(function(x) { return String(x.id) === sid; });
+  if (!s) {
+    var fromDock = (typeof dockAppointments !== 'undefined' && dockAppointments)
+      ? dockAppointments.find(function(a) {
+          return String(a.shipmentId || '') === sid && !['Cancelled', 'No Show'].includes(a.status || '');
+        })
+      : null;
+    var ordLinked = orders.filter(function(o) { return String(o.shipmentId || '') === sid; });
+    if (fromDock || ordLinked.length) {
+      var ord0 = ordLinked[0];
+      s = {
+        id: sid,
+        carrier: (fromDock && fromDock.carrier) ? fromDock.carrier : '—',
+        mode: 'TL',
+        origin: ord0 ? ord0.origin : (fromDock && fromDock.location ? fromDock.location : '—'),
+        dest: ord0 ? ord0.dest : '—',
+        weight: ord0 ? (typeof ord0.weight === 'number' ? String(ord0.weight) : String(ord0.weight || '0')) : '0',
+        pieces: ord0 ? (parseInt(ord0.pieces, 10) || 0) : 0,
+        cost: '—',
+        pickup: ord0 ? (ord0.ready || '') : (fromDock && fromDock.date ? fromDock.date : ''),
+        delivery: ord0 ? (ord0.due || '') : '',
+        status: 'Planned',
+        commodity: ord0 ? (ord0.commodity || '') : '',
+        dockAssigned: fromDock ? fromDock.door : '',
+        dockTime: (fromDock && fromDock.date && fromDock.start) ? (fromDock.date + ' ' + fromDock.start) : '',
+        loadingStart: '',
+        loadingEnd: '',
+        consolidatedOrders: ordLinked.map(function(o) { return o.id; })
+      };
+      if (fromDock) {
+        try {
+          var lw = computeLoadingWindowFromDock(fromDock.date, fromDock.start, fromDock.duration || 60);
+          s.loadingStart = lw.start;
+          s.loadingEnd = lw.end;
+        } catch (e) { /* ignore */ }
+      }
+    }
+  }
+  if (!s) {
+    document.getElementById('sd-title').textContent = sid;
+    document.getElementById('sd-body').innerHTML =
+      '<div style="padding:28px;text-align:center;max-width:420px;margin:0 auto">'
+      + '<p style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Shipment not loaded</p>'
+      + '<p style="font-size:12px;color:var(--text3);line-height:1.5"><span class="mono">' + sid.replace(/</g, '') + '</span> is not in memory. Open the <strong>Shipments</strong> page or use <strong>Sync</strong>, then try again.</p></div>';
+    return;
+  }
+  var _shipmentInList = shipments.some(function(x) { return String(x.id) === String(s.id); });
   document.getElementById('sd-title').textContent = s.id;
   var pct = s.status==='Delivered'?100:s.status==='In Transit'?62:s.status==='Tendered'?20:s.status==='Exception'?55:5;
   var barCol = s.status==='Exception'?'var(--red)':s.status==='Delivered'?'var(--green)':'var(--accent)';
@@ -10194,10 +10743,10 @@ function _openShipDetailRender(id) {
   // Progress
   html += '<div style="padding:18px 24px;border-bottom:1px solid var(--border)">';
   html += '<div style="display:flex;justify-content:space-between;margin-bottom:10px">';
-  html += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">ORIGIN</div><div style="font-weight:700;font-size:14px;margin-top:3px">' + s.origin + '</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Pickup: ' + s.pickup + '</div></div>';
+  html += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">ORIGIN</div><div style="font-weight:700;font-size:14px;margin-top:3px">' + s.origin + '</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Pickup: ' + (s.pickup || '—') + '</div></div>';
   var _sMiles = getDist(s.origin, s.dest);
   html += '<div style="text-align:center;padding-top:8px"><div style="font-size:13px;font-weight:700;color:var(--text2)">' + _sMiles.toLocaleString() + ' mi</div><span style="font-size:12px;color:var(--text3)">' + pct + '% complete</span></div>';
-  html += '<div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">DESTINATION</div><div style="font-weight:700;font-size:14px;margin-top:3px">' + s.dest + '</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Delivery: ' + s.delivery + '</div></div>';
+  html += '<div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">DESTINATION</div><div style="font-weight:700;font-size:14px;margin-top:3px">' + s.dest + '</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Delivery: ' + (s.delivery || '—') + '</div></div>';
   html += '</div>';
   html += '<div class="progress-wrap" style="height:10px;border-radius:8px"><div class="progress-bar" style="width:' + pct + '%;background:' + barCol + ';border-radius:8px"></div></div>';
   html += '</div>';
@@ -10212,7 +10761,31 @@ function _openShipDetailRender(id) {
   html += sdField('Est. Cost', s.cost, '💰');
   html += sdField('Pickup Date', s.pickup || '—', '📅');
   html += sdField('Delivery Date', s.delivery || '—', '🏁');
-  html += sdField('Transit Days', (s.pickup && s.delivery) ? (function(){ return businessDaysBetween(s.pickup, s.delivery) + ' days'; })() : '—', '🚚');
+  html += sdField('Transit Days', (function(){
+    var pu = s.pickup, du = s.delivery;
+    if (!pu || !du || !/^\d{4}-\d{2}-\d{2}$/.test(String(pu)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(du))) return '—';
+    return businessDaysBetween(pu, du) + ' days';
+  })(), '🚚');
+  var _dockAppt = (typeof dockAppointments !== 'undefined' && dockAppointments)
+    ? dockAppointments.find(function(a){
+        return String(a.shipmentId) === String(s.id) && !['Cancelled','No Show'].includes(a.status||'');
+      })
+    : null;
+  var _dockDoor = (s.dockAssigned || (_dockAppt && _dockAppt.door) || '').trim();
+  var _dockWin = '';
+  if(_dockAppt) {
+    _dockWin = (_dockAppt.location ? _dockAppt.location + ' · ' : '')
+      + _dockAppt.date + ' ' + _dockAppt.start + ' · ' + _dockAppt.duration + ' min';
+  } else if(s.dockTime) {
+    _dockWin = String(s.dockTime);
+  }
+  var _loadFromAppt = (!s.loadingStart || !s.loadingEnd) && _dockAppt ? loadingWindowFromDockAppt(_dockAppt) : null;
+  var _loadStart = s.loadingStart || (_loadFromAppt && _loadFromAppt.start) || '';
+  var _loadEnd   = s.loadingEnd   || (_loadFromAppt && _loadFromAppt.end)   || '';
+  html += sdField('Dock door', _dockDoor || '—', '🚪');
+  html += sdField('Dock window', _dockWin || '—', '🕐');
+  html += sdField('Loading start', _loadStart || '—', '▶️');
+  html += sdField('Loading end', _loadEnd || '—', '⏹️');
   html += '</div>';
 
 
@@ -10286,11 +10859,16 @@ function _openShipDetailRender(id) {
   html += renderEventTimeline(s.id, defaultEvents);
   html += '</div>';
 
+  if (!_shipmentInList) {
+    html += '<div style="padding:14px 24px;background:#fffbeb;border-top:1px solid #fcd34d;font-size:12px;color:#92400e">Partial view from dock / orders — sync shipments for the full record and actions.</div>';
+  }
+
   // Action footer
   html += '<div style="padding:16px 24px;background:#f8faff;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;border-radius:0 0 16px 16px">';
-  if(s.status==='Planned') html += '<button class="btn btn-primary btn-sm" onclick="tenderAndClose(\'' + s.id + '\')">📤 Tender to Carrier</button>';
-  if(s.status==='Exception') html += '<button class="btn btn-danger btn-sm">🚨 Escalate Exception</button>';
-  if(['Planned','Tendered','In Transit'].includes(s.status)) html += '<button class="btn btn-secondary btn-sm" onclick="openChangeCarrierGuarded(\'' + s.id + '\')">🔄 Change Carrier</button>';
+  if (_shipmentInList && s.status === 'Planned') html += '<button class="btn btn-primary btn-sm" onclick="tenderAndClose(\'' + s.id + '\')">📤 Tender to Carrier</button>';
+  if (_shipmentInList && s.status === 'Exception') html += '<button class="btn btn-danger btn-sm">🚨 Escalate Exception</button>';
+  if (_shipmentInList && ['Planned', 'Tendered', 'In Transit'].includes(s.status)) html += '<button class="btn btn-secondary btn-sm" onclick="openChangeCarrierGuarded(\'' + s.id + '\')">🔄 Change Carrier</button>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="closeModal(\'modal-ship-detail\');navigate(\'dock\')">🚪 Dock schedule</button>';
   html += '<button class="btn btn-secondary btn-sm" onclick="openOrGenerateBOL(\'' + s.id + '\')">📄 Documents</button>';
   html += '<button class="btn btn-secondary btn-sm">📧 Contact Carrier</button>';
   html += '<button class="btn btn-secondary btn-sm" onclick="sendShipmentMsg(\''+s.id+'\')">📨 Send to WMS</button>';
@@ -10338,7 +10916,7 @@ function _openShipDetailRender(id) {
 var _lastTenderedId = null;
 
 function tenderAndClose(id) {
-  var s = shipments.find(function(x){ return x.id===id; });
+  var s = shipments.find(function(x){ return String(x.id)===String(id); });
   if(!s) { toast('Shipment not found', 'warning'); return; }
   // Run tender flow immediately — no need to close ship detail first
   // The tender overlay sits above everything at z-index:99999
@@ -11563,7 +12141,7 @@ function confirmCarrierChange() {
   // Re-open detail — use local updated data directly to avoid stale Supabase re-fetch
   // Update the local cache entry so openShipDetail renders correctly
   setTimeout(function(){
-    var idx = shipments.findIndex(function(x){ return x.id === shipId; });
+    var idx = shipments.findIndex(function(x){ return String(x.id) === String(shipId); });
     if (idx >= 0) shipments[idx] = s;
     _openShipDetailRender(shipId);
   }, 200);
@@ -14133,7 +14711,14 @@ function sendShipmentMsg(shipId, msgType) {
 // DOCK SCHEDULING
 // ═══════════════════════════════════════════════════════════
 
-var _dockDate = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+/** Calendar date YYYY-MM-DD in the browser's local timezone (avoid UTC off-by-one from toISOString). */
+function dockLocalYmd(dt) {
+  var d = dt ? new Date(dt) : new Date();
+  if (isNaN(d.getTime())) d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+var _dockDate = dockLocalYmd(new Date());
 
 // Dock doors per location
 var dockLocationConfig = {
@@ -14170,24 +14755,65 @@ var dockAppointments = [
   {id:'DA-011', door:'Door 1', location:'Chicago, IL',     date:'2026-03-05', start:'09:00', duration:90,  type:'Outbound',  carrier:'Schneider National',  driver:'Tom Reed',     trailer:'TR-2200', shipmentId:'',              status:'Scheduled',  notes:''},
   {id:'DA-012', door:'Door 1', location:'Los Angeles, CA', date:'2026-03-05', start:'08:00', duration:120, type:'Inbound',   carrier:'Swift Transport',      driver:'Maria Lopez',  trailer:'TR-3310', shipmentId:'',              status:'Confirmed',  notes:'Port import'},
   {id:'DA-013', door:'Door 2', location:'Los Angeles, CA', date:'2026-03-05', start:'11:00', duration:60,  type:'Outbound',  carrier:'Landstar',             driver:'Kevin Nash',   trailer:'TR-4420', shipmentId:'',              status:'Scheduled',  notes:''},
-  {id:'DA-014', door:'Door 1', location:'Atlanta, GA',     date:'2026-03-05', start:'10:00', duration:90,  type:'Inbound',   carrier:'USX (US Xpress)',      driver:'Dana Brooks',  trailer:'TR-5530', shipmentId:'',              status:'Scheduled',  notes:''},
+  {id:'DA-014', door:'Door 1', location:'Atlanta, GA',     date:'2026-03-05', start:'10:00', duration:90,  type:'Inbound',   carrier:'USX (US Xpress)',      driver:'Dana Brooks',  trailer:'TR-5530', shipmentId:'SHP-2024-ATL04', status:'Scheduled',  notes:''},
+  {id:'DA-ATL-0324a', door:'Door 1', location:'Atlanta, GA', date:'2026-03-24', start:'08:00', duration:90,  type:'Outbound', carrier:'Schneider National', driver:'Pat M.',       trailer:'TR-ATL1', shipmentId:'SHP-2024-ATL01', status:'Scheduled',  notes:'Sample Atlanta outbound'},
+  {id:'DA-ATL-0324b', door:'Door 2', location:'Atlanta, GA', date:'2026-03-24', start:'12:00', duration:60,  type:'Inbound',  carrier:'Old Dominion',         driver:'Jamie L.',     trailer:'TR-ATL2', shipmentId:'SHP-2024-ATL02', status:'Scheduled',  notes:''},
+  {id:'DA-ATL-0324c', door:'Door 3', location:'Atlanta, GA', date:'2026-03-24', start:'15:30', duration:60,  type:'Outbound', carrier:'XPO Logistics',        driver:'Chris P.',     trailer:'TR-ATL3', shipmentId:'SHP-2024-ATL03', status:'Confirmed',   notes:''},
 ];
+
+/** Merge demo shipments used by Atlanta dock rows so the modal + shipment detail resolve (works with or without Supabase). */
+function ensureAtlantaDockShipments() {
+  var seeds = [
+    { id:'SHP-2024-ATL01', carrier:'Schneider National', mode:'TL', origin:'Atlanta, GA', dest:'Nashville, TN', weight:'42,000', pieces:22, status:'Planned', pickup:'2026-03-24', delivery:'2026-03-24', cost:'$2,850', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Retail — mixed' },
+    { id:'SHP-2024-ATL02', carrier:'Old Dominion', mode:'LTL', origin:'Memphis, TN', dest:'Atlanta, GA', weight:'12,400', pieces:8, status:'Planned', pickup:'2026-03-23', delivery:'2026-03-24', cost:'$920', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Automotive parts' },
+    { id:'SHP-2024-ATL03', carrier:'XPO Logistics', mode:'TL', origin:'Atlanta, GA', dest:'Miami, FL', weight:'38,000', pieces:18, status:'Confirmed', pickup:'2026-03-24', delivery:'2026-03-25', cost:'$3,100', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Consumer goods' },
+    { id:'SHP-2024-ATL04', carrier:'USX (US Xpress)', mode:'TL', origin:'Charlotte, NC', dest:'Atlanta, GA', weight:'36,200', pieces:14, status:'Planned', pickup:'2026-03-05', delivery:'2026-03-05', cost:'$1,680', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'General freight' },
+    { id:'SHP-2024-ATL05', carrier:'Demo Logistics', mode:'TL', origin:'Atlanta, GA', dest:'Birmingham, AL', weight:'18,000', pieces:10, status:'Planned', pickup:'', delivery:'', cost:'$890', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Demo load' }
+  ];
+  seeds.forEach(function(s) {
+    if (!shipments.some(function(x) { return x.id === s.id; })) shipments.push(s);
+  });
+}
+
+(function seedDockDemoForLocalToday() {
+  try {
+    var ymd = dockLocalYmd(new Date());
+    if (dockAppointments.some(function(a) { return a.date === ymd && a.location === 'Atlanta, GA'; })) return;
+    ensureAtlantaDockShipments();
+    dockAppointments.push({
+      id: 'DA-DEMO-' + ymd.replace(/-/g, ''),
+      door: 'Door 1',
+      location: 'Atlanta, GA',
+      date: ymd,
+      start: '09:00',
+      duration: 60,
+      type: 'Outbound',
+      carrier: 'Demo Logistics',
+      driver: '',
+      trailer: '',
+      shipmentId: 'SHP-2024-ATL05',
+      status: 'Scheduled',
+      notes: 'Sample appointment for today — add real loads from planning.'
+    });
+  } catch (e) { /* ignore */ }
+})();
 
 var _dockEditId = null;
 
 function dockNavDay(delta) {
   var d = new Date(_dockDate + 'T12:00:00');
   d.setDate(d.getDate() + delta);
-  _dockDate = d.toISOString().slice(0,10);
+  _dockDate = dockLocalYmd(d);
   renderDockSchedule();
 }
 
 function dockGoToday() {
-  _dockDate = new Date().toISOString().slice(0,10);
+  _dockDate = dockLocalYmd(new Date());
   renderDockSchedule();
 }
 
 function renderDockSchedule() {
+  ensureAtlantaDockShipments();
   var locFilter = document.getElementById('dock-location-filter') ? document.getElementById('dock-location-filter').value : '';
 
   // Determine which doors to show based on selected location
@@ -14234,6 +14860,20 @@ function renderDockSchedule() {
   document.getElementById('dock-kpi-outbound').textContent  = outbound;
   document.getElementById('dock-kpi-conflicts').textContent = conflicts;
 
+  /** "Today" + now (minutes) for the filtered facility, or browser local for all-locations view */
+  var gridTodayYmd, gridNowMins, gridNowHour;
+  if (locFilter && dockLocationConfig[locFilter]) {
+    var _wall = getFacilityWallClockNow(dockTimeZoneForLocation(locFilter));
+    gridTodayYmd = _wall.ymd;
+    gridNowMins = _wall.minutes;
+    gridNowHour = Math.floor(_wall.minutes / 60);
+  } else {
+    gridTodayYmd = dockLocalYmd(new Date());
+    var _n = new Date();
+    gridNowMins = _n.getHours() * 60 + _n.getMinutes();
+    gridNowHour = _n.getHours();
+  }
+
   // Build time header
   var hdr = document.getElementById('dock-time-header');
   // columns: door-label col + one per hour (06-20)
@@ -14242,8 +14882,7 @@ function renderDockSchedule() {
   hdr.style.gridTemplateColumns = '110px repeat('+hours.length+', 1fr)';
   hdr.innerHTML = '<div style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;border-right:1px solid var(--border)">Door</div>'
     + hours.map(function(h){
-        var now = new Date(); var curH = now.getHours();
-        var isNow = _dockDate === new Date().toISOString().slice(0,10) && h === curH;
+        var isNow = _dockDate === gridTodayYmd && h === gridNowHour;
         return '<div style="padding:8px 4px;text-align:center;font-size:11px;font-weight:'+(isNow?'800':'600')+';color:'+(isNow?'var(--accent)':'var(--text3)')+';border-right:1px solid var(--border);background:'+(isNow?'rgba(59,130,246,.06)':'transparent')+'">'
           + String(h).padStart(2,'0') + ':00</div>';
       }).join('');
@@ -14263,10 +14902,9 @@ function renderDockSchedule() {
       var pct = (h-6)/14*100;
       barHtml += '<div style="position:absolute;top:0;bottom:0;left:'+pct+'%;width:1px;background:var(--border);opacity:.5"></div>';
     }
-    // Current time indicator
-    var now2 = new Date();
-    if(_dockDate === new Date().toISOString().slice(0,10)){
-      var curMins = now2.getHours()*60+now2.getMinutes();
+    // Current time indicator (facility wall clock when a site is filtered)
+    if(_dockDate === gridTodayYmd){
+      var curMins = gridNowMins;
       if(curMins >= 360 && curMins <= 1200){
         var curPct = (curMins-360)/(14*60)*100;
         barHtml += '<div style="position:absolute;top:0;bottom:0;left:'+curPct+'%;width:2px;background:#ef4444;z-index:3"></div>';
@@ -14301,15 +14939,7 @@ function renderDockSchedule() {
   // Appointment cards list
   renderDockApptList(todayAppts);
 
-  // Populate shipment dropdown
-  var sel = document.getElementById('dock-appt-shipment');
-  if(sel && sel.options.length < 3){
-    shipments.forEach(function(s){
-      var o = document.createElement('option');
-      o.value = s.id; o.textContent = s.id+' · '+s.carrier+' · '+s.origin.split(',')[0]+'→'+s.dest.split(',')[0];
-      sel.appendChild(o);
-    });
-  }
+  populateDockShipmentDropdown();
 
   // Populate time slots
   var startSel = document.getElementById('dock-appt-start');
@@ -14371,8 +15001,49 @@ function detectDockConflicts(appts) {
 
 function toMins(t){ var p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
 
+/** Rebuild shipment choices from `shipments` (call when dock view renders or modal opens). */
+function populateDockShipmentDropdown() {
+  var sel = document.getElementById('dock-appt-shipment');
+  if (!sel) return;
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">— Unlinked / Manual —</option>';
+  shipments.forEach(function(s){
+    if (!s || !s.id) return;
+    var o = document.createElement('option');
+    o.value = s.id;
+    var o0 = (s.origin || '').split(',')[0] || '—';
+    var d0 = (s.dest || '').split(',')[0] || '—';
+    o.textContent = s.id + ' · ' + (s.carrier || '—') + ' · ' + o0 + '→' + d0;
+    sel.appendChild(o);
+  });
+  if (prev && Array.prototype.some.call(sel.options, function(opt) { return opt.value === prev; })) sel.value = prev;
+}
+
+/** If appointment notes mention a shipment id but the field was empty, recover it (planning / legacy rows). */
+function dockNotesExtractShipmentId(notes) {
+  if (!notes || typeof notes !== 'string') return '';
+  var m = notes.match(/\b(SHP-[A-Za-z0-9-]+)\b/);
+  return m ? m[1] : '';
+}
+
+/** Ensure `<select>` has an option for this id so `.value` displays (shipments may load after the appt was created). */
+function ensureDockShipmentSelectOption(shipmentId) {
+  if (!shipmentId) return;
+  var sel = document.getElementById('dock-appt-shipment');
+  if (!sel) return;
+  if (Array.prototype.some.call(sel.options, function(o) { return o.value === shipmentId; })) return;
+  var s = shipments.find(function(x) { return x.id === shipmentId; });
+  var o = document.createElement('option');
+  o.value = shipmentId;
+  o.textContent = s
+    ? (s.id + ' · ' + (s.carrier || '—') + ' · ' + (s.origin || '').split(',')[0] + '→' + (s.dest || '').split(',')[0])
+    : (shipmentId + ' · Linked load (open Shipments or sync if details are missing)');
+  sel.appendChild(o);
+}
+
 function openDockApptModal(apptId, door, date) {
   _dockEditId = apptId;
+  populateDockShipmentDropdown();
   document.getElementById('dock-modal-title').textContent = apptId ? 'Edit Appointment' : 'New Appointment';
   document.getElementById('dock-delete-btn').style.display = apptId ? 'block' : 'none';
   document.getElementById('dock-conflict-warn').style.display = 'none';
@@ -14381,7 +15052,10 @@ function openDockApptModal(apptId, door, date) {
     var a = dockAppointments.find(function(x){ return x.id===apptId; });
     if(!a) return;
     document.getElementById('dock-appt-id').value       = a.id;
-    document.getElementById('dock-appt-shipment').value = a.shipmentId||'';
+    var sid = (a.shipmentId && String(a.shipmentId).trim()) || dockNotesExtractShipmentId(a.notes || '');
+    if (sid && !a.shipmentId) a.shipmentId = sid;
+    ensureDockShipmentSelectOption(sid);
+    document.getElementById('dock-appt-shipment').value = sid || '';
     document.getElementById('dock-appt-type').value     = a.type;
     document.getElementById('dock-appt-location').value = a.location||'';
     updateDockDoorOptions();
@@ -14398,7 +15072,8 @@ function openDockApptModal(apptId, door, date) {
     document.getElementById('dock-appt-id').value       = '';
     document.getElementById('dock-appt-shipment').value = '';
     document.getElementById('dock-appt-type').value     = 'Inbound';
-    document.getElementById('dock-appt-location').value = locFilter||'';
+    var dockLocFilter = document.getElementById('dock-location-filter') ? document.getElementById('dock-location-filter').value : '';
+    document.getElementById('dock-appt-location').value = dockLocFilter || '';
     updateDockDoorOptions();
     document.getElementById('dock-appt-door').value     = door||'Door 1';
     document.getElementById('dock-appt-date').value     = date||_dockDate;
@@ -14421,6 +15096,39 @@ function updateDockDoorOptions() {
     : ['Door 1','Door 2','Door 3','Door 4','Door 5','Door 6'];
   sel.innerHTML = doors.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
   if(doors.includes(prev)) sel.value = prev;
+}
+
+/** Push dock appointment fields onto the linked shipment (and optional Supabase). */
+function syncShipmentFromDockAppointment(appt) {
+  var sid = (appt.shipmentId && String(appt.shipmentId).trim()) || '';
+  if (!sid) return;
+  var s = shipments.find(function(x) { return String(x.id) === String(sid); });
+  if (!s) return;
+  var loadWin = computeLoadingWindowFromDock(appt.date, appt.start, appt.duration || 60);
+  s.dockAssigned = appt.door || '';
+  s.dockTime = (appt.date && appt.start) ? (appt.date + ' ' + appt.start) : '';
+  s.loadingStart = loadWin.start;
+  s.loadingEnd = loadWin.end;
+  if (appt.carrier && String(appt.carrier).trim()) s.carrier = appt.carrier.trim();
+  if (typeof supaSaveShipment === 'function') supaSaveShipment(s);
+}
+
+/** Clear dock reservation on a shipment when no active appointment references it. */
+function clearShipmentDockIfNoAppointment(shipmentId) {
+  if (!shipmentId) return;
+  var sid = String(shipmentId).trim();
+  if (!sid) return;
+  var stillLinked = dockAppointments.some(function(a) {
+    return String(a.shipmentId || '') === sid && !['Cancelled', 'No Show'].includes(a.status || '');
+  });
+  if (stillLinked) return;
+  var s = shipments.find(function(x) { return String(x.id) === sid; });
+  if (!s) return;
+  s.dockAssigned = null;
+  s.dockTime = null;
+  s.loadingStart = null;
+  s.loadingEnd = null;
+  if (typeof supaSaveShipment === 'function') supaSaveShipment(s);
 }
 
 function saveDockAppt() {
@@ -14451,6 +15159,12 @@ function saveDockAppt() {
       'Conflicts with: '+conflicts.map(function(c){ return c.carrier+' ('+c.start+')'; }).join(', ')+'. Save anyway to override.';
   }
 
+  var prevShipmentId = '';
+  if (_dockEditId) {
+    var _prevA = dockAppointments.find(function(a) { return a.id === _dockEditId; });
+    if (_prevA && _prevA.shipmentId) prevShipmentId = String(_prevA.shipmentId).trim();
+  }
+
   var appt = {
     id:          _dockEditId || 'DA-'+String(Date.now()).slice(-5),
     location:    location,
@@ -14462,7 +15176,7 @@ function saveDockAppt() {
     carrier:     carrier,
     driver:      document.getElementById('dock-appt-driver').value.trim(),
     trailer:     document.getElementById('dock-appt-trailer').value.trim(),
-    shipmentId:  document.getElementById('dock-appt-shipment').value,
+    shipmentId:  (document.getElementById('dock-appt-shipment').value || '').trim(),
     status:      status,
     notes:       document.getElementById('dock-appt-notes').value.trim()
   };
@@ -14474,17 +15188,25 @@ function saveDockAppt() {
     dockAppointments.push(appt);
   }
 
+  syncShipmentFromDockAppointment(appt);
+  if (prevShipmentId && prevShipmentId !== appt.shipmentId) clearShipmentDockIfNoAppointment(prevShipmentId);
+
   closeModal('modal-dock-appt');
   _dockDate = date;
   renderDockSchedule();
-  toast((_dockEditId?'Updated':'Created')+' appointment for '+carrier+' · '+door+' · '+start, 'success');
+  if (typeof renderShipments === 'function') renderShipments();
+  toast((_dockEditId?'Updated':'Created')+' appointment for '+carrier+' · '+door+' · '+start + (appt.shipmentId ? ' · shipment updated' : ''), 'success');
 }
 
 function deleteDockAppt() {
   if(!_dockEditId) return;
+  var _del = dockAppointments.find(function(a) { return a.id === _dockEditId; });
+  var _delSid = _del && _del.shipmentId ? String(_del.shipmentId).trim() : '';
   dockAppointments = dockAppointments.filter(function(a){ return a.id!==_dockEditId; });
+  if (_delSid) clearShipmentDockIfNoAppointment(_delSid);
   closeModal('modal-dock-appt');
   renderDockSchedule();
+  if (typeof renderShipments === 'function') renderShipments();
   toast('Appointment deleted','info');
 }
 
@@ -15288,6 +16010,18 @@ function deleteOrder(id) {
   supaDeleteRecord('orders', id);
   renderOrders();
   toast('🗑️ Order ' + id + ' deleted', 'info');
+}
+
+function cancelOrder(id) {
+  var o = orders.find(function(x){ return x.id === id; });
+  if (!o) return;
+  if (o.status !== 'Unplanned') { toast('Only Unplanned orders can be cancelled', 'warning'); return; }
+  if (!confirm('Cancel order ' + id + '?')) return;
+  o.status = 'Cancelled';
+  o.notes = (o.notes ? o.notes + ' | ' : '') + 'CANCELLED: Manual user action (' + new Date().toLocaleDateString() + ')';
+  supaSaveOrder(o);
+  renderOrders();
+  toast('🚫 Order ' + id + ' cancelled', 'warning');
 }
 
 function tenderOrder(ordId, shpId) {

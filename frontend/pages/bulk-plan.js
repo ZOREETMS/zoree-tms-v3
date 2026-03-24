@@ -835,6 +835,22 @@ async function bpExecute() {
       });
     });
 
+    // Add created shipments to in-memory shipments array
+    createdShipments.forEach(function(s) {
+      if (!s || !s.id) return;
+      // Remove any existing with same ID
+      if (typeof shipments !== 'undefined') {
+        var existIdx = shipments.findIndex(function(x) { return x.id === s.id; });
+        if (existIdx >= 0) shipments.splice(existIdx, 1);
+        shipments.unshift({
+          id: s.id, carrier: s.carrier, mode: s.mode, origin: s.origin, dest: s.dest,
+          weight: s.weight, pieces: s.pieces, status: s.status || 'Planned',
+          totalCost: s.total_cost || 0, pickupDate: s.pickup_date, deliveryDate: s.delivery_date,
+          orderIds: s.order_ids || [], czarliteRate: s.czarlite_rate || false,
+        });
+      }
+    });
+
     // Store results and switch to results tab
     _bpResults = {
       shipments: createdShipments,

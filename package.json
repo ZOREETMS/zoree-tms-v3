@@ -11,12 +11,14 @@
     "dev": "concurrently \"npm run dev --workspace=api\" \"npm run dev --workspace=frontend\"",
     "start": "npm run start --workspace=api",
     "install:all": "npm install && npm install --workspace=api && npm install --workspace=frontend",
-    "build": "npm run build --workspace=frontend"
+    "build": "npm run build --workspace=frontend",
+    "smoke:cancel-order": "node scripts/smoke-cancel-order.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "playwright": "^1.58.2",
     "serve": "^14.2.6"
   }
 }

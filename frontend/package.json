@@ -1,0 +1,14 @@
+{
+  "name": "zoree-tms-frontend",
+  "version": "3.0.0",
+  "private": true,
+  "description": "ZoreeTMS browser app (static index.html + assets)",
+  "scripts": {
+    "dev": "serve -l 5173 .",
+    "start": "serve -l 5173 .",
+    "build": "node -e \"console.log('Static frontend — no build step')\""
+  },
+  "devDependencies": {
+    "serve": "^14.2.6"
+  }
+}
