@@ -205,7 +205,7 @@ function renderBPSelect(el) {
         <span style="font-size:13px;font-weight:600;color:var(--text)">${selCount} order${selCount !== 1 ? 's' : ''} selected</span>
         <span style="font-size:12px;color:var(--text3)">${selWeight.toLocaleString()} lbs total</span>
         <span style="flex:1"></span>
-        ${selCount > 0 ? '<button class="btn btn-sm" style="background:var(--accent);color:#fff" onclick="bpGroupLanes()">Group by Lane →</button>' : ''}
+        ${selCount > 0 ? '<button class="btn btn-sm" style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-weight:600" onclick="bpPlanNow()">⚡ Bulk Plan Now</button>' : ''}
         ${selCount > 0 ? '<button class="btn btn-sm btn-secondary" onclick="bpClearSelection()">Clear</button>' : ''}
       </div>
 
@@ -519,7 +519,58 @@ function _bpFindLanePref(lane) {
   }) || null;
 }
 
-// Assign carrier respecting lane prefs + order constraints
+// Check if carrier is feasible (has transit data if carrierconnect_enabled)
+function _bpIsFeasible(q) {
+  if (!q.carrier) return false;
+  var carrierUp = (q.carrier || '').toUpperCase();
+  var carrierRec = (typeof carriers !== 'undefined' ? carriers : []).find(function(c) {
+    if (!c.name) return false;
+    var cUp = c.name.toUpperCase();
+    return carrierUp === cUp || carrierUp.indexOf(cUp) >= 0 || cUp.indexOf(carrierUp) >= 0;
+  });
+  // Check both snake_case and camelCase field names
+  var ccxlEnabled = carrierRec && (carrierRec.carrierconnect_enabled || carrierRec.carrierconnectEnabled);
+  // If CCXL enabled but no transit returned → infeasible
+  if (ccxlEnabled && !q.transitDays) return false;
+  return true;
+}
+
+// Check if a quote will deliver late for a lane
+function _bpIsLate(q, lane) {
+  var earliestDue = null;
+  var earliestReady = null;
+  (lane.orders || []).forEach(function(o) {
+    var d = o.due || o.dueDate || '';
+    var r = o.ready || o.readyDate || '';
+    if (d && (!earliestDue || d < earliestDue)) earliestDue = d;
+    if (r && (!earliestReady || r < earliestReady)) earliestReady = r;
+  });
+  if (!earliestDue) return false;
+  var today = _bpFmtDate(new Date());
+  var transit = q.transitDays || null;
+  if (!transit) return false; // can't determine, assume ok
+
+  // Pickup = max(today, readyDate)
+  var pickup = today;
+  if (earliestReady && earliestReady > pickup) pickup = earliestReady;
+
+  // Delivery = pickup + transit business days
+  var deliveryDate = _bpFmtDate(_bpAddBusinessDays(_bpParseDate(pickup), transit));
+  return deliveryDate > earliestDue;
+}
+
+// Add business days forward
+function _bpAddBusinessDays(fromDate, days) {
+  var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+  var remaining = days;
+  while (remaining > 0) {
+    d.setDate(d.getDate() + 1);
+    if (_bpIsBusinessDay(d)) remaining--;
+  }
+  return d;
+}
+
+// Assign carrier respecting lane prefs + order constraints + feasibility + lateness
 function _bpAssignWithPrefs(laneKey, quotes) {
   if (!quotes || !quotes.length) return null;
   var lane = _bpLanes.find(function(l) { return l.laneKey === laneKey; });
@@ -529,6 +580,7 @@ function _bpAssignWithPrefs(laneKey, quotes) {
   var pref = _bpFindLanePref(lane);
   var preferred = pref ? (pref.preferred || []) : [];
   var excluded = pref ? (pref.excluded || []) : [];
+  var prefMode = pref ? (pref.mode || '') : '';
 
   // 2. Get order-level preferred/excluded carriers
   (lane.orders || []).forEach(function(o) {
@@ -550,47 +602,53 @@ function _bpAssignWithPrefs(laneKey, quotes) {
   }
   if (!filtered.length) filtered = quotes; // fallback if all excluded
 
-  // 4. If preferred carriers exist, pick the cheapest preferred
-  if (preferred.length) {
-    var prefQuotes = filtered.filter(function(q) {
-      var name = (q.carrier || '').toLowerCase();
-      var scac = (q.scac || '').toLowerCase();
-      return preferred.some(function(p) {
-        var pL = p.toLowerCase();
-        return name.indexOf(pL) >= 0 || scac.indexOf(pL) >= 0 || pL.indexOf(name) >= 0 || pL.indexOf(scac) >= 0;
-      });
-    });
-    if (prefQuotes.length) {
-      prefQuotes.sort(function(a, b) { return (a.totalCharge || 99999) - (b.totalCharge || 99999); });
-      return prefQuotes[0];
-    }
-  }
+  // 4. Filter out infeasible carriers (CCXL enabled but no transit)
+  var feasible = filtered.filter(function(q) { return _bpIsFeasible(q); });
+  if (!feasible.length) feasible = filtered; // fallback if all infeasible
 
-  // 5. No preference match — return cheapest non-excluded
-  filtered.sort(function(a, b) { return (a.totalCharge || 99999) - (b.totalCharge || 99999); });
-  return filtered[0];
+  // 5. Tag late/on-time
+  feasible.forEach(function(q) {
+    q._isLate = _bpIsLate(q, lane);
+  });
+
+  // 6. Weight constraint: if lane weight > LTL max (15000), skip LTL mode preference
+  var laneWt = lane.totalWeight || 0;
+  var effectivePrefMode = (prefMode === 'LTL' && laneWt > 15000) ? '' : prefMode;
+
+  // 7. Sort: preferred+on-time > on-time > preferred+late > late, within each: cheapest
+  feasible.sort(function(a, b) {
+    var aIsPref = preferred.length && preferred.some(function(p) {
+      return (a.carrier || '').toLowerCase().indexOf(p.toLowerCase()) >= 0;
+    });
+    var bIsPref = preferred.length && preferred.some(function(p) {
+      return (b.carrier || '').toLowerCase().indexOf(p.toLowerCase()) >= 0;
+    });
+    // Mode match
+    var aMode = effectivePrefMode ? (effectivePrefMode === (a.mode || 'LTL') ? 1 : 0) : 1;
+    var bMode = effectivePrefMode ? (effectivePrefMode === (b.mode || 'LTL') ? 1 : 0) : 1;
+
+    // Tier: on-time preferred+mode > on-time preferred > on-time > late preferred > late
+    var aScore = (a._isLate ? 0 : 100) + (aIsPref ? 50 : 0) + (aMode ? 10 : 0);
+    var bScore = (b._isLate ? 0 : 100) + (bIsPref ? 50 : 0) + (bMode ? 10 : 0);
+    if (aScore !== bScore) return bScore - aScore;
+
+    // Within same tier: if both late, sort by fastest transit
+    if (a._isLate && b._isLate) return (a.transitDays || 99) - (b.transitDays || 99);
+
+    // Otherwise sort by cost
+    return (a.totalCharge || 99999) - (b.totalCharge || 99999);
+  });
+
+  return feasible[0];
 }
 
 function bpAutoAssign(by) {
   _bpLanes.forEach(function(lane) {
     var r = _bpRates[lane.laneKey];
     if (!r || !r.quotes || !r.quotes.length) return;
-
-    // Always respect lane preferences first
-    var prefAssign = _bpAssignWithPrefs(lane.laneKey, r.quotes);
-    if (prefAssign) {
-      _bpAssign[lane.laneKey] = prefAssign;
-      return;
-    }
-
-    // Fallback: sort by user choice
-    var sorted = r.quotes.slice().sort(function(a, b) {
-      if (by === 'transit') return (a.transitDays || 99) - (b.transitDays || 99);
-      return (a.totalCharge || 99999) - (b.totalCharge || 99999);
-    });
-    _bpAssign[lane.laneKey] = sorted[0];
+    _bpAssign[lane.laneKey] = _bpAssignWithPrefs(lane.laneKey, r.quotes);
   });
-  toast('Carriers auto-assigned by ' + (by === 'transit' ? 'fastest transit' : 'lowest cost') + ' (lane preferences enforced)', 'success');
+  toast('Carriers auto-assigned by ' + (by === 'transit' ? 'fastest transit' : 'lowest cost') + ' (preferences + feasibility enforced)', 'success');
   renderBulkPlan();
 }
 
@@ -716,7 +774,7 @@ async function bpExecute() {
         destination: lane.destination,
         carrier: a.carrier || '',
         scac: a.scac || '',
-        mode: _bpLoadType(lane.totalWeight) === 'LTL' ? 'LTL' : 'TL',
+        mode: a.mode || (_bpLoadType(lane.totalWeight) === 'LTL' ? 'LTL' : 'TL'),
         totalWeight: lane.totalWeight,
         totalPieces: lane.totalPieces,
         totalCost: a.totalCharge || 0,
@@ -784,6 +842,171 @@ async function bpExecute() {
   }
 
   _bpExecuting = false;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BULK PLAN NOW — one-click: group → rate → assign → execute
+// ══════════════════════════════════════════════════════════════════
+async function bpPlanNow() {
+  var allOrders = (typeof orders !== 'undefined' ? orders : []);
+  var selected = allOrders.filter(function(o) { return _bpSelected[o.id]; });
+  if (!selected.length) { toast('Select at least one order', 'warning'); return; }
+
+  var unplannedCount = selected.filter(function(o) { return o.status === 'Unplanned'; }).length;
+  if (!confirm('Bulk plan ' + unplannedCount + ' order' + (unplannedCount !== 1 ? 's' : '') + '?\n\nThis will:\n1. Group orders by lane\n2. Get CzarLite rates\n3. Auto-assign best carrier per lane\n4. Create shipments')) return;
+
+  // Show progress
+  _bpTab = 'results';
+  _bpResults = null;
+  var el = document.getElementById('bp-content');
+  if (el) el.innerHTML = '<div style="text-align:center;padding:80px 20px"><div style="font-size:48px;margin-bottom:16px">⏳</div><div style="font-size:18px;font-weight:600;color:var(--text)">Bulk Planning in Progress…</div><div style="font-size:13px;color:var(--text3);margin-top:8px">Grouping lanes, fetching rates, assigning carriers…</div></div>';
+
+  try {
+    // Step 1: Group by lane
+    bpGroupLanes();
+
+    // Filter out lanes without ZIPs
+    _bpLanes = _bpLanes.filter(function(l) { return l.originZip && l.destZip; });
+    if (!_bpLanes.length) { toast('No lanes with valid ZIP codes', 'error'); _bpTab = 'select'; renderBulkPlan(); return; }
+
+    // Step 2: Rate all lanes
+    var rateBody = { lanes: _bpLanes.map(function(lane) {
+      // Get miles from distance lookup
+      var miles = (typeof getDist === 'function') ? getDist(lane.origin, lane.destination) : 500;
+      return {
+        laneKey: lane.laneKey,
+        originZip: lane.originZip,
+        destZip: lane.destZip,
+        origin: lane.origin,
+        destination: lane.destination,
+        totalWeight: lane.totalWeight,
+        freightClass: lane.freightClass || '70',
+        orderIds: lane.orders.map(function(o) { return o.id; }),
+        miles: miles,
+      };
+    }), optimizeBy: 'cost' };
+
+    var rateData = await _bpApi('POST', '/bulk-plan/rate', rateBody);
+    if (rateData.error) throw new Error(rateData.error);
+
+    // Store rates
+    (rateData.results || []).forEach(function(r) {
+      _bpRates[r.laneKey] = { quotes: r.quotes || [], loadType: r.loadType };
+    });
+
+    // Step 3: Auto-assign best carrier per lane (using all rules)
+    _bpLanes.forEach(function(lane) {
+      var r = _bpRates[lane.laneKey];
+      if (!r || !r.quotes || !r.quotes.length) return;
+      _bpAssign[lane.laneKey] = _bpAssignWithPrefs(lane.laneKey, r.quotes);
+    });
+
+    // Step 4: Calculate dates and build execution plans
+    var today = _bpFmtDate(new Date());
+    var plans = _bpLanes.map(function(lane) {
+      var a = _bpAssign[lane.laneKey] || {};
+      var transit = a.transitDays || null;
+
+      // Find earliest due and ready dates
+      var earliestDue = null;
+      var earliestReady = null;
+      (lane.orders || []).forEach(function(o) {
+        var d = o.due || o.dueDate || '';
+        var r = o.ready || o.readyDate || '';
+        if (d && (!earliestDue || d < earliestDue)) earliestDue = d;
+        if (r && (!earliestReady || r < earliestReady)) earliestReady = r;
+      });
+
+      // Pickup: max(today, readyDate), then check if transit allows on-time delivery
+      var pickupDate = today;
+      if (earliestReady && earliestReady > pickupDate) pickupDate = earliestReady;
+      if (earliestDue && transit) {
+        var idealPickup = _bpFmtDate(_bpSubtractBusinessDays(_bpParseDate(earliestDue), transit));
+        if (idealPickup > pickupDate) pickupDate = idealPickup;
+      }
+
+      // Delivery: pickup + transit business days
+      var deliveryDate = '';
+      if (transit) {
+        deliveryDate = _bpFmtDate(_bpAddBusinessDays(_bpParseDate(pickupDate), transit));
+      } else if (earliestDue) {
+        deliveryDate = earliestDue;
+      }
+
+      return {
+        laneKey: lane.laneKey,
+        origin: lane.origin,
+        destination: lane.destination,
+        carrier: a.carrier || '',
+        scac: a.scac || '',
+        mode: a.mode || (_bpLoadType(lane.totalWeight) === 'LTL' ? 'LTL' : 'TL'),
+        totalWeight: lane.totalWeight,
+        totalPieces: lane.totalPieces,
+        totalCost: a.totalCharge || 0,
+        orderIds: lane.orders.map(function(o) { return o.id; }),
+        pickupDate: pickupDate,
+        deliveryDate: deliveryDate,
+        transitDays: transit,
+      };
+    });
+
+    // Filter out plans with no carrier assigned
+    var validPlans = plans.filter(function(p) { return p.carrier; });
+    var skippedPlans = plans.filter(function(p) { return !p.carrier; });
+
+    if (!validPlans.length) { toast('No carriers could be assigned — check rates and preferences', 'error'); _bpTab = 'select'; renderBulkPlan(); return; }
+
+    // Step 5: Execute
+    var data = await _bpApi('POST', '/bulk-plan/execute', { plans: validPlans });
+    if (data.error) throw new Error(data.error);
+
+    // Update in-memory orders + history
+    var createdShipments = data.shipments || [];
+    validPlans.forEach(function(plan, idx) {
+      var shipment = createdShipments[idx];
+      var shipId = shipment ? (shipment.id || '') : '';
+      (plan.orderIds || []).forEach(function(orderId) {
+        var ord = allOrders.find(function(o) { return o.id === orderId; });
+        if (ord) { ord.status = 'Planned'; ord.shipmentId = shipId; ord.shipment_id = shipId; }
+        if (typeof orderChangeLog !== 'undefined') {
+          if (!orderChangeLog[orderId]) orderChangeLog[orderId] = [];
+          orderChangeLog[orderId].unshift({
+            ts: new Date().toLocaleString(), user: 'System (Bulk Plan)', type: 'plan',
+            changes: [
+              { label: 'Status', old: 'Unplanned', new: 'Planned' },
+              { label: 'Shipment', old: '—', new: shipId },
+              { label: 'Carrier', old: '—', new: plan.carrier || '—' },
+              { label: 'Cost', old: '—', new: '$' + (plan.totalCost || 0).toLocaleString() },
+            ]
+          });
+        }
+      });
+    });
+
+    // Show results
+    _bpResults = {
+      shipments: createdShipments,
+      ordersUpdated: data.ordersUpdated || 0,
+      totalCost: validPlans.reduce(function(s, p) { return s + (p.totalCost || 0); }, 0),
+      totalWeight: validPlans.reduce(function(s, p) { return s + (p.totalWeight || 0); }, 0),
+      plans: validPlans,
+      skipped: skippedPlans,
+      executedAt: new Date().toLocaleString(),
+    };
+    _bpTab = 'results';
+
+    if (typeof refreshAll === 'function') await refreshAll();
+    else if (typeof supaLoadAll === 'function') await supaLoadAll();
+
+    _bpSelected = {};
+    toast('Bulk plan complete — ' + createdShipments.length + ' shipments created', 'success');
+
+  } catch (e) {
+    toast('Bulk plan error: ' + e.message, 'error');
+    _bpTab = 'select';
+  }
+
+  renderBulkPlan();
 }
 
 // ══════════════════════════════════════════════════════════════════

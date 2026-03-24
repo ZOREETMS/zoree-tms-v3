@@ -19,6 +19,8 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;}
+input[type="text"],input:not([type]),textarea,select{text-transform:uppercase;}
+input[type="text"]::placeholder,input:not([type])::placeholder,textarea::placeholder{text-transform:none;}
 .app{display:flex;height:100vh;}
 /* SIDEBAR */
 .sidebar{width:220px;min-width:220px;background:linear-gradient(160deg,#1e2d6b 0%,#1a237e 40%,#283593 100%);border-right:none;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;box-shadow:4px 0 20px rgba(30,45,107,0.15);position:relative;}
@@ -4434,7 +4436,7 @@ function onRouteWeightChange(val) {
 
 <div class="toast-wrap" id="toasts"></div>
 
-<script src="pages/bulk-plan.js?v=9"></script>
+<script src="pages/bulk-plan.js?v=11"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // SUPABASE INTEGRATION
@@ -4847,14 +4849,14 @@ async function supaSaveCarrier(c) {
 async function supaSaveItem(it) {
   if (!SUPA.enabled) return;
   var row = {
-    id: it.id, description: it.desc, customer: it.customer || null,
-    class: it.class || 'General', nmfc: it.nmfc || null,
-    freight_class: it.fclass || null, weight_unit: it.weightUnit || 0,
+    id: _uc(it.id), description: _uc(it.desc), customer: _uc(it.customer || null),
+    class: _uc(it.class || 'General'), nmfc: _uc(it.nmfc || null),
+    freight_class: _uc(it.fclass || null), weight_unit: it.weightUnit || 0,
     length: it.len || 0, width: it.wid || 0, height: it.hgt || 0,
     units_per_pallet: it.unitsPerPallet || 1,
     hazmat: !!it.hazmat, fragile: !!it.fragile, temp_ctrl: !!it.tempCtrl,
     top_load: !!it.topLoad, value_unit: it.valueUnit || 0,
-    status: it.status || 'Active', notes: it.notes || null
+    status: it.status || 'Active', notes: _uc(it.notes || null)
   };
   var r = await supaFetch('POST', 'items?on_conflict=id', row);
   if (r === null) await supaFetch('PATCH', 'items?id=eq.' + encodeURIComponent(row.id), row);
@@ -4865,19 +4867,19 @@ async function supaDeleteItem(id) {
 }
 async function supaSaveDriver(d) {
   if (!SUPA.enabled) return;
-  var row = { id: d.id, name: d.name, license: d.license, license_state: d.licenseState, cdl_class: d.cdlClass || 'Class A', status: d.status || 'Available', carrier: d.carrier || null, phone: d.phone || null, hours_driven: parseFloat(d.hoursDriven) || 0, hours_remaining: parseFloat(d.hoursRemaining) || 11, current_location: d.location || null };
+  var row = { id: _uc(d.id), name: _uc(d.name), license: _uc(d.license), license_state: _uc(d.licenseState), cdl_class: _uc(d.cdlClass || 'Class A'), status: d.status || 'Available', carrier: _uc(d.carrier || null), phone: d.phone || null, hours_driven: parseFloat(d.hoursDriven) || 0, hours_remaining: parseFloat(d.hoursRemaining) || 11, current_location: _uc(d.location || null) };
   var r = await supaFetch('PATCH', 'drivers?id=eq.' + encodeURIComponent(row.id), row);
   if (r === null) await supaFetch('POST', 'drivers', row);
 }
 async function supaSaveLanePref(p) {
   if (!SUPA.enabled) return;
   var row = {
-    id: p.id, origin: p.origin, dest: p.dest, mode: p.mode || 'TL',
-    customer: p.customer || null,
-    preferred: p.preferred || [],
-    excluded: p.excluded || [],
+    id: _uc(p.id), origin: _uc(p.origin), dest: _uc(p.dest), mode: _uc(p.mode || 'TL'),
+    customer: _uc(p.customer || null),
+    preferred: (p.preferred || []).map(_uc),
+    excluded: (p.excluded || []).map(_uc),
     priority: p.priority || 'Medium',
-    reason: p.reason || '', transit_days: p.transitDays || null,
+    reason: _uc(p.reason || ''), transit_days: p.transitDays || null,
     status: p.status || 'Active'
   };
   var r = await supaFetch('PATCH', 'lane_preferences?id=eq.' + encodeURIComponent(row.id), row);
@@ -4889,28 +4891,27 @@ async function supaDeleteLanePref(id) {
 }
 function orderToDb(o) {
   return {
-    id: o.id, customer: o.customer, origin: o.origin, dest: o.dest,
+    id: o.id, customer: _uc(o.customer), origin: _uc(o.origin), dest: _uc(o.dest),
     weight: parseInt(String(o.weight).replace(/,/g,'')) || 0,
-    pieces: parseInt(o.pieces) || 0, commodity: o.commodity || '',
-    incoterms: o.incoterms || null,
+    pieces: parseInt(o.pieces) || 0, commodity: _uc(o.commodity || ''),
+    incoterms: _uc(o.incoterms || null),
     ready: o.ready || null, due: o.due || null,
     status: o.status || 'Unplanned',
     shipment_id: o.shipmentId || null,
     no_contract_rate: !!(o.noContractRate || o.dualRate),
     hazmat: !!o.hazmat,
-    preferred_carrier: o.preferredCarrier || null,
-    excluded_carrier:  o.excludedCarrier  || null,
+    preferred_carrier: _uc(o.preferredCarrier || null),
+    excluded_carrier:  _uc(o.excludedCarrier  || null),
     no_consolidate:    !!o.noConsolidate,
     dedicated_equip:   !!o.dedicatedEquip,
-    notes: o.notes || null,
-    // ── Location IDs (3-tier addition) ─────────────────────────────
-    origin_location_id: o.originLocationId || null,
-    dest_location_id:   o.destLocationId   || null,
-    ship_from_name:     o.shipFromName     || null,
-    ship_to_name:       o.shipToName       || null,
-    ship_to_address:    o.shipToAddress    || null,
-    po_number:          o.poNumber         || null,
-    ship_mode:          o.shipMode         || null,
+    notes: _uc(o.notes || null),
+    origin_location_id: _uc(o.originLocationId || null),
+    dest_location_id:   _uc(o.destLocationId   || null),
+    ship_from_name:     _uc(o.shipFromName     || null),
+    ship_to_name:       _uc(o.shipToName       || null),
+    ship_to_address:    _uc(o.shipToAddress    || null),
+    po_number:          _uc(o.poNumber         || null),
+    ship_mode:          _uc(o.shipMode         || null),
     line_count:         o.lineCount        || 0,
     origin_zip:         o.originZip        || null,
     dest_zip:           o.destZip          || null,
@@ -4947,8 +4948,8 @@ function dbToOrder(r) {
 function shipmentToDb(s) {
   var costNum = parseFloat(String(s.cost || '0').replace(/[$,]/g,'')) || 0;
   return {
-    id: s.id, carrier: s.carrier || '', mode: s.mode || 'TL',
-    origin: s.origin, dest: s.dest,
+    id: s.id, carrier: _uc(s.carrier || ''), mode: _uc(s.mode || 'TL'),
+    origin: _uc(s.origin), dest: _uc(s.dest),
     origin_zip: s.originZip || null,
     dest_zip:   s.destZip   || null,
     weight: parseInt(String(s.weight).replace(/,/g,'')) || 0,
@@ -4956,14 +4957,14 @@ function shipmentToDb(s) {
     pickup_date:   s.pickup        || null,
     delivery_date: s.delivery      || null,
     total_cost: costNum, spot_rate: !!s.spotRate,
-    czarlite_rate: !!s.czarliteRate, czarlite_class: s.czarliteClass || null,
-    bol_number:      s.bolNumber      || null,
-    pro_number:      s.proNumber      || null,
-    tracking_number: s.trackingNumber || null,
-    service_level:   s.serviceLevel   || null,
-    dock_assigned:   s.dockAssigned   || null,
+    czarlite_rate: !!s.czarliteRate, czarlite_class: _uc(s.czarliteClass || null),
+    bol_number:      _uc(s.bolNumber      || null),
+    pro_number:      _uc(s.proNumber      || null),
+    tracking_number: _uc(s.trackingNumber || null),
+    service_level:   _uc(s.serviceLevel   || null),
+    dock_assigned:   _uc(s.dockAssigned   || null),
     dock_time:       s.dockTime       || null,
-    notes: s.notes || null,
+    notes: _uc(s.notes || null),
     order_ids: s.consolidatedOrders || []
   };
 }
@@ -4990,8 +4991,8 @@ function dbToShipment(r) {
 }
 function carrierToDb(c) {
   return {
-    id: c.id || ('C-' + c.name.replace(/\s+/g,'-').toLowerCase()),
-    name: c.name, scac: c.scac || '', mode: c.mode || 'TL',
+    id: c.id || ('C-' + c.name.replace(/\s+/g,'-').toUpperCase()),
+    name: _uc(c.name), scac: _uc(c.scac || ''), mode: _uc(c.mode || 'TL'),
     status: c.status || 'Active',
     on_time_pct: parseFloat(c.otd) || 0,
     claim_ratio: parseFloat(c.claim) || 0,
@@ -5000,19 +5001,22 @@ function carrierToDb(c) {
     carrierconnect_enabled: !!c.carrierconnect_enabled
   };
 }
+function _uc(s) { return typeof s === 'string' ? s.toUpperCase() : s; }
 function rateToDb(r) {
   var row = {
-    lane: r.lane, origin: r.origin, dest: r.dest,
-    carrier: r.carrier, mode: r.mode || 'TL',
-    rate: r.rate, unit: r.unit || 'per mile', fsc: r.fsc || '22.5%',
+    lane: _uc(r.lane), origin: _uc(r.origin), dest: _uc(r.dest),
+    carrier: _uc(r.carrier), mode: _uc(r.mode || 'TL'),
+    rate: _uc(r.rate), unit: _uc(r.unit || 'per mile'), fsc: _uc(r.fsc || '22.5%'),
     eff: r.eff || null, exp: r.exp || null,
     status: r.status || 'Active',
-    czarlite: !!r.czarlite, czarlite_class: r.czarliteClass || null,
+    czarlite: !!r.czarlite, czarlite_class: _uc(r.czarliteClass || null),
     czarlite_min_wt: r.czarliteMinWt || null,
     czarlite_max_wt: r.czarliteMaxWt || null,
-    czarlite_tariff: r.czarliteTariff || null,
+    czarlite_tariff: _uc(r.czarliteTariff || null),
     discount: r.discount || 0,
-    discount_flat: r.discountFlat || 0
+    discount_flat: r.discountFlat || 0,
+    transit_days: r.transitDays || null,
+    service_level: _uc(r.serviceLevel || null)
   };
   return row;
 }
@@ -5028,7 +5032,9 @@ function dbToRate(r) {
     czarliteMaxWt: r.czarlite_max_wt,
     czarliteTariff: r.czarlite_tariff,
     discount: parseFloat(r.discount) || 0,
-    discountFlat: parseFloat(r.discount_flat) || 0
+    discountFlat: parseFloat(r.discount_flat) || 0,
+    serviceLevel: r.service_level || null,
+    transitDays: r.transit_days || null
   };
 }
 
@@ -5071,6 +5077,62 @@ async function supaLoadAll() {
       }
     });
     rates     = mergeWithLocal(dbRates,     rates,     dbToRate);
+    // One-time: uppercase all rate text fields and persist
+    var _ucMigrated = false;
+    rates.forEach(function(r) {
+      var changed = false;
+      ['lane','origin','dest','carrier','mode','rate','unit','fsc'].forEach(function(k) {
+        if (r[k] && typeof r[k] === 'string' && r[k] !== r[k].toUpperCase()) {
+          r[k] = r[k].toUpperCase();
+          changed = true;
+        }
+      });
+      if (changed) { supaSaveRate(r); _ucMigrated = true; }
+    });
+    if (_ucMigrated) console.log('[Supa] Migrated rates to uppercase');
+    // One-time: uppercase all order text fields and persist
+    var _ucOrders = false;
+    orders.forEach(function(o) {
+      var changed = false;
+      ['customer','origin','dest','commodity','preferredCarrier','excludedCarrier','shipFromName','shipToName','shipToAddress','poNumber','shipMode','notes','incoterms'].forEach(function(k) {
+        if (o[k] && typeof o[k] === 'string' && o[k] !== o[k].toUpperCase()) {
+          o[k] = o[k].toUpperCase();
+          changed = true;
+        }
+      });
+      if (changed) { supaSaveOrder(o); _ucOrders = true; }
+    });
+    if (_ucOrders) console.log('[Supa] Migrated orders to uppercase');
+    // Fix: repair any status values that got uppercased by mistake
+    var _statusMap = {'UNPLANNED':'Unplanned','PLANNED':'Planned','CONSOLIDATED':'Consolidated','IN TRANSIT':'In Transit','DELIVERED':'Delivered','TENDERED':'Tendered','EXCEPTION':'Exception','CANCELLED':'Cancelled','ON HOLD':'On Hold'};
+    orders.forEach(function(o) {
+      if (o.status && _statusMap[o.status]) { o.status = _statusMap[o.status]; supaSaveOrder(o); }
+    });
+    // Fix rate statuses too
+    rates.forEach(function(r) {
+      if (r.status === 'ACTIVE') { r.status = 'Active'; supaSaveRate(r); }
+      if (r.status === 'INACTIVE') { r.status = 'Inactive'; supaSaveRate(r); }
+      if (r.status === 'EXPIRED') { r.status = 'Expired'; supaSaveRate(r); }
+    });
+    // Uppercase carriers
+    carriers.forEach(function(c) {
+      var changed = false;
+      ['name','scac','mode'].forEach(function(k) {
+        if (c[k] && typeof c[k] === 'string' && c[k] !== c[k].toUpperCase()) { c[k] = c[k].toUpperCase(); changed = true; }
+      });
+      if (changed) supaSaveCarrier(c);
+    });
+    // Uppercase shipments
+    shipments.forEach(function(s) {
+      var changed = false;
+      ['carrier','origin','dest','mode','bolNumber','proNumber','trackingNumber','serviceLevel','notes'].forEach(function(k) {
+        if (s[k] && typeof s[k] === 'string' && s[k] !== s[k].toUpperCase()) { s[k] = s[k].toUpperCase(); changed = true; }
+      });
+      // Fix shipment statuses
+      var _shpStatusMap = {'PLANNED':'Planned','IN TRANSIT':'In Transit','DELIVERED':'Delivered','TENDERED':'Tendered','EXCEPTION':'Exception','CANCELLED':'Cancelled'};
+      if (s.status && _shpStatusMap[s.status]) { s.status = _shpStatusMap[s.status]; changed = true; }
+      if (changed) supaSaveShipment(s);
+    });
     // Load lane preferences from DB
     if (dbLanePrefs && dbLanePrefs.length) {
       lanePreferences = dbLanePrefs.map(function(r) {
@@ -5544,13 +5606,33 @@ var laneDistances = {
 function getDist(o,d){ return laneDistances[o+'|'+d] || xdockDistances[o+'|'+d] || 750; }
 
 function getRates(o,d){
-  return rates.filter(function(r){ return r.mode==='TL' && r.status==='Active' && r.origin===o && r.dest===d; });
+  var oLow = (o||'').toLowerCase().replace(/\s+/g,' ').trim();
+  var dLow = (d||'').toLowerCase().replace(/\s+/g,' ').trim();
+  return rates.filter(function(r){
+    if(r.status !== 'Active') return false;
+    var rO = (r.origin||'').toLowerCase().replace(/\s+/g,' ').trim();
+    var rD = (r.dest||'').toLowerCase().replace(/\s+/g,' ').trim();
+    // Match by city name (ignore ZIP differences)
+    var oCity = oLow.split(',')[0].trim();
+    var dCity = dLow.split(',')[0].trim();
+    var rOCity = rO.split(',')[0].trim();
+    var rDCity = rD.split(',')[0].trim();
+    return rOCity === oCity && rDCity === dCity;
+  });
 }
 
 /** Any active rate row (TL or LTL) on this lane — used for “spot vs contracted” UI, not TL-only pricing. */
+function _stripCityName(s) {
+  // Extract just the city name: remove state, ZIP, country
+  // "CHICAGO 60602" → "chicago", "Chicago, IL 60601" → "chicago", "Atlanta, GA 30303" → "atlanta"
+  return (s||'').toLowerCase().split(',')[0].replace(/\s*\d{5}(-\d{4})?\s*$/,'').trim();
+}
 function laneHasActiveRate(o, d) {
+  var oL = _stripCityName(o);
+  var dL = _stripCityName(d);
   return rates.some(function(r) {
-    return r.status === 'Active' && r.origin === o && r.dest === d;
+    if (r.status !== 'Active') return false;
+    return _stripCityName(r.origin) === oL && _stripCityName(r.dest) === dL;
   });
 }
 
@@ -6792,7 +6874,22 @@ function renderRates(){
         })()
       : '';
     return '<tr style="'+(r.czarlite?'border-left:3px solid #6366f1;background:rgba(99,102,241,.03)':'')+'">'
-      +'<td class="mono">'+r.lane+'</td>'
+      +'<td class="mono">'+(function(){
+        var lane = r.lane || '';
+        // Append mode (TL/LTL) if not already present
+        var mode = (r.mode||'TL').toUpperCase();
+        if(lane.indexOf('-TL')< 0 && lane.indexOf('-LTL')< 0) lane += '-' + mode;
+        // Append STD/EXP if not already present
+        var isExp = (r.serviceLevel||'').toLowerCase().indexOf('express')>=0
+                 || (r.serviceLevel||'').toLowerCase().indexOf('expedit')>=0
+                 || lane.indexOf('EXP')>=0;
+        var hasTag = lane.indexOf('-STD')>=0 || lane.indexOf('-EXP')>=0;
+        if(!hasTag && !isExp) lane += '-STD';
+        if(!hasTag && isExp) lane += '-EXP';
+        // Append expiry date as YYYYMMDD
+        if(r.exp) lane += '-' + r.exp.replace(/-/g,'');
+        return lane;
+      })()+'</td>'
       +'<td>'+r.origin+'</td><td>'+r.dest+'</td>'
       +'<td>'+r.carrier+'</td>'
       +'<td><span class="tag">'+r.mode+'</span></td>'
@@ -6801,7 +6898,21 @@ function renderRates(){
       +'<td class="mono">'+r.fsc+'</td>'
       +'<td class="mono" style="color:#059669;text-align:center">'+(r.discount?r.discount+'%':'—')+'</td>'
       +'<td class="mono" style="color:#059669;text-align:center">'+(r.discountFlat?'$'+r.discountFlat:'—')+'</td>'
-      +'<td class="mono" style="text-align:center">'+(r.transitDays ? r.transitDays+' day'+(r.transitDays>1?'s':'') : '—')+'</td>'
+      +'<td class="mono" style="text-align:center">'+(function(){
+        var td = r.transitDays;
+        var isExp = (r.serviceLevel||'').toLowerCase().indexOf('express') >= 0
+                 || (r.serviceLevel||'').toLowerCase().indexOf('expedit') >= 0
+                 || (r.lane||'').indexOf('EXP') >= 0;
+        // Only estimate from miles if no transit stored in rate table
+        if(!td) {
+          var dist = getDist(r.origin, r.dest);
+          if(dist > 0) {
+            var milesPerDay = isExp ? 800 : (r.mode === 'LTL' ? 350 : 500);
+            td = Math.max(1, Math.ceil(dist / milesPerDay));
+          }
+        }
+        return td ? td+' day'+(td>1?'s':'')+(isExp?' <span style="font-size:8px;color:#7c3aed;font-weight:700">TEAM</span>':'') : '—';
+      })()+'</td>'
       +'<td class="mono">'+r.eff+'</td>'
       +'<td class="mono">'+r.exp+'</td>'
       +'<td>'+badge(r.status)+'</td>'
@@ -7227,7 +7338,7 @@ function renderCarrierBars(){
 // PLAN MODAL
 // ─────────────────────────────────────────────
 var _planSibs=[], _planPriced=[], _planSelIdx=0;
-var _planShipmentGroups=[], _planEquipMaxWt=44000, _ratesByLane={};
+var _planShipmentGroups=[], _planEquipMaxWt=44000, _ratesByLane={}, _ccxlTransitMaps=null;
 var _selectedOrders = new Set();
 
 function toggleOrderSel(id, checked) {
@@ -7287,8 +7398,7 @@ var _planEquipType = DEFAULT_EQUIP;
 
 function openPlanWithGroup(selOrds) {
   if(!selOrds || selOrds.length === 0) return;
-
-  var maxWt = getEquipMaxWeight(_planEquipType);
+  _ccxlTransitMaps = {};
 
   // ── Step 1: Group by lane (origin+dest) ────────────────────────────────
   var laneMap = {};
@@ -7297,6 +7407,30 @@ function openPlanWithGroup(selOrds) {
     if(!laneMap[k]) laneMap[k] = [];
     laneMap[k].push(o);
   });
+
+  // Equipment selection:
+  // 1. If lane pref says LTL and weight fits → LTL
+  // 2. If no pref, equipment stays as default (cheapest rate wins regardless of mode)
+  // 3. If weight > LTL max → always TL
+  var LTL_MAX_WEIGHT = 15000;
+  var firstLaneKey = Object.keys(laneMap)[0] || '';
+  var firstLaneParts = firstLaneKey.split('||');
+  var _laneWeight = (laneMap[firstLaneKey]||[]).reduce(function(s,o){ return s + (parseInt(String(o.weight).replace(/,/g,''))||0); }, 0);
+  if (firstLaneParts.length === 2) {
+    var firstLP = getLanePrefsForOrder({origin: firstLaneParts[0], dest: firstLaneParts[1], customer: (laneMap[firstLaneKey][0]||{}).customer||''});
+    if (firstLP.mode === 'LTL' && _laneWeight <= LTL_MAX_WEIGHT) {
+      _planEquipType = 'LTL Truck';
+    } else if (_laneWeight > LTL_MAX_WEIGHT) {
+      _planEquipType = DEFAULT_EQUIP; // weight exceeds LTL, force TL
+    } else if (!firstLP.mode && _laneWeight <= LTL_MAX_WEIGHT) {
+      // No mode pref — keep default equipment, cheapest rate will be auto-selected
+      // Don't force TL or LTL, let the rate sorting decide
+    } else if (_planEquipType === 'LTL Truck') {
+      _planEquipType = DEFAULT_EQUIP;
+    }
+  }
+
+  var maxWt = getEquipMaxWeight(_planEquipType);
 
   // ── Step 2: Within each lane, bin orders into weight-limited shipments ──
   // Each bin = one future shipment
@@ -7355,14 +7489,31 @@ function openPlanWithGroup(selOrds) {
     var filtered = rOpts.filter(function(r){ return !lp.excluded.includes(r.carrier); });
     if(filtered.length === 0) filtered = rOpts;
     var miles = getDist(origin, dest);
+    var laneWt = (laneMap[lk]||[]).reduce(function(s,o){ return s + (parseInt(String(o.weight).replace(/,/g,''))||0); }, 0);
+    var prefMode = lp.mode || '';
+    // If weight exceeds LTL max, ignore LTL mode preference
+    var effectivePrefMode = (prefMode === 'LTL' && laneWt > LTL_MAX_WEIGHT) ? '' : prefMode;
     ratesByLane[lk] = filtered.map(function(r) {
       var co = calcCost(r.rate, r.fsc, miles);
+      var rMode = r._czarlite || (r.mode || '').toUpperCase() === 'LTL' ? 'LTL' : 'TL';
+      // Don't mark LTL rates as preferred if weight exceeds LTL limit
+      var isPref = lp.preferred.includes(r.carrier) || r._preferred;
+      if (isPref && rMode === 'LTL' && laneWt > LTL_MAX_WEIGHT) isPref = false;
+      // If lane pref specifies a mode, rates matching that mode get priority
+      var modeMatch = !effectivePrefMode || effectivePrefMode === rMode;
       return { carrier:r.carrier, rate:r.rate, fsc:r.fsc, miles:miles,
                base:co.base, fuel:co.fuel, acc:co.acc, total:co.total,
                mode: r.mode || 'TL', lane: r.lane,
+               serviceLevel: r.serviceLevel || '', transitDays: r.transitDays || null,
+               deliveryDate: r.deliveryDate || '',
                _czarlite: r._czarlite, _czarliteClass: r._czarliteClass, _cwt: r._cwt,
-               _preferred: lp.preferred.includes(r.carrier) || r._preferred };
+               _preferred: isPref, _modeMatch: modeMatch };
     }).sort(function(a,b){
+      // Sort: preferred + mode match first, then mode match, then preferred, then by cost
+      if(a._preferred && a._modeMatch && !(b._preferred && b._modeMatch)) return -1;
+      if(b._preferred && b._modeMatch && !(a._preferred && a._modeMatch)) return 1;
+      if(a._modeMatch && !b._modeMatch) return -1;
+      if(b._modeMatch && !a._modeMatch) return 1;
       if(a._preferred && !b._preferred) return -1;
       if(b._preferred && !a._preferred) return  1;
       return a.total - b.total;
@@ -7375,22 +7526,31 @@ function openPlanWithGroup(selOrds) {
   _planSelIdx   = 0;
   _planSibs     = selOrds; // legacy compat
 
-  // ── Step 3b: Fetch CzarLite rates per lane and merge ───────────────────
+  // ── Step 3b: Fetch CzarLite rates per lane (CCXL transit included from backend) ──
   var laneKeys = Object.keys(laneMap);
-  var czPromises = laneKeys.map(function(lk) {
+  var combinedPromises = laneKeys.map(function(lk) {
     var parts  = lk.split('||');
     var origin = parts[0], dest = parts[1];
     var laneWt = (laneMap[lk]||[]).reduce(function(s,o){ return s+wNum(o.weight); }, 0) || 5000;
     var laneLp = getLanePrefsForOrder({origin:origin, dest:dest, customer:(laneMap[lk][0]||{}).customer||''});
+
     return getCzarliteRatesForLane(origin, dest, laneWt).then(function(czOpts) {
+      var miles = getDist(origin, dest);
+      var existing = ratesByLane[lk] || [];
       (czOpts||[]).forEach(function(cz) {
-        var miles = getDist(origin, dest);
-        var existing = ratesByLane[lk] || [];
-        // Skip if this carrier already in list
         if(existing.find(function(r){ return r.carrier===cz.carrier&&r._czarlite; })) return;
         var isPref = (laneLp.preferred || []).some(function(p) {
           return cz.carrier && cz.carrier.toLowerCase().indexOf(p.toLowerCase()) >= 0;
         });
+        if (isPref && laneWt > LTL_MAX_WEIGHT) isPref = false;
+
+        // Transit comes from backend (CCXL already merged in /api/ltl/quote)
+        var hasTransit = !!(cz.transitDays);
+        // Check carrierconnect_enabled to determine if missing transit = ineligible
+        var carrierUp = (cz.carrier||'').toUpperCase();
+        var carrierRec = carriers.find(function(c){ return c.name && c.name.toUpperCase().indexOf(carrierUp.split(' ')[0]) >= 0; });
+        var ccxlEnabled = carrierRec && carrierRec.carrierconnect_enabled;
+
         existing.push({
           carrier: cz.carrier, rate: '$'+cz.ratePerCwt+'/cwt',
           fsc: cz.fsc||'0%', miles: miles,
@@ -7399,23 +7559,36 @@ function openPlanWithGroup(selOrds) {
           _czarlite: true, _czarliteClass: cz._czarliteClass,
           _cwt: cz._cwt, ratePerCwt: cz.ratePerCwt,
           discountAmt: cz.discountAmt||0, discountPct: cz.discountPct||0,
-          _preferred: isPref
+          _preferred: isPref,
+          transitDays: cz.transitDays || null,
+          _ccxlTransit: hasTransit,
+          _noTransit: ccxlEnabled && !hasTransit
         });
-        // Filter out excluded carriers
-        existing = existing.filter(function(r){ return !(laneLp.excluded || []).includes(r.carrier); });
-        // Re-sort: preferred first then cheapest
-        existing.sort(function(a,b){
-          if(a._preferred&&!b._preferred) return -1;
-          if(b._preferred&&!a._preferred) return 1;
-          return a.total-b.total;
-        });
-        ratesByLane[lk] = existing;
       });
+
+      // Filter excluded, tag mode match, sort
+      existing = existing.filter(function(r){ return !(laneLp.excluded || []).includes(r.carrier); });
+      var prefMode2 = laneLp.mode || '';
+      var effectivePrefMode2 = (prefMode2 === 'LTL' && laneWt > LTL_MAX_WEIGHT) ? '' : prefMode2;
+      existing.forEach(function(r) {
+        var rMode = r._czarlite || (r.mode || '').toUpperCase() === 'LTL' ? 'LTL' : 'TL';
+        r._modeMatch = !effectivePrefMode2 || effectivePrefMode2 === rMode;
+      });
+      existing.sort(function(a,b){
+        if(a._preferred && a._modeMatch && !(b._preferred && b._modeMatch)) return -1;
+        if(b._preferred && b._modeMatch && !(a._preferred && a._modeMatch)) return 1;
+        if(a._modeMatch && !b._modeMatch) return -1;
+        if(b._modeMatch && !a._modeMatch) return 1;
+        if(a._preferred&&!b._preferred) return -1;
+        if(b._preferred&&!a._preferred) return 1;
+        return a.total-b.total;
+      });
+      ratesByLane[lk] = existing;
     }).catch(function(){});
   });
 
-  // Render immediately with TL rates, then re-render when CzarLite loads
-  var _renderGroupPlan = function() {
+  // Render immediately with TL rates, then re-render when CzarLite+CCXL load
+  window._renderGroupPlan = function() {
     // ── Step 4: Build modal HTML ───────────────────────────────────────
 
   var totalLanes    = Object.keys(laneMap).length;
@@ -7503,13 +7676,140 @@ function openPlanWithGroup(selOrds) {
     if(isOver) html += '<div style="font-size:10px;color:var(--red);margin-top:3px;font-weight:600">⚠️ Exceeds weight limit by '+(plan.weight-maxWt).toLocaleString()+' lbs</div>';
     html += '</div>';
 
-    // Best rate
-    if(best.carrier !== 'TBD') {
+    // All rates for this lane — re-sort: on-time first, late to bottom
+    var laneRates = ratesByLane[plan.laneKey] || [];
+    // Find earliest due date and earliest ready date for date calculations
+    var earliestDue = null;
+    var earliestReady = null;
+    plan.orders.forEach(function(o) {
+      var d = o.due || o.dueDate || '';
+      if(d && (!earliestDue || d < earliestDue)) earliestDue = d;
+      var r = o.ready || o.readyDate || '';
+      if(r && (!earliestReady || r > earliestReady)) earliestReady = r; // latest ready = can't ship before this
+    });
+    var _now = new Date();
+    var today = _now.getFullYear() + '-' + String(_now.getMonth()+1).padStart(2,'0') + '-' + String(_now.getDate()).padStart(2,'0');
+
+    // Pre-compute feasibility for each rate and re-sort: on-time first, then by existing sort
+    if(earliestDue && earliestReady) {
+      laneRates.forEach(function(r) {
+        var _rd = { transitDays: r.transitDays || null, miles: r.miles, mode: r.mode, serviceLevel: r.serviceLevel, lane: r.lane, _czarlite: r._czarlite };
+        if(!_rd.transitDays && r.miles) {
+          var _isE = (r.serviceLevel||'').toLowerCase().indexOf('express') >= 0 || (r.lane||'').indexOf('EXP') >= 0;
+          var _rM = r._czarlite || (r.mode||'').toUpperCase() === 'LTL' ? 'LTL' : 'TL';
+          _rd.transitDays = Math.max(1, Math.ceil(r.miles / (_isE ? 800 : (_rM === 'LTL' ? 350 : 500))));
+        }
+        var _d = calcShipmentDates(_rd, earliestDue, earliestReady);
+        r._isLate = !!_d.warning;
+      });
+      var allLate = laneRates.filter(function(r) { return !r._noTransit; }).every(function(r) { return r._isLate; });
+      // Re-sort: no-transit to bottom, then on-time by cost, late by fastest transit
+      laneRates.sort(function(a, b) {
+        // No transit always at bottom
+        if(a._noTransit && !b._noTransit) return 1;
+        if(!a._noTransit && b._noTransit) return -1;
+        if(a._noTransit && b._noTransit) return a.total - b.total;
+        // Late goes below on-time
+        if(a._isLate && !b._isLate) return 1;
+        if(!a._isLate && b._isLate) return -1;
+        // Both late — sort by fastest transit time first
+        if(a._isLate && b._isLate) {
+          var aT = a.transitDays || 999;
+          var bT = b.transitDays || 999;
+          if(aT !== bT) return aT - bT;
+          return a.total - b.total;
+        }
+        return 0; // preserve existing sort for on-time
+      });
+      // Update ratesByLane so confirmPlan uses the re-sorted order
+      ratesByLane[plan.laneKey] = laneRates;
+    }
+
+    if(laneRates.length > 0) {
+      laneRates.forEach(function(r, ri) {
+        var isSelected = ri === 0;
+        var rMode = r._czarlite || (r.mode||'').toUpperCase() === 'LTL' ? 'LTL' : 'TL';
+        var isExp = (r.serviceLevel||'').toLowerCase().indexOf('express') >= 0
+                 || (r.serviceLevel||'').toLowerCase().indexOf('expedit') >= 0
+                 || (r.lane||'').indexOf('EXP') >= 0;
+        var svcTag = isExp ? 'EXP' : 'STD';
+
+        // Transit days: CCXL > rate table > miles estimate (TL only)
+        var transit = r.transitDays || null;
+        var transitSource = r._ccxlTransit ? 'CCXL' : (transit ? 'RATE' : '');
+        if(!transit && r.miles && !r._czarlite) {
+          // Only estimate for TL rates — CzarLite LTL should use CCXL
+          var milesPerDay = isExp ? 800 : 500;
+          transit = Math.max(1, Math.ceil(r.miles / milesPerDay));
+          transitSource = 'EST';
+        } else if(!transit && r._czarlite) {
+          // Check if carrier is carrierconnect_enabled in carriers table
+          var carrierObj = carriers.find(function(c) {
+            return c.name === r.carrier || c.scac === r.scac;
+          });
+          var isCCXLEnabled = carrierObj && carrierObj.carrierconnect_enabled;
+          if(isCCXLEnabled) {
+            // Carrier should have CCXL transit but doesn't — ineligible for auto-selection
+            transitSource = 'N/A';
+            r._noTransit = true;
+          } else {
+            // Carrier not CCXL-enabled, use miles estimate as fallback
+            if(r.miles) {
+              transit = Math.max(1, Math.ceil(r.miles / 350));
+              transitSource = 'EST';
+            } else {
+              transitSource = 'N/A';
+              r._noTransit = true;
+            }
+          }
+        }
+
+        // Calculate pickup/delivery using calcShipmentDates (respects ready date, weekends, holidays)
+        var _rateForDates = { transitDays: transit, miles: r.miles, mode: r.mode, serviceLevel: r.serviceLevel, lane: r.lane, _czarlite: r._czarlite };
+        var _dates = calcShipmentDates(_rateForDates, earliestDue, earliestReady);
+        var pickupDate = _dates.pickup || today;
+        var deliveryDate = _dates.delivery || earliestDue || '';
+        var _lateWarning = _dates.warning || '';
+
+        var bg = isSelected ? 'background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2)' : 'background:var(--bg4);border:1px solid var(--border)';
+        html += '<div style="'+bg+';border-radius:8px;margin-bottom:4px;cursor:pointer;padding:8px 12px" onclick="_bpPickRate('+pi+','+ri+')">';
+        // Row 1: carrier + badges + price
+        html += '<div style="display:flex;align-items:center;gap:8px">';
+        html += '<input type="radio" name="rate-'+pi+'" '+(isSelected?'checked':'')+' style="margin:0">';
+        html += '<div style="flex:1"><span style="font-weight:'+(isSelected?'700':'500')+';font-size:12px">'+r.carrier+'</span>';
+        html += '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:5px;'+(rMode==='LTL'?'background:rgba(99,102,241,.12);color:#4f46e5':'background:rgba(16,185,129,.12);color:#059669')+'">'+rMode+'</span>';
+        html += '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:3px;'+(isExp?'background:rgba(124,58,237,.12);color:#7c3aed':'background:rgba(107,114,128,.1);color:#6b7280')+'">'+svcTag+(isExp?' 🚛🚛':'')+'</span>';
+        if(r._preferred) html += '<span style="font-size:9px;background:rgba(59,130,246,.1);color:var(--accent);border:1px solid rgba(59,130,246,.2);padding:1px 6px;border-radius:8px;margin-left:3px;font-weight:700">⭐ PREF</span>';
+        if(isSelected) html += '<span style="font-size:9px;background:rgba(16,185,129,.12);color:#059669;padding:1px 6px;border-radius:8px;margin-left:3px;font-weight:700">✓ SELECTED</span>';
+        if(r._czarlite) html += '<span style="font-size:9px;background:rgba(99,102,241,.1);color:#4f46e5;padding:1px 6px;border-radius:8px;margin-left:3px;font-weight:600">CZARLITE</span>';
+        html += '</div>';
+        html += '<span style="font-family:monospace;font-weight:'+(isSelected?'800':'600')+';color:'+(isSelected?'var(--green)':'var(--text2)')+';font-size:13px">$'+r.total.toLocaleString()+'</span>';
+        html += '</div>';
+        // Row 2: transit + dates
+        if(transit || pickupDate !== today) {
+          html += '<div style="display:flex;gap:12px;margin-top:4px;margin-left:28px;font-size:10px;color:var(--text3)">';
+          if(transit) {
+            var srcStyle = transitSource === 'CCXL' ? 'color:#059669' : transitSource === 'EST' ? 'color:#b45309' : 'color:var(--text3)';
+            var srcLabel = transitSource === 'CCXL' ? ' <span style="font-size:8px;font-weight:700;'+srcStyle+'">CCXL</span>' : transitSource === 'EST' ? ' <span style="font-size:8px;font-weight:700;'+srcStyle+'">EST</span>' : '';
+            html += '<span>🚚 '+transit+'d transit'+srcLabel+'</span>';
+          } else if(transitSource === 'N/A') {
+            html += '<span style="color:#b45309">🚚 Transit: N/A</span>';
+          }
+          if(pickupDate) html += '<span>📦 Pickup: '+pickupDate+'</span>';
+          if(deliveryDate) html += '<span>🏁 Delivery: '+deliveryDate+'</span>';
+          html += '</div>';
+        }
+        if(r._noTransit) {
+          html += '<div style="margin-top:3px;margin-left:28px;font-size:9px;color:#b45309;font-weight:600">⚠️ No transit data — CCXL enabled but no transit returned</div>';
+        } else if(_lateWarning) {
+          html += '<div style="margin-top:3px;margin-left:28px;font-size:9px;color:#dc2626;font-weight:600">⚠️ Late — delivery after due date</div>';
+        }
+        html += '</div>';
+      });
+    } else if(best.carrier !== 'TBD') {
       html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px">';
       html += '<span style="font-size:13px">✓</span>';
-      html += '<div style="flex:1"><span style="font-weight:700;font-size:12px">'+best.carrier+'</span>';
-      if(best._preferred) html += '<span style="font-size:10px;background:rgba(59,130,246,.1);color:var(--accent);border:1px solid rgba(59,130,246,.2);padding:1px 6px;border-radius:8px;margin-left:5px;font-weight:700">⭐ PREF</span>';
-      html += '</div>';
+      html += '<div style="flex:1"><span style="font-weight:700;font-size:12px">'+best.carrier+'</span></div>';
       html += '<span style="font-family:monospace;font-weight:800;color:var(--green);font-size:14px">$'+best.total.toLocaleString()+'</span>';
       html += '</div>';
     }
@@ -7538,12 +7838,24 @@ function openPlanWithGroup(selOrds) {
   }
   }; // end _renderGroupPlan
 
-  // Render immediately with TL, then re-render once CzarLite loads
-  _renderGroupPlan();
-  Promise.all(czPromises).then(function() {
-    if(document.getElementById('modal-plan').style.display !== 'none') {
+  // Rate picker for compact view — swap selected rate for a shipment plan
+  window._bpPickRate = function(planIdx, rateIdx) {
+    var plan = shipmentPlans[planIdx];
+    if (!plan) return;
+    var rates = ratesByLane[plan.laneKey] || [];
+    if (rateIdx >= 0 && rateIdx < rates.length) {
+      // Move selected rate to front
+      var picked = rates.splice(rateIdx, 1)[0];
+      rates.unshift(picked);
+      ratesByLane[plan.laneKey] = rates;
       _renderGroupPlan();
     }
+  };
+
+  // Render immediately with TL rates, re-render when CzarLite (with CCXL transit) loads
+  _renderGroupPlan();
+  Promise.all(combinedPromises).then(function() {
+    if(document.getElementById('modal-plan').style.display !== 'none') _renderGroupPlan();
   });
 }
 
@@ -7555,14 +7867,19 @@ function changePlanEquip(equipType) {
 }
 
 function openPlan(orderId){
-  _planShipmentGroups = []; // not a multi-group plan
+  // Delegate to openPlanWithGroup for consistent lane pref + mode handling
   var o=orders.find(function(x){ return x.id===orderId; });
   if(!o) return;
   var sibs=orders.filter(function(x){ return x.status==='Unplanned'&&x.origin===o.origin&&x.dest===o.dest; });
+  _selectedOrders.clear();
+  sibs.forEach(function(s){ _selectedOrders.add(s.id); });
+  openPlanWithGroup(sibs);
+  return;
+  // --- Legacy code below (kept for reference, unreachable) ---
+  _planShipmentGroups = [];
   var miles=getDist(o.origin,o.dest);
-  var isChiDal=o.origin==='Chicago, IL'&&o.dest==='Dallas, TX';
   var rOpts=getRates(o.origin,o.dest);
-  if(isChiDal||rOpts.length<1){
+  if(rOpts.length<1){
     rOpts=[
       {carrier:'Schneider National',rate:'$2.28',fsc:'22.5%',mode:'TL',lane:'CHI-DAL-TL'},
       {carrier:'Swift Transport',   rate:'$2.42',fsc:'22.5%',mode:'TL',lane:'CHI-DAL-TL2'},
@@ -7592,7 +7909,12 @@ function openPlan(orderId){
   // Add preferred carriers that may not have a rate on file
   allPreferred.forEach(function(pc) {
     if(!filteredOpts.find(function(r){ return r.carrier===pc; })) {
-      filteredOpts.unshift({carrier:pc, rate:'$2.45', fsc:'22.5%', mode:'TL', lane:'CUSTOM', _preferred:true});
+      // When lane pref is LTL, add TL rate at the end (not first) — CzarLite LTL rates come first
+      if (lanePrefs.mode === 'LTL') {
+        filteredOpts.push({carrier:pc, rate:'$2.45', fsc:'22.5%', mode:'TL', lane:'CUSTOM', _preferred:true});
+      } else {
+        filteredOpts.unshift({carrier:pc, rate:'$2.45', fsc:'22.5%', mode:'TL', lane:'CUSTOM', _preferred:true});
+      }
     }
   });
   if(filteredOpts.length === 0) filteredOpts = rOpts; // fallback
@@ -7630,7 +7952,14 @@ function openPlan(orderId){
         _ccLive: cz._ccLive||false, transitDays: cz.transitDays||null,
       });
     });
+    // Sort: preferred CzarLite first, then other CzarLite, then TL
+    var prefMode = lanePrefs.mode;
     _planPriced.sort(function(a,b){
+      // When lane pref is LTL: CzarLite rates come before TL rates
+      if(prefMode === 'LTL') {
+        if(a._czarlite && !b._czarlite) return -1;
+        if(!a._czarlite && b._czarlite) return 1;
+      }
       if(a._preferred&&!b._preferred) return -1;
       if(b._preferred&&!a._preferred) return 1;
       return a.total-b.total;
@@ -7788,7 +8117,7 @@ function _renderPlanCards(o, sibs, tw, tp, util, miles, isGroup, allPreferred, a
       +(isCheapest?'<div style="position:absolute;top:12px;right:12px;background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px">✓ CHEAPEST</div>':'')
       +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
       +'<div style="width:34px;height:34px;border-radius:8px;background:'+(i===0?(r._czarlite?'linear-gradient(135deg,#4f46e5,#6366f1)':'var(--accent)'):'var(--bg4)')+';display:flex;align-items:center;justify-content:center;font-size:16px">'+(r._czarlite?'📐':'🚛')+'</div>'
-      +'<div><div style="font-weight:700;font-size:14px">'+r.carrier+'</div>'
+      +'<div><div style="font-weight:700;font-size:14px">'+r.carrier+' <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;margin-left:6px;vertical-align:middle;'+(r._czarlite||r.mode==='LTL'?'background:rgba(99,102,241,.12);color:#4f46e5':'background:rgba(16,185,129,.12);color:#059669')+'">'+(r._czarlite||r.mode==='LTL'?'LTL':'TL')+'</span></div>'
       +'<div style="font-size:11px;color:'+(r._czarlite?'#6366f1':'var(--text3)')+'">'+(r._czarlite?r.rate+' · NMFC Class '+r._czarliteClass+' · '+r._cwt+' cwt':r.rate+'/mile · FSC '+r.fsc)+'</div></div>'
       +'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:'+(isGroup?'10px':'0')+'px">'
@@ -8568,47 +8897,68 @@ function businessDaysBetween(startStr, endStr) {
   return count;
 }
 function calcShipmentDates(chosen, dueDate, readyDate) {
-  // Returns {pickup, delivery, error}
-  // delivery = order due date
-  // pickup   = due date minus transit days (business days, skipping holidays)
-  var today = new Date().toISOString().slice(0,10);
+  // Returns {pickup, delivery, transitDays, error}
+  // pickup   = due date minus transit business days
+  // delivery = pickup + transit business days
+  var _n = new Date();
+  var today = _n.getFullYear() + '-' + String(_n.getMonth()+1).padStart(2,'0') + '-' + String(_n.getDate()).padStart(2,'0');
   var transit = chosen.transitDays || chosen.transit || null;
 
-  // For TL rates without transit days — use distance-based estimate (500 mi/day)
-  if(!transit && chosen.miles) transit = Math.max(1, Math.ceil(chosen.miles / 500));
-  if(!transit) transit = 2; // fallback estimate
+  // For rates without transit days — calculate from distance
+  if(!transit && chosen.miles) {
+    var isExp = (chosen.serviceLevel||'').toLowerCase().indexOf('express') >= 0
+             || (chosen.lane||'').indexOf('EXP') >= 0;
+    var rMode = chosen._czarlite || (chosen.mode||'').toUpperCase() === 'LTL' ? 'LTL' : 'TL';
+    var mpd = isExp ? 800 : (rMode === 'LTL' ? 350 : 500);
+    transit = Math.max(1, Math.ceil(chosen.miles / mpd));
+  }
+  if(!transit) transit = 2; // fallback
 
-  var delivery = dueDate || null;
-  var pickup   = readyDate || today;
+  var pickup, delivery;
 
-  if(delivery) {
-    // Pickup = delivery date minus transit days (business days)
-    var calcPickup = subtractBusinessDays(delivery, transit);
+  if(dueDate) {
+    // Pickup = due date minus transit business days
+    pickup = subtractBusinessDays(dueDate, transit);
 
-    // Validate: pickup can't be in the past or before ready date
-    var minPickup = readyDate || today;
-    if(calcPickup < minPickup) {
-      // Check if we have enough days between ready and due
-      var available = businessDaysBetween(minPickup, delivery);
-      if(available < transit) {
-        return {
-          error: 'No valid transit available — ' + transit + ' business days needed but only ' +
-                 available + ' business day' + (available===1?'':'s') + ' available between ' +
-                 minPickup + ' and ' + delivery +
-                 (isHoliday(calcPickup) || !isBusinessDay(calcPickup) ? ' (includes holidays/weekends)' : '') +
-                 '. Consider extending the due date or selecting a faster carrier.'
-        };
-      }
-      pickup = minPickup; // use ready date as pickup
-    } else {
-      pickup = calcPickup;
+    // Don't allow pickup before ready date or today
+    var minPickup = today > (readyDate || '') ? today : (readyDate || today);
+    if(pickup < minPickup) {
+      pickup = minPickup;
+    }
+
+    // Delivery = pickup + transit business days
+    delivery = addBusinessDays(pickup, transit);
+
+    // Warn (but don't block) if delivery is after due date
+    if(delivery > dueDate) {
+      return {
+        pickup: pickup, delivery: delivery, transitDays: transit,
+        warning: 'Delivery ' + delivery + ' is after due date ' + dueDate +
+                 ' (pickup constrained by ready date ' + (readyDate||today) + ')'
+      };
     }
   } else {
-    // No due date — pickup = ready/today, delivery = pickup + transit days
+    // No due date — pickup = ready/today, delivery = pickup + transit
+    pickup = readyDate || today;
+    if(pickup < today) pickup = today;
     delivery = addBusinessDays(pickup, transit);
   }
 
   return {pickup: pickup, delivery: delivery, transitDays: transit};
+}
+
+// Pick a different rate for a shipment plan
+function _bpPickRate(planIdx, rateIdx) {
+  var plan = _planShipmentGroups[planIdx];
+  if (!plan) return;
+  var rates = _ratesByLane[plan.laneKey] || [];
+  if (!rates[rateIdx]) return;
+  // Move selected rate to position 0
+  var selected = rates.splice(rateIdx, 1)[0];
+  rates.unshift(selected);
+  _ratesByLane[plan.laneKey] = rates;
+  // Re-render
+  if (typeof _renderGroupPlan === 'function') _renderGroupPlan();
 }
 
 function confirmPlan(){
@@ -8632,7 +8982,8 @@ function confirmPlan(){
       var _mDue   = plan.orders.map(function(o){ return o.due; }).sort().reverse()[0];
       var _mReady = plan.orders.map(function(o){ return o.ready; }).sort()[0];
       var mDates  = calcShipmentDates(best, _mDue, _mReady);
-      if(mDates.error){ toast('⛔ '+mDates.error,'error',7000); return; }
+      if(mDates.error && !mDates.pickup){ toast('⛔ '+mDates.error,'error',7000); return; }
+      if(mDates.warning) toast('⚠️ '+mDates.warning,'warning',5000);
       shipments.unshift({
         id:newId, origin:origin, dest:dest, mode:bestMode, carrier:best.carrier,
         weight:tw.toLocaleString(), pieces:tp, cost:'$'+best.total.toLocaleString(),
@@ -8647,7 +8998,7 @@ function confirmPlan(){
       var bulkStatus = plan.orders.length > 1 ? 'Consolidated' : 'Planned';
       plan.orders.forEach(function(o){
         var ord = orders.find(function(x){ return x.id===o.id; });
-        if(ord){ ord.status=bulkStatus; ord.shipmentId=newId; if(isSpotRateMulti) ord.noContractRate=true; }
+        if(ord){ ord.status=bulkStatus; ord.shipmentId=newId; ord.noContractRate=!!isSpotRateMulti; }
       });
       // ── Log plan event in each order's history ──
       var now2 = new Date().toLocaleString();
@@ -8714,7 +9065,7 @@ function confirmPlan(){
   var newStatus = sibs.length > 1 ? 'Consolidated' : 'Planned';
   sibs.forEach(function(s){
     var ord=orders.find(function(x){ return x.id===s.id; });
-    if(ord){ ord.status=newStatus; ord.shipmentId=newId; if(isSpotRate) ord.noContractRate=true; }
+    if(ord){ ord.status=newStatus; ord.shipmentId=newId; ord.noContractRate=!!isSpotRate; }
   });
   // ── Log plan event in each order's history ──
   var now = new Date().toLocaleString();
@@ -9851,7 +10202,8 @@ function _openShipDetailRender(id) {
   html += '<div style="padding:18px 24px;border-bottom:1px solid var(--border)">';
   html += '<div style="display:flex;justify-content:space-between;margin-bottom:10px">';
   html += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">ORIGIN</div><div style="font-weight:700;font-size:14px;margin-top:3px">' + s.origin + '</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Pickup: ' + s.pickup + '</div></div>';
-  html += '<div style="text-align:center;padding-top:8px"><span style="font-size:12px;color:var(--text3)">' + pct + '% complete</span></div>';
+  var _sMiles = getDist(s.origin, s.dest);
+  html += '<div style="text-align:center;padding-top:8px"><div style="font-size:13px;font-weight:700;color:var(--text2)">' + _sMiles.toLocaleString() + ' mi</div><span style="font-size:12px;color:var(--text3)">' + pct + '% complete</span></div>';
   html += '<div style="text-align:right"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">DESTINATION</div><div style="font-weight:700;font-size:14px;margin-top:3px">' + s.dest + '</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Delivery: ' + s.delivery + '</div></div>';
   html += '</div>';
   html += '<div class="progress-wrap" style="height:10px;border-radius:8px"><div class="progress-bar" style="width:' + pct + '%;background:' + barCol + ';border-radius:8px"></div></div>';
@@ -9865,6 +10217,9 @@ function _openShipDetailRender(id) {
   html += sdField('Pieces', String(s.pieces), '🔢');
   html += sdField('Commodity', s.commodity, '🏷️');
   html += sdField('Est. Cost', s.cost, '💰');
+  html += sdField('Pickup Date', s.pickup || '—', '📅');
+  html += sdField('Delivery Date', s.delivery || '—', '🏁');
+  html += sdField('Transit Days', (s.pickup && s.delivery) ? (function(){ return businessDaysBetween(s.pickup, s.delivery) + ' days'; })() : '—', '🚚');
   html += '</div>';
 
 
@@ -9924,13 +10279,16 @@ function _openShipDetailRender(id) {
   var hasInTransitEvent = customEventTypes.some(function(t){ return t === 'in transit' || t === 'departed'; });
   var hasDeliveredEvent = customEventTypes.some(function(t){ return t === 'delivered' || t === 'delivery'; });
 
+  var _isTendered  = s.status !== 'Planned';
+  var _isPickedUp  = ['In Transit','Delivered','Exception'].includes(s.status);
+  var _isInTransit = ['In Transit','Delivered'].includes(s.status);
+  var _isDelivered = s.status === 'Delivered';
   var defaultEvents = [
-    {icon:'📋', label:'Order Created & Rate Confirmed', time:s.pickup||'—',  done:true,                                          sortDt:'2000-01-01T00:00'},
-    // Only show 'Tendered to Carrier' default if no real Tendered event exists
-    !hasTenderedEvent  ? {icon:'📤', label:'Tendered to Carrier',  time:s.pickup||'—',  done:s.status!=='Planned',                          sortDt:'2000-01-02T00:00'} : null,
-    !hasPickedUpEvent  ? {icon:'🚛', label:'Picked Up',            time:s.pickup||'—',  done:['In Transit','Delivered','Exception'].includes(s.status), sortDt:(s.pickup||'9000-01-01')+'T23:00'} : null,
-    !hasInTransitEvent ? {icon:'📍', label:'In Transit',           time:'En route',done:['In Transit','Delivered'].includes(s.status), sortDt:(s.pickup||'9000-01-01')+'T23:59'} : null,
-    !hasDeliveredEvent ? {icon:'✅', label:'Delivered',            time:s.delivery||'—',done:s.status==='Delivered',                        sortDt:(s.delivery||'9999-12-31')+'T23:59'} : null,
+    {icon:'📋', label:'Order Created & Rate Confirmed', time:s.pickup||'—',  done:true, sortDt:'2000-01-01T00:00'},
+    !hasTenderedEvent  ? {icon:'📤', label:'Tendered to Carrier',  time:_isTendered ? (s.pickup||'—') : 'Pending',  done:_isTendered, sortDt:'2000-01-02T00:00'} : null,
+    !hasPickedUpEvent  ? {icon:'🚛', label:'Picked Up',            time:_isPickedUp ? (s.pickup||'—') : 'Pending',  done:_isPickedUp, sortDt:(s.pickup||'9000-01-01')+'T23:00'} : null,
+    !hasInTransitEvent ? {icon:'📍', label:'In Transit',           time:_isInTransit ? 'En route' : 'Pending',      done:_isInTransit, sortDt:(s.pickup||'9000-01-01')+'T23:59'} : null,
+    !hasDeliveredEvent ? {icon:'✅', label:'Delivered',            time:_isDelivered ? (s.delivery||'—') : 'Pending',done:_isDelivered, sortDt:(s.delivery||'9999-12-31')+'T23:59'} : null,
   ].filter(Boolean);
   html += renderEventTimeline(s.id, defaultEvents);
   html += '</div>';
@@ -10398,8 +10756,8 @@ function renderOrdDetailView(id) {
   // Actions footer
   html += '<div style="padding:14px 24px;background:#f8faff;display:flex;gap:8px;border-radius:0 0 16px 16px">';
   if(o.status==='Unplanned') html += '<button class="btn btn-primary btn-sm" onclick="planFromDetail(\'' + o.id + '\')">⚡ Plan This Order</button>';
+  if(linkedShip && (o.status==='Planned'||o.status==='Consolidated')) html += '<button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="unassignOrderFromShipment(\'' + o.id + '\',\'' + (o.shipmentId||'') + '\',true);closeModal(\'modal-order-detail\')">🔓 Unplan</button>';
   html += '<button class="btn btn-secondary btn-sm" onclick="switchOrdDetailTab(\'edit\')">✏️ Edit Order</button>';
-  if(linkedShip) html += '<button class="btn btn-secondary btn-sm" onclick="openOrGenerateBOL(\'' + linkedShip.id + '\')">📄 Documents</button>';
   var histCount = (orderChangeLog[id]||[]).length;
   if(histCount>0) html += '<button class="btn btn-secondary btn-sm" onclick="switchOrdDetailTab(\'history\')" style="margin-left:auto">🕐 History (' + histCount + ')</button>';
   html += '</div>';
@@ -16459,14 +16817,7 @@ function exportLocations() {
 // LANE CARRIER PREFERENCES
 // ═══════════════════════════════════════════════════════════
 
-var lanePreferences = [
-  {id:'CHI-DAL-PREF', origin:'Chicago, IL',   dest:'Dallas, TX',   mode:'TL',  customer:'',              preferred:['Swift Transport','Schneider National'], excluded:[], priority:'High',   reason:'Best OTD and lane coverage. Swift has dedicated equipment on this corridor.',  status:'Active'},
-  {id:'CMH-ATL-PREF', origin:'Columbus, OH',  dest:'Atlanta, GA',  mode:'TL',  customer:'',              preferred:['Werner Enterprises'],                   excluded:['JB Hunt'],      priority:'Medium', reason:'Werner preferred — consistent 95%+ OTD. JB Hunt excluded due to Q1 claim.',     status:'Active'},
-  {id:'DAL-PHX-PREF', origin:'Dallas, TX',    dest:'Phoenix, AZ',  mode:'TL',  customer:'',              preferred:['Werner Enterprises'],                   excluded:[],               priority:'Medium', reason:'Werner dedicated lanes on Southwest corridor.',                                status:'Active'},
-  {id:'LAX-SEA-PREF', origin:'Los Angeles, CA',dest:'Seattle, WA', mode:'TL',  customer:'',              preferred:['Werner Enterprises','Swift Transport'], excluded:['BNSF Railway'], priority:'Medium', reason:'TL only — rail too slow for this customer SLA.',                               status:'Active'},
-  {id:'CHI-DAL-CISCO', origin:'Chicago, IL',  dest:'Dallas, TX',   mode:'TL',  customer:'Cisco Systems', preferred:['Swift Transport'],                      excluded:['Schneider National'], priority:'High', reason:'Cisco SLA requires carrier with real-time tracking. Swift preferred.',          status:'Active'},
-  {id:'ATL-NYC-PREF', origin:'Atlanta, GA',   dest:'New York, NY', mode:'Any', customer:'',              preferred:['Schneider National'],                   excluded:[],               priority:'Low',    reason:'Schneider has NY metro delivery expertise.',                                   status:'Active'},
-];
+var lanePreferences = []; // Loaded from Supabase in supaLoadAll()
 
 var _lpPreferred = [];
 var _lpExcluded  = [];
@@ -16730,7 +17081,7 @@ function deleteLanePref(id) {
 // ── Planning engine integration ───────────────────────────
 // Returns {preferred: [], excluded: []} for a given order
 function getLanePrefsForOrder(order) {
-  var result = { preferred: [], excluded: [] };
+  var result = { preferred: [], excluded: [], mode: null };
   if(!order) return result;
 
   var activePref = lanePreferences
@@ -16748,6 +17099,11 @@ function getLanePrefsForOrder(order) {
       var pri = {High:3, Medium:2, Low:1};
       return (pri[b.priority]||0) - (pri[a.priority]||0);
     });
+
+  // Use mode from highest priority lane pref
+  if (activePref.length > 0 && activePref[0].mode && activePref[0].mode !== 'Any') {
+    result.mode = activePref[0].mode;
+  }
 
   activePref.forEach(function(p) {
     p.preferred.forEach(function(c) { if(!result.preferred.includes(c)) result.preferred.push(c); });

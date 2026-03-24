@@ -1177,139 +1177,76 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       const loadType = wt >= 35000 ? 'Full TL' : wt >= 10000 ? 'Partial TL' : 'LTL';
       const quotes = [];
 
-      if (loadType === 'LTL' || loadType === 'Partial TL') {
-        // Step 1: CzarLite base rate
+      // Fetch LTL rates via the SAME /api/ltl/quote endpoint used by single-order plan
+      // This ensures identical logic: CzarLite base + carrier discounts + CCXL transit
+      if (loadType === 'LTL' || loadType === 'Partial TL' || wt <= 20000) {
         try {
-          // Use same schema as working /api/ltl/quote: shipmentRequests[]
-          const czBody = {
-            shipmentRequests: [{
-              origin:      { postalCode: originZip, country: 'USA', city: '', stateProvince: '' },
-              destination: { postalCode: destZip,   country: 'USA', city: '', stateProvince: '' },
-              tariffName:          SMC3_TARIFF || 'DEMOLTLA',
-              tariffEffectiveDate: '20070703',
-              details: [{ nmfcClass: fc, weight: wt }]
-            }]
-          };
-          const czRaw = await new Promise((resolve, reject) => {
-            _smc3Post(SMC3_RW_HOST, SMC3_RW_BASE + '/ltlrateshipment', czBody, function(err, data) {
-              if (err) return reject(err);
-              resolve(data);
-            });
+          const ltlRes = await fetch(`http://localhost:${PORT || 3001}/api/ltl/quote`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': req.headers.authorization || '',
+            },
+            body: JSON.stringify({
+              originZip, destZip, weight: wt, freightClass: fc,
+            }),
           });
-          const czData = (czRaw.shipmentResponses && czRaw.shipmentResponses[0]) || czRaw;
-          const baseTotal = parseFloat(czData.totalCharge) || 0;
-          const baseLinehaul = parseFloat(czData.lineHaulGrossCharge) || parseFloat(czData.linehaulCharge) || 0;
-          const baseFuel = parseFloat(czData.surchargeAmount) || parseFloat(czData.fuelSurcharge) || 0;
-          const billedWeight = parseFloat(czData.billedWeight) || wt;
-
-          // Step 2: Load carrier rates from DB
-          const ratesUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&czarlite=eq.true&status=eq.Active&select=carrier,origin,dest,discount,discount_flat,fsc,lane,transit_days`;
-          const ratesRes = await fetch(ratesUrl, {
-            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
-          });
-          const allRates = await ratesRes.json();
-
-          if (Array.isArray(allRates) && allRates.length > 0) {
-            allRates.forEach((rate) => {
-              const discPct = parseFloat(rate.discount || 0);
-              const discFlat = parseFloat(rate.discount_flat || 0);
-              const fscPct = parseFloat(rate.fsc || 0);
-
-              const discountAmt = baseTotal * ((discPct + discFlat) / 100);
-              const discountedBase = Math.max(0, baseTotal - discountAmt);
-              const fscCharge = Math.round(discountedBase * (fscPct / 100));
-              const totalCharge = Math.round(discountedBase + fscCharge);
-
+          const ltlData = await ltlRes.json();
+          if (ltlData.quotes && Array.isArray(ltlData.quotes)) {
+            ltlData.quotes.forEach((q) => {
               quotes.push({
-                carrier: rate.carrier || 'Unknown',
-                scac: '',
-                totalCharge,
-                czarBaseGross: Math.round(baseTotal),
-                discountPct: Math.round(discPct + discFlat),
-                fscCharge,
-                fscPct,
-                transitDays: rate.transit_days || null,
-                deliveryDate: '',
+                carrier: q.carrier || 'Unknown',
+                scac: q.scac || '',
+                totalCharge: Math.round(q.totalCharge || 0),
+                czarBaseGross: Math.round(q.czarBaseGross || 0),
+                discountPct: Math.round(q.discountPct || 0),
+                fscCharge: Math.round(q.fscCharge || 0),
+                fscPct: parseFloat(q.fscPct || 0),
+                transitDays: q.transitDays || null,
+                deliveryDate: q.deliveryDate || '',
                 recommended: false,
+                mode: 'LTL',
               });
             });
           }
-
-          // If no rates in DB, add a base CzarLite quote
-          if (quotes.length === 0) {
-            quotes.push({
-              carrier: 'CzarLite Base',
-              scac: '',
-              totalCharge: Math.round(baseTotal),
-              czarBaseGross: Math.round(baseTotal),
-              discountPct: 0,
-              fscCharge: Math.round(baseFuel),
-              fscPct: 0,
-              transitDays: null,
-              deliveryDate: '',
-              recommended: true,
-            });
-          }
-
-          // Step 3: Try CarrierConnect XL v3 for transit times
-          try {
-            const today = new Date();
-            const pickupDate = today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
-            const ccBody = {
-              carriers: [{ serviceCode:'', serviceMethod:'LTL', serviceType:'ALL_AVAILABLE', SCAC:'' }],
-              origin:      { postalCode: originZip, countryCode: 'USA' },
-              destination: { postalCode: destZip,   countryCode: 'USA' },
-              pickupDate:  pickupDate,
-            };
-            const ccData = await new Promise((resolve, reject) => {
-              _ccxlPost(_CCXL_HOST, _CCXL_BASE + '/transit', ccBody, (err, data) => {
-                if (err) return reject(err);
-                resolve(data);
-              });
-            });
-            const ccList = ccData.carriers || (Array.isArray(ccData) ? ccData : []);
-            const ccMap = {};
-            ccList.forEach((c) => {
-              const csd = c.carrierServiceDetail || {};
-              const name = csd.carrierName || csd.SCAC || '';
-              const scac = csd.SCAC || '';
-              ccMap[name] = { transitDays: c.transitDays, scac, deliveryDate: c.deliveryDate || '' };
-              if (scac) ccMap[scac] = ccMap[name];
-            });
-
-            quotes.forEach((q) => {
-              const match = ccMap[q.carrier] || ccMap[q.scac];
-              if (match) {
-                q.transitDays = match.transitDays || q.transitDays;
-                q.deliveryDate = match.deliveryDate || '';
-                q.scac = match.scac || q.scac;
-              }
-            });
-            console.log(`[BulkPlan/rate] CCXL transit: ${originZip}→${destZip}, ${ccList.length} carriers`);
-          } catch (ccErr) {
-            console.warn('[BulkPlan/rate] CCXL error (non-fatal):', ccErr.message);
-          }
-
-        } catch (czErr) {
-          console.error('[BulkPlan/rate] CzarLite error for', laneKey, czErr.message);
-          // Return lane with no quotes
+          console.log(`[BulkPlan/rate] LTL via /api/ltl/quote: ${originZip}→${destZip}, ${quotes.length} quotes`);
+        } catch (ltlErr) {
+          console.error('[BulkPlan/rate] LTL quote error for', laneKey, ltlErr.message);
         }
+      }
 
-      } else {
-        // TL lane — query TL rates from DB
+      // Always fetch TL rates from DB (for both Partial TL and Full TL)
+      if (loadType !== 'LTL') {
         try {
-          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate_per_mile,fsc_pct,transit_days,lane`;
+          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level`;
           const tlRes = await fetch(tlUrl, {
             headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
           });
           const tlRates = await tlRes.json();
 
+          // Extract city name: strip ZIP codes, state codes, commas
+          function extractCity(str) {
+            return (str || '').replace(/\d{5}/g, '').split(',')[0].replace(/\s+(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s*$/i, '').trim().toLowerCase();
+          }
+          const oCity = extractCity(lane.origin);
+          const dCity = extractCity(lane.destination);
+
           if (Array.isArray(tlRates)) {
             tlRates.forEach((rate) => {
-              const rpm = parseFloat(rate.rate_per_mile || 2.50);
-              const fscPct = parseFloat(rate.fsc_pct || 20);
-              const estimatedMiles = 500; // placeholder
-              const baseCost = Math.round(rpm * estimatedMiles);
+              // Filter: only rates matching this lane's origin and dest (city name)
+              const rateO = extractCity(rate.origin);
+              const rateD = extractCity(rate.dest);
+              if (!rateO.includes(oCity) && !oCity.includes(rateO)) return;
+              if (!rateD.includes(dCity) && !dCity.includes(rateD)) return;
+
+              // Parse rate string like "$2.15" → 2.15
+              const rpm = parseFloat((rate.rate || '').replace(/[^0-9.]/g, '')) || 0;
+              if (!rpm) return;
+              // Parse FSC string like "22.5%" → 22.5
+              const fscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
+              // Use actual miles from distance lookup (passed from frontend)
+              const miles = lane.miles || 500;
+              const baseCost = Math.round(rpm * miles);
               const fscCharge = Math.round(baseCost * (fscPct / 100));
               quotes.push({
                 carrier: rate.carrier || 'Unknown',
@@ -1319,16 +1256,22 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 discountPct: 0,
                 fscCharge,
                 fscPct,
-                transitDays: rate.transit_days || 2,
+                transitDays: rate.transit_days || null,
                 deliveryDate: '',
                 recommended: false,
+                mode: 'TL',
+                serviceLevel: rate.service_level || '',
               });
             });
           }
+          console.log(`[BulkPlan/rate] TL rates for ${oCity}→${dCity}: ${quotes.filter(q=>q.mode==='TL').length} matched from ${Array.isArray(tlRates)?tlRates.length:0} total`);
         } catch (tlErr) {
           console.error('[BulkPlan/rate] TL rates error:', tlErr.message);
         }
       }
+
+      // Log all quotes before sorting
+      console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d`).join(', '));
 
       // Sort and mark recommended
       const sortBy = optimizeBy === 'transit' ? 'transitDays' : 'totalCharge';
