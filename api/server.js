@@ -1170,16 +1170,32 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     const { lanes, optimizeBy } = req.body;
     if (!lanes || !lanes.length) return res.status(400).json({ error: 'lanes[] required' });
 
+    // Load carriers table once for carrierconnect_enabled flag
+    let carrierFlags = {};
+    try {
+      const cfRes = await fetch(`${SUPABASE_URL}/rest/v1/carriers?select=name,scac,czarlite_enabled,carrierconnect_enabled&limit=200`, {
+        headers: { 'apikey': ANON_KEY },
+      });
+      const cfData = await cfRes.json();
+      if (Array.isArray(cfData)) {
+        cfData.forEach(c => {
+          const key = (c.name || '').toUpperCase();
+          carrierFlags[key] = { czarlite: c.czarlite_enabled, ccxl: c.carrierconnect_enabled, scac: c.scac };
+          if (c.scac) carrierFlags[c.scac.toUpperCase()] = carrierFlags[key];
+        });
+      }
+    } catch(e) { console.warn('[BulkPlan] carrier flags load error:', e.message); }
+
     const results = await Promise.allSettled(lanes.map(async (lane) => {
       const { laneKey, originZip, destZip, totalWeight, freightClass, orderIds } = lane;
       const fc = String(freightClass || 70);
       const wt = Math.round(totalWeight || 1000);
-      const loadType = wt >= 35000 ? 'Full TL' : wt >= 10000 ? 'Partial TL' : 'LTL';
+      const LTL_MAX = 15000;
+      const loadType = wt >= 35000 ? 'Full TL' : wt >= LTL_MAX ? 'Partial TL' : 'LTL';
       const quotes = [];
 
-      // Fetch LTL rates via the SAME /api/ltl/quote endpoint used by single-order plan
-      // This ensures identical logic: CzarLite base + carrier discounts + CCXL transit
-      if (loadType === 'LTL' || loadType === 'Partial TL' || wt <= 20000) {
+      // Always fetch LTL rates (CzarLite + CCXL) unless weight exceeds LTL max
+      if (wt <= LTL_MAX) {
         try {
           const ltlRes = await fetch(`http://localhost:${PORT || 3001}/api/ltl/quote`, {
             method: 'POST',
@@ -1215,8 +1231,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         }
       }
 
-      // Always fetch TL rates from DB (for both Partial TL and Full TL)
-      if (loadType !== 'LTL') {
+      // Always fetch TL rates from DB (for all weight classes)
+      {
         try {
           const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level`;
           const tlRes = await fetch(tlUrl, {
@@ -1270,12 +1286,28 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         }
       }
 
-      // Log all quotes before sorting
-      console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d`).join(', '));
+      // Tag each quote with carrier flags (carrierconnect_enabled, feasibility)
+      quotes.forEach(q => {
+        const key = (q.carrier || '').toUpperCase();
+        const flags = carrierFlags[key] || carrierFlags[(q.scac || '').toUpperCase()] || {};
+        q.ccxlEnabled = !!flags.ccxl;
+        // Infeasible: CCXL enabled but no transit data returned
+        q.infeasible = !!(flags.ccxl && !q.transitDays);
+        // Over LTL weight limit
+        if (q.mode === 'LTL' && wt > LTL_MAX) q.infeasible = true;
+      });
 
-      // Sort and mark recommended
+      // Log all quotes before sorting
+      console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d ${q.infeasible?'INFEASIBLE':''}`).join(', '));
+
+      // Sort: feasible first, then by cost/transit
       const sortBy = optimizeBy === 'transit' ? 'transitDays' : 'totalCharge';
-      quotes.sort((a, b) => (a[sortBy] || 99999) - (b[sortBy] || 99999));
+      quotes.sort((a, b) => {
+        // Infeasible always last
+        if (a.infeasible && !b.infeasible) return 1;
+        if (!a.infeasible && b.infeasible) return -1;
+        return (a[sortBy] || 99999) - (b[sortBy] || 99999);
+      });
       if (quotes.length > 0) quotes[0].recommended = true;
 
       return {
@@ -1329,9 +1361,11 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           order_ids: plan.orderIds || [],
           pickup_date: plan.pickupDate || null,
           delivery_date: plan.deliveryDate || null,
+          czarlite_rate: !!plan.czarliteRate || (plan.mode || '').toUpperCase() === 'LTL',
         };
 
         // Create shipment
+        console.log(`[BulkPlan/execute] INSERT payload:`, JSON.stringify(shipRow));
         const shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
           method: 'POST',
           headers: {
@@ -1342,6 +1376,11 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           body: JSON.stringify(shipRow),
         });
         const shipData = await shipRes.json();
+        if (!shipRes.ok) {
+          console.error(`[BulkPlan/execute] Supabase INSERT FAILED:`, shipRes.status, JSON.stringify(shipData));
+          errors.push({ shipId, error: shipData.message || 'DB insert failed' });
+          continue;
+        }
         const created = Array.isArray(shipData) ? shipData[0] : shipData;
         shipments.push(created);
 

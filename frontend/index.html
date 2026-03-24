@@ -4436,7 +4436,7 @@ function onRouteWeightChange(val) {
 
 <div class="toast-wrap" id="toasts"></div>
 
-<script src="pages/bulk-plan.js?v=11"></script>
+<script src="pages/bulk-plan.js?v=20260324b"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // SUPABASE INTEGRATION
@@ -5606,17 +5606,12 @@ var laneDistances = {
 function getDist(o,d){ return laneDistances[o+'|'+d] || xdockDistances[o+'|'+d] || 750; }
 
 function getRates(o,d){
-  var oLow = (o||'').toLowerCase().replace(/\s+/g,' ').trim();
-  var dLow = (d||'').toLowerCase().replace(/\s+/g,' ').trim();
+  var oCity = _stripCityName(o);
+  var dCity = _stripCityName(d);
   return rates.filter(function(r){
     if(r.status !== 'Active') return false;
-    var rO = (r.origin||'').toLowerCase().replace(/\s+/g,' ').trim();
-    var rD = (r.dest||'').toLowerCase().replace(/\s+/g,' ').trim();
-    // Match by city name (ignore ZIP differences)
-    var oCity = oLow.split(',')[0].trim();
-    var dCity = dLow.split(',')[0].trim();
-    var rOCity = rO.split(',')[0].trim();
-    var rDCity = rD.split(',')[0].trim();
+    var rOCity = _stripCityName(r.origin);
+    var rDCity = _stripCityName(r.dest);
     return rOCity === oCity && rDCity === dCity;
   });
 }
@@ -7473,23 +7468,18 @@ function openPlanWithGroup(selOrds) {
     var origin = parts[0], dest = parts[1];
     var rOpts  = getRates(origin, dest);
     var lp = getLanePrefsForOrder({origin:origin, dest:dest, customer:(laneMap[lk][0]||{}).customer||''});
-    if(rOpts.length === 0) {
-      var defaults = [
-        {carrier:'Schneider National', rate:'$2.28', fsc:'22.5%', mode:'TL', lane:'SPOT'},
-        {carrier:'Swift Transport',    rate:'$2.42', fsc:'22.5%', mode:'TL', lane:'SPOT'},
-      ];
-      // Add preferred carriers from lane preferences as default options
-      (lp.preferred || []).forEach(function(pName) {
-        if (!defaults.find(function(d){ return d.carrier === pName; })) {
-          defaults.unshift({carrier: pName, rate:'$2.15', fsc:'22.5%', mode:'TL', lane:'PREF', _preferred: true});
-        }
-      });
-      rOpts = defaults;
-    }
+    // No default/fake rates — only use actual rates from DB + CzarLite
     var filtered = rOpts.filter(function(r){ return !lp.excluded.includes(r.carrier); });
     if(filtered.length === 0) filtered = rOpts;
     var miles = getDist(origin, dest);
     var laneWt = (laneMap[lk]||[]).reduce(function(s,o){ return s + (parseInt(String(o.weight).replace(/,/g,''))||0); }, 0);
+    // Filter out LTL rates when weight exceeds LTL max
+    if (laneWt > LTL_MAX_WEIGHT) {
+      var tlOnly = filtered.filter(function(r){ return (r.mode||'').toUpperCase() !== 'LTL' && !r._czarlite; });
+      if (tlOnly.length > 0) filtered = tlOnly;
+    }
+    // Filter out $0 rates (CzarLite discount rates without base — invalid for TL planning)
+    filtered = filtered.filter(function(r){ var co = calcCost(r.rate, r.fsc, miles); return co.total > 0; });
     var prefMode = lp.mode || '';
     // If weight exceeds LTL max, ignore LTL mode preference
     var effectivePrefMode = (prefMode === 'LTL' && laneWt > LTL_MAX_WEIGHT) ? '' : prefMode;
@@ -7534,7 +7524,11 @@ function openPlanWithGroup(selOrds) {
     var laneWt = (laneMap[lk]||[]).reduce(function(s,o){ return s+wNum(o.weight); }, 0) || 5000;
     var laneLp = getLanePrefsForOrder({origin:origin, dest:dest, customer:(laneMap[lk][0]||{}).customer||''});
 
-    return getCzarliteRatesForLane(origin, dest, laneWt).then(function(czOpts) {
+    // Skip CzarLite LTL if weight exceeds LTL max
+    var czPromise = laneWt <= LTL_MAX_WEIGHT
+      ? getCzarliteRatesForLane(origin, dest, laneWt)
+      : Promise.resolve([]);
+    return czPromise.then(function(czOpts) {
       var miles = getDist(origin, dest);
       var existing = ratesByLane[lk] || [];
       (czOpts||[]).forEach(function(cz) {
@@ -7542,7 +7536,6 @@ function openPlanWithGroup(selOrds) {
         var isPref = (laneLp.preferred || []).some(function(p) {
           return cz.carrier && cz.carrier.toLowerCase().indexOf(p.toLowerCase()) >= 0;
         });
-        if (isPref && laneWt > LTL_MAX_WEIGHT) isPref = false;
 
         // Transit comes from backend (CCXL already merged in /api/ltl/quote)
         var hasTransit = !!(cz.transitDays);

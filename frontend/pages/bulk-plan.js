@@ -395,6 +395,7 @@ async function bpRateAll() {
   try {
     var payload = {
       lanes: _bpLanes.map(function(l) {
+        var miles = (typeof getDist === 'function') ? getDist(l.origin, l.destination) : 0;
         return {
           laneKey: l.laneKey,
           origin: l.origin,
@@ -404,6 +405,7 @@ async function bpRateAll() {
           totalWeight: l.totalWeight,
           freightClass: parseInt(l.freightClass) || 70,
           orderIds: l.orders.map(function(o) { return o.id; }),
+          miles: miles,
         };
       }),
       optimizeBy: 'cost',
@@ -514,23 +516,30 @@ function _bpFindLanePref(lane) {
     if (lp.status !== 'Active') return false;
     var lpO = (lp.origin || '').toLowerCase().replace(/[,\s]+/g, ' ').trim();
     var lpD = (lp.dest || '').toLowerCase().replace(/[,\s]+/g, ' ').trim();
-    return oNorm.indexOf(lpO) >= 0 || lpO.indexOf(oNorm) >= 0 ||
-           (oNorm.split(' ')[0] === lpO.split(' ')[0] && dNorm.split(' ')[0] === lpD.split(' ')[0]);
+    // Both origin AND destination must match (by city name)
+    var oCity = oNorm.split(' ')[0];
+    var dCity = dNorm.split(' ')[0];
+    var lpOCity = lpO.split(' ')[0];
+    var lpDCity = lpD.split(' ')[0];
+    var originMatch = oCity === lpOCity || oNorm.indexOf(lpO) >= 0 || lpO.indexOf(oNorm) >= 0;
+    var destMatch = dCity === lpDCity || dNorm.indexOf(lpD) >= 0 || lpD.indexOf(dNorm) >= 0;
+    return originMatch && destMatch;
   }) || null;
 }
 
-// Check if carrier is feasible (has transit data if carrierconnect_enabled)
+// Check if carrier is feasible
 function _bpIsFeasible(q) {
   if (!q.carrier) return false;
+  // Use backend infeasible flag if available (set by /api/bulk-plan/rate)
+  if (q.infeasible) return false;
+  // Fallback: check carriers table
   var carrierUp = (q.carrier || '').toUpperCase();
   var carrierRec = (typeof carriers !== 'undefined' ? carriers : []).find(function(c) {
     if (!c.name) return false;
     var cUp = c.name.toUpperCase();
     return carrierUp === cUp || carrierUp.indexOf(cUp) >= 0 || cUp.indexOf(carrierUp) >= 0;
   });
-  // Check both snake_case and camelCase field names
   var ccxlEnabled = carrierRec && (carrierRec.carrierconnect_enabled || carrierRec.carrierconnectEnabled);
-  // If CCXL enabled but no transit returned → infeasible
   if (ccxlEnabled && !q.transitDays) return false;
   return true;
 }
@@ -639,6 +648,8 @@ function _bpAssignWithPrefs(laneKey, quotes) {
     return (a.totalCharge || 99999) - (b.totalCharge || 99999);
   });
 
+  console.log('[BulkPlan/assign] ' + laneKey + ' → ' + feasible.map(function(q) { return q.carrier + ' ' + (q.mode||'?') + ' $' + (q.totalCharge||0) + ' ' + (q.transitDays||'?') + 'd' + (q._isLate?' LATE':'') + (q.infeasible?' INFEASIBLE':''); }).join(' | '));
+  console.log('[BulkPlan/assign] PICKED: ' + (feasible[0]||{}).carrier + ' ' + (feasible[0]||{}).mode + ' $' + (feasible[0]||{}).totalCharge);
   return feasible[0];
 }
 
@@ -768,13 +779,16 @@ async function bpExecute() {
       var deliveryEl = document.getElementById('bp-delivery-' + idx);
       var deliveryDate = deliveryEl ? deliveryEl.value : '';
 
+      var resolvedMode = a.mode || (_bpLoadType(lane.totalWeight) === 'LTL' ? 'LTL' : 'TL');
+      var isCzarlite = resolvedMode === 'LTL' || (resolvedMode || '').toUpperCase() === 'LTL';
+      console.log('[BulkPlan/execute] Lane:', lane.laneKey, 'Carrier:', a.carrier, 'a.mode:', a.mode, 'resolved:', resolvedMode, 'czarlite:', isCzarlite);
       return {
         laneKey: lane.laneKey,
         origin: lane.origin,
         destination: lane.destination,
         carrier: a.carrier || '',
         scac: a.scac || '',
-        mode: a.mode || (_bpLoadType(lane.totalWeight) === 'LTL' ? 'LTL' : 'TL'),
+        mode: resolvedMode,
         totalWeight: lane.totalWeight,
         totalPieces: lane.totalPieces,
         totalCost: a.totalCharge || 0,
@@ -782,6 +796,7 @@ async function bpExecute() {
         pickupDate: pickupDate,
         deliveryDate: deliveryDate,
         transitDays: a.transitDays || null,
+        czarliteRate: isCzarlite,
       };
     });
 
