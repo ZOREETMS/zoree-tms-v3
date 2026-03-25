@@ -4,6 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>ZoreeTMS v3.11</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -20,8 +23,8 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;text-transform:uppercase;}
 .modal,.toast-wrap,#chat-panel{text-transform:uppercase;}
-input,select,textarea,.search-input,select.fsel{text-transform:uppercase !important;}
-input::placeholder,textarea::placeholder{text-transform:uppercase !important;}
+input:not([type="password"]):not([id="ov-email"]):not([id="ov-pass"]),select,textarea,.search-input,select.fsel{text-transform:uppercase !important;}
+input::placeholder:not([id="ov-email"])::placeholder,textarea::placeholder{text-transform:uppercase !important;}
 pre,code,.dbe-sql-editor,.dbe-results-empty{text-transform:none;}
 .dbe-results-table td,.dbe-results-table th{text-transform:uppercase;}
 .app{display:flex;height:100vh;}
@@ -164,6 +167,7 @@ tbody tr:hover{filter:brightness(.96);}
 .form-group.full{grid-column:span 2;}
 label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;}
 input,select,textarea{background:#f8faff;border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;text-transform:uppercase;}
+input[type="password"]{text-transform:none !important;}
 input::placeholder,textarea::placeholder{text-transform:uppercase !important;}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 textarea{resize:vertical;min-height:70px;}
@@ -4496,6 +4500,14 @@ var CURRENT_SESSION = null;
 
 // Session helpers — work on file://, http://, and https://
 function _saveSession(data) {
+  try {
+    if (data && data.access_token && !(data.expires_at > 0)) {
+      try {
+        var _p = JSON.parse(atob(data.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        if (_p.exp) data.expires_at = _p.exp;
+      } catch (e2) {}
+    }
+  } catch (e) {}
   var json = JSON.stringify(data);
   // Try all storage methods — at least one works on any protocol
   try { sessionStorage.setItem('zoree_session', json); } catch(e) {}
@@ -4661,6 +4673,46 @@ function supaXHR(method, url, headers, body) {
   });
 }
 
+/** PostgREST to the UI Supabase project when Tier-2 API rejects a valid token (mismatched api/.env). */
+async function supaFetchDirectRest(method, tableName, queryStr, isUpsert, filterId, body, token) {
+  var h = {
+    'Content-Type': 'application/json',
+    'apikey': SUPA.anonJwt,
+    'Authorization': 'Bearer ' + token
+  };
+  var url, opts;
+  if (method === 'GET') {
+    url = SUPA.url + '/rest/v1/' + tableName + '?' + (queryStr || 'select=*&order=created_at.desc&limit=500');
+    opts = { method: 'GET', headers: h };
+  } else if (method === 'POST' && isUpsert) {
+    url = SUPA.url + '/rest/v1/' + tableName + '?on_conflict=id';
+    opts = { method: 'POST', headers: Object.assign({}, h, { Prefer: 'resolution=merge-duplicates,return=representation' }), body: JSON.stringify(body) };
+  } else if (method === 'POST') {
+    url = SUPA.url + '/rest/v1/' + tableName;
+    opts = { method: 'POST', headers: Object.assign({}, h, { Prefer: 'return=representation' }), body: JSON.stringify(body) };
+  } else if (method === 'PATCH' && filterId) {
+    url = SUPA.url + '/rest/v1/' + tableName + '?id=eq.' + encodeURIComponent(filterId);
+    opts = { method: 'PATCH', headers: Object.assign({}, h, { Prefer: 'return=representation' }), body: JSON.stringify(body) };
+  } else if (method === 'DELETE' && filterId) {
+    url = SUPA.url + '/rest/v1/' + tableName + '?id=eq.' + encodeURIComponent(filterId);
+    opts = { method: 'DELETE', headers: h };
+  } else {
+    return null;
+  }
+  var res = await fetch(url, opts);
+  if (!res.ok) {
+    var errTxt = await res.text().catch(function(){ return ''; });
+    console.error('[Supa direct] ' + res.status + ' on ' + method + ' ' + tableName + ':', (errTxt || '').slice(0, 400));
+    return null;
+  }
+  if (method === 'DELETE') return [];
+  var data = await res.json().catch(function(){ return null; });
+  if (method === 'GET') {
+    return Array.isArray(data) ? data : (data ? [data] : []);
+  }
+  return data;
+}
+
 // Main fetch wrapper — uses SDK for all REST table operations
 async function supaFetch(method, tableAndQuery, body) {
   if (!SUPA.enabled) return null;
@@ -4675,6 +4727,10 @@ async function supaFetch(method, tableAndQuery, body) {
   var isUpsert  = queryStr.includes('on_conflict');
   var idMatch   = queryStr.match(/id=eq\.([^&]+)/);
   var filterId  = idMatch ? decodeURIComponent(idMatch[1]) : null;
+
+  if (window.__ZOREE_USE_DIRECT_REST && token) {
+    return await supaFetchDirectRest(method, tableName, queryStr, isUpsert, filterId, body, token);
+  }
 
   var headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -4705,19 +4761,41 @@ async function supaFetch(method, tableAndQuery, body) {
 
     var res = await fetch(url, opts);
 
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 403) {
       try {
         window._lastApiError = {
-          table: tableName, method: method, status: res.status,
+          table: tableName, method: method, status: 403,
           detail: '', parsed: {},
-          human: (res.status === 401 ? 'Unauthorized (sign in again)' : 'Forbidden — often RLS or missing permission on ' + tableName)
+          human: 'Forbidden — RLS or table policy (session kept)'
         };
       } catch (x) {}
-      // Only clear session once to avoid infinite 401 loop
+      console.warn('[API] 403 on ' + method + ' ' + tableName + ' — keeping session');
+      return null;
+    }
+
+    if (res.status === 401) {
+      if (token) {
+        try {
+          var ur = await fetch(SUPA.url + '/auth/v1/user', {
+            headers: { 'apikey': SUPA.anonJwt, 'Authorization': 'Bearer ' + token }
+          });
+          if (ur.ok) {
+            console.warn('[Zoree] Tier-2 API rejected this token; Supabase accepts it. Using direct PostgREST. Align api/.env SUPABASE_URL + SUPABASE_ANON_KEY with frontend SUPA in index.html to use the API.');
+            window.__ZOREE_USE_DIRECT_REST = true;
+            return await supaFetchDirectRest(method, tableName, queryStr, isUpsert, filterId, body, token);
+          }
+        } catch (probeEx) {}
+      }
+      try {
+        window._lastApiError = {
+          table: tableName, method: method, status: 401,
+          detail: '', parsed: {},
+          human: 'Unauthorized (sign in again)'
+        };
+      } catch (x) {}
       if (window._isLoggedIn !== false) {
         window._authToken  = null;
         window._isLoggedIn = false;
-        // Stop realtime to prevent further unauthorized fetches
         if (_realtimeWs) { try { _realtimeWs.close(); } catch(e){} _realtimeWs = null; }
         clearInterval(_realtimeHeartbeatTimer);
         clearTimeout(_realtimeReconnectTimer);
@@ -4966,6 +5044,31 @@ async function supaSaveCarrier(c) {
   }
   return true;
 }
+async function supaSaveDockAppt(a) {
+  if (!SUPA.enabled) return;
+  var row = {
+    facility: a.location || 'DEFAULT',
+    door: a.door || 'DOOR 1',
+    scheduled_date: a.date || new Date().toISOString().slice(0,10),
+    scheduled_time: a.start || '08:00',
+    duration_minutes: parseInt(a.duration) || 60,
+    appointment_type: a.type || 'Outbound',
+    carrier: a.carrier || null,
+    shipment_id: a.shipmentId || null,
+    status: a.status || 'Scheduled',
+    notes: a.notes || null,
+  };
+  if (a._dbId) {
+    await supaFetch('PATCH', 'dock_appointments?id=eq.' + a._dbId, row);
+  } else {
+    var r = await supaFetch('POST', 'dock_appointments', row);
+    if (r && r.length && r[0].id) a._dbId = r[0].id;
+  }
+}
+async function supaDeleteDockAppt(a) {
+  if (!SUPA.enabled || !a._dbId) return;
+  await supaFetch('DELETE', 'dock_appointments?id=eq.' + a._dbId);
+}
 async function supaSaveItem(it) {
   if (!SUPA.enabled) return;
   var row = {
@@ -5204,7 +5307,7 @@ async function supaLoadAll() {
   var t0 = performance.now();
   showLoadingOverlay('Connecting to Supabase…');
   try {
-    var [dbOrders, dbShipments, dbCarriers, dbRates, dbDrivers, dbItems, dbLanePrefs] = await Promise.all([
+    var [dbOrders, dbShipments, dbCarriers, dbRates, dbDrivers, dbItems, dbLanePrefs, dbDockAppts] = await Promise.all([
       supaSelect('orders',    'select=*&order=created_at.desc&limit=500'),
       supaSelect('shipments', 'select=*&order=created_at.desc&limit=500'),
       supaSelect('carriers',  'select=*&order=name&limit=200'),
@@ -5212,6 +5315,7 @@ async function supaLoadAll() {
       supaSelect('drivers',   'select=*&order=name&limit=200'),
       supaSelect('items',     'select=*&order=id&limit=500'),
       supaSelect('lane_preferences', 'select=*&order=id&limit=200'),
+      supaSelect('dock_appointments', 'select=*&order=created_at.desc&limit=200'),
     ]);
     console.log('[Supa] Raw DB results → orders:', dbOrders, '| shipments:', dbShipments, '| carriers:', dbCarriers);
     var ms = Math.round(performance.now() - t0);
@@ -5302,6 +5406,27 @@ async function supaLoadAll() {
           excluded: r.excluded || [], priority: r.priority || 'Medium',
           reason: r.reason || '', transitDays: r.transit_days || null,
           status: r.status || 'Active'
+        };
+      });
+    }
+    // Load dock appointments from DB
+    if (dbDockAppts && dbDockAppts.length) {
+      dockAppointments = dbDockAppts.map(function(r) {
+        return {
+          _dbId: r.id,
+          id: 'DA-' + r.id,
+          location: r.facility || '',
+          door: r.door || '',
+          date: r.scheduled_date || '',
+          start: (r.scheduled_time || '').slice(0, 5),
+          duration: r.duration_minutes || 60,
+          type: r.appointment_type || 'Outbound',
+          carrier: r.carrier || '',
+          driver: '',
+          trailer: '',
+          shipmentId: r.shipment_id || '',
+          status: r.status || 'Scheduled',
+          notes: r.notes || '',
         };
       });
     }
@@ -5663,8 +5788,7 @@ function _showLoginOverlay() {
     var passEl  = document.getElementById('ov-pass');
     var btn     = document.getElementById('ov-btn');
     var err     = document.getElementById('ov-err');
-    emailEl.focus(); emailEl.blur(); passEl.focus(); passEl.blur();
-    var email = (emailEl.value || '').trim();
+    var email = (emailEl.value || '').trim().toLowerCase();
     var pass  = passEl.value || '';
     if (!email || !pass) {
       err.textContent = '⚠️ Click into each field and type your credentials';
@@ -5678,25 +5802,88 @@ function _showLoginOverlay() {
       err.textContent = 'Supabase SDK not loaded — check your internet connection';
       btn.textContent = 'Sign In'; btn.disabled = false; return;
     }
-    fetch(SUPA.apiBase+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pass})})
-    .then(function(r){return r.json().then(function(d){return{ok:r.ok,data:d};});})
-    .then(function(res){
-      if(!res.ok){err.textContent=res.data.error||'Invalid email or password';btn.textContent='Sign In';btn.disabled=false;return;}
-      window._authToken=res.data.token;window._isLoggedIn=true;
-      CURRENT_USER=res.data.user;
-      CURRENT_SESSION={
-        access_token:  res.data.token,
-        refresh_token: res.data.refresh_token||'',
-        expires_at:    res.data.expires_at||0,
-        expires_in:    res.data.expires_in||3600,
-        user:          res.data.user
-      };
-      _saveSession(CURRENT_SESSION);
+    var apiOrigin = (typeof zoreeApiOrigin === 'function')
+      ? zoreeApiOrigin()
+      : String(SUPA.apiBase || 'http://localhost:3001').replace(/\/api\/?$/i,'').replace(/\/+$/, '') || 'http://localhost:3001';
+    var loginUrl = apiOrigin + '/api/auth/login';
+
+    function finishLoginSuccess() {
+      window.__authSessionEpoch = (window.__authSessionEpoch || 0) + 1;
       var ov=document.getElementById('login-overlay');if(ov)ov.remove();
       window._loginOverlayShowing=false;_bootApp();
       setTimeout(function(){if(typeof supaLoadAll==='function')supaLoadAll();},100);
       setTimeout(realtimeConnect, 2000);
-    }).catch(function(e){err.textContent=e.message||'Cannot reach API server';btn.textContent='Sign In';btn.disabled=false;});
+    }
+
+    function applyApiTokens(data) {
+      window._authToken=data.token;window._isLoggedIn=true;
+      CURRENT_USER=data.user;
+      CURRENT_SESSION={
+        access_token:  data.token,
+        refresh_token: data.refresh_token||'',
+        expires_at:    data.expires_at||0,
+        expires_in:    data.expires_in||3600,
+        user:          data.user
+      };
+      _saveSession(CURRENT_SESSION);
+    }
+
+    function tryDirectSupabase(apiErrText) {
+      err.textContent = 'Signing in via Supabase…';
+      db.auth.signInWithPassword({ email: email, password: pass }).then(function(result) {
+        var se = result.error;
+        var sd = result.data;
+        if (se || !sd || !sd.session) {
+          err.textContent = (se && se.message) ? se.message : (apiErrText || 'Invalid email or password');
+          btn.textContent='Sign In'; btn.disabled=false;
+          return;
+        }
+        var u = sd.session.user;
+        window._authToken = sd.session.access_token;
+        window._isLoggedIn = true;
+        CURRENT_USER = u;
+        CURRENT_SESSION = {
+          access_token: sd.session.access_token,
+          refresh_token: sd.session.refresh_token || '',
+          expires_at: sd.session.expires_at || 0,
+          expires_in: sd.session.expires_in || 3600,
+          user: u
+        };
+        _saveSession(CURRENT_SESSION);
+        finishLoginSuccess();
+      }).catch(function(e2){
+        err.textContent = (e2 && e2.message) ? e2.message : (apiErrText || 'Sign-in failed');
+        btn.textContent='Sign In'; btn.disabled=false;
+      });
+    }
+
+    fetch(loginUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pass})})
+    .then(function(r){
+      return r.text().then(function(t){
+        var d = {};
+        try { d = t ? JSON.parse(t) : {}; } catch (parseErr) {
+          d = { error: 'API returned non-JSON — is the server running at ' + apiOrigin + '?' };
+        }
+        return { ok: r.ok, status: r.status, data: d };
+      });
+    })
+    .then(function(res){
+      if (res.ok && res.data && res.data.token) {
+        applyApiTokens(res.data);
+        finishLoginSuccess();
+        return;
+      }
+      if (res.status === 401) {
+        err.textContent = (res.data && res.data.error) ? res.data.error : 'Invalid email or password';
+        btn.textContent='Sign In'; btn.disabled=false;
+        return;
+      }
+      var hint = (res.data && res.data.error) ? res.data.error : ('HTTP ' + res.status);
+      tryDirectSupabase(hint);
+    })
+    .catch(function(){
+      tryDirectSupabase('Cannot reach API at ' + apiOrigin);
+    });
   }
 
   document.getElementById('ov-btn').addEventListener('click', doLogin);
@@ -5707,11 +5894,13 @@ function _showLoginOverlay() {
 
 document.addEventListener('DOMContentLoaded', function() {
   var _booted = false;
+  var _epochAtLoad = window.__authSessionEpoch || 0;
   // Boot immediately — don't wait for IndexedDB
   _bootApp();
   _booted = true;
   // Check IndexedDB for saved session in background
   _loadSessionAsync(function(stored) {
+    if ((window.__authSessionEpoch || 0) !== _epochAtLoad) return;
     if (_booted && stored && !window._isLoggedIn) {
       try {
         var sess = JSON.parse(stored);
@@ -6733,8 +6922,8 @@ function renderShipments(){
       +'<td class="mono">'+s.delivery+'</td>'
       +'<td>'+badge(s.status)+'</td>'
       +'<td style="white-space:nowrap"><div style="display:inline-flex;gap:4px;align-items:center">'
-      +(s.status==='Planned'?'<button class="btn btn-success btn-sm" onclick="tenderShip(\''+s.id+'\')" style="background:#2563eb;color:#fff;border-color:#2563eb;padding:4px 10px;font-size:12px">📤 Tender</button>':s.status==='Tendered'?'<button class="btn btn-sm" onclick="quickAcceptTender(\''+s.id+'\')" style="background:#16a34a;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">✅ Accept</button> <button class="btn btn-sm" onclick="quickRejectTender(\''+s.id+'\')" style="background:#dc2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">❌ Reject</button>':s.status==='Confirmed'?'<span style="font-size:11px;font-weight:700;color:var(--green)">✅ Confirmed</span>':'')
-      +'<button onclick="deleteShipment(\''+s.id+'\',event)" title="Delete shipment" style="background:rgba(220,38,38,.08);color:#dc2626;border:1px solid rgba(220,38,38,.25);padding:4px 7px;border-radius:6px;font-size:12px;cursor:pointer;line-height:1">🗑️</button>'
+      +(s.status==='Planned'?'<button class="btn btn-success btn-sm" onclick="tenderShip(\''+s.id+'\')" style="background:#2563eb;color:#fff;border-color:#2563eb;padding:4px 10px;font-size:12px">📤 Tender</button>':s.status==='Tendered'?'<button class="btn btn-sm" onclick="withdrawTender(\''+s.id+'\')" style="background:#ea580c;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">↩️ Withdraw</button>':s.status==='Confirmed'?'<span style="font-size:11px;font-weight:700;color:var(--green)">✅ Confirmed</span>':'')
+      +(s.status==='Planned'?'<button onclick="deleteShipment(\''+s.id+'\',event)" title="Delete shipment" style="background:rgba(220,38,38,.08);color:#dc2626;border:1px solid rgba(220,38,38,.25);padding:4px 7px;border-radius:6px;font-size:12px;cursor:pointer;line-height:1">🗑️</button>':'')
       +'</div></td>'
       +'</tr>';
   }).join('');
@@ -7877,6 +8066,7 @@ function createDockApptForShipment(s, opts) {
     notes: 'Auto-booked from planning for shipment ' + (s.id || '')
   };
   dockAppointments.push(appt);
+  supaSaveDockAppt(appt);
 
   s.dockAssigned = door;
   s.dockTime = date + ' ' + start;
@@ -8528,13 +8718,12 @@ function changePlanEquip(equipType) {
 }
 
 function openPlan(orderId){
-  // Delegate to openPlanWithGroup for consistent lane pref + mode handling
+  // Plan only the clicked order (use Plan Group for consolidation)
   var o=orders.find(function(x){ return x.id===orderId; });
   if(!o) return;
-  var sibs=orders.filter(function(x){ return x.status==='Unplanned'&&x.origin===o.origin&&x.dest===o.dest; });
   _selectedOrders.clear();
-  sibs.forEach(function(s){ _selectedOrders.add(s.id); });
-  openPlanWithGroup(sibs);
+  _selectedOrders.add(o.id);
+  openPlanWithGroup([o]);
   return;
   // --- Legacy code below (kept for reference, unreachable) ---
   _planShipmentGroups = [];
@@ -9294,6 +9483,7 @@ function confirmCrossDock() {
     notes:     'Auto-booked cross-dock transfer. Leg1: '+leg1Id+' → Leg2: '+leg2Id+'. Dwell: '+hub.dwell+'h.',
   };
   dockAppointments.push(dockAppt);
+  supaSaveDockAppt(dockAppt);
 
   // Log events
   if(!shipmentEvents[leg1Id]) shipmentEvents[leg1Id] = [];
@@ -11014,7 +11204,7 @@ function _openShipDetailRender(id) {
         html += '<span style="font-size:11px;color:var(--text3)">&middot; ' + ord.origin.split(',')[0] + ' → ' + ord.dest.split(',')[0] + '</span>';
         html += '<span style="margin-left:auto;font-size:12px;font-family:monospace;color:var(--text2)">' + w2 + ' lbs</span>';
       }
-      html += '<button onclick="unassignOrderFromShipment(\''+oid+'\',\''+s.id+'\')" title="Unassign from shipment" style="margin-left:8px;padding:3px 10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:7px;font-size:11px;font-weight:600;color:#b45309;cursor:pointer;font-family:inherit;white-space:nowrap">🔓 Unassign</button>';
+      if (s.status === 'Planned') html += '<button onclick="unassignOrderFromShipment(\''+oid+'\',\''+s.id+'\')" title="Unassign from shipment" style="margin-left:8px;padding:3px 10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:7px;font-size:11px;font-weight:600;color:#b45309;cursor:pointer;font-family:inherit;white-space:nowrap">🔓 Unassign</button>';
       html += '</div>';
     });
     html += '</div>';
@@ -11069,6 +11259,7 @@ function _openShipDetailRender(id) {
   // Action footer
   html += '<div style="padding:16px 24px;background:#f8faff;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;border-radius:0 0 16px 16px">';
   if (_shipmentInList && s.status === 'Planned') html += '<button class="btn btn-primary btn-sm" onclick="tenderAndClose(\'' + s.id + '\')">📤 Tender to Carrier</button>';
+  if (_shipmentInList && s.status === 'Tendered') html += '<button class="btn btn-sm" onclick="withdrawTender(\'' + s.id + '\');closeModal(\'modal-ship-detail\')" style="background:#ea580c;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">↩️ Withdraw Tender</button>';
   if (_shipmentInList && s.status === 'Exception') html += '<button class="btn btn-danger btn-sm">🚨 Escalate Exception</button>';
   if (_shipmentInList && ['Planned', 'Tendered', 'In Transit'].includes(s.status)) html += '<button class="btn btn-secondary btn-sm" onclick="openChangeCarrierGuarded(\'' + s.id + '\')">🔄 Change Carrier</button>';
   html += '<button class="btn btn-secondary btn-sm" onclick="closeModal(\'modal-ship-detail\');navigate(\'dock\')">🚪 Dock schedule</button>';
@@ -11096,10 +11287,12 @@ function _openShipDetailRender(id) {
           lh += '<th style="padding:5px 8px;text-align:' + (['Qty','Unit Wt','Total Wt'].indexOf(h)>=0?'right':'left') + ';font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">' + h + '</th>';
         });
         lh += '</tr></thead><tbody>';
+        var globalLineNum = 0;
         allLines.forEach(function(l) {
+          globalLineNum++;
           lh += '<tr style="border-bottom:1px solid var(--border)">';
           lh += '<td style="padding:5px 8px;font-family:monospace;font-size:10px;color:var(--text3)">' + (l.order_id||'') + '</td>';
-          lh += '<td style="padding:5px 8px;font-size:11px;color:var(--text3)">' + (l.line_num||'—') + '</td>';
+          lh += '<td style="padding:5px 8px;font-size:11px;color:var(--text3)">' + globalLineNum + '</td>';
           lh += '<td style="padding:5px 8px;font-family:monospace;font-size:11px;color:var(--accent)">' + (l.item_id||'—') + '</td>';
           lh += '<td style="padding:5px 8px;font-size:12px">' + (l.description||'—') + '</td>';
           lh += '<td style="padding:5px 8px;text-align:right;font-weight:600">' + (l.qty_ordered||0) + '</td>';
@@ -11529,8 +11722,8 @@ var orderChangeLog = {};  // { orderId: [{ts, user, field, oldVal, newVal}] }
 var _ordDetailId   = null;
 var _ordDetailTab  = 'view';
 
-// Simulated users for demo
-var CURRENT_USER = 'Sridhar (Dispatcher)';
+// Simulated users for order edit / changelog attribution (must NOT reuse auth CURRENT_USER)
+var ORDER_EDIT_DEFAULT_USER = 'Sridhar (Dispatcher)';
 var DEMO_USERS = ['Sridhar (Dispatcher)', 'Maria (Planner)', 'Carlos (Ops)', 'System'];
 
 function switchOrdDetailTab(tab) {
@@ -11704,7 +11897,7 @@ function renderOrdDetailEdit(id) {
     }).join('');
 
   var userOpts = DEMO_USERS.map(function(u){
-    return '<option value="'+u+'"'+(u===CURRENT_USER?' selected':'')+'>'+u+'</option>';
+    return '<option value="'+u+'"'+(u===ORDER_EDIT_DEFAULT_USER?' selected':'')+'>'+u+'</option>';
   }).join('');
 
   var html = '<div style="padding:20px 24px">';
@@ -11864,7 +12057,7 @@ function saveOrdEdit() {
   var o = orders.find(function(x){ return x.id===_ordDetailId; });
   if(!o) return;
 
-  var user = (document.getElementById('od-edit-user')||{value:CURRENT_USER}).value;
+  var user = (document.getElementById('od-edit-user')||{value:ORDER_EDIT_DEFAULT_USER}).value;
   var now  = new Date().toISOString().slice(0,16).replace('T',' ');
   var changes = [];
 
@@ -12225,6 +12418,16 @@ var _ccSelectedCarrier = null;
 // ─────────────────────────────────────────────
 var _wtShipId = null;
 
+function withdrawTender(shipId) {
+  var s = shipments.find(function(x){ return x.id===shipId; });
+  if(!s) return;
+  _wtShipId = shipId;
+  document.getElementById('wt-carrier-name').textContent = s.carrier;
+  document.getElementById('wt-ship-id').textContent = shipId;
+  document.getElementById('wt-reason').value = '';
+  openModal('modal-withdraw-tender');
+}
+
 function openChangeCarrierGuarded(shipId) {
   var s = shipments.find(function(x){ return x.id===shipId; });
   if(!s) return;
@@ -12249,6 +12452,7 @@ function confirmWithdrawTender() {
 
   var prevCarrier = s.carrier;
   s.status = 'Planned';
+  supaSaveShipment(s);
   renderShipments();
 
   // Log withdrawal event
@@ -15094,62 +15298,9 @@ var dockTimeSlots = (function(){
 })();
 
 // Sample appointments data
-var dockAppointments = [
-  {id:'DA-001', door:'Door 1', location:'Dallas, TX',      date:'2026-03-05', start:'07:00', duration:60,  type:'Inbound',   carrier:'JB Hunt',           driver:'Mike Torres',  trailer:'TR-1842', shipmentId:'SHP-2024-1843', status:'Confirmed',  notes:'Temp-controlled'},
-  {id:'DA-002', door:'Door 2', location:'Dallas, TX',      date:'2026-03-05', start:'08:00', duration:90,  type:'Outbound',  carrier:'Werner Enterprises', driver:'Sue Lang',     trailer:'TR-2241', shipmentId:'SHP-2024-1844', status:'Scheduled',  notes:''},
-  {id:'DA-003', door:'Door 3', location:'Dallas, TX',      date:'2026-03-05', start:'09:00', duration:120, type:'Inbound',   carrier:'XPO Logistics',      driver:'Carlos Ruiz',  trailer:'TR-3301', shipmentId:'SHP-2024-1849', status:'Checked In', notes:'Hazmat — class 3'},
-  {id:'DA-004', door:'Door 1', location:'Columbus, OH',    date:'2026-03-05', start:'10:00', duration:60,  type:'Outbound',  carrier:'Coyote Logistics',   driver:'Amy Chen',     trailer:'TR-4415', shipmentId:'',              status:'Scheduled',  notes:''},
-  {id:'DA-005', door:'Door 4', location:'Dallas, TX',      date:'2026-03-05', start:'11:00', duration:60,  type:'Cross-Dock',carrier:'Estes Express',       driver:'Joe Black',    trailer:'TR-5521', shipmentId:'',              status:'Scheduled',  notes:'Transfer to Door 6 after'},
-  {id:'DA-006', door:'Door 2', location:'Columbus, OH',    date:'2026-03-05', start:'13:00', duration:90,  type:'Inbound',   carrier:'Old Dominion',        driver:'Pat Willis',   trailer:'TR-6633', shipmentId:'SHP-2024-1845', status:'Scheduled',  notes:''},
-  {id:'DA-007', door:'Door 5', location:'Dallas, TX',      date:'2026-03-05', start:'14:00', duration:60,  type:'Outbound',  carrier:'Saia Inc',            driver:'Linda Shaw',   trailer:'TR-7744', shipmentId:'',              status:'Confirmed',  notes:''},
-  {id:'DA-008', door:'Door 3', location:'Columbus, OH',    date:'2026-03-05', start:'15:30', duration:60,  type:'Inbound',   carrier:'JB Hunt',             driver:'Dave Kim',     trailer:'TR-8855', shipmentId:'SHP-2024-1846', status:'Scheduled',  notes:''},
-  {id:'DA-009', door:'Door 6', location:'Dallas, TX',      date:'2026-03-05', start:'07:30', duration:120, type:'Outbound',  carrier:'FedEx Freight',       driver:'Rosa Navarro', trailer:'TR-9966', shipmentId:'SHP-2024-1847', status:'Loading',    notes:'Priority'},
-  {id:'DA-010', door:'Door 4', location:'Chicago, IL',     date:'2026-03-05', start:'16:00', duration:60,  type:'Inbound',   carrier:'R+L Carriers',        driver:'Bill Grant',   trailer:'TR-1077', shipmentId:'',              status:'Scheduled',  notes:''},
-  {id:'DA-011', door:'Door 1', location:'Chicago, IL',     date:'2026-03-05', start:'09:00', duration:90,  type:'Outbound',  carrier:'Schneider National',  driver:'Tom Reed',     trailer:'TR-2200', shipmentId:'',              status:'Scheduled',  notes:''},
-  {id:'DA-012', door:'Door 1', location:'Los Angeles, CA', date:'2026-03-05', start:'08:00', duration:120, type:'Inbound',   carrier:'Swift Transport',      driver:'Maria Lopez',  trailer:'TR-3310', shipmentId:'',              status:'Confirmed',  notes:'Port import'},
-  {id:'DA-013', door:'Door 2', location:'Los Angeles, CA', date:'2026-03-05', start:'11:00', duration:60,  type:'Outbound',  carrier:'Landstar',             driver:'Kevin Nash',   trailer:'TR-4420', shipmentId:'',              status:'Scheduled',  notes:''},
-  {id:'DA-014', door:'Door 1', location:'Atlanta, GA',     date:'2026-03-05', start:'10:00', duration:90,  type:'Inbound',   carrier:'USX (US Xpress)',      driver:'Dana Brooks',  trailer:'TR-5530', shipmentId:'SHP-2024-ATL04', status:'Scheduled',  notes:''},
-  {id:'DA-ATL-0324a', door:'Door 1', location:'Atlanta, GA', date:'2026-03-24', start:'08:00', duration:90,  type:'Outbound', carrier:'Schneider National', driver:'Pat M.',       trailer:'TR-ATL1', shipmentId:'SHP-2024-ATL01', status:'Scheduled',  notes:'Sample Atlanta outbound'},
-  {id:'DA-ATL-0324b', door:'Door 2', location:'Atlanta, GA', date:'2026-03-24', start:'12:00', duration:60,  type:'Inbound',  carrier:'Old Dominion',         driver:'Jamie L.',     trailer:'TR-ATL2', shipmentId:'SHP-2024-ATL02', status:'Scheduled',  notes:''},
-  {id:'DA-ATL-0324c', door:'Door 3', location:'Atlanta, GA', date:'2026-03-24', start:'15:30', duration:60,  type:'Outbound', carrier:'XPO Logistics',        driver:'Chris P.',     trailer:'TR-ATL3', shipmentId:'SHP-2024-ATL03', status:'Confirmed',   notes:''},
-];
+var dockAppointments = [];
 
-/** Merge demo shipments used by Atlanta dock rows so the modal + shipment detail resolve (works with or without Supabase). */
-function ensureAtlantaDockShipments() {
-  var seeds = [
-    { id:'SHP-2024-ATL01', carrier:'Schneider National', mode:'TL', origin:'Atlanta, GA', dest:'Nashville, TN', weight:'42,000', pieces:22, status:'Planned', pickup:'2026-03-24', delivery:'2026-03-24', cost:'$2,850', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Retail — mixed' },
-    { id:'SHP-2024-ATL02', carrier:'Old Dominion', mode:'LTL', origin:'Memphis, TN', dest:'Atlanta, GA', weight:'12,400', pieces:8, status:'Planned', pickup:'2026-03-23', delivery:'2026-03-24', cost:'$920', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Automotive parts' },
-    { id:'SHP-2024-ATL03', carrier:'XPO Logistics', mode:'TL', origin:'Atlanta, GA', dest:'Miami, FL', weight:'38,000', pieces:18, status:'Confirmed', pickup:'2026-03-24', delivery:'2026-03-25', cost:'$3,100', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Consumer goods' },
-    { id:'SHP-2024-ATL04', carrier:'USX (US Xpress)', mode:'TL', origin:'Charlotte, NC', dest:'Atlanta, GA', weight:'36,200', pieces:14, status:'Planned', pickup:'2026-03-05', delivery:'2026-03-05', cost:'$1,680', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'General freight' },
-    { id:'SHP-2024-ATL05', carrier:'Demo Logistics', mode:'TL', origin:'Atlanta, GA', dest:'Birmingham, AL', weight:'18,000', pieces:10, status:'Planned', pickup:'', delivery:'', cost:'$890', spotRate:false, czarliteRate:false, consolidatedOrders:[], commodity:'Demo load' }
-  ];
-  seeds.forEach(function(s) {
-    if (!shipments.some(function(x) { return x.id === s.id; })) shipments.push(s);
-  });
-}
-
-(function seedDockDemoForLocalToday() {
-  try {
-    var ymd = dockLocalYmd(new Date());
-    if (dockAppointments.some(function(a) { return a.date === ymd && a.location === 'Atlanta, GA'; })) return;
-    ensureAtlantaDockShipments();
-    dockAppointments.push({
-      id: 'DA-DEMO-' + ymd.replace(/-/g, ''),
-      door: 'Door 1',
-      location: 'Atlanta, GA',
-      date: ymd,
-      start: '09:00',
-      duration: 60,
-      type: 'Outbound',
-      carrier: 'Demo Logistics',
-      driver: '',
-      trailer: '',
-      shipmentId: 'SHP-2024-ATL05',
-      status: 'Scheduled',
-      notes: 'Sample appointment for today — add real loads from planning.'
-    });
-  } catch (e) { /* ignore */ }
-})();
+function ensureAtlantaDockShipments() { /* no-op — demo data removed */ }
 
 var _dockEditId = null;
 
@@ -15536,10 +15687,11 @@ function saveDockAppt() {
 
   if(_dockEditId){
     var idx = dockAppointments.findIndex(function(a){ return a.id===_dockEditId; });
-    if(idx>=0) dockAppointments[idx] = appt;
+    if(idx>=0) { appt._dbId = dockAppointments[idx]._dbId; dockAppointments[idx] = appt; }
   } else {
     dockAppointments.push(appt);
   }
+  supaSaveDockAppt(appt);
 
   syncShipmentFromDockAppointment(appt);
   if (prevShipmentId && prevShipmentId !== appt.shipmentId) clearShipmentDockIfNoAppointment(prevShipmentId);

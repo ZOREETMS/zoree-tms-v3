@@ -266,7 +266,7 @@ app.post('/api/tender/email', async (req, res) => {
   const pickup = String(b.pickup || '');
   const delivery = String(b.delivery || '');
   const mode = String(b.mode || '');
-  const cost = String(b.cost || '');
+  const cost = '$' + String(b.cost || '0').replace(/[$,]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const weight = String(b.weight || '');
   const pieces = String(b.pieces || '');
   const commodity = String(b.commodity || '');
