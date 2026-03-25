@@ -8,6 +8,7 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
+const nodemailer = require('nodemailer');
 
 
 // ── Crash prevention ─────────────────────────────────────────────────────────
@@ -53,7 +54,10 @@ async function dbSelect(table, query, token) {
 async function dbUpsert(table, data, token) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=id`, {
     method:  'POST',
-    headers: sbHeaders(token),
+    headers: {
+      ...sbHeaders(token),
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    },
     body:    JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`DB upsert failed (${res.status}): ${await res.text()}`);
@@ -69,7 +73,12 @@ async function dbUpdate(table, id, data, token) {
   });
   if (!res.ok) throw new Error(`DB update failed (${res.status}): ${await res.text()}`);
   const r = await res.json();
-  return Array.isArray(r) ? r[0] : r;
+  const row = Array.isArray(r) ? r[0] : r;
+  // PostgREST returns [] when no row matched — do not treat as success (avoids false "saved" on stubs / wrong id)
+  if (Array.isArray(r) && r.length === 0) {
+    throw new Error(`DB update matched no rows for ${table} id=${id}`);
+  }
+  return row;
 }
 
 async function dbDelete(table, id, token) {
@@ -138,11 +147,23 @@ app.post('/dev/push-html', express.raw({type:'text/html',limit:'5mb'}), (req,res
   });
 });
 
+// ── Tender / SMTP diagnostics (updated after startup verify) ───────────────
+let smtpVerifyState = { ok: null, error: null, checkedAt: null };
+
 // ── Health (public) ────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({
   status: 'ok', version: '3.0.0',
   tier: 'API (Tier 2) — 3-Tier Architecture',
   ts: new Date().toISOString(),
+  tenderEmail: {
+    smtpConfigured: !!process.env.SMTP_HOST,
+    smtpHost: process.env.SMTP_HOST || null,
+    smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+    from: (process.env.SMTP_FROM || process.env.SMTP_USER || 'contact@zoree.io'),
+    verifyOk: smtpVerifyState.ok,
+    verifyError: smtpVerifyState.ok === false ? smtpVerifyState.error : undefined,
+    verifyCheckedAt: smtpVerifyState.checkedAt,
+  },
 }));
 
 // ── POST /api/auth/login ───────────────────────────────────────────
@@ -191,6 +212,255 @@ app.get('/api/auth/me', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
   res.json({ user: { id: user.id, email: user.email, role: 'admin' } });
+});
+
+// ── POST /api/tender/email — notify carrier when a shipment is tendered ──
+function getSmtpTransport() {
+  const host = process.env.SMTP_HOST;
+  if (!host) return null;
+  const opts = {
+    host,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: process.env.SMTP_USER
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' }
+      : undefined,
+  };
+  if (process.env.SMTP_DEBUG === 'true') opts.debug = true;
+  return nodemailer.createTransport(opts);
+}
+
+async function verifySmtpOnStartup() {
+  const t = getSmtpTransport();
+  smtpVerifyState = { ok: null, error: null, checkedAt: new Date().toISOString() };
+  if (!t) {
+    console.log('   📧 Tender email: SMTP not configured — set SMTP_HOST (and usually SMTP_USER / SMTP_PASS) in api/.env');
+    return;
+  }
+  try {
+    await t.verify();
+    smtpVerifyState = { ok: true, error: null, checkedAt: new Date().toISOString() };
+    console.log('   📧 Tender email: SMTP server accepted connection (' + (process.env.SMTP_HOST || '') + ':' + (process.env.SMTP_PORT || '587') + ')');
+  } catch (e) {
+    smtpVerifyState = { ok: false, error: e.message || String(e), checkedAt: new Date().toISOString() };
+    console.error('   📧 Tender email: SMTP verify FAILED — fix credentials or network before carriers receive mail.');
+    console.error('      ', e.message || e);
+  }
+}
+
+app.post('/api/tender/email', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  const b = req.body || {};
+  const toRaw = String(b.to || '').trim();
+  if (!toRaw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toRaw)) {
+    return res.status(400).json({ error: 'Valid "to" email required' });
+  }
+  const override = (process.env.TENDER_EMAIL_OVERRIDE || '').trim();
+  const actualTo = override || toRaw;
+  const shipmentId = String(b.shipmentId || '');
+  const carrierName = String(b.carrierName || '');
+  const refNum = String(b.refNum || '');
+  const origin = String(b.origin || '');
+  const dest = String(b.dest || '');
+  const pickup = String(b.pickup || '');
+  const delivery = String(b.delivery || '');
+  const mode = String(b.mode || '');
+  const cost = String(b.cost || '');
+  const weight = String(b.weight || '');
+  const pieces = String(b.pieces || '');
+  const commodity = String(b.commodity || '');
+  const specialInstructions = String(b.specialInstructions || '');
+  const contactName = String(b.contactName || '');
+  const contactPhone = String(b.contactPhone || '');
+  const contactEmail = String(b.contactEmail || toRaw);
+  const today = new Date().toISOString().slice(0, 10);
+  const companyName = String(b.companyName || 'ZOREE LLC');
+  const mcNumber = String(b.mcNumber || '');
+  const webUrl = String(b.webUrl || 'www.zoree.io');
+
+  // Plain text fallback
+  const text = [
+    'BROKER - CARRIER LOAD TENDER & RATE CONFIRMATION',
+    '================================================',
+    '',
+    'Name of Carrier: ' + carrierName,
+    'Load Number: ' + shipmentId,
+    'Fax/Email: ' + contactEmail,
+    'Date: ' + today,
+    'Pickup Date: ' + pickup,
+    'Origin: ' + origin,
+    'Destination: ' + dest,
+    'Commodity & Weight: ' + commodity + ' / ' + weight + ' lbs',
+    'Mode: ' + mode,
+    'Agreed Rate: ' + cost,
+    '',
+    'THIS LOAD IS TENDERED TO THE NAMED CARRIER BY',
+    companyName + ', A LICENSED PROPERTY BROKER, PURSUANT TO WRITTEN SIGNED CONTRACTS,',
+    'IF ANY, AND THE BROKER/CARRIER TERMS AND CONDITIONS FOUND AT ' + webUrl,
+    'TO WHICH CARRIER EXPRESSLY AGREES.',
+    '',
+    'Special Service Requirements: ' + (specialInstructions || 'None'),
+    '',
+    'Send Freight Bills to: ' + companyName,
+    'MUST INCLUDE THIS COPY OF CONFIRMATION, P.O.D. AND INVOICE',
+    '',
+    'Please respond via the Carrier Portal or contact your shipper rep.',
+    '— ' + companyName,
+  ].join('\n');
+
+  // Professional HTML tender form
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;background:#f5f5f5">
+<div style="max-width:700px;margin:0 auto;background:#fff;border:2px solid #1a237e;padding:0">
+
+  <!-- Header -->
+  <div style="background:#1a237e;color:#fff;padding:16px 24px;text-align:center">
+    <div style="font-size:18px;font-weight:bold;letter-spacing:1px">${companyName}</div>
+    <div style="font-size:14px;font-weight:bold;margin-top:6px;letter-spacing:0.5px">BROKER &mdash; CARRIER LOAD TENDER &amp; RATE CONFIRMATION</div>
+  </div>
+
+  <!-- Main Info Table -->
+  <table style="width:100%;border-collapse:collapse;font-size:13px" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px;width:50%">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Name of Carrier</div>
+        <div style="font-size:15px;font-weight:bold;color:#1a237e">${carrierName}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px;width:50%">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Load Number</div>
+        <div style="font-size:15px;font-weight:bold;color:#1a237e">${shipmentId}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Carrier Email</div>
+        <div>${contactEmail}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Date</div>
+        <div>${today}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Pickup Date</div>
+        <div style="font-size:14px;font-weight:bold;color:#2e7d32">${pickup}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Delivery Date</div>
+        <div style="font-size:14px;font-weight:bold;color:#2e7d32">${delivery}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Origin</div>
+        <div style="font-weight:bold">${origin}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Destination</div>
+        <div style="font-weight:bold">${dest}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Mode</div>
+        <div>${mode}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Commodity &amp; Weight</div>
+        <div>${commodity || '—'} &bull; ${weight} lbs &bull; ${pieces} pcs</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Legal Notice -->
+  <div style="background:#fff3e0;border:1px solid #ccc;border-top:none;padding:12px 16px;font-size:11px;line-height:1.5;color:#333">
+    THIS LOAD IS TENDERED TO THE NAMED CARRIER BY <strong>${companyName}</strong>${mcNumber ? ' (MC-' + mcNumber + ')' : ''}, A LICENSED PROPERTY BROKER, PURSUANT TO WRITTEN SIGNED CONTRACTS, IF ANY, AND THE BROKER/CARRIER TERMS AND CONDITIONS FOUND AT <strong>${webUrl}</strong> TO WHICH CARRIER EXPRESSLY AGREES.
+  </div>
+
+  <!-- Shipment Details -->
+  <table style="width:100%;border-collapse:collapse;font-size:13px" cellpadding="0" cellspacing="0">
+    <tr>
+      <td colspan="2" style="border:1px solid #ccc;padding:10px 12px;background:#f9f9f9">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Shipment Information</div>
+        <div>Reference: ${refNum || shipmentId}</div>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" style="border:1px solid #ccc;padding:10px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Special Service Requirements</div>
+        <div>${specialInstructions || 'None specified'}</div>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" style="border:1px solid #ccc;padding:10px 12px;background:#f9f9f9">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Communications and Invoicing Requirements</div>
+        <div>Send Freight Bills to: <strong>${companyName}</strong></div>
+        <div style="margin-top:4px;font-size:11px;color:#666">MUST INCLUDE THIS COPY OF CONFIRMATION, P.O.D. AND INVOICE</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Rate & Signature -->
+  <table style="width:100%;border-collapse:collapse;font-size:13px" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="border:1px solid #ccc;padding:12px 16px;width:50%;background:#e8f5e9">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Agreed Rate</div>
+        <div style="font-size:22px;font-weight:bold;color:#2e7d32">${cost}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:12px 16px;width:50%">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Carrier Acknowledgment</div>
+        <div style="font-size:11px;color:#888;margin-top:8px">Please reply to this email to confirm acceptance.</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Footer -->
+  <div style="background:#1a237e;color:#fff;padding:12px 24px;text-align:center;font-size:11px">
+    <div>${companyName} &bull; ${webUrl}</div>
+    <div style="margin-top:4px;opacity:0.7">Powered by Zoree TMS</div>
+  </div>
+
+</div>
+</body></html>`;
+
+  const subject = String(b.subject || ('Load Tender: ' + shipmentId + ' — ' + origin + ' → ' + dest));
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'contact@zoree.io';
+  const transport = getSmtpTransport();
+
+  if (!transport) {
+    console.warn('[tender/email] SKIP — SMTP_HOST not set. Would send to:', toRaw, '| subject:', subject);
+    return res.json({
+      sent: false,
+      skipped: 'smtp',
+      message: 'SMTP not configured; tender saved but email not sent. Set SMTP_HOST and related env vars.',
+      draftTo: toRaw,
+    });
+  }
+
+  try {
+    const info = await transport.sendMail({
+      from,
+      to: actualTo,
+      replyTo: process.env.SMTP_REPLY_TO || undefined,
+      subject,
+      text,
+      html,
+      headers: override ? { 'X-Original-To': toRaw } : undefined,
+    });
+    console.log('[tender/email] SENT ok | to=' + actualTo + (override ? ' (orig ' + toRaw + ')' : '') + ' | messageId=' + (info.messageId || 'n/a'));
+    res.json({
+      sent: true,
+      messageId: info.messageId || null,
+      to: actualTo,
+      originalTo: override ? toRaw : undefined,
+    });
+  } catch (e) {
+    console.error('[tender/email] SEND FAILED:', e.message);
+    res.status(502).json({ error: 'Failed to send email: ' + e.message });
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════
@@ -1516,7 +1786,12 @@ app.listen(PORT, () => {
   console.log(`\n🚛 ZoreeTMS API — Tier 2 running on http://localhost:${PORT}`);
   console.log(`   ✅ Supabase credentials: SERVER-SIDE ONLY`);
   console.log(`   ✅ Browser never touches Supabase directly`);
-  console.log(`   ✅ 3-Tier Architecture active\n`);
+  console.log(`   ✅ 3-Tier Architecture active`);
+  console.log(`   ℹ️  Tender email check: GET http://localhost:${PORT}/health → tenderEmail`);
+  verifySmtpOnStartup().catch(function(err) {
+    console.error('   📧 Tender email: verify error:', err && err.message ? err.message : err);
+  });
+  console.log('');
 });
 
 module.exports = app;

@@ -4261,7 +4261,7 @@ function onRouteWeightChange(val) {
         <div style="display:flex;align-items:flex-start;gap:12px">
           <div style="width:40px;height:40px;background:var(--red);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚠️</div>
           <div>
-            <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">Tender Rejected by Carrier</div>
+            <div id="tr-error-title" style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">Tender Rejected by Carrier</div>
             <div id="tr-error-msg" style="font-size:12px;color:var(--text2);line-height:1.6"></div>
           </div>
         </div>
@@ -4706,6 +4706,13 @@ async function supaFetch(method, tableAndQuery, body) {
     var res = await fetch(url, opts);
 
     if (res.status === 401 || res.status === 403) {
+      try {
+        window._lastApiError = {
+          table: tableName, method: method, status: res.status,
+          detail: '', parsed: {},
+          human: (res.status === 401 ? 'Unauthorized (sign in again)' : 'Forbidden — often RLS or missing permission on ' + tableName)
+        };
+      } catch (x) {}
       // Only clear session once to avoid infinite 401 loop
       if (window._isLoggedIn !== false) {
         window._authToken  = null;
@@ -4721,8 +4728,18 @@ async function supaFetch(method, tableAndQuery, body) {
     }
 
     if (!res.ok) {
-      var e = await res.json().catch(function(){ return {}; });
-      console.error('[API] ' + res.status + ' on ' + method + ' ' + tableName + ':', e.error || res.statusText);
+      var errTxt = await res.text().catch(function(){ return ''; });
+      var e = {};
+      try { e = errTxt ? JSON.parse(errTxt) : {}; } catch (parseErr) {}
+      var _human = e.message || e.error || (e.details && (e.details.message || String(e.details))) || e.hint || errTxt || res.statusText;
+      try {
+        window._lastApiError = {
+          table: tableName, method: method, status: res.status,
+          detail: (errTxt || '').slice(0, 1200), parsed: e,
+          human: String(_human || '').slice(0, 800)
+        };
+      } catch (x2) {}
+      console.error('[API] ' + res.status + ' on ' + method + ' ' + tableName + ':', e.message || e.error || e.details || errTxt || res.statusText);
       return null;
     }
 
@@ -4750,13 +4767,50 @@ async function supaFetch(method, tableAndQuery, body) {
         return r.error ? null : r.data;
       } else if (method === 'POST' && isUpsert) {
         var r = await db.from(tableName).upsert(body, { onConflict: 'id' });
-        return r.error ? null : r.data || [];
+        if (r.error) {
+          try {
+            window._lastApiError = {
+              table: tableName, method: method, status: 0, detail: JSON.stringify(r.error),
+              parsed: r.error, human: String(r.error.message || r.error.details || r.error.hint || 'Supabase upsert error').slice(0, 800)
+            };
+          } catch (x) {}
+          return null;
+        }
+        return r.data || [];
       } else if (method === 'POST') {
-        var r = await db.from(tableName).insert(body);
-        return r.error ? null : r.data || [];
+        var rIns = await db.from(tableName).insert(body);
+        if (rIns.error) {
+          try {
+            window._lastApiError = {
+              table: tableName, method: method, status: 0, detail: JSON.stringify(rIns.error),
+              parsed: rIns.error, human: String(rIns.error.message || rIns.error.details || rIns.error.hint || 'Supabase insert error').slice(0, 800)
+            };
+          } catch (x) {}
+          return null;
+        }
+        return rIns.data || [];
       } else if (method === 'PATCH' && filterId) {
         var r = await db.from(tableName).update(body).eq('id', filterId);
-        return r.error ? null : r.data || [];
+        if (r.error) {
+          try {
+            window._lastApiError = {
+              table: tableName, method: method, status: 0, detail: JSON.stringify(r.error),
+              parsed: r.error, human: String(r.error.message || r.error.details || r.error.hint || 'Supabase update error').slice(0, 800)
+            };
+          } catch (x) {}
+          return null;
+        }
+        var rd = r.data;
+        if (!rd || (Array.isArray(rd) && rd.length === 0)) {
+          try {
+            window._lastApiError = {
+              table: tableName, method: method, status: 0, detail: '', parsed: {},
+              human: 'Update matched no rows (id may not exist in database).'
+            };
+          } catch (x) {}
+          return null;
+        }
+        return rd;
       } else if (method === 'DELETE' && filterId) {
         var r = await db.from(tableName).delete().eq('id', filterId);
         return r.error ? null : [];
@@ -4809,25 +4863,81 @@ async function supaSaveOrder(o) {
   } catch(e) { console.error('[Supa] supaSaveOrder exception:', e); }
 }
 async function supaSaveShipment(s) {
-  if (!SUPA.enabled) return;
+  if (!SUPA.enabled) return true;
+  window.__lastShipmentSaveError = '';
   var row = shipmentToDb(s);
+  var rowMin = shipmentToDbMinimal(s);
+  var bestErr = '';
+  function shipmentErrMsg() {
+    var le = window._lastApiError;
+    if (!le || le.table !== 'shipments') return '';
+    return (le.human || le.detail || '').trim();
+  }
+  function noteErr() {
+    var m = shipmentErrMsg();
+    if (!m) return;
+    var noRow = /matched no rows/i.test(m);
+    if (!bestErr) bestErr = m;
+    else if (!noRow) bestErr = m;
+    else if (!/matched no rows/i.test(bestErr)) { /* keep stronger err */ }
+    else bestErr = m;
+  }
+  function markPersisted() {
+    if (s && s._stubFromOrders) try { delete s._stubFromOrders; } catch (x) {}
+  }
   try {
-    // Upsert — insert or update in one call
     var r = await supaFetch('POST', 'shipments?on_conflict=id', row);
-    if (r === null) {
-      // Fallback: try PATCH then INSERT
-      var patch = await supaFetch('PATCH', 'shipments?id=eq.' + encodeURIComponent(row.id), row);
-      if (patch === null) {
-        var ins = await supaFetch('POST', 'shipments', row);
-        if (ins === null) console.error('[Supa] supaSaveShipment FAILED for', row.id);
-        else console.log('[Supa] Shipment inserted (fallback):', row.id);
-      } else {
-        console.log('[Supa] Shipment updated (fallback):', row.id);
-      }
-    } else {
+    if (r !== null) {
       console.log('[Supa] Shipment upserted:', row.id, row.status);
+      markPersisted();
+      return true;
     }
-  } catch(e) { console.error('[Supa] supaSaveShipment exception:', e); }
+    noteErr();
+
+    // Stub / schema: row may not exist yet, or full payload has columns PostgREST rejects — insert/merge with minimal fields first
+    var rMin = await supaFetch('POST', 'shipments?on_conflict=id', rowMin);
+    if (rMin !== null) {
+      console.log('[Supa] Shipment upserted (minimal columns):', row.id, row.status);
+      markPersisted();
+      return true;
+    }
+    noteErr();
+
+    var minPatch = await supaFetch('PATCH', 'shipments?id=eq.' + encodeURIComponent(row.id), { status: row.status });
+    if (minPatch !== null) {
+      console.log('[Supa] Shipment updated (status-only PATCH):', row.id);
+      markPersisted();
+      return true;
+    }
+    noteErr();
+
+    var patch = await supaFetch('PATCH', 'shipments?id=eq.' + encodeURIComponent(row.id), row);
+    if (patch !== null) {
+      console.log('[Supa] Shipment updated (full PATCH):', row.id);
+      markPersisted();
+      return true;
+    }
+    noteErr();
+
+    var patchMin = await supaFetch('PATCH', 'shipments?id=eq.' + encodeURIComponent(row.id), rowMin);
+    if (patchMin !== null) {
+      console.log('[Supa] Shipment updated (minimal PATCH):', row.id);
+      markPersisted();
+      return true;
+    }
+    noteErr();
+
+    window.__lastShipmentSaveError = bestErr || shipmentErrMsg() || 'Save failed — see DevTools Console for [API] lines.';
+    if (s && s._stubFromOrders && /matched no rows/i.test(window.__lastShipmentSaveError)) {
+      window.__lastShipmentSaveError += ' This shipment only existed from an order link (no DB row yet). If minimal insert also failed, fix RLS INSERT on shipments or align columns.';
+    }
+    console.error('[Supa] supaSaveShipment FAILED for', row.id, window.__lastShipmentSaveError);
+    return false;
+  } catch(e) {
+    console.error('[Supa] supaSaveShipment exception:', e);
+    window.__lastShipmentSaveError = e.message || String(e);
+    return false;
+  }
 }
 async function supaSaveRate(rt) {
   if (!SUPA.enabled) return;
@@ -4842,12 +4952,19 @@ async function supaSaveRate(rt) {
   }
 }
 async function supaSaveCarrier(c) {
-  if (!SUPA.enabled) return;
+  if (!SUPA.enabled) return true;
   var row = carrierToDb(c);
-  // Try upsert first (insert or update on conflict)
   var r = await supaFetch('POST', 'carriers?on_conflict=id', row);
-  // Fallback to PATCH if upsert returns null
-  if (r === null) await supaFetch('PATCH', 'carriers?id=eq.' + encodeURIComponent(row.id), row);
+  if (r === null) r = await supaFetch('PATCH', 'carriers?id=eq.' + encodeURIComponent(row.id), row);
+  if (r === null) {
+    var minimal = { contact: row.contact, phone: row.phone, email: row.email };
+    r = await supaFetch('PATCH', 'carriers?id=eq.' + encodeURIComponent(row.id), minimal);
+  }
+  if (r === null) {
+    console.error('[Carrier] Save failed — open DevTools → Console for [API] error. Common causes: RLS blocking UPDATE, or a column in the payload does not exist (e.g. cost_per_mile).');
+    return false;
+  }
+  return true;
 }
 async function supaSaveItem(it) {
   if (!SUPA.enabled) return;
@@ -4973,14 +5090,36 @@ function shipmentToDb(s) {
     order_ids: s.consolidatedOrders || []
   };
 }
+/** Core columns only — use when full shipmentToDb fails (unknown columns) or stub rows need first INSERT */
+function shipmentToDbMinimal(s) {
+  var costNum = parseFloat(String(s.cost || '0').replace(/[$,—\-]/g,'')) || 0;
+  return {
+    id: s.id,
+    carrier: _uc(s.carrier || ''),
+    mode: _uc(s.mode || 'TL'),
+    origin: _uc(s.origin),
+    dest: _uc(s.dest),
+    weight: parseInt(String(s.weight).replace(/,/g,''), 10) || 0,
+    pieces: parseInt(s.pieces, 10) || 0,
+    status: s.status || 'Planned',
+    pickup_date: s.pickup || null,
+    delivery_date: s.delivery || null,
+    total_cost: costNum,
+    spot_rate: !!s.spotRate,
+    notes: _uc((s.commodity && String(s.commodity).trim()) ? s.commodity : (s.notes || null)) || null
+  };
+}
 function dbToShipment(r) {
+  var _st = r.status || 'Planned';
+  var _stMap = { 'TENDERED':'Tendered','PLANNED':'Planned','IN TRANSIT':'In Transit','DELIVERED':'Delivered','EXCEPTION':'Exception','CANCELLED':'Cancelled','CONFIRMED':'Confirmed' };
+  if (_stMap[_st]) _st = _stMap[_st];
   return {
     id: r.id, carrier: r.carrier, mode: r.mode,
     origin: r.origin, dest: r.dest,
     originZip: r.origin_zip || null,
     destZip:   r.dest_zip   || null,
     weight: r.weight ? r.weight.toLocaleString() : '0',
-    pieces: r.pieces, status: r.status,
+    pieces: r.pieces, status: _st,
     pickup: r.pickup_date, delivery: r.delivery_date,
     cost: r.total_cost ? '$' + r.total_cost.toLocaleString() : '$0',
     spotRate: r.spot_rate, czarliteRate: r.czarlite_rate,
@@ -4997,7 +5136,10 @@ function dbToShipment(r) {
   };
 }
 function carrierToDb(c) {
-  return {
+  var em = c.email && String(c.email).trim();
+  var ph = c.phone && String(c.phone).trim();
+  var ct = c.contact && String(c.contact).trim();
+  var row = {
     id: c.id || ('C-' + c.name.replace(/\s+/g,'-').toUpperCase()),
     name: _uc(c.name), scac: _uc(c.scac || ''), mode: _uc(c.mode || 'TL'),
     status: c.status || 'Active',
@@ -5005,8 +5147,19 @@ function carrierToDb(c) {
     claim_ratio: parseFloat(c.claim) || 0,
     rating: parseFloat(c.rating) || 4.0,
     czarlite_enabled: !!c.czarlite_enabled,
-    carrierconnect_enabled: !!c.carrierconnect_enabled
+    carrierconnect_enabled: !!c.carrierconnect_enabled,
+    contact: ct ? _uc(ct) : null,
+    phone: ph || null,
+    email: em ? em.toLowerCase() : null
   };
+  if (c.cost != null && c.cost !== '' && !isNaN(parseFloat(c.cost)))
+    row.cost_per_mile = parseFloat(c.cost);
+  if (c.preferred != null) row.preferred = !!c.preferred;
+  if (c.laneCount != null && c.laneCount !== '' && !isNaN(parseInt(c.laneCount, 10)))
+    row.lane_count = parseInt(c.laneCount, 10);
+  if (c.region != null && String(c.region).trim() !== '')
+    row.region = _uc(String(c.region));
+  return row;
 }
 function _uc(s) { return typeof s === 'string' ? s.toUpperCase() : s; }
 function rateToDb(r) {
@@ -5159,6 +5312,7 @@ async function supaLoadAll() {
           status: r.status, otd: r.on_time_pct, claim: r.claim_ratio,
           cost: r.cost_per_mile, preferred: r.preferred,
           laneCount: r.lane_count, region: r.region, rating: r.rating,
+          contact: r.contact || '', phone: r.phone || '', email: r.email || '',
           czarlite_enabled: !!r.czarlite_enabled,
           carrierconnect_enabled: !!r.carrierconnect_enabled
         };
@@ -6511,12 +6665,54 @@ function updateNavBadges() {
   if (bOrd) bOrd.textContent = orders.filter(function(o){ return o.status !== 'Cancelled'; }).length;
 }
 
+/** Orders can reference a shipmentId before/without a matching shipments row — list & search would miss them */
+function ensureShipmentsFromOrders() {
+  if (typeof orders === 'undefined' || !orders.length) return;
+  var have = {};
+  (shipments || []).forEach(function(s) { if (s && s.id != null) have[String(s.id)] = true; });
+  var added = 0;
+  orders.forEach(function(o) {
+    if (!o.shipmentId) return;
+    var sid = String(o.shipmentId).trim();
+    if (!sid || have[sid]) return;
+    var sibs = orders.filter(function(x) { return String(x.shipmentId || '') === sid; });
+    if (!sibs.length) return;
+    var tw = sibs.reduce(function(a, x) { return a + wNum(x.weight); }, 0);
+    var tp = sibs.reduce(function(a, x) { return a + (parseInt(x.pieces, 10) || 0); }, 0);
+    var comms = [...new Set(sibs.map(function(x) { return x.commodity || ''; }))].filter(Boolean).join(', ') || 'General';
+    var o0 = sibs[0];
+    shipments.push({
+      id: sid,
+      origin: o0.origin || '—',
+      dest: o0.dest || '—',
+      mode: (o0.shipMode || 'TL'),
+      carrier: o0.preferredCarrier || '',
+      weight: tw ? tw.toLocaleString() : '0',
+      pieces: tp,
+      cost: '—',
+      pickup: o0.ready || '',
+      delivery: o0.due || '',
+      status: 'Planned',
+      commodity: comms,
+      consolidatedOrders: sibs.map(function(x) { return x.id; }),
+      spotRate: false,
+      czarliteRate: false,
+      _stubFromOrders: true
+    });
+    have[sid] = true;
+    added++;
+  });
+  if (added) console.log('[Shipments] Added ' + added + ' stub row(s) from order shipmentId links');
+}
+
 function renderShipments(){
+  ensureShipmentsFromOrders();
   var q=(document.getElementById('shp-search').value||'').toLowerCase();
   var sf=document.getElementById('shp-status').value;
   var mf=document.getElementById('shp-mode').value;
   var rows=shipments.filter(function(s){
-    var hay=(s.id+s.origin+s.dest+s.carrier+(s.commodity||'')).toLowerCase();
+    var cHay = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || '');
+    var hay=(s.id+s.origin+s.dest+cHay+(s.commodity||'')).toLowerCase();
     var qMatch = !q || (function(){
       var terms = q.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
       return q.indexOf(',')>=0 ? terms.some(function(t){ return hay.includes(t); }) : hay.includes(q);
@@ -6525,11 +6721,13 @@ function renderShipments(){
   });
   document.getElementById('shp-tbody').innerHTML=rows.map(function(s){
     var sStyle = s.czarliteRate ? 'background:rgba(99,102,241,.04);border-left:3px solid #6366f1;' : s.spotRate ? 'background:#fef2f2;border-left:3px solid #dc2626;' : rowStyle(s.status);
+    var carrierCell = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || '—');
+    if (!carrierCell || carrierCell === '—') carrierCell = '<span style="color:var(--text3);font-style:italic">—</span>';
     return '<tr style="'+sStyle+'">'
       +'<td><span class="mono" style="color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="openShipDetail(\''+ s.id +'\')">'+ s.id +'</span></td>'
       +'<td>'+s.origin+'</td><td>'+s.dest+'</td>'
       +'<td><span class="tag">'+s.mode+'</span></td>'
-      +'<td>'+(s.xdock ? '<span style="font-size:10px;font-weight:700;background:rgba(124,58,237,.1);color:#7c3aed;border:1px solid rgba(124,58,237,.25);padding:1px 6px;border-radius:6px;margin-right:5px">' + (s.xdockRole==='leg1' ? '🔄 Leg 1' : '🔄 Leg 2') + '</span>' : '')+(s.spotRate && !s.czarliteRate ? '<span style="font-size:10px;font-weight:700;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:1px 6px;border-radius:6px;margin-right:5px">⚠️ Spot</span>' : '')+(s.czarliteRate ? '<span style="font-size:10px;font-weight:700;background:#4f46e5;color:#fff;padding:1px 6px;border-radius:6px;margin-right:5px">📐 Czarlite'+(s.czarliteClass?' Cl.'+s.czarliteClass:'')+' </span>' : '')+s.carrier+'</td>'
+      +'<td>'+(s.xdock ? '<span style="font-size:10px;font-weight:700;background:rgba(124,58,237,.1);color:#7c3aed;border:1px solid rgba(124,58,237,.25);padding:1px 6px;border-radius:6px;margin-right:5px">' + (s.xdockRole==='leg1' ? '🔄 Leg 1' : '🔄 Leg 2') + '</span>' : '')+(s.spotRate && !s.czarliteRate ? '<span style="font-size:10px;font-weight:700;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:1px 6px;border-radius:6px;margin-right:5px">⚠️ Spot</span>' : '')+(s.czarliteRate ? '<span style="font-size:10px;font-weight:700;background:#4f46e5;color:#fff;padding:1px 6px;border-radius:6px;margin-right:5px">📐 Czarlite'+(s.czarliteClass?' Cl.'+s.czarliteClass:'')+' </span>' : '')+carrierCell+'</td>'
       +'<td class="mono" style="color:var(--green)">'+s.cost+'</td>'
       +'<td class="mono">'+s.pickup+'</td>'
       +'<td class="mono">'+s.delivery+'</td>'
@@ -6708,10 +6906,10 @@ function renderOrders(){
       +'<td>'+constraintBadges(o)+'</td>'
       +'<td>'+badge(o.status)+'</td>'
       +'<td style="white-space:nowrap">'
-      +(o.status==='Unplanned'&&eligibleCnt<=1?'<button class="btn btn-primary btn-sm" onclick="openPlan(\''+o.id+'\')">⚡ Plan</button> <button class="btn btn-secondary btn-sm" onclick="openManualPlanForOrder(\''+o.id+'\')" title="Manual plan">✏️</button> <button class="btn btn-secondary btn-sm" onclick="openCrossDockPlanner(\''+o.id+'\')" title="Cross-dock" style="background:rgba(124,58,237,.08);color:#7c3aed;border-color:rgba(124,58,237,.3)">🔄</button>':'')
-      +(o.status==='Unplanned'&&inGroup?'':'')
+      +(o.status==='Unplanned'&&eligibleCnt<=1?'<button class="btn btn-primary btn-sm" onclick="openPlan(\''+o.id+'\')">⚡ Plan</button> <button class="btn btn-secondary btn-sm" onclick="openOrdDetail(\''+o.id+'\');setTimeout(function(){switchOrdDetailTab(\'edit\')},200)" title="Edit order">✏️</button> <button class="btn btn-secondary btn-sm" onclick="openCrossDockPlanner(\''+o.id+'\')" title="Cross-dock" style="background:rgba(124,58,237,.08);color:#7c3aed;border-color:rgba(124,58,237,.3)">🔄</button>':'')
+      +(o.status==='Unplanned'&&inGroup?'<button class="btn btn-primary btn-sm" onclick="openPlan(\''+o.id+'\')" title="Plan this order individually">⚡ Plan</button> <button class="btn btn-secondary btn-sm" onclick="openOrdDetail(\''+o.id+'\');setTimeout(function(){switchOrdDetailTab(\'edit\')},200)" title="Edit order">✏️</button> <button class="btn btn-secondary btn-sm" onclick="openCrossDockPlanner(\''+o.id+'\')" title="Cross-dock" style="background:rgba(124,58,237,.08);color:#7c3aed;border-color:rgba(124,58,237,.3)">🔄</button>':'')
       +(o.status==='Consolidated'?'<button class="btn btn-secondary btn-sm" onclick="unassignOrderFromShipment(\''+o.id+'\',\''+(o.shipmentId||'')+'\',true)" title="Remove from shipment and return to Unplanned" style="background:rgba(245,158,11,.08);color:#b45309;border-color:rgba(245,158,11,.35);font-size:11px">🔓 Unplan</button>':'')
-      +(o.status==='Planned'?'<button class="btn btn-secondary btn-sm" onclick="tenderOrder(\''+o.id+'\',\''+(o.shipmentId||'')+'\')" title="Tender to carrier" style="background:rgba(16,185,129,.08);color:#059669;border-color:rgba(16,185,129,.35);font-size:11px">📤 Tender</button> <button class="btn btn-secondary btn-sm" onclick="unassignOrderFromShipment(\''+o.id+'\',\''+(o.shipmentId||'')+'\',true)" title="Remove from shipment and return to Unplanned" style="background:rgba(245,158,11,.08);color:#b45309;border-color:rgba(245,158,11,.35);font-size:11px">🔓 Unplan</button>':'')
+      +(o.status==='Planned'?(function(){ var _shp=shipments.find(function(s){return s.id===o.shipmentId;}); var _isTendered=_shp&&_shp.status==='Tendered'; return (_isTendered?'<span class="badge badge-purple" style="font-size:9px;margin-right:4px">TENDERED</span>':'<button class="btn btn-secondary btn-sm" onclick="tenderOrder(\''+o.id+'\',\''+(o.shipmentId||'')+'\')" title="Tender to carrier" style="background:rgba(16,185,129,.08);color:#059669;border-color:rgba(16,185,129,.35);font-size:11px">📤 Tender</button>')+((_isTendered)?'':'<button class="btn btn-secondary btn-sm" onclick="unassignOrderFromShipment(\''+o.id+'\',\''+(o.shipmentId||'')+'\',true)" title="Remove from shipment and return to Unplanned" style="background:rgba(245,158,11,.08);color:#b45309;border-color:rgba(245,158,11,.35);font-size:11px">🔓 Unplan</button>');})():'')
       +(o.status==='Unplanned'?'<button class="btn btn-sm" onclick="cancelOrder(\''+o.id+'\')" title="Cancel order" style="background:rgba(245,158,11,.10);color:#b45309;border:1px solid rgba(245,158,11,.35);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:4px">🚫</button> <button class="btn btn-sm" onclick="deleteOrder(\''+o.id+'\')" title="Delete order" style="background:rgba(220,38,38,.08);color:#dc2626;border:1px solid rgba(220,38,38,.2);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:4px">🗑️</button>':'')
       +'</td>'
   });
@@ -10722,6 +10920,11 @@ function _openShipDetailRender(id) {
       + '<p style="font-size:12px;color:var(--text3);line-height:1.5"><span class="mono">' + sid.replace(/</g, '') + '</span> is not in memory. Open the <strong>Shipments</strong> page or use <strong>Sync</strong>, then try again.</p></div>';
     return;
   }
+  var displayCarrier = resolveShipmentCarrierName(s);
+  var carrierEmptyInDb = !s.carrier || String(s.carrier).trim() === '' || String(s.carrier).trim() === '—';
+  var carrierFootnote = (carrierEmptyInDb && displayCarrier !== '—')
+    ? 'Inferred from order preference or lane rates — use <strong>Change Carrier</strong> to save on the shipment.'
+    : '';
   var _shipmentInList = shipments.some(function(x) { return String(x.id) === String(s.id); });
   document.getElementById('sd-title').textContent = s.id;
   var pct = s.status==='Delivered'?100:s.status==='In Transit'?62:s.status==='Tendered'?20:s.status==='Exception'?55:5;
@@ -10734,7 +10937,7 @@ function _openShipDetailRender(id) {
   html += '<div style="padding:16px 24px;background:#f8faff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
   html += '<div style="display:flex;align-items:center;gap:12px">';
   html += badge(s.status);
-  html += '<span style="font-size:13px;color:var(--text2)">' + s.carrier + ' &nbsp;·&nbsp; <span class="tag">' + s.mode + '</span></span>';
+  html += '<span style="font-size:13px;color:var(--text2)">' + displayCarrier + ' &nbsp;·&nbsp; <span class="tag">' + s.mode + '</span></span>';
   if(consolidated) html += '<span style="font-size:11px;background:rgba(99,102,241,.1);color:#6366f1;border:1px solid rgba(99,102,241,.2);padding:2px 9px;border-radius:10px;font-weight:600">🔗 Consolidated &middot; ' + s.consolidatedOrders.length + ' orders</span>';
   html += '</div>';
   html += '<span style="font-size:15px;font-weight:800;color:var(--green)">' + s.cost + '</span>';
@@ -10753,7 +10956,7 @@ function _openShipDetailRender(id) {
 
   // Details grid
   html += '<div style="padding:20px 24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-bottom:1px solid var(--border)">';
-  html += sdField('Carrier', s.carrier, '🚛');
+  html += sdField('Carrier', displayCarrier, '🚛', carrierFootnote);
   html += sdField('Mode', s.mode, '📦');
   html += sdField('Weight', s.weight + ' lbs', '⚖️');
   html += sdField('Pieces', String(s.pieces), '🔢');
@@ -10938,22 +11141,35 @@ function closeTenderResult() {
   setTimeout(function(){ el.style.display = 'none'; }, 420);
 }
 
+/** Tier-2 API origin only (no `/api` suffix). Prevents `.../api/api/tender/email` when apiBase already ends with `/api`. */
+function zoreeApiOrigin() {
+  var b = (typeof SUPA !== 'undefined' && SUPA.apiBase) ? String(SUPA.apiBase) : (window.ZOREE_API_URL || 'http://localhost:3001');
+  b = b.replace(/\/api\/?$/i, '').replace(/\/+$/, '');
+  if (!b) b = 'http://localhost:3001';
+  return b;
+}
+
 function runTenderFlow(id) {
   var s = shipments.find(function(x){ return x.id===id; });
   if(!s) return;
 
   _lastTenderedId = id;
 
+  var carrierDisp = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : String(s.carrier || '').trim();
+  if (!carrierDisp || carrierDisp === '—') carrierDisp = 'Carrier (assign on shipment or order preference)';
+
   // Sending state
   var hero = document.getElementById('tr-hero');
   hero.style.background = 'linear-gradient(135deg,#1e2d6b,#3b82f6)';
   document.getElementById('tr-icon').textContent  = '📡';
   document.getElementById('tr-title').textContent = 'Sending Tender…';
-  document.getElementById('tr-sub').textContent   = 'Contacting ' + s.carrier + ' for ' + id;
+  document.getElementById('tr-sub').textContent   = 'Contacting ' + carrierDisp + ' for ' + id;
   document.getElementById('tr-status-line').textContent = '';
   document.getElementById('tr-card').innerHTML    = buildTenderCard(s);
   document.getElementById('tr-ref').style.display       = 'none';
   document.getElementById('tr-error-box').style.display = 'none';
+  var _trErrT = document.getElementById('tr-error-title');
+  if (_trErrT) _trErrT.textContent = 'Tender Rejected by Carrier';
   document.getElementById('tr-pulse-bar').style.display = 'block';
   // Accept button already removed from UI
   var viewBtn = document.getElementById('tr-view-btn');
@@ -10967,15 +11183,105 @@ function runTenderFlow(id) {
   setTimeout(function(){ document.getElementById('tr-pulse-fill').style.width = '70%'; }, 80);
 
   var delay = 1000 + Math.random() * 600;
-  setTimeout(function() {
-    var success = Math.random() > 0.1;
+  setTimeout(async function() {
+    // Default: tender always succeeds. Set window.ZOREE_SIMULATE_TENDER_FAIL = true in console to test failure UI (~10% fail).
+    var success = window.ZOREE_SIMULATE_TENDER_FAIL === true ? (Math.random() > 0.1) : true;
 
     if(success) {
+      // Persist carrier on tender when DB/stub row left it blank (orders still have preferredCarrier)
+      if (!(s.carrier && String(s.carrier).trim()) && typeof resolveShipmentCarrierName === 'function') {
+        var _rc = resolveShipmentCarrierName(s);
+        if (_rc && _rc !== '—') s.carrier = _rc;
+      }
       s.status = 'Tendered';
-      supaSaveShipment(s);
+      var saved = await supaSaveShipment(s);
+      if (!saved) {
+        s.status = 'Planned';
+        var _why = (typeof window.__lastShipmentSaveError === 'string' && window.__lastShipmentSaveError.trim()) ? window.__lastShipmentSaveError.trim() : '';
+        try { toast('Tender not saved: ' + (_why ? _why.slice(0, 120) + (_why.length > 120 ? '…' : '') : 'see error in modal / Console'), 'error'); } catch(e) {}
+        renderShipments();
+        document.getElementById('tr-pulse-bar').style.display = 'none';
+        hero.style.background = 'linear-gradient(135deg,#7f1d1d,#dc2626)';
+        document.getElementById('tr-icon').textContent  = '❌';
+        document.getElementById('tr-title').textContent = 'Tender Not Saved';
+        document.getElementById('tr-sub').textContent   = 'Database did not save the tendered status.';
+        document.getElementById('tr-status-line').textContent = '';
+        document.getElementById('tr-card').innerHTML = buildTenderCard(s);
+        document.getElementById('tr-error-box').style.display = 'block';
+        var _dbErrT = document.getElementById('tr-error-title');
+        if (_dbErrT) _dbErrT.textContent = 'Could not save shipment (database / API)';
+        document.getElementById('tr-error-msg').textContent =
+          'This is not a carrier rejection — the app could not write status to Supabase.'
+          + (_why ? '\n\nServer message:\n' + _why : '')
+          + '\n\nTypical fixes: allow UPDATE (and INSERT if the row only exists in the app) on table shipments in Row Level Security; remove or add columns so the payload matches your schema; ensure this shipment id exists in Supabase if you are only updating status.';
+        return;
+      }
       renderShipments();
       closeModal('modal-ship-detail'); // close ship detail behind the tender overlay
       var refNum = 'TND-' + id.replace('SHP-','') + '-' + Math.floor(Math.random()*9000+1000);
+
+      var carrierUp = function(n){ return String(n || '').trim().toUpperCase(); };
+      var carrierRec = carriers.find(function(c){ return carrierUp(c.name) === carrierUp(s.carrier); })
+        || carriers.find(function(c){ return carrierUp(c.name) === carrierUp(carrierDisp); });
+      var toEmail = (carrierRec && carrierRec.email) ? String(carrierRec.email).trim() : '';
+      if (toEmail && window._authToken) {
+        var _tenderUrl = zoreeApiOrigin() + '/api/tender/email';
+        try { console.log('[Tender email] POST', _tenderUrl, '→', toEmail); } catch(e) {}
+        fetch(_tenderUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + window._authToken
+          },
+          body: JSON.stringify({
+            to: toEmail,
+            shipmentId: id,
+            carrierName: (s.carrier && String(s.carrier).trim()) ? s.carrier : carrierDisp,
+            refNum: refNum,
+            subject: 'Load Tender: ' + id + ' — ' + (s.origin || '').split(',')[0] + ' → ' + (s.dest || '').split(',')[0],
+            origin: s.origin || '',
+            dest: s.dest || '',
+            pickup: s.pickupDate || s.pickup || '',
+            delivery: s.deliveryDate || s.delivery || '',
+            mode: s.mode || '',
+            cost: '$' + (s.totalCost || s.cost || 0).toLocaleString(),
+            weight: (s.weight || 0).toLocaleString(),
+            pieces: s.pieces || '',
+            commodity: s.commodity || '',
+            specialInstructions: s.specialInstructions || s.notes || '',
+            contactName: (carrierRec && carrierRec.contact) || '',
+            contactPhone: (carrierRec && carrierRec.phone) || '',
+            contactEmail: toEmail,
+            companyName: 'ZOREE LLC',
+            webUrl: 'www.zoree.io'
+          })
+        }).then(function(r){
+          return r.text().then(function(t){
+            var j = {};
+            try { if (t) j = JSON.parse(t); } catch(e) {}
+            return { ok: r.ok, j: j };
+          });
+        })
+          .then(function(x){
+            try { console.log('[Tender email] response:', x.ok, x.j); } catch(e) {}
+            if (x.ok && x.j && x.j.sent) {
+              try { toast('📧 Tender email sent to ' + toEmail, 'success'); } catch(e) {}
+              if (x.j.messageId) try { console.log('[Tender email] messageId:', x.j.messageId); } catch(e2) {}
+            } else if (x.ok && x.j && x.j.skipped === 'smtp') {
+              try { toast('Tender saved — API has no SMTP (set SMTP_HOST in api/.env). Check GET ' + zoreeApiOrigin() + '/health', 'warning'); } catch(e) {}
+            } else if (!x.ok) {
+              try { toast((x.j && x.j.error) ? x.j.error : 'Tender email failed (see Console)', 'warning'); } catch(e) {}
+            }
+          })
+          .catch(function(err){
+            try { console.error('[Tender email] fetch failed:', err && err.message ? err.message : err); } catch(e) {}
+            try { toast('Tender saved — could not reach API (' + zoreeApiOrigin() + '). Is the API running?', 'warning'); } catch(e2) {}
+          });
+      } else if (toEmail && !window._authToken) {
+        try { toast('Tender saved — sign in to send tender email to the carrier', 'info'); } catch(e) {}
+      } else if (!toEmail) {
+        try { toast('Tender saved — add carrier email in Carriers to notify by email', 'info'); } catch(e) {}
+      }
 
       // Animate bar to 100%
       document.getElementById('tr-pulse-fill').style.width = '100%';
@@ -10986,7 +11292,7 @@ function runTenderFlow(id) {
         hero.style.background = 'linear-gradient(135deg,#1e3a5f,#1d4ed8)';
         document.getElementById('tr-icon').textContent  = '📤';
         document.getElementById('tr-title').textContent = 'Tender Sent!';
-        document.getElementById('tr-sub').textContent   = 'Tender dispatched to ' + s.carrier + ' · Awaiting their response';
+        document.getElementById('tr-sub').textContent   = 'Tender dispatched to ' + carrierDisp + ' · Awaiting their response';
         document.getElementById('tr-status-line').innerHTML = 'Shipment ' + id + ' · Tendered at ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) + ' · <span style="color:#1d4ed8;font-weight:600;cursor:pointer" onclick="closeTenderResult();setTimeout(function(){navigate(\'carrier-portal\');},80)">View in Carrier Portal →</span>';
         document.getElementById('tr-ref').style.display = 'block';
         document.getElementById('tr-ref-num').textContent = refNum;
@@ -11000,7 +11306,7 @@ function runTenderFlow(id) {
           id: 'EV-' + Date.now(), type: 'Tendered',
           datetime: new Date().toISOString().slice(0,16),
           location: s.origin, driver: '',
-          notes: 'Tender accepted by ' + s.carrier + '. Ref: ' + refNum,
+          notes: 'Tender accepted by ' + ((s.carrier && String(s.carrier).trim()) ? s.carrier : carrierDisp) + '. Ref: ' + refNum,
           user: 'System', statusChange: 'Tendered'
         });
       }, 350);
@@ -11015,12 +11321,16 @@ function runTenderFlow(id) {
       var errMsg = errors[Math.floor(Math.random()*errors.length)];
 
       document.getElementById('tr-pulse-bar').style.display = 'none';
+      document.getElementById('tr-ref').style.display = 'none';
+      document.getElementById('tr-card').innerHTML = buildTenderCard(s);
       hero.style.background = 'linear-gradient(135deg,#7f1d1d,#dc2626)';
       document.getElementById('tr-icon').textContent  = '❌';
       document.getElementById('tr-title').textContent = 'Tender Failed';
-      document.getElementById('tr-sub').textContent   = s.carrier + ' could not accept this tender';
+      document.getElementById('tr-sub').textContent   = carrierDisp + ' could not accept this tender';
       document.getElementById('tr-status-line').textContent = 'Shipment status unchanged — still Planned';
       document.getElementById('tr-error-box').style.display = 'block';
+      var _rejT = document.getElementById('tr-error-title');
+      if (_rejT) _rejT.textContent = 'Tender rejected by carrier (simulated)';
       document.getElementById('tr-error-msg').textContent   = errMsg;
       viewBtn.textContent = '🔄 Try Again';
       viewBtn.style.background = 'var(--red)';
@@ -11033,11 +11343,13 @@ function runTenderFlow(id) {
 }
 
 function buildTenderCard(s) {
+  var cname = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || '—');
+  if (!cname || cname === '—') cname = 'Not assigned — use Change Carrier';
   return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Shipment</div>'
     + '<div style="font-weight:800;font-size:14px;color:var(--accent);font-family:monospace;margin-top:2px">'+s.id+'</div></div>'
     + '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Carrier</div>'
-    + '<div style="font-weight:700;font-size:13px;margin-top:2px">'+s.carrier+'</div></div>'
+    + '<div style="font-weight:700;font-size:13px;margin-top:2px">'+cname+'</div></div>'
     + '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Lane</div>'
     + '<div style="font-weight:600;font-size:12px;margin-top:2px">'+s.origin.split(',')[0]+' → '+s.dest.split(',')[0]+'</div></div>'
     + '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Est. Cost</div>'
@@ -11072,7 +11384,7 @@ function acceptTenderFromPopup() {
     id: 'EV-' + Date.now(), type: 'Tender Accepted',
     datetime: new Date().toISOString().slice(0,16),
     location: s.origin, driver: '',
-    notes: 'Tender accepted by dispatcher on behalf of ' + s.carrier,
+    notes: 'Tender accepted by dispatcher on behalf of ' + ((typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || 'carrier')),
     user: 'Dispatcher', statusChange: ''
   });
 
@@ -11081,7 +11393,8 @@ function acceptTenderFromPopup() {
   hero.style.background = 'linear-gradient(135deg,#0f4c35,#16a34a)';
   document.getElementById('tr-icon').textContent  = '✅';
   document.getElementById('tr-title').textContent = 'Tender Accepted!';
-  document.getElementById('tr-sub').textContent   = s.carrier + ' · Acceptance confirmed';
+  var _accC = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || '—');
+  document.getElementById('tr-sub').textContent   = (_accC && _accC !== '—' ? _accC : 'Carrier') + ' · Acceptance confirmed';
   document.getElementById('tr-status-line').innerHTML = 'Shipment ' + _lastTenderedId + ' · Carrier confirmed';
 
   // Swap ref box to green
@@ -11160,12 +11473,48 @@ async function loadOrderLines(orderId, containerEl) {
   }
 }
 
-function sdField(label, value, icon) {
+function sdField(label, value, icon, footnote) {
   var display = (value === null || value === undefined || value === 'null' || value === '') ? '—' : value;
   return '<div style="background:#f8faff;border-radius:10px;padding:12px 14px;border:1px solid var(--border)">'
     + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px">' + icon + ' ' + label + '</div>'
     + '<div style="font-weight:600;font-size:13.5px;color:' + (display === '—' ? 'var(--text3)' : 'var(--text)') + '">' + display + '</div>'
+    + (footnote ? '<div style="font-size:10px;color:var(--text3);margin-top:5px;line-height:1.35">' + footnote + '</div>' : '')
     + '</div>';
+}
+
+/** When shipment.carrier is blank in DB, infer from orders / events / lane rates for display */
+function resolveShipmentCarrierName(s) {
+  function clean(v) {
+    if (v == null) return '';
+    var t = String(v).trim();
+    return (t === '' || t === '—') ? '' : t;
+  }
+  var direct = clean(s.carrier);
+  if (direct) return direct;
+  var idSet = {};
+  if (s.consolidatedOrders && s.consolidatedOrders.length) {
+    s.consolidatedOrders.forEach(function(oid) { if (oid) idSet[String(oid)] = true; });
+  }
+  orders.forEach(function(o) {
+    if (String(o.shipmentId || '') === String(s.id) && o.id) idSet[String(o.id)] = true;
+  });
+  var ids = Object.keys(idSet);
+  var i, ord;
+  for (i = 0; i < ids.length; i++) {
+    ord = orders.find(function(o) { return String(o.id) === String(ids[i]); });
+    if (ord && ord.preferredCarrier) return String(ord.preferredCarrier).trim();
+  }
+  var evs = shipmentEvents[s.id] || [];
+  for (i = 0; i < evs.length; i++) {
+    var n = evs[i].notes || '';
+    var m = n.match(/Tender accepted by\s+([^.\n]+)/i);
+    if (m && m[1]) return m[1].trim();
+  }
+  try {
+    var gr = getRates(s.origin, s.dest);
+    if (gr && gr.length && gr[0].carrier) return gr[0].carrier;
+  } catch (e) {}
+  return '—';
 }
 
 // ─────────────────────────────────────────────
@@ -13542,15 +13891,18 @@ function renderCarrierPortal() {
   empty.style.display = 'none';
 
   grid.innerHTML = pool.map(function(s){
-    return buildTenderCard(s);
+    return buildCarrierPortalTenderCard(s);
   }).join('');
 }
 
-function buildTenderCard(s) {
+function buildCarrierPortalTenderCard(s) {
   var resp    = cpResponses[s.id];
   var status  = resp ? resp.status : 'Awaiting';
   var relOrds = orders.filter(function(o){ return o.shipmentId === s.id || (s.consolidatedOrders && s.consolidatedOrders.includes(o.id)); });
   var consolidated = s.consolidatedOrders && s.consolidatedOrders.length > 1;
+  var cDisp = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || '—');
+  if (cDisp === '—' || !String(cDisp).trim()) cDisp = 'Carrier TBD';
+  var cInitial = String(cDisp).trim().charAt(0) || '?';
 
   // Status colors
   var statusColor = status === 'Accepted' ? 'var(--green)' : status === 'Rejected' ? 'var(--red)' : 'var(--yellow)';
@@ -13575,8 +13927,8 @@ function buildTenderCard(s) {
 
   // Carrier + lane row
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
-  html += '<div style="width:32px;height:32px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0">'+s.carrier[0]+'</div>';
-  html += '<div><div style="font-weight:700;font-size:13px">'+s.carrier+'</div><div style="font-size:11px;color:var(--text3)">'+s.origin.split(',')[0]+' → '+s.dest.split(',')[0]+'</div></div>';
+  html += '<div style="width:32px;height:32px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0">'+cInitial+'</div>';
+  html += '<div><div style="font-weight:700;font-size:13px">'+cDisp+'</div><div style="font-size:11px;color:var(--text3)">'+s.origin.split(',')[0]+' → '+s.dest.split(',')[0]+'</div></div>';
   html += '<div style="margin-left:auto;text-align:right"><div style="font-weight:800;font-size:15px;color:var(--green)">'+s.cost+'</div><div style="font-size:10px;color:var(--text3)">Est. Freight Cost</div></div>';
   html += '</div>';
 
@@ -13654,7 +14006,8 @@ function openCpAccept(shipId) {
   var s = shipments.find(function(x){ return x.id===shipId; });
   if(!s) return;
   document.getElementById('cp-accept-ship-id').value = shipId;
-  document.getElementById('cp-accept-ship-label').textContent = shipId + ' · ' + s.carrier + ' · ' + s.origin.split(',')[0] + ' → ' + s.dest.split(',')[0];
+  var _cpC = (typeof resolveShipmentCarrierName === 'function') ? resolveShipmentCarrierName(s) : (s.carrier || '—');
+  document.getElementById('cp-accept-ship-label').textContent = shipId + ' · ' + (_cpC !== '—' ? _cpC : 'Carrier TBD') + ' · ' + s.origin.split(',')[0] + ' → ' + s.dest.split(',')[0];
   document.getElementById('cp-accept-driver').value  = '';
   document.getElementById('cp-accept-phone').value   = '';
   document.getElementById('cp-accept-truck').value   = '';
@@ -16137,7 +16490,7 @@ function openCarrierModal(id) {
   openModal('modal-carrier-edit');
 }
 
-function saveCarrierModal() {
+async function saveCarrierModal() {
   var nameVal   = document.getElementById('cm-name').value.trim();
   var scacVal   = document.getElementById('cm-scac').value.trim().toUpperCase();
   var modeVal   = document.getElementById('cm-mode').value;
@@ -16154,6 +16507,7 @@ function saveCarrierModal() {
 
   var czV = !!(document.getElementById('cm-czarlite') && document.getElementById('cm-czarlite').checked);
   var ccV = !!(document.getElementById('cm-carrierconnect') && document.getElementById('cm-carrierconnect').checked);
+  var prev = _editingCarrierId ? carriers.find(function(x){ return x.id === _editingCarrierId; }) : null;
   var updated = {
     id: _editingCarrierId || ('CAR-' + Date.now()),
     name: nameVal, scac: scacVal, mode: modeVal,
@@ -16163,18 +16517,30 @@ function saveCarrierModal() {
     czarlite_enabled: czV,
     carrierconnect_enabled: ccV
   };
+  if (prev) {
+    if (prev.laneCount != null) updated.laneCount = prev.laneCount;
+    if (prev.region != null) updated.region = prev.region;
+    if (prev.rating != null) updated.rating = prev.rating;
+  } else {
+    updated.laneCount = 0;
+    updated.rating = 4.0;
+  }
 
   if (_editingCarrierId) {
     var idx = carriers.findIndex(function(x){ return x.id === _editingCarrierId; });
     if (idx > -1) carriers[idx] = updated;
-    toast('✅ Carrier updated — ' + nameVal, 'success');
   } else {
     carriers.push(updated);
-    toast('✅ Carrier added — ' + nameVal, 'success');
   }
-  supaSaveCarrier(updated);
+
+  var saved = await supaSaveCarrier(updated);
   closeModal('modal-carrier-edit');
   renderCarriers();
+  if (saved) {
+    toast(_editingCarrierId ? ('✅ Carrier updated — ' + nameVal) : ('✅ Carrier added — ' + nameVal), 'success');
+  } else {
+    toast('Could not save carrier — ensure Supabase `carriers` has contact, phone, email columns', 'error');
+  }
 }
 
 function exportItems() {
@@ -18489,10 +18855,26 @@ function realtimeHandleChange(table, type, record, oldRec) {
       carriers = carriers.filter(function(c){ return c.id !== id; });
     } else {
       var local = carriers.find(function(c){ return c.id === record.id || c.name === record.name; }) || {};
+      var costDb = record.cost_per_mile != null ? record.cost_per_mile : record.cost;
+      var pick = function(key, rec, loc, empty) {
+        if (Object.prototype.hasOwnProperty.call(rec, key)) {
+          return rec[key] == null || rec[key] === '' ? empty : String(rec[key]);
+        }
+        return loc || empty;
+      };
       var mapped = Object.assign({}, local, {
         id: record.id, name: record.name, scac: record.scac, mode: record.mode,
         status: record.status, otd: record.on_time_pct, claim: record.claim_ratio,
-        cost: record.cost || local.cost, rating: record.rating
+        cost: costDb != null ? costDb : local.cost,
+        preferred: record.preferred != null ? record.preferred : local.preferred,
+        laneCount: record.lane_count != null ? record.lane_count : local.laneCount,
+        region: record.region != null ? record.region : local.region,
+        rating: record.rating != null ? record.rating : local.rating,
+        contact: pick('contact', record, local.contact, ''),
+        phone: pick('phone', record, local.phone, ''),
+        email: pick('email', record, local.email, ''),
+        czarlite_enabled: record.czarlite_enabled != null ? !!record.czarlite_enabled : !!local.czarlite_enabled,
+        carrierconnect_enabled: record.carrierconnect_enabled != null ? !!record.carrierconnect_enabled : !!local.carrierconnect_enabled
       });
       var idx = carriers.findIndex(function(c){ return c.id === record.id || c.name === record.name; });
       if (idx >= 0) carriers[idx] = mapped;
@@ -18560,6 +18942,34 @@ function realtimeUpdateIndicator(state) {
 
 // ── POLLING FALLBACK — re-fetches key tables every 30s ─────────────────
 var _pollTimer = null;
+function _shipmentStatusRank(st) {
+  var p = { 'Cancelled': 0, 'Planned': 1, 'Tendered': 2, 'Confirmed': 2, 'In Transit': 3, 'Exception': 3, 'Delivered': 4 };
+  return p[st] != null ? p[st] : 1;
+}
+/** Prefer higher workflow status from local memory if DB poll is briefly stale (e.g. right after tender). */
+function mergeShipmentsFromPoll(localArr, dbMapped) {
+  var dbById = {};
+  (dbMapped || []).forEach(function(s) { if (s && s.id != null) dbById[String(s.id)] = s; });
+  var out = (dbMapped || []).map(function(dbRow) {
+    var loc = (localArr || []).find(function(x) { return String(x.id) === String(dbRow.id); });
+    if (!loc) return dbRow;
+    if (_shipmentStatusRank(loc.status) > _shipmentStatusRank(dbRow.status)) return loc;
+    // DB row often omits carrier / order_ids after minimal upsert — keep local context for UI + search
+    var merged = Object.assign({}, dbRow);
+    var dbC = merged.carrier != null ? String(merged.carrier).trim() : '';
+    var locC = loc.carrier != null ? String(loc.carrier).trim() : '';
+    if (!dbC && locC) merged.carrier = loc.carrier;
+    var dbCo = merged.consolidatedOrders;
+    var locCo = loc.consolidatedOrders;
+    if ((!dbCo || !dbCo.length) && locCo && locCo.length) merged.consolidatedOrders = locCo.slice();
+    return merged;
+  });
+  (localArr || []).forEach(function(loc) {
+    if (loc && loc.id != null && !dbById[String(loc.id)]) out.push(loc);
+  });
+  return out;
+}
+
 async function startPolling() {
   if (_pollTimer) return;
   _pollTimer = setInterval(async function() {
@@ -18579,19 +18989,26 @@ async function startPolling() {
         if (sig(mapped) !== sig(orders)) { orders = mapped; changed = true; }
       }
       if (newShipments && newShipments.length) {
-        var mappedS = newShipments.map(dbToShipment);
+        var mappedS = mergeShipmentsFromPoll(shipments, newShipments.map(dbToShipment));
         var sigS = function(arr){ return arr.map(function(s){ return s.id+s.status+s.carrier; }).join('|'); };
         if (sigS(mappedS) !== sigS(shipments)) { shipments = mappedS; changed = true; }
       }
       if (newCarriers && newCarriers.length) {
         var mappedC = newCarriers.map(function(r){
-          return { id:r.id, name:r.name, scac:r.scac, mode:r.mode, status:r.status,
-                   otd:r.on_time_pct, claim:r.claim_ratio, cost:r.cost_per_mile,
-                   preferred:r.preferred, laneCount:r.lane_count, region:r.region,
-                   czarlite_enabled: !!r.czarlite_enabled,
-                   carrierconnect_enabled: !!r.carrierconnect_enabled };
+          return {
+            id:r.id, name:r.name, scac:r.scac, mode:r.mode, status:r.status,
+            otd:r.on_time_pct, claim:r.claim_ratio, cost:r.cost_per_mile,
+            preferred:r.preferred, laneCount:r.lane_count, region:r.region, rating:r.rating,
+            contact:r.contact || '', phone:r.phone || '', email:r.email || '',
+            czarlite_enabled: !!r.czarlite_enabled,
+            carrierconnect_enabled: !!r.carrierconnect_enabled
+          };
         });
-        var sigC = function(arr){ return arr.map(function(c){ return c.id+c.status; }).join('|'); };
+        var sigC = function(arr){
+          return arr.map(function(c){
+            return c.id + c.status + (c.contact||'') + (c.phone||'') + (c.email||'') + (c.cost||'');
+          }).join('|');
+        };
         if (sigC(mappedC) !== sigC(carriers)) { carriers = mappedC; changed = true; }
       }
 
