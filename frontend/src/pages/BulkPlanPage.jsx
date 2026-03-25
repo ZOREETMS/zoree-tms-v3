@@ -18,6 +18,7 @@ export default function BulkPlanPage() {
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState([]);
   const [message, setMessage] = useState("");
+  const [optimizeBy, setOptimizeBy] = useState("cost");
 
   const lanes = useMemo(() => {
     const groups = new Map();
@@ -56,7 +57,7 @@ export default function BulkPlanPage() {
     setBusy(true);
     setMessage("");
     try {
-      const res = await BulkPlanApi.rate(lanes, "cost");
+      const res = await BulkPlanApi.rate(lanes, optimizeBy);
       setResults(Array.isArray(res?.results) ? res.results : []);
       setMessage(`Rated ${Array.isArray(res?.results) ? res.results.length : 0} lanes.`);
     } catch (err) {
@@ -114,6 +115,17 @@ export default function BulkPlanPage() {
       <div className="card">
         <div>Unplanned lanes: {lanes.length}</div>
         <div className="row gap">
+          <label>
+            Optimize By{" "}
+            <select
+              value={optimizeBy}
+              onChange={(e) => setOptimizeBy(e.target.value)}
+              disabled={busy}
+            >
+              <option value="cost">Cost</option>
+              <option value="transit">Transit</option>
+            </select>
+          </label>
           <button onClick={onRate} disabled={busy}>
             {busy ? "Working..." : "Rate Lanes"}
           </button>
@@ -132,6 +144,7 @@ export default function BulkPlanPage() {
             <th>Best Carrier</th>
             <th>Mode</th>
             <th>Cost</th>
+            <th>Transit (days)</th>
           </tr>
         </thead>
         <tbody>
@@ -146,6 +159,7 @@ export default function BulkPlanPage() {
                 <td>{best?.carrier || "-"}</td>
                 <td>{best?.mode || "-"}</td>
                 <td>{best?.totalCharge ? `$${best.totalCharge}` : "-"}</td>
+                <td>{best?.transitDays ?? "-"}</td>
               </tr>
             );
           })}

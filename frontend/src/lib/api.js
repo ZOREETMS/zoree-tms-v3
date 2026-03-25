@@ -67,6 +67,26 @@ export const DbApi = {
   },
 };
 
+export const OrdersApi = {
+  full(id) {
+    return api(`/orders/${encodeURIComponent(id)}/full`);
+  },
+  lines(id) {
+    return api(`/orders/${encodeURIComponent(id)}/lines`);
+  },
+  saveLines(id, lines) {
+    return api(`/orders/${encodeURIComponent(id)}/lines`, {
+      method: "POST",
+      body: JSON.stringify(lines),
+    });
+  },
+  clearLines(id) {
+    return api(`/orders/${encodeURIComponent(id)}/lines`, {
+      method: "DELETE",
+    });
+  },
+};
+
 export const TenderApi = {
   sendEmail(payload) {
     return api("/tender/email", {
