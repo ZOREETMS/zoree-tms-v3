@@ -103,7 +103,20 @@
       "Bash(curl -s -X DELETE \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/dock_appointments?facility=eq.ATLANTA%20GA\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
       "Bash(node -e \"try { require\\(''fs''\\).readFileSync\\(''C:/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/index.html'',''utf8''\\); console.log\\(''HTML file reads OK, size:'', require\\(''fs''\\).statSync\\(''C:/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/index.html''\\).size\\); } catch\\(e\\) { console.log\\(''ERROR:'', e.message\\); }\")",
       "Bash(node -e \"try{ new Function\\(require\\(''fs''\\).readFileSync\\(''C:/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/pages/bulk-plan.js'',''utf8''\\)\\); console.log\\(''bulk-plan.js: OK''\\); }catch\\(e\\){ console.log\\(''bulk-plan.js SYNTAX ERROR:'', e.message\\); }\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}\" http://localhost:3000/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}\" http://localhost:3000/)",
+      "Bash(ls \"C:\\\\Zoree\\\\zoree-tms-v3\\\\zoree-tms-v3\\\\frontend 2>/dev/null && echo --- && ls C:Zoreezoree-tms-v3zoree-tms-v3frontendsrc\")",
+      "Bash(find C:Zoreezoree-tms-v3zoree-tms-v3frontend -name *.jsx -o -name *.tsx -o -name vite.config* -o -name package.json)",
+      "Bash(find C:Zoreezoree-tms-v3zoree-tms-v3frontendsrc -type f -name *.jsx -o -name *.js -o -name *.css)",
+      "Bash(findstr :5173.*LISTENING)",
+      "Bash(find C:Zoreezoree-tms-v3zoree-tms-v3 -name index.html.bak -o -name index.html.old -o -name *.bak)",
+      "Bash(git -C C:Zoreezoree-tms-v3zoree-tms-v3 log --oneline -5)",
+      "Bash(git -C C:Zoreezoree-tms-v3zoree-tms-v3 show HEAD~1:frontend/index.html)",
+      "Bash(git -C \"C:\\\\Zoree\\\\zoree-tms-v3\\\\zoree-tms-v3\" log --all --oneline)",
+      "Bash(git -C C:Zoreezoree-tms-v3zoree-tms-v3 show 5459014:frontend/index.html)",
+      "Bash(git -C \"C:\\\\Zoree\\\\zoree-tms-v3\\\\zoree-tms-v3\" show 5459014:frontend/index.html)",
+      "Bash(\"C:\\\\Zoree\\\\zoree-tms-v3\\\\zoree-tms-v3\\\\frontend\\\\OLD_index.html\")",
+      "Bash(npx vite:*)",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/items?select=*&limit=2\" -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE')"
     ]
   }
 }

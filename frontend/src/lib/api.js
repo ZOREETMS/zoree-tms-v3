@@ -49,6 +49,18 @@ export const DbApi = {
   carriers() {
     return api("/db/carriers?q=select=*%26order=name.asc%26limit=500");
   },
+  lanePreferences() {
+    return api("/db/lane_preferences?q=select=*%26order=id%26limit=200");
+  },
+  items() {
+    return api("/db/items?q=select=*%26order=id.asc%26limit=500");
+  },
+  locations() {
+    return api("/db/locations?q=select=*%26order=name.asc%26limit=500");
+  },
+  remove(table, id) {
+    return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   upsert(table, payload) {
     return api(`/db/${table}`, {
       method: "POST",
