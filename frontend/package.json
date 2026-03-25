@@ -2,13 +2,20 @@
   "name": "zoree-tms-frontend",
   "version": "3.0.0",
   "private": true,
-  "description": "ZoreeTMS browser app (static index.html + assets)",
+  "description": "ZoreeTMS frontend (React + Vite)",
   "scripts": {
-    "dev": "serve -l 5173 .",
-    "start": "serve -l 5173 .",
-    "build": "node -e \"console.log('Static frontend — no build step')\""
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 5173"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.2"
   },
   "devDependencies": {
-    "serve": "^14.2.6"
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.1.3"
   }
 }
