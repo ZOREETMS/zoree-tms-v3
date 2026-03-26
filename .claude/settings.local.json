@@ -116,7 +116,22 @@
       "Bash(git -C \"C:\\\\Zoree\\\\zoree-tms-v3\\\\zoree-tms-v3\" show 5459014:frontend/index.html)",
       "Bash(\"C:\\\\Zoree\\\\zoree-tms-v3\\\\zoree-tms-v3\\\\frontend\\\\OLD_index.html\")",
       "Bash(npx vite:*)",
-      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/items?select=*&limit=2\" -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE')"
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/items?select=*&limit=2\" -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE')",
+      "Bash(findstr :5173)",
+      "Bash(findstr LISTENING)",
+      "Bash(tasklist //FI \"PID eq 21048\" //FO CSV //NH)",
+      "Bash(wmic process:*)",
+      "Bash(taskkill //PID 21048 //F)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(taskkill //PID 40676 //F)",
+      "Bash(curl -s -m 5 http://localhost:3001/health)",
+      "Bash(curl -s -m 5 -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@zoree.io\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Zoree@2024\"\"\"\"}')",
+      "Bash(taskkill /PID 44804 /F)",
+      "Bash(cmd /c \"taskkill /PID 44804 /F\")",
+      "Bash(cmd /c \"taskkill /PID 44804 /F 2>&1\")",
+      "Bash(cmd.exe //c \"taskkill //PID 44804 //F\")",
+      "Bash(powershell -Command \"Stop-Process -Id 44804 -Force\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_-Force -ErrorAction SilentlyContinue }\")"
     ]
   }
 }

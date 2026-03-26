@@ -145,6 +145,17 @@ select.fsel{background:#fff;border:1px solid var(--border2);color:var(--text2);b
 .modal-body{padding:24px;}
 .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
 
+/* ── RATE CARDS ─────────────────────────────────────────────── */
+.rate-card{border:2px solid var(--border2);background:var(--bg3);border-radius:12px;padding:16px;margin-bottom:10px;cursor:pointer;transition:all .15s;}
+.rate-card:hover{border-color:var(--accent);}
+.rate-card.selected{border-color:var(--accent);background:var(--accent-glow);}
+
+/* ── SD FIELD (order detail) ────────────────────────────────── */
+.sd-field{background:#f8faff;border-radius:10px;padding:12px 14px;border:1px solid var(--border);}
+.sd-field-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;}
+.sd-field-value{font-weight:600;font-size:13.5px;color:var(--text);}
+.sd-field-value.empty{color:var(--text3);}
+
 /* ── FORM (exact match) ─────────────────────────────────────── */
 .form-grid,.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}

@@ -270,6 +270,8 @@ app.post('/api/tender/email', async (req, res) => {
   const weight = String(b.weight || '');
   const pieces = String(b.pieces || '');
   const commodity = String(b.commodity || '');
+  const dockDoor = String(b.dockDoor || '');
+  const dockTime = String(b.dockTime || '');
   const specialInstructions = String(b.specialInstructions || '');
   const contactName = String(b.contactName || '');
   const contactPhone = String(b.contactPhone || '');
@@ -346,11 +348,21 @@ app.post('/api/tender/email', async (req, res) => {
     <tr>
       <td style="border:1px solid #ccc;padding:8px 12px">
         <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Pickup Date</div>
-        <div style="font-size:14px;font-weight:bold;color:#2e7d32">${pickup}</div>
+        <div style="font-size:14px;font-weight:bold;color:#2e7d32">${pickup || '—'}</div>
       </td>
       <td style="border:1px solid #ccc;padding:8px 12px">
         <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Delivery Date</div>
-        <div style="font-size:14px;font-weight:bold;color:#2e7d32">${delivery}</div>
+        <div style="font-size:14px;font-weight:bold;color:#2e7d32">${delivery || '—'}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Pickup Dock</div>
+        <div style="font-weight:bold">${dockDoor || '—'}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Pickup Time</div>
+        <div style="font-weight:bold">${dockTime || '—'}</div>
       </td>
     </tr>
     <tr>
@@ -370,7 +382,7 @@ app.post('/api/tender/email', async (req, res) => {
       </td>
       <td style="border:1px solid #ccc;padding:8px 12px">
         <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Commodity &amp; Weight</div>
-        <div>${commodity || '—'} &bull; ${weight} lbs &bull; ${pieces} pcs</div>
+        <div style="font-weight:bold">${commodity || '—'} &bull; ${weight || '—'} lbs &bull; ${pieces || '—'} pcs</div>
       </td>
     </tr>
   </table>

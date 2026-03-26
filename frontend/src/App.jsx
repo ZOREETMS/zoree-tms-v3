@@ -59,7 +59,6 @@ export default function App() {
   const [error, setError] = useState("");
 
   async function refreshData() {
-    setLoading(true);
     setError("");
     return Promise.all([
       DbApi.orders(),

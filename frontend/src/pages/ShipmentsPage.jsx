@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi, TenderApi } from "../lib/api";
 
 const STATUS_BADGES = {
@@ -51,11 +51,13 @@ export default function ShipmentsPage() {
       const linkedOrders = orders.filter(
         (o) => String(o.shipment_id || "") === String(s.id || "")
       );
+      const commodities = [...new Set(linkedOrders.map((o) => o.commodity).filter(Boolean))];
       return {
         ...s,
         _carrier: resolveCarrierName(s),
         _linkedOrders: linkedOrders,
         _orderCount: linkedOrders.length,
+        _commodity: commodities.join(", ") || s.commodity || "",
       };
     });
     if (statusFilter !== "All") list = list.filter((s) => s.status === statusFilter);
@@ -95,6 +97,10 @@ export default function ShipmentsPage() {
         origin: row.origin || "", dest: row.dest || "",
         pickup: row.pickup_date || "", delivery: row.delivery_date || "",
         mode: row.mode || "", cost: row.total_cost || "",
+        weight: row.weight || "", pieces: row.pieces || "",
+        commodity: row.commodity || row._commodity || "",
+        dockDoor: row.dock_door || "Door 1",
+        dockTime: row.dock_time || "06:00–08:00",
       });
       toast(`Tendered ${row.id} → ${to}`, "success");
       await refreshData();
