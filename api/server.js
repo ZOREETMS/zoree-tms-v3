@@ -1573,8 +1573,9 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         const key = (q.carrier || '').toUpperCase();
         const flags = carrierFlags[key] || carrierFlags[(q.scac || '').toUpperCase()] || {};
         q.ccxlEnabled = !!flags.ccxl;
-        // Infeasible: CCXL enabled but no transit data returned
-        q.infeasible = !!(flags.ccxl && !q.transitDays);
+        // Infeasible: only for TL carriers where CCXL is enabled but no transit data returned
+        // LTL carriers are never infeasible just because transit data is missing (CzarLite doesn't always return transit)
+        q.infeasible = !!(q.mode === 'TL' && flags.ccxl && !q.transitDays);
         // Over LTL weight limit
         if (q.mode === 'LTL' && wt > LTL_MAX) q.infeasible = true;
       });

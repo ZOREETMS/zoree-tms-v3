@@ -205,8 +205,8 @@ export default function OrdersPage() {
       setEditForm({
         customer: o.customer || "", status: o.status || "Unplanned",
         refNum: o.ref_num || o.refNum || "", poNum: o.po_num || o.poNum || "",
-        originCity: op.city, originState: op.state, originZip: o.origin_zip || op.zip,
-        destCity: dp.city, destState: dp.state, destZip: o.dest_zip || dp.zip,
+        originCity: op.city, originState: op.state, originZip: o.origin_zip || op.zip || cityZipLookup(o.origin) || "",
+        destCity: dp.city, destState: dp.state, destZip: o.dest_zip || dp.zip || cityZipLookup(o.dest) || "",
         weight: o.weight || "", pieces: o.pieces || "", shipMode: o.ship_mode || o.shipMode || "",
         commodity: o.commodity || "", incoterms: o.incoterms || "", equipment: o.equipment || "",
         ready: o.ready || "", due: o.due || "", notes: o.notes || "",
@@ -368,6 +368,20 @@ export default function OrdersPage() {
     return { pickup, delivery, transit };
   }
 
+  /* ── City → Zip fallback (for orders missing zip codes) ── */
+  const CITY_ZIPS = {
+    "chicago": "60602", "dallas": "75202", "atlanta": "30303", "los angeles": "90012",
+    "new york": "10001", "houston": "77002", "san jose": "95112", "charlotte": "28202",
+    "memphis": "38103", "louisville": "40202", "columbus": "43215", "indianapolis": "46204",
+    "nashville": "37203", "san francisco": "94102", "seattle": "98101", "denver": "80202",
+    "phoenix": "85004", "detroit": "48226", "minneapolis": "55401", "miami": "33131",
+    "college park": "30337", "laredo": "78040", "el paso": "79901", "savannah": "31401",
+  };
+  const cityZipLookup = (str) => {
+    const city = (str || "").split(",")[0].trim().toLowerCase();
+    return CITY_ZIPS[city] || "";
+  };
+
   /* ── Open Plan Confirmation Modal ── */
   async function openPlanModal(orderId, planGroup = false) {
     const o = orders.find((x) => x.id === orderId);
@@ -378,8 +392,8 @@ export default function OrdersPage() {
       : [o];
     const totalWeight = sibs.reduce((s, x) => s + Number(x.weight || 0), 0);
     const totalPieces = sibs.reduce((s, x) => s + Number(x.pieces || 0), 0);
-    const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
-    const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || "";
+    const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
+    const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.dest);
     const maxWt = 44000;
     const util = Math.round((totalWeight / maxWt) * 100);
     const lane = {

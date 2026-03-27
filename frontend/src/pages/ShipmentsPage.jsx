@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import { DbApi, TenderApi } from "../lib/api";
 
 const STATUS_BADGES = {
@@ -11,6 +11,217 @@ const STATUS_BADGES = {
   Cancelled: "badge badge-red",
 };
 
+/* ── InfoBox helper ── */
+function InfoBox({ icon, label, value }) {
+  return (
+    <div style={{ padding: "10px 14px", background: "var(--bg2)", borderRadius: 10, border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>{icon} {label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>{value || "—"}</div>
+    </div>
+  );
+}
+
+/* ── Shipment Detail Modal ── */
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES }) {
+  const linked = ds._linkedOrders || [];
+  const consolidated = linked.length > 1;
+  const pct = ds.status === "Delivered" ? 100 : ds.status === "In Transit" ? 62 : ds.status === "Tendered" ? 20 : ds.status === "Exception" ? 55 : 5;
+  const barCol = ds.status === "Exception" ? "var(--red)" : ds.status === "Delivered" ? "var(--green)" : "var(--accent)";
+  const isTendered = ds.status !== "Planned";
+  const isPickedUp = ["In Transit", "Delivered", "Exception"].includes(ds.status);
+  const isInTransit = ["In Transit", "Delivered"].includes(ds.status);
+  const isDelivered = ds.status === "Delivered";
+  const transitDays = (() => {
+    const pu = ds.pickup_date, du = ds.delivery_date;
+    if (!pu || !du) return "—";
+    const d1 = new Date(pu), d2 = new Date(du);
+    if (isNaN(d1) || isNaN(d2)) return "—";
+    return Math.max(1, Math.round((d2 - d1) / 86400000)) + " days";
+  })();
+  const timelineEvents = [
+    { icon: "📋", label: "Order Created & Rate Confirmed", done: true },
+    { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? (ds.pickup_date || "—") : "Pending" },
+    { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? (ds.pickup_date || "—") : "Pending" },
+    { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? "En route" : "Pending" },
+    { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? (ds.delivery_date || "—") : "Pending" },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+        <div className="modal-header">
+          <div>
+            <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1 }}>SHIPMENT DETAILS</div>
+            <h3>{ds.id}</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+
+          {/* Status bar */}
+          <div style={{ padding: "14px 20px", background: "#f8faff", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className={STATUS_BADGES[ds.status] || "badge"}>{ds.status}</span>
+              <span style={{ fontSize: 13, color: "var(--text2)" }}>{ds._carrier || "—"} · <span className={`badge ${ds.mode === "LTL" ? "badge-blue" : "badge-green"}`} style={{ fontSize: 11 }}>{ds.mode || "—"}</span></span>
+              {consolidated && <span style={{ fontSize: 11, background: "rgba(99,102,241,.1)", color: "#6366f1", border: "1px solid rgba(99,102,241,.2)", padding: "2px 9px", borderRadius: 10, fontWeight: 600 }}>🔗 Consolidated · {linked.length} orders</span>}
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--green)" }}>${(ds.total_cost || 0).toLocaleString()}</span>
+          </div>
+
+          {/* Progress / Origin → Destination */}
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>ORIGIN</div>
+                <div style={{ fontWeight: 700, fontSize: 14, marginTop: 3 }}>{ds.origin || "—"}</div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Pickup: {ds.pickup_date || "—"}</div>
+              </div>
+              <div style={{ textAlign: "center", paddingTop: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)" }}>750 mi</div>
+                <span style={{ fontSize: 12, color: "var(--text3)" }}>{pct}% complete</span>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>DESTINATION</div>
+                <div style={{ fontWeight: 700, fontSize: 14, marginTop: 3 }}>{ds.dest || "—"}</div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Delivery: {ds.delivery_date || "—"}</div>
+              </div>
+            </div>
+            <div style={{ height: 10, background: "var(--bg3)", borderRadius: 8 }}>
+              <div style={{ width: `${pct}%`, height: 10, background: barCol, borderRadius: 8 }} />
+            </div>
+          </div>
+
+          {/* Details grid - 3 columns */}
+          <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, borderBottom: "1px solid var(--border)" }}>
+            <InfoBox icon="🚛" label="Carrier" value={ds._carrier || "—"} />
+            <InfoBox icon="📦" label="Mode" value={ds.mode || "—"} />
+            <InfoBox icon="⚖️" label="Weight" value={`${(ds.weight || 0).toLocaleString()} lbs`} />
+            <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
+            <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
+            <InfoBox icon="💰" label="Est. Cost" value={`$${(ds.total_cost || 0).toLocaleString()}`} />
+            <InfoBox icon="📅" label="Pickup Date" value={ds.pickup_date || "—"} />
+            <InfoBox icon="🏁" label="Delivery Date" value={ds.delivery_date || "—"} />
+            <InfoBox icon="🚚" label="Transit Days" value={transitDays} />
+            <InfoBox icon="🚪" label="Dock Door" value={ds.dock_door || "—"} />
+            <InfoBox icon="🕐" label="Dock Window" value={ds.dock_time || "—"} />
+            <InfoBox icon="▶️" label="Loading Start" value={ds.loading_start || "—"} />
+            <InfoBox icon="⏹️" label="Loading End" value={ds.loading_end || "—"} />
+          </div>
+
+          {/* Consolidated Orders */}
+          {linked.length > 0 && (
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+                {linked.length > 1 ? `Consolidated Orders (${linked.length})` : "Associated Order"}
+              </div>
+              {linked.map((o) => (
+                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", background: "#f8faff", borderRadius: 8, marginBottom: 6, border: "1px solid var(--border)" }}>
+                  <span className="mono" style={{ color: "var(--accent)", fontSize: 12, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>{o.id}</span>
+                  <span style={{ fontSize: 12, color: "var(--text2)" }}>{o.customer || ""}</span>
+                  <span style={{ fontSize: 12, color: "var(--text3)" }}>· {o.commodity || ""}</span>
+                  <span style={{ fontSize: 11, color: "var(--text3)" }}>· {(o.origin || "").split(",")[0]} → {(o.dest || "").split(",")[0]}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, fontFamily: "monospace", color: "var(--text2)" }}>{(o.weight || 0).toLocaleString()} lbs</span>
+                  {ds.status === "Planned" && (
+                    <button style={{ padding: "3px 10px", background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 7, fontSize: 11, fontWeight: 600, color: "#b45309", cursor: "pointer", fontFamily: "inherit" }}>🔓 Unassign</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Line Items */}
+          <ShipmentLineItems orderIds={linked.map((o) => o.id)} />
+
+          {/* Shipment Timeline */}
+          <div style={{ padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1 }}>Shipment Timeline</span>
+              <button style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ Add Event</button>
+            </div>
+            {timelineEvents.map((ev, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: ev.done ? "var(--accent)" : "var(--bg3)", border: ev.done ? "2px solid var(--accent)" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+                    {ev.done ? <span style={{ color: "#fff", fontSize: 12 }}>{ev.icon}</span> : <span style={{ opacity: 0.4, fontSize: 12 }}>{ev.icon}</span>}
+                  </div>
+                  {i < 4 && <div style={{ width: 2, height: 20, background: ev.done ? "var(--accent)" : "var(--border)" }} />}
+                </div>
+                <div style={{ paddingTop: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: ev.done ? "var(--text)" : "var(--text3)" }}>{ev.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--text3)" }}>{ev.time || (ev.done ? "Confirmed" : "Pending")}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Action Footer */}
+        <div style={{ padding: "14px 20px", background: "#f8faff", borderTop: "1px solid var(--border)", display: "flex", gap: 8, flexWrap: "wrap", borderRadius: "0 0 16px 16px" }}>
+          {ds.status === "Planned" && (
+            <button className="btn btn-primary btn-sm" onClick={() => onTender(ds)}>📤 Tender to Carrier</button>
+          )}
+          {ds.status === "Tendered" && (
+            <button style={{ background: "#ea580c", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => onWithdraw(ds)}>📤 Withdraw Tender</button>
+          )}
+          {["Planned", "Tendered", "In Transit"].includes(ds.status) && (
+            <button className="btn btn-secondary btn-sm">🔄 Change Carrier</button>
+          )}
+          <button className="btn btn-secondary btn-sm">🚪 Dock schedule</button>
+          <button className="btn btn-secondary btn-sm">📄 Documents</button>
+          <button className="btn btn-secondary btn-sm">📧 Contact Carrier</button>
+          <button className="btn btn-secondary btn-sm">📨 Send to WMS</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Async Line Items for Shipment Detail ── */
+function ShipmentLineItems({ orderIds }) {
+  const [lines, setLines] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!orderIds.length) { setLoading(false); return; }
+    Promise.all(orderIds.map((oid) =>
+      DbApi.list("order_lines", `order_id=eq.${encodeURIComponent(oid)}&order=line_num.asc&limit=50`)
+        .then((res) => (Array.isArray(res) ? res : res?.data || []))
+        .catch(() => [])
+    )).then((results) => {
+      setLines(results.flat());
+      setLoading(false);
+    });
+  }, [orderIds.join(",")]);
+  if (loading) return <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📦 Line Items</div><div style={{ color: "var(--text3)", fontSize: 12, fontStyle: "italic" }}>Loading…</div></div>;
+  if (!lines.length) return null;
+  return (
+    <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📦 Line Items</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: "var(--bg3)" }}>
+            {["Order", "#", "Item ID", "Description", "Qty", "Unit Wt", "Total Wt"].map((h) => (
+              <th key={h} style={{ padding: "5px 8px", textAlign: ["Qty", "Unit Wt", "Total Wt"].includes(h) ? "right" : "left", fontSize: 10, color: "var(--text3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid var(--border)" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+              <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 10, color: "var(--text3)" }}>{l.order_id || ""}</td>
+              <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text3)" }}>{i + 1}</td>
+              <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 11, color: "var(--accent)" }}>{l.item_id || "—"}</td>
+              <td style={{ padding: "5px 8px", fontSize: 12 }}>{l.description || "—"}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{l.qty_ordered || 0}</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{l.unit_weight || 0} lbs</td>
+              <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{l.total_weight || 0} lbs</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function ShipmentsPage() {
   const { shipments, orders, carriers, setData, refreshData } = useOutletContext();
   const [q, setQ] = useState("");
@@ -19,6 +230,22 @@ export default function ShipmentsPage() {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState({ text: "", type: "" });
   const [detailShipment, setDetailShipment] = useState(null);
+
+  // Auto-open shipment detail from URL ?id=SHP-xxxx (run once on mount)
+  const [autoOpened, setAutoOpened] = useState(false);
+  useEffect(() => {
+    if (autoOpened) return;
+    const idParam = new URLSearchParams(window.location.search).get("id");
+    if (idParam && shipments.length > 0) {
+      const ship = shipments.find((s) => s.id === idParam);
+      if (ship) {
+        const linkedOrders = orders.filter((o) => String(o.shipment_id || "") === String(ship.id || ""));
+        setDetailShipment({ ...ship, _linkedOrders: linkedOrders, _carrier: ship.carrier || "" });
+      }
+      setAutoOpened(true);
+      window.history.replaceState({}, "", "/shipments");
+    }
+  }, [shipments]);
   const [sortCol, setSortCol] = useState("id");
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -329,164 +556,7 @@ export default function ShipmentsPage() {
       <div className="text-sm text-muted mt-2">{rows.length} of {shipments.length} shipments</div>
 
       {/* Shipment Detail Modal */}
-      {detailShipment && (
-        <div className="modal-overlay" onClick={() => setDetailShipment(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1 }}>SHIPMENT DETAILS</div>
-                <h3>{detailShipment.id}</h3>
-              </div>
-              <button className="modal-close" onClick={() => setDetailShipment(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {/* Status bar */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className={STATUS_BADGES[detailShipment.status] || "badge"}>
-                  {detailShipment.status}
-                </span>
-                <span className="fw-700">{detailShipment._carrier || "—"}</span>
-                <span className="text-muted">·</span>
-                <span className={`badge ${detailShipment.mode === "LTL" ? "badge-blue" : "badge-green"}`}>
-                  {detailShipment.mode || "—"}
-                </span>
-                <span className="ml-auto fw-700 text-green" style={{ fontSize: 20 }}>
-                  ${(detailShipment.total_cost || 0).toLocaleString()}
-                </span>
-              </div>
-
-              {/* Origin → Destination */}
-              <div className="flex items-center gap-3 mb-3" style={{ padding: "12px 16px", background: "var(--bg2)", borderRadius: 12, border: "1px solid var(--border)" }}>
-                <div>
-                  <div className="text-xs text-muted">ORIGIN</div>
-                  <div className="fw-700">{detailShipment.origin || "—"}</div>
-                  <div className="text-xs text-muted">Pickup: {detailShipment.pickup_date || "—"}</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div className="text-xs text-muted">
-                    {detailShipment._linkedOrders?.length > 1 ? `${detailShipment._linkedOrders.length} orders consolidated` : ""}
-                  </div>
-                  <div style={{ borderTop: "2px solid var(--accent)", margin: "6px 0" }} />
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div className="text-xs text-muted">DESTINATION</div>
-                  <div className="fw-700">{detailShipment.dest || "—"}</div>
-                  <div className="text-xs text-muted">Delivery: {detailShipment.delivery_date || "—"}</div>
-                </div>
-              </div>
-
-              {/* Info Grid */}
-              <div className="info-grid">
-                <div className="info-box">
-                  <div className="info-box-label">Carrier</div>
-                  <div className="info-box-value">{detailShipment._carrier || "—"}</div>
-                </div>
-                <div className="info-box">
-                  <div className="info-box-label">Mode</div>
-                  <div className="info-box-value">{detailShipment.mode || "—"}</div>
-                </div>
-                <div className="info-box">
-                  <div className="info-box-label">Weight</div>
-                  <div className="info-box-value">{(detailShipment.weight || 0).toLocaleString()} lbs</div>
-                </div>
-                <div className="info-box">
-                  <div className="info-box-label">Pieces</div>
-                  <div className="info-box-value">{detailShipment.pieces || "—"}</div>
-                </div>
-                <div className="info-box">
-                  <div className="info-box-label">Est. Cost</div>
-                  <div className="info-box-value">${(detailShipment.total_cost || 0).toLocaleString()}</div>
-                </div>
-                <div className="info-box">
-                  <div className="info-box-label">Pickup Date</div>
-                  <div className="info-box-value">{detailShipment.pickup_date || "—"}</div>
-                </div>
-              </div>
-
-              {/* Linked Orders */}
-              {detailShipment._linkedOrders?.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-xs fw-700 text-muted mb-2" style={{ letterSpacing: 1 }}>
-                    ASSOCIATED ORDERS ({detailShipment._linkedOrders.length})
-                  </div>
-                  {detailShipment._linkedOrders.map((o) => (
-                    <div key={o.id} className="flex items-center gap-2 mb-2" style={{
-                      padding: "8px 12px", background: "var(--bg2)",
-                      borderRadius: 10, border: "1px solid var(--border)"
-                    }}>
-                      <span className="mono text-sm" style={{ color: "var(--accent)", fontWeight: 600 }}>
-                        {o.id}
-                      </span>
-                      <span className="text-sm">{o.customer || ""}</span>
-                      <span className="text-xs text-muted">·</span>
-                      <span className="text-xs text-muted">{o.commodity || ""}</span>
-                      <span className="text-xs text-muted">·</span>
-                      <span className="text-xs text-muted">{o.origin} → {o.dest}</span>
-                      <span className="ml-auto mono text-sm">{(o.weight || 0).toLocaleString()} lbs</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Timeline */}
-              <div className="mt-4">
-                <div className="text-xs fw-700 text-muted mb-2" style={{ letterSpacing: 1 }}>
-                  SHIPMENT TIMELINE
-                </div>
-                <div className="timeline">
-                  <div className="timeline-item done">
-                    <div className="timeline-label">Order Created & Rate Confirmed</div>
-                    <div className="timeline-time">{detailShipment.pickup_date || "—"}</div>
-                  </div>
-                  <div className={`timeline-item ${detailShipment.status !== "Planned" ? "done" : ""}`}>
-                    <div className="timeline-label">Tendered to Carrier</div>
-                    <div className="timeline-time">
-                      {detailShipment.status !== "Planned" ? detailShipment.pickup_date || "—" : "Pending"}
-                    </div>
-                  </div>
-                  <div className={`timeline-item ${["In Transit", "Delivered"].includes(detailShipment.status) ? "done" : ""}`}>
-                    <div className="timeline-label">Picked Up</div>
-                    <div className="timeline-time">
-                      {["In Transit", "Delivered"].includes(detailShipment.status) ? detailShipment.pickup_date || "—" : "Pending"}
-                    </div>
-                  </div>
-                  <div className={`timeline-item ${["In Transit", "Delivered"].includes(detailShipment.status) ? "done" : ""}`}>
-                    <div className="timeline-label">In Transit</div>
-                    <div className="timeline-time">
-                      {["In Transit", "Delivered"].includes(detailShipment.status) ? "En route" : "Pending"}
-                    </div>
-                  </div>
-                  <div className={`timeline-item ${detailShipment.status === "Delivered" ? "done" : ""}`}>
-                    <div className="timeline-label">Delivered</div>
-                    <div className="timeline-time">
-                      {detailShipment.status === "Delivered" ? detailShipment.delivery_date || "—" : "Pending"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              {detailShipment.status === "Planned" && (
-                <button className="btn btn-purple" onClick={() => onTender(detailShipment)}>
-                  🚛 Tender to Carrier
-                </button>
-              )}
-              {detailShipment.status === "Tendered" && (
-                <button className="btn" onClick={() => withdrawTender(detailShipment)}>
-                  ↩ Withdraw Tender
-                </button>
-              )}
-              {detailShipment.status === "Planned" && (
-                <button className="btn btn-red" onClick={() => deleteShipment(detailShipment)}>
-                  🗑️ Delete
-                </button>
-              )}
-              <button className="btn" onClick={() => setDetailShipment(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} STATUS_BADGES={STATUS_BADGES} />}
       </div>{/* end page-content */}
     </div>
   );

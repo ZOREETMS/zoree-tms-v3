@@ -131,7 +131,31 @@
       "Bash(cmd /c \"taskkill /PID 44804 /F 2>&1\")",
       "Bash(cmd.exe //c \"taskkill //PID 44804 //F\")",
       "Bash(powershell -Command \"Stop-Process -Id 44804 -Force\")",
-      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_-Force -ErrorAction SilentlyContinue }\")"
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_-Force -ErrorAction SilentlyContinue }\")",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(node api/server.js)",
+      "Bash(tasklist /FI 'IMAGENAME eq node.exe')",
+      "Bash(findstr node:*)",
+      "Bash(cmd /c \"start /B node api/server.js\")",
+      "Bash(cmd /c \"start /B npx vite --host\")",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(curl -s -X POST http://localhost:3001/api/ltl/quote -H \"Content-Type: application/json\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\" -d \"{\"\"originZip\"\":\"\"60602\"\",\"\"destZip\"\":\"\"75202\"\",\"\"weight\"\":3000,\"\"freightClass\"\":\"\"70\"\"}\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/orders?id=eq.ORD-2024-003\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);const o=Array.isArray\\(j\\)?j[0]:j;console.log\\(''''origin:'''',o.origin\\);console.log\\(''''dest:'''',o.dest\\);console.log\\(''''origin_zip:'''',o.origin_zip\\);console.log\\(''''dest_zip:'''',o.dest_zip\\);console.log\\(''''weight:'''',o.weight\\);console.log\\(''''pieces:'''',o.pieces\\)}\\)\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/orders\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);const o=j.find\\(x=>x.id===''''ORD-2024-003''''\\);if\\(o\\)console.log\\(JSON.stringify\\({id:o.id,origin:o.origin,dest:o.dest,origin_zip:o.origin_zip,dest_zip:o.dest_zip,customer:o.customer,weight:o.weight,pieces:o.pieces},null,2\\)\\);else console.log\\(''''NOT FOUND''''\\)}\\)\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);const arr=j.data||j;const o=arr.find\\(x=>x.id===''''ORD-2024-003''''\\);if\\(o\\)console.log\\(JSON.stringify\\({id:o.id,origin:o.origin,dest:o.dest,origin_zip:o.origin_zip,dest_zip:o.dest_zip,customer:o.customer,weight:o.weight,pieces:o.pieces},null,2\\)\\);else console.log\\(''''NOT FOUND, keys:'''', Object.keys\\(j\\).slice\\(0,5\\)\\)}\\)\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(typeof j, Array.isArray\\(j\\), JSON.stringify\\(j\\).slice\\(0,200\\)\\)}\\)\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/orders?id=eq.ORD-2024-003&select=id,origin,dest,origin_zip,dest_zip,weight,pieces,customer\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/orders?select=id,origin,dest,origin_zip,dest_zip&limit=10&order=id\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>JSON.parse\\(d\\).forEach\\(o=>console.log\\(o.id,o.origin,''''|'''',o.dest,''''| oz:'''',o.origin_zip,''''| dz:'''',o.dest_zip\\)\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/bulk-plan/rate -H \"Content-Type: application/json\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\" -d '{\"\"\"\"lanes\"\"\"\":[{\"\"\"\"laneKey\"\"\"\":\"\"\"\"LA->CHI\"\"\"\",\"\"\"\"origin\"\"\"\":\"\"\"\"LOS ANGELES, CA\"\"\"\",\"\"\"\"destination\"\"\"\":\"\"\"\"CHICAGO, IL\"\"\"\",\"\"\"\"originZip\"\"\"\":\"\"\"\"90012\"\"\"\",\"\"\"\"destZip\"\"\"\":\"\"\"\"60602\"\"\"\",\"\"\"\"totalWeight\"\"\"\":1000,\"\"\"\"freightClass\"\"\"\":\"\"\"\"70\"\"\"\",\"\"\"\"orderIds\"\"\"\":[\"\"\"\"ORD-2024-003\"\"\"\"]}],\"\"\"\"optimizeBy\"\"\"\":\"\"\"\"cost\"\"\"\"}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/bulk-plan/rate -H \"Content-Type: application/json\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\" -d \"{\"\"lanes\"\":[{\"\"laneKey\"\":\"\"LA\"\",\"\"origin\"\":\"\"LOS ANGELES, CA\"\",\"\"destination\"\":\"\"CHICAGO, IL\"\",\"\"originZip\"\":\"\"90012\"\",\"\"destZip\"\":\"\"60602\"\",\"\"totalWeight\"\":1000,\"\"freightClass\"\":\"\"70\"\",\"\"orderIds\"\":[\"\"ORD-2024-003\"\"]}],\"\"optimizeBy\"\":\"\"cost\"\"}\")",
+      "Bash(cmd /c \"start /min cmd /c node api/server.js\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,transit_days,lane&limit=20\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{JSON.parse\\(d\\).forEach\\(r=>console.log\\(r.carrier,''''|'''',r.origin,''''→'''',r.dest,''''|'''',r.rate,''''|'''',r.transit_days+''''d''''\\)\\)}\\)\")",
+      "Bash(node -e \"try{require\\(''esbuild''\\).transformSync\\(require\\(''fs''\\).readFileSync\\(''src/pages/ShipmentsPage.jsx'',''utf8''\\),{jsx:''transform'',loader:''jsx''}\\);console.log\\(''SYNTAX OK''\\)}catch\\(e\\){console.log\\(''ERROR:'',e.message.split\\(''\\\\n''\\).slice\\(0,5\\).join\\(''\\\\n''\\)\\)}\")",
+      "Bash(curl -s http://localhost:5173/shipments)"
     ]
   }
 }
