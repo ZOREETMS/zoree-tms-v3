@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DbApi, TenderApi } from "../lib/api";
+import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -24,6 +24,25 @@ function InfoBox({ icon, label, value }) {
 /* ── Shipment Detail Modal ── */
 function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES }) {
   const linked = ds._linkedOrders || [];
+  const [lines, setLines] = useState([]);
+  const [linesLoading, setLinesLoading] = useState(true);
+  const [events, setEvents] = useState([]);
+  const [showAddEvent, setShowAddEvent] = useState(false);
+  const [newEvent, setNewEvent] = useState({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
+
+  // Load line items for all linked orders
+  useEffect(() => {
+    const ids = linked.map((o) => o.id).filter(Boolean);
+    if (!ids.length) { setLinesLoading(false); return; }
+    Promise.all(ids.map((oid) =>
+      OrdersApi.lines(oid)
+        .then((res) => (Array.isArray(res) ? res : res?.lines || res?.data || []))
+        .catch(() => [])
+    )).then((results) => {
+      setLines(results.flat());
+      setLinesLoading(false);
+    }).catch(() => setLinesLoading(false));
+  }, [ds.id]);
   const consolidated = linked.length > 1;
   const pct = ds.status === "Delivered" ? 100 : ds.status === "In Transit" ? 62 : ds.status === "Tendered" ? 20 : ds.status === "Exception" ? 55 : 5;
   const barCol = ds.status === "Exception" ? "var(--red)" : ds.status === "Delivered" ? "var(--green)" : "var(--accent)";
@@ -99,11 +118,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
             <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
             <InfoBox icon="💰" label="Est. Cost" value={`$${(ds.total_cost || 0).toLocaleString()}`} />
-            <InfoBox icon="📅" label="Pickup Date" value={ds.pickup_date || "—"} />
-            <InfoBox icon="🏁" label="Delivery Date" value={ds.delivery_date || "—"} />
+            <InfoBox icon="📅" label="Pickup Date" value={ds.pickup_date || ds.pickup || "—"} />
+            <InfoBox icon="🏁" label="Delivery Date" value={ds.delivery_date || ds.delivery || "—"} />
             <InfoBox icon="🚚" label="Transit Days" value={transitDays} />
-            <InfoBox icon="🚪" label="Dock Door" value={ds.dock_door || "—"} />
-            <InfoBox icon="🕐" label="Dock Window" value={ds.dock_time || "—"} />
+            <InfoBox icon="🔖" label="PRO Number" value={ds.pro_number || "—"} />
+            <InfoBox icon="📋" label="BOL / Carrier Ref" value={ds.bol_number || "—"} />
+            <InfoBox icon="⭐" label="Service Level" value={ds.service_level || "—"} />
+            <InfoBox icon="🚪" label="Dock Door" value={ds.dock_door || ds.dock_assigned || "—"} />
+            <InfoBox icon="🕐" label="Dock Time" value={ds.dock_time || "—"} />
             <InfoBox icon="▶️" label="Loading Start" value={ds.loading_start || "—"} />
             <InfoBox icon="⏹️" label="Loading End" value={ds.loading_end || "—"} />
           </div>
@@ -130,14 +152,92 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
           )}
 
           {/* Line Items */}
-          <ShipmentLineItems orderIds={linked.map((o) => o.id)} />
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📦 Line Items</div>
+            {linesLoading ? (
+              <div style={{ color: "var(--text3)", fontSize: 12, fontStyle: "italic" }}>Loading…</div>
+            ) : lines.length === 0 ? (
+              <div style={{ color: "var(--text3)", fontSize: 12, fontStyle: "italic" }}>No line items</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "var(--bg3)" }}>
+                    {["Order", "#", "Item ID", "Description", "Qty", "Unit Wt", "Total Wt"].map((h) => (
+                      <th key={h} style={{ padding: "5px 8px", textAlign: ["Qty", "Unit Wt", "Total Wt"].includes(h) ? "right" : "left", fontSize: 10, color: "var(--text3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid var(--border)" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 10, color: "var(--text3)" }}>{l.order_id || ""}</td>
+                      <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text3)" }}>{i + 1}</td>
+                      <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 11, color: "var(--accent)" }}>{l.item_id || "—"}</td>
+                      <td style={{ padding: "5px 8px", fontSize: 12 }}>{l.description || "—"}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{l.qty_ordered || 0}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{l.unit_weight || l.unit_value || 0} lbs</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{l.total_weight || l.total_value || 0} lbs</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
 
           {/* Shipment Timeline */}
           <div style={{ padding: "16px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1 }}>Shipment Timeline</span>
-              <button style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ Add Event</button>
+              <button onClick={() => setShowAddEvent(!showAddEvent)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ Add Event</button>
             </div>
+
+            {/* Add Event Form */}
+            {showAddEvent && (
+              <div style={{ padding: "12px", background: "var(--bg2)", borderRadius: 10, border: "1px solid var(--border)", marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <select value={newEvent.type} onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value })} style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, fontFamily: "inherit" }}>
+                    <option value="">— Select Event Type —</option>
+                    <option value="Picked Up">Picked Up</option>
+                    <option value="In Transit">In Transit</option>
+                    <option value="Departed">Departed Terminal</option>
+                    <option value="Arrived">Arrived at Destination</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Exception">Exception</option>
+                    <option value="Delay">Delay Notification</option>
+                    <option value="Note">General Note</option>
+                  </select>
+                  <input type="date" value={newEvent.date} onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, fontFamily: "inherit" }} />
+                </div>
+                <input placeholder="Add a note (optional)" value={newEvent.note} onChange={(e) => setNewEvent({ ...newEvent, note: e.target.value })} style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, fontFamily: "inherit", marginBottom: 8, boxSizing: "border-box" }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => {
+                    if (!newEvent.type) return;
+                    setEvents([...events, { type: newEvent.type, note: newEvent.note, date: newEvent.date, time: new Date().toLocaleTimeString() }]);
+                    setNewEvent({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
+                    setShowAddEvent(false);
+                  }} style={{ padding: "5px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Save Event</button>
+                  <button onClick={() => setShowAddEvent(false)} style={{ padding: "5px 14px", background: "var(--bg3)", color: "var(--text2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Events */}
+            {events.map((ev, i) => (
+              <div key={`custom-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#10b981", border: "2px solid #10b981", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+                    <span style={{ color: "#fff", fontSize: 12 }}>📝</span>
+                  </div>
+                  <div style={{ width: 2, height: 20, background: "#10b981" }} />
+                </div>
+                <div style={{ paddingTop: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{ev.type}</div>
+                  <div style={{ fontSize: 11, color: "var(--text3)" }}>{ev.date} {ev.time}{ev.note ? ` — ${ev.note}` : ""}</div>
+                </div>
+              </div>
+            ))}
+
+            {/* Default Timeline */}
             {timelineEvents.map((ev, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 4 }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -172,52 +272,6 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
           <button className="btn btn-secondary btn-sm">📨 Send to WMS</button>
         </div>
       </div>
-    </div>
-  );
-}
-
-/* ── Async Line Items for Shipment Detail ── */
-function ShipmentLineItems({ orderIds }) {
-  const [lines, setLines] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    if (!orderIds.length) { setLoading(false); return; }
-    Promise.all(orderIds.map((oid) =>
-      DbApi.list("order_lines", `order_id=eq.${encodeURIComponent(oid)}&order=line_num.asc&limit=50`)
-        .then((res) => (Array.isArray(res) ? res : res?.data || []))
-        .catch(() => [])
-    )).then((results) => {
-      setLines(results.flat());
-      setLoading(false);
-    });
-  }, [orderIds.join(",")]);
-  if (loading) return <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📦 Line Items</div><div style={{ color: "var(--text3)", fontSize: 12, fontStyle: "italic" }}>Loading…</div></div>;
-  if (!lines.length) return null;
-  return (
-    <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📦 Line Items</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <thead>
-          <tr style={{ background: "var(--bg3)" }}>
-            {["Order", "#", "Item ID", "Description", "Qty", "Unit Wt", "Total Wt"].map((h) => (
-              <th key={h} style={{ padding: "5px 8px", textAlign: ["Qty", "Unit Wt", "Total Wt"].includes(h) ? "right" : "left", fontSize: 10, color: "var(--text3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid var(--border)" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-              <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 10, color: "var(--text3)" }}>{l.order_id || ""}</td>
-              <td style={{ padding: "5px 8px", fontSize: 11, color: "var(--text3)" }}>{i + 1}</td>
-              <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 11, color: "var(--accent)" }}>{l.item_id || "—"}</td>
-              <td style={{ padding: "5px 8px", fontSize: 12 }}>{l.description || "—"}</td>
-              <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600 }}>{l.qty_ordered || 0}</td>
-              <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{l.unit_weight || 0} lbs</td>
-              <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{l.total_weight || 0} lbs</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -338,11 +392,82 @@ export default function ShipmentsPage() {
     }
   }
 
-  async function acceptTender(row) {
+  /* ── Accept Tender Modal ── */
+  const [acceptModal, setAcceptModal] = useState(null); // { shipment, pro, pickup, service, bol, dock, dockTime, notes }
+
+  function openAcceptTender(row) {
+    const today = new Date().toISOString().slice(0, 10);
+    setAcceptModal({
+      shipment: row,
+      pro: row.pro_number || "",
+      pickup: row.pickup || today,
+      delivery: row.delivery || "",
+      service: row.service_level || "",
+      bol: row.bol_number || "",
+      dock: row.dock_assigned || "",
+      dockLoadStart: row.dock_load_start || "",
+      dockLoadEnd: row.dock_load_end || "",
+      notes: "",
+    });
+  }
+
+  async function confirmAcceptTender() {
+    if (!acceptModal) return;
+    const { shipment: row, pro, pickup, delivery, service, bol, dock, dockLoadStart, dockLoadEnd, notes } = acceptModal;
+    if (!pickup) { toast("Pickup date is required", "warning"); return; }
     setBusyId(row.id);
     try {
-      await DbApi.patch("shipments", row.id, { status: "Confirmed" });
-      toast(`Tender accepted for ${row.id}`, "success");
+      // 1. Update shipment in DB
+      await DbApi.patch("shipments", row.id, {
+        status: "Confirmed",
+        pro_number: pro || null,
+        pickup: pickup,
+        delivery: delivery || null,
+        service_level: service || null,
+        bol_number: bol || null,
+        dock_assigned: dock || null,
+        dock_load_start: dockLoadStart || null,
+        dock_load_end: dockLoadEnd || null,
+        notes: notes || null,
+      });
+      // 2. Update linked orders
+      const linkedOrders = orders.filter((o) => String(o.shipment_id || "") === String(row.id));
+      await Promise.all(linkedOrders.map((o) =>
+        DbApi.patch("orders", o.id, { status: "Confirmed", pickup: pickup })
+      ));
+      // 3. Push to OMS
+      try {
+        const omsResult = await OmsApi.push({
+          shipmentId: row.id,
+          carrier: row.carrier || "",
+          mode: row.mode || "",
+          serviceLevel: service || "",
+          pickupDate: pickup,
+          deliveryDate: delivery || "",
+          proNumber: pro || "",
+          bolNumber: bol || "",
+          dockNumber: dock || "",
+          dockLoadStart: dockLoadStart || "",
+          dockLoadEnd: dockLoadEnd || "",
+          origin: row.origin || "",
+          destination: row.dest || "",
+          weight: row.weight || 0,
+          pieces: row.pieces || 0,
+          commodity: row.commodity || "",
+          cost: row.cost || 0,
+          orderIds: linkedOrders.map((o) => o.id),
+          notes: notes || "",
+        });
+        if (omsResult.sent) {
+          toast(`✅ Tender confirmed & sent to OMS — ${row.id}`, "success");
+        } else {
+          toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS: ${omsResult.message || "not configured"}`, "success");
+        }
+      } catch (omsErr) {
+        console.warn("[OMS Push] Failed:", omsErr.message);
+        toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS push failed (non-blocking)`, "success");
+      }
+      setAcceptModal(null);
       await refreshData();
     } catch (err) {
       toast(`Failed: ${err.message}`, "error");
@@ -517,7 +642,7 @@ export default function ShipmentsPage() {
                   <button
                     style={{ background: "#16a34a", color: "#fff", border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                     disabled={busyId === s.id}
-                    onClick={() => acceptTender(s)}
+                    onClick={() => openAcceptTender(s)}
                   >
                     ✅ Accept
                   </button>
@@ -557,6 +682,101 @@ export default function ShipmentsPage() {
 
       {/* Shipment Detail Modal */}
       {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} STATUS_BADGES={STATUS_BADGES} />}
+
+      {/* Accept Tender Modal */}
+      {acceptModal && (
+        <div className="modal-overlay" onClick={() => setAcceptModal(null)}>
+          <div style={{ background: "var(--bg)", borderRadius: 16, width: 520, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.4)", border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ background: "linear-gradient(135deg,#0f4c35,#16a34a)", padding: "20px 24px", borderRadius: "16px 16px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>✅ Accept Tender</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.8)", marginTop: 3 }}>{acceptModal.shipment.id} · {acceptModal.shipment.carrier}</div>
+              </div>
+              <button onClick={() => setAcceptModal(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", width: 30, height: 30, borderRadius: "50%", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
+
+            {/* Shipment summary */}
+            <div style={{ padding: "16px 24px", background: "var(--bg2)", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", fontWeight: 700 }}>Origin</div><div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{acceptModal.shipment.origin}</div></div>
+              <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", fontWeight: 700 }}>Destination</div><div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{acceptModal.shipment.dest}</div></div>
+              <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", fontWeight: 700 }}>Weight</div><div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{(acceptModal.shipment.weight || 0).toLocaleString()} lbs</div></div>
+            </div>
+
+            {/* Form */}
+            <div style={{ padding: "20px 24px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>Tender Response Details</div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>PRO Number <span style={{ color: "var(--accent)", fontSize: 10 }}>(from carrier)</span></label>
+                  <input value={acceptModal.pro} onChange={(e) => setAcceptModal({ ...acceptModal, pro: e.target.value })} placeholder="e.g. PRO-123456" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", fontFamily: "monospace", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Pickup Date *</label>
+                  <input type="date" value={acceptModal.pickup} onChange={(e) => setAcceptModal({ ...acceptModal, pickup: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Service Level</label>
+                  <select value={acceptModal.service} onChange={(e) => setAcceptModal({ ...acceptModal, service: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }}>
+                    <option value="">— Select —</option>
+                    <option value="Standard">Standard</option>
+                    <option value="Expedited">Expedited</option>
+                    <option value="Economy">Economy</option>
+                    <option value="White Glove">White Glove</option>
+                    <option value="Time-Critical">Time-Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Carrier Ref / BOL</label>
+                  <input value={acceptModal.bol} onChange={(e) => setAcceptModal({ ...acceptModal, bol: e.target.value })} placeholder="e.g. BOL-2026-001" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", fontFamily: "monospace", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Delivery Date</label>
+                  <input type="date" value={acceptModal.delivery} onChange={(e) => setAcceptModal({ ...acceptModal, delivery: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Assigned</label>
+                  <input value={acceptModal.dock} onChange={(e) => setAcceptModal({ ...acceptModal, dock: e.target.value })} placeholder="e.g. Dock 4A" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Loading Start</label>
+                  <input type="time" value={acceptModal.dockLoadStart} onChange={(e) => setAcceptModal({ ...acceptModal, dockLoadStart: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Loading End</label>
+                  <input type="time" value={acceptModal.dockLoadEnd} onChange={(e) => setAcceptModal({ ...acceptModal, dockLoadEnd: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Notes (optional)</label>
+                <input value={acceptModal.notes} onChange={(e) => setAcceptModal({ ...acceptModal, notes: e.target.value })} placeholder="Any additional carrier notes" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+              </div>
+
+              <div style={{ background: "rgba(59,130,246,.06)", border: "1px solid rgba(59,130,246,.2)", borderRadius: 8, padding: "10px 14px", marginTop: 14, fontSize: 11, color: "var(--text2)" }}>
+                💡 These details will be sent back to OMS via Middleware Pull TMS Planning so the shipping team has all confirmation info.
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: 10, justifyContent: "flex-end", background: "var(--bg2)", borderRadius: "0 0 16px 16px" }}>
+              <button onClick={() => setAcceptModal(null)} style={{ padding: "10px 20px", background: "var(--bg)", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "var(--text2)", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+              <button onClick={confirmAcceptTender} disabled={busyId === acceptModal.shipment.id} style={{ padding: "10px 24px", background: "#16a34a", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>✅ Confirm Acceptance</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </div>{/* end page-content */}
     </div>
   );

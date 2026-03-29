@@ -108,6 +108,15 @@ export const TenderApi = {
   },
 };
 
+export const OmsApi = {
+  push(payload) {
+    return api("/oms/push", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
 export const BulkPlanApi = {
   rate(lanes, optimizeBy = "cost") {
     return api("/bulk-plan/rate", {

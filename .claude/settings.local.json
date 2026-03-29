@@ -155,7 +155,10 @@
       "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,transit_days,lane&limit=20\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
       "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{JSON.parse\\(d\\).forEach\\(r=>console.log\\(r.carrier,''''|'''',r.origin,''''→'''',r.dest,''''|'''',r.rate,''''|'''',r.transit_days+''''d''''\\)\\)}\\)\")",
       "Bash(node -e \"try{require\\(''esbuild''\\).transformSync\\(require\\(''fs''\\).readFileSync\\(''src/pages/ShipmentsPage.jsx'',''utf8''\\),{jsx:''transform'',loader:''jsx''}\\);console.log\\(''SYNTAX OK''\\)}catch\\(e\\){console.log\\(''ERROR:'',e.message.split\\(''\\\\n''\\).slice\\(0,5\\).join\\(''\\\\n''\\)\\)}\")",
-      "Bash(curl -s http://localhost:5173/shipments)"
+      "Bash(curl -s http://localhost:5173/shipments)",
+      "Bash(grep -r \"RateOptimizer\\\\|rateOptimizer\" /c/Zoree/zoree-tms-v3/zoree-tms-v3 --include=*.jsx --include=*.js)",
+      "Bash(taskkill /F /PID 9292)",
+      "Bash(taskkill /F /PID 41148)"
     ]
   }
 }

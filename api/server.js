@@ -475,6 +475,72 @@ app.post('/api/tender/email', async (req, res) => {
   }
 });
 
+// ── POST /api/oms/push — Send shipment details to OMS after tender acceptance ──
+app.post('/api/oms/push', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  const b = req.body || {};
+  const payload = {
+    shipmentId:      String(b.shipmentId || ''),
+    carrier:         String(b.carrier || ''),
+    mode:            String(b.mode || ''),
+    serviceLevel:    String(b.serviceLevel || ''),
+    pickupDate:      String(b.pickupDate || ''),
+    deliveryDate:    String(b.deliveryDate || ''),
+    proNumber:       String(b.proNumber || ''),
+    bolNumber:       String(b.bolNumber || ''),
+    dockNumber:      String(b.dockNumber || ''),
+    dockLoadStart:   String(b.dockLoadStart || ''),
+    dockLoadEnd:     String(b.dockLoadEnd || ''),
+    origin:          String(b.origin || ''),
+    destination:     String(b.destination || ''),
+    weight:          Number(b.weight || 0),
+    pieces:          Number(b.pieces || 0),
+    commodity:       String(b.commodity || ''),
+    cost:            Number(b.cost || 0),
+    orderIds:        Array.isArray(b.orderIds) ? b.orderIds : [],
+    notes:           String(b.notes || ''),
+    timestamp:       new Date().toISOString(),
+    source:          'ZoreeTMS',
+  };
+
+  // Check if OMS endpoint is configured
+  const omsUrl = process.env.OMS_API_URL || '';
+  const omsApiKey = process.env.OMS_API_KEY || '';
+
+  if (!omsUrl) {
+    console.log('[OMS Push] No OMS_API_URL configured. Payload logged:');
+    console.log(JSON.stringify(payload, null, 2));
+    return res.json({
+      sent: false,
+      skipped: 'no_oms_url',
+      message: 'OMS_API_URL not configured. Set OMS_API_URL and OMS_API_KEY env vars to enable OMS integration.',
+      payload,
+    });
+  }
+
+  try {
+    const omsRes = await fetch(omsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(omsApiKey ? { 'Authorization': `Bearer ${omsApiKey}`, 'X-API-Key': omsApiKey } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    const omsText = await omsRes.text();
+    console.log(`[OMS Push] ${omsRes.status} | ${omsText.slice(0, 300)}`);
+    if (omsRes.ok) {
+      res.json({ sent: true, status: omsRes.status, payload });
+    } else {
+      res.status(502).json({ sent: false, error: `OMS returned ${omsRes.status}`, detail: omsText.slice(0, 500), payload });
+    }
+  } catch (err) {
+    console.error('[OMS Push] FAILED:', err.message);
+    res.status(502).json({ sent: false, error: err.message, payload });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════
 // GENERIC TABLE PROXY — handles all TMS data reads/writes
 // Replaces individual order/shipment/carrier routes with one

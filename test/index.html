@@ -3210,38 +3210,32 @@ function onRouteWeightChange(val) {
 
 <!-- ITEM MASTER MODAL -->
 <div class="modal-overlay" id="modal-item">
-  <div class="modal" style="width:680px">
-    <div class="modal-header" style="background:linear-gradient(135deg,#0f4c75,#1b6ca8);border-radius:16px 16px 0 0">
-      <div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Item Master</div>
-        <span class="modal-title" style="color:#fff" id="item-modal-title">New Item</span>
-      </div>
-      <button class="modal-close" data-close="modal-item" style="color:rgba(255,255,255,.7);font-size:22px">✕</button>
+  <div class="modal" style="width:580px">
+    <div class="modal-header">
+      <span class="modal-title" id="item-modal-title">Add New Item</span>
+      <button class="modal-close" data-close="modal-item">✕</button>
     </div>
     <div class="modal-body" style="padding:24px">
 
-      <!-- Section: Identity -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">📋 Item Identity</div>
-      <div class="form-grid" style="margin-bottom:20px">
+      <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
-          <label>Item Number *</label>
-          <input id="itm-f-id" placeholder="e.g. ITM-10042" style="margin-top:5px">
+          <label>Item ID *</label>
+          <input id="itm-f-id">
         </div>
         <div class="form-group">
           <label>Description *</label>
-          <input id="itm-f-desc" placeholder="Product description" style="margin-top:5px">
+          <input id="itm-f-desc">
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group">
+          <label>Customer</label>
+          <input id="itm-f-customer">
         </div>
         <div class="form-group">
-          <label>Customer / Owner</label>
-          <select id="itm-f-customer" style="margin-top:5px">
-            <option value="">— Select —</option>
-            <option>Cisco Systems</option><option>AT&T</option><option>Meta</option>
-            <option>Google</option><option>Seagate</option><option>XPO</option><option>Internal</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Product Class</label>
-          <select id="itm-f-class" style="margin-top:5px">
+          <label>Item Class</label>
+          <select id="itm-f-class">
             <option value="General">General</option>
             <option value="Electronics">Electronics</option>
             <option value="Industrial">Industrial</option>
@@ -3251,127 +3245,88 @@ function onRouteWeightChange(val) {
         </div>
       </div>
 
-      <!-- Section: Freight Attributes -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">📦 Freight Attributes</div>
-      <div class="form-grid" style="margin-bottom:20px">
+      <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
-          <label>NMFC Number</label>
-          <input id="itm-f-nmfc" placeholder="e.g. 41280" style="margin-top:5px">
+          <label>NMFC Code</label>
+          <input id="itm-f-nmfc">
         </div>
         <div class="form-group">
           <label>Freight Class</label>
-          <select id="itm-f-fclass" style="margin-top:5px">
-            <option value="50">Class 50</option><option value="55">Class 55</option>
-            <option value="60">Class 60</option><option value="65">Class 65</option>
-            <option value="70">Class 70</option><option value="77.5">Class 77.5</option>
-            <option value="85">Class 85</option><option value="92.5">Class 92.5</option>
-            <option value="100">Class 100</option><option value="110">Class 110</option>
-            <option value="125">Class 125</option><option value="150">Class 150</option>
-            <option value="175">Class 175</option><option value="200">Class 200</option>
-            <option value="250">Class 250</option><option value="300">Class 300</option>
-            <option value="400">Class 400</option><option value="500">Class 500</option>
+          <select id="itm-f-fclass">
+            <option value="50">50</option><option value="55">55</option>
+            <option value="60">60</option><option value="65">65</option>
+            <option value="70" selected>70</option><option value="77.5">77.5</option>
+            <option value="85">85</option><option value="92.5">92.5</option>
+            <option value="100">100</option><option value="110">110</option>
+            <option value="125">125</option><option value="150">150</option>
+            <option value="175">175</option><option value="200">200</option>
+            <option value="250">250</option><option value="300">300</option>
+            <option value="400">400</option><option value="500">500</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label>Weight per Unit (lbs) *</label>
-          <input id="itm-f-weight" type="number" placeholder="0.00" style="margin-top:5px">
-        </div>
-        <div class="form-group">
-          <label>Value per Unit ($)</label>
-          <input id="itm-f-value" type="number" placeholder="0.00" style="margin-top:5px">
         </div>
       </div>
 
-      <!-- Section: Dimensions -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">📐 Dimensions & Packaging</div>
-      <div class="form-grid" style="margin-bottom:20px">
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group">
+          <label>Weight/Unit (lbs)</label>
+          <input id="itm-f-weight" type="number">
+        </div>
+        <div class="form-group">
+          <label>Value/Unit ($)</label>
+          <input id="itm-f-value" type="number">
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
           <label>Length (in)</label>
-          <input id="itm-f-len" type="number" placeholder="0" style="margin-top:5px">
+          <input id="itm-f-len" type="number">
         </div>
         <div class="form-group">
           <label>Width (in)</label>
-          <input id="itm-f-wid" type="number" placeholder="0" style="margin-top:5px">
+          <input id="itm-f-wid" type="number">
         </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
           <label>Height (in)</label>
-          <input id="itm-f-hgt" type="number" placeholder="0" style="margin-top:5px">
+          <input id="itm-f-hgt" type="number">
         </div>
         <div class="form-group">
-          <label>Units per Pallet</label>
-          <input id="itm-f-pallet" type="number" placeholder="0" style="margin-top:5px">
+          <label>Units/Pallet</label>
+          <input id="itm-f-pallet" type="number">
         </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
-          <label>Packaging Type</label>
-          <select id="itm-f-pkg" style="margin-top:5px">
+          <label>Packaging</label>
+          <select id="itm-f-pkg">
             <option>Carton</option><option>Pallet</option><option>Crate</option>
             <option>Drum</option><option>Bag</option><option>Roll</option><option>Bundle</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Stack Height (pallets)</label>
-          <input id="itm-f-stack" type="number" placeholder="1" style="margin-top:5px">
+          <label>Max Stack</label>
+          <input id="itm-f-stack" type="number" value="1">
         </div>
       </div>
 
-      <!-- Section: Handling & Compliance -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">⚙️ Handling & Compliance</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
-        <div style="background:#f8faff;border-radius:10px;padding:14px;border:1px solid var(--border)">
-          <div style="font-size:12px;font-weight:600;margin-bottom:10px">Handling Requirements</div>
-          <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="itm-f-hazmat" style="accent-color:var(--accent)"> ☢️ Hazmat / Dangerous Goods</label>
-          <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="itm-f-fragile" style="accent-color:var(--accent)"> 🔴 Fragile — Handle with care</label>
-          <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="itm-f-temp" style="accent-color:var(--accent)"> 🌡️ Temperature controlled</label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="itm-f-topload" style="accent-color:var(--accent)"> ⬆️ Top-load only</label>
+      <div style="margin-bottom:8px">
+        <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Handling Flags</label>
+        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;text-transform:uppercase"><input type="checkbox" id="itm-f-hazmat"> Hazmat</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;text-transform:uppercase"><input type="checkbox" id="itm-f-fragile"> Fragile</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;text-transform:uppercase"><input type="checkbox" id="itm-f-temp"> Temp Controlled</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;text-transform:uppercase"><input type="checkbox" id="itm-f-topload"> Top Load Only</label>
         </div>
-        <div style="background:#f8faff;border-radius:10px;padding:14px;border:1px solid var(--border)">
-          <div style="font-size:12px;font-weight:600;margin-bottom:10px">Hazmat Details <span style="font-weight:400;color:var(--text3)">(if applicable)</span></div>
-          <div class="form-group" style="margin-bottom:8px">
-            <label style="font-size:11px">UN Number</label>
-            <input id="itm-f-un" placeholder="e.g. UN1993" style="margin-top:3px;font-size:12px;padding:6px 10px">
-          </div>
-          <div class="form-group">
-            <label style="font-size:11px">Hazmat Class</label>
-            <select id="itm-f-hazclass" style="margin-top:3px;font-size:12px;padding:6px 10px">
-              <option value="">— Select —</option>
-              <option>Class 1 — Explosives</option>
-              <option>Class 2 — Gases</option>
-              <option>Class 3 — Flammable Liquids</option>
-              <option>Class 4 — Flammable Solids</option>
-              <option>Class 5 — Oxidizers</option>
-              <option>Class 6 — Toxic</option>
-              <option>Class 7 — Radioactive</option>
-              <option>Class 8 — Corrosives</option>
-              <option>Class 9 — Miscellaneous</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <!-- Density calc output -->
-      <div id="itm-density-result" style="display:none;padding:12px 16px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:10px;font-size:12px;margin-bottom:4px"></div>
-
-      <!-- Inventory -->
-      <div style="border-top:1px solid var(--border);padding-top:14px">
-        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">📦 Inventory</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px">
-          <div><label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Stock Qty</label>
-            <input id="itm-f-stock" type="number" min="0" placeholder="0" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"></div>
-          <div><label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Available Qty</label>
-            <input id="itm-f-available" type="number" min="0" placeholder="0" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"></div>
-          <div><label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Reserved Qty</label>
-            <input id="itm-f-reserved" type="number" min="0" placeholder="0" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"></div>
-          <div><label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Reorder Point</label>
-            <input id="itm-f-reorder" type="number" min="0" placeholder="0" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"></div>
-        </div>
-        <div><label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Warehouse Location</label>
-          <input id="itm-f-warehouse" type="text" placeholder="e.g. WH-CHI-A1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"></div>
       </div>
 
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" data-close="modal-item">Cancel</button>
-      <button class="btn btn-primary" onclick="saveItem()">✅ Save Item</button>
+      <button class="btn btn-primary" onclick="saveItem()">Save Item</button>
     </div>
   </div>
 </div>
@@ -16370,7 +16325,7 @@ function openItemModal(id) {
   _editingItemId = id || null;
   var it = id ? itemMaster.find(function(x){ return x.id===id; }) : null;
 
-  document.getElementById('item-modal-title').textContent = it ? 'Edit Item — '+it.id : 'New Item';
+  document.getElementById('item-modal-title').textContent = it ? 'Edit Item — '+it.id : 'Add New Item';
 
   // Populate fields
   document.getElementById('itm-f-id').value      = it ? it.id       : '';
@@ -16391,42 +16346,12 @@ function openItemModal(id) {
   document.getElementById('itm-f-fragile').checked = it ? it.fragile  : false;
   document.getElementById('itm-f-temp').checked    = it ? it.tempCtrl : false;
   document.getElementById('itm-f-topload').checked = it ? it.topLoad  : false;
-  document.getElementById('itm-f-un').value      = it ? it.un       : '';
-  document.getElementById('itm-f-hazclass').value = it ? it.hazClass : '';
-  // Inventory fields
-  var stockEl = document.getElementById('itm-f-stock');
-  var availEl = document.getElementById('itm-f-available');
-  var resvEl  = document.getElementById('itm-f-reserved');
-  var ropEl   = document.getElementById('itm-f-reorder');
-  var whEl    = document.getElementById('itm-f-warehouse');
-  if(stockEl) stockEl.value = it ? (it.stockQty  || '') : '';
-  if(availEl) availEl.value = it ? (it.availableQty || '') : '';
-  if(resvEl)  resvEl.value  = it ? (it.reservedQty  || '') : '';
-  if(ropEl)   ropEl.value   = it ? (it.reorderPoint || '') : '';
-  if(whEl)    whEl.value    = it ? (it.warehouseLoc || '') : '';
 
-  updateDensityCalc();
   openModal('modal-item');
 }
 
 function updateDensityCalc() {
-  var w = parseFloat(document.getElementById('itm-f-weight').value)||0;
-  var l = parseFloat(document.getElementById('itm-f-len').value)||0;
-  var wi= parseFloat(document.getElementById('itm-f-wid').value)||0;
-  var h = parseFloat(document.getElementById('itm-f-hgt').value)||0;
-  var res = document.getElementById('itm-density-result');
-  if(w>0&&l>0&&wi>0&&h>0){
-    var cubicFt = (l*wi*h)/1728;
-    var density = w/cubicFt;
-    var suggestedClass = density>=50?'Class 50':density>=35?'Class 55':density>=30?'Class 60':density>=22.5?'Class 65':density>=15?'Class 70':density>=13.5?'Class 77.5':density>=12?'Class 85':density>=10?'Class 92.5':density>=9?'Class 100':density>=8?'Class 110':density>=7?'Class 125':density>=6?'Class 150':density>=5?'Class 175':density>=4?'Class 200':density>=3?'Class 250':density>=2?'Class 300':'Class 400+';
-    res.style.display='block';
-    res.innerHTML='<strong>📐 Density Calculator:</strong> &nbsp;'
-      +'Volume: <strong>'+cubicFt.toFixed(3)+' ft³</strong> &nbsp;|&nbsp; '
-      +'Density: <strong>'+density.toFixed(2)+' lbs/ft³</strong> &nbsp;|&nbsp; '
-      +'Suggested Freight Class: <strong style="color:var(--accent)">'+suggestedClass+'</strong>';
-  } else {
-    res.style.display='none';
-  }
+  // Density calculator removed from simplified modal
 }
 
 function saveItem() {
@@ -16458,8 +16383,6 @@ function saveItem() {
     fragile:     document.getElementById('itm-f-fragile').checked,
     tempCtrl:    document.getElementById('itm-f-temp').checked,
     topLoad:     document.getElementById('itm-f-topload').checked,
-    un:          document.getElementById('itm-f-un').value,
-    hazClass:    document.getElementById('itm-f-hazclass').value,
     status:      'Active',
   };
 
