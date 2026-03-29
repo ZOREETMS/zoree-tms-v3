@@ -14,6 +14,7 @@ import ItemMasterPage from "./pages/ItemMasterPage";
 import LocationMasterPage from "./pages/LocationMasterPage";
 import RateManagementPage from "./pages/RateManagementPage";
 import RouteOptimizerPage from "./pages/RouteOptimizerPage";
+import LiveTrackingPage from "./pages/LiveTrackingPage";
 import DockSchedulingPage from "./pages/DockSchedulingPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
@@ -32,7 +33,7 @@ function PrivateRoutes({ data }) {
         <Route path="item-master" element={<ItemMasterPage />} />
         <Route path="location-master" element={<LocationMasterPage />} />
         <Route path="route-optimizer" element={<RouteOptimizerPage />} />
-        <Route path="live-tracking" element={<PlaceholderPage title="Live Tracking" icon="📡" description="Real-time shipment tracking and visibility" />} />
+        <Route path="live-tracking" element={<LiveTrackingPage />} />
         <Route path="carrier-portal" element={<PlaceholderPage title="Carrier Portal" icon="🏢" description="Carrier self-service portal for tenders and updates" />} />
         <Route path="dock-scheduling" element={<DockSchedulingPage />} />
         <Route path="fleet-management" element={<PlaceholderPage title="Fleet Management" icon="🔧" description="Manage drivers, vehicles, and fleet operations" />} />

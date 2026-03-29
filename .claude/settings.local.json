@@ -160,7 +160,16 @@
       "Bash(taskkill /F /PID 9292)",
       "Bash(taskkill /F /PID 41148)",
       "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -type f \\\\\\(-name *track*.jsx -o -name *live*.jsx -o -name *tracking*.html \\\\\\))",
-      "Bash(grep -r \"leaflet\\\\|mapbox\\\\|google.*map\\\\|react-map\\\\|Leaflet\" C:/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src --include=*.jsx --include=*.js)"
+      "Bash(grep -r \"leaflet\\\\|mapbox\\\\|google.*map\\\\|react-map\\\\|Leaflet\" C:/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src --include=*.jsx --include=*.js)",
+      "Bash(grep -l \"locations\\\\|location\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/pages/*.jsx)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -type f \\\\\\(-name *.md -o -name README* -o -name *.yaml -o -name *.yml \\\\\\) -not -path */node_modules/*)",
+      "Bash(git log:*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(npx -y acorn --ecma2020 --module --allow-import-export-everywhere src/pages/RouteOptimizerPage.jsx)",
+      "Bash(npx kill-port:*)",
+      "Bash(npx -y acorn --ecma2020 --jsx --allow-import-export-everywhere frontend/src/pages/ShipmentsPage.jsx)",
+      "Bash(node scripts/seed-locations.js)",
+      "Bash(node -e \":*)"
     ]
   }
 }

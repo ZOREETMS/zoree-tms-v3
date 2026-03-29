@@ -278,6 +278,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
 
 export default function ShipmentsPage() {
   const { shipments, orders, carriers, setData, refreshData } = useOutletContext();
+  const [shipView, setShipView] = useState("list");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [modeFilter, setModeFilter] = useState("All");
@@ -553,6 +554,19 @@ export default function ShipmentsPage() {
       </div>
       <div className="page-content">
 
+      {/* View Toggle */}
+      <div style={{ display: "flex", gap: 2, marginBottom: 16, background: "#f0f4ff", borderRadius: 10, padding: 3, border: "1px solid rgba(59,130,246,.15)", width: "fit-content" }}>
+        <button
+          style={{ padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .15s", fontFamily: "inherit", background: shipView === "list" ? "var(--accent)" : "transparent", color: shipView === "list" ? "#fff" : "var(--text3)" }}
+          onClick={() => setShipView("list")}
+        >List</button>
+        <button
+          style={{ padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .15s", fontFamily: "inherit", background: shipView === "map" ? "var(--accent)" : "transparent", color: shipView === "map" ? "#fff" : "var(--text3)" }}
+          onClick={() => setShipView("map")}
+        >Map View</button>
+      </div>
+
+      {shipView === "list" ? (<>
       {/* Filters */}
       <div className="filter-bar">
         <input
@@ -679,6 +693,61 @@ export default function ShipmentsPage() {
       </table>
       </div></div>{/* end table-wrap, card */}
       <div className="text-sm text-muted mt-2">{rows.length} of {shipments.length} shipments</div>
+      </>) : (
+        /* ═══ MAP VIEW ═══ */
+        <div>
+          {/* Legend */}
+          <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: "50%", background: "#3b82f6" }} />In Transit</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444" }} />Exception</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22c55e" }} />Delivered</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f59e0b" }} />Planned / Tendered</div>
+          </div>
+          {/* Map Container */}
+          <div className="card" style={{ padding: 20, minHeight: 500, position: "relative", overflow: "hidden" }}>
+            {/* US Map SVG */}
+            <svg viewBox="0 0 960 600" style={{ width: "100%", height: 500 }}>
+              {/* Simplified US outline */}
+              <path d="M150,450 L200,500 L350,520 L500,510 L600,500 L700,480 L750,440 L800,400 L850,350 L860,300 L850,250 L830,200 L800,180 L750,150 L700,130 L650,120 L600,110 L550,100 L500,95 L450,100 L400,110 L350,130 L300,160 L250,200 L200,250 L170,300 L150,350 L140,400 Z"
+                fill="#f0f4ff" stroke="var(--border)" strokeWidth="1.5" />
+              {/* Plot shipment routes */}
+              {rows.map((s, i) => {
+                // Simple hash-based positioning for demo
+                const hash = (str) => { let h = 0; for (let c = 0; c < (str||"").length; c++) h = ((h << 5) - h) + (str||"").charCodeAt(c); return Math.abs(h); };
+                const ox = 200 + (hash(s.origin) % 600);
+                const oy = 150 + (hash(s.origin + "y") % 300);
+                const dx = 200 + (hash(s.dest) % 600);
+                const dy = 150 + (hash(s.dest + "y") % 300);
+                const col = s.status === "In Transit" ? "#3b82f6" : s.status === "Exception" ? "#ef4444" : s.status === "Delivered" ? "#22c55e" : "#f59e0b";
+                return (
+                  <g key={s.id + i}>
+                    <line x1={ox} y1={oy} x2={dx} y2={dy} stroke={col} strokeWidth="1.5" opacity="0.5" />
+                    <circle cx={ox} cy={oy} r="4" fill={col} stroke="#fff" strokeWidth="1" />
+                    <circle cx={dx} cy={dy} r="4" fill={col} stroke="#fff" strokeWidth="1" />
+                  </g>
+                );
+              })}
+            </svg>
+            {/* Shipment summary cards below map */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, marginTop: 16 }}>
+              {rows.slice(0, 12).map((s) => {
+                const col = s.status === "In Transit" ? "var(--accent)" : s.status === "Exception" ? "var(--red)" : s.status === "Delivered" ? "var(--green)" : "var(--yellow)";
+                return (
+                  <div key={s.id} style={{ padding: "10px 14px", border: "1.5px solid var(--border)", borderRadius: 10, cursor: "pointer", borderLeft: `3px solid ${col}` }}
+                    onClick={() => setDetailShipment(s)}>
+                    <div className="mono" style={{ fontWeight: 700, color: "var(--accent)", fontSize: 12 }}>{s.id}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{s.origin} → {s.dest}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11 }}>
+                      <span className={STATUS_BADGES[s.status] || "badge badge-blue"} style={{ fontSize: 10 }}>{s.status}</span>
+                      <span className="mono" style={{ fontWeight: 700 }}>${(s.total_cost || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shipment Detail Modal */}
       {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} STATUS_BADGES={STATUS_BADGES} />}

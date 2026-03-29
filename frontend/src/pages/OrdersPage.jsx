@@ -13,6 +13,18 @@ const STATUS_BADGES = {
   Cancelled: "badge badge-red",
 };
 
+const STATUS_ROW_COLORS = {
+  Unplanned:    { bg: "#fffef0", border: "#ca8a04" },
+  Planned:      { bg: "#f0fdf4", border: "#16a34a" },
+  Consolidated: { bg: "#eff6ff", border: "#2563eb" },
+  Tendered:     { bg: "#fffbeb", border: "#d97706" },
+  "In Transit": { bg: "#f0f9ff", border: "#0284c7" },
+  Delivered:    { bg: "#f0fdf4", border: "#059669" },
+  Exception:    { bg: "#fef2f2", border: "#dc2626" },
+  Cancelled:    { bg: "#f9fafb", border: "#9ca3af" },
+};
+const SPOT_ROW_STYLE = { background: "#fef2f2", borderLeft: "3px solid #dc2626" };
+
 function SdField({ icon, label, value }) {
   const display = value === null || value === undefined || value === "" ? "\u2014" : value;
   const isEmpty = display === "\u2014";
@@ -119,16 +131,22 @@ export default function OrdersPage() {
           .some((v) => String(v || "").toLowerCase().includes(t))
       );
     }
-    // Sort: unplanned first, then by lane for grouping
+    // Sort: when sorting by default (id), group Unplanned first by lane; otherwise sort purely by chosen column
     return [...filtered].sort((a, b) => {
-      if (a.status === "Unplanned" && b.status !== "Unplanned") return -1;
-      if (b.status === "Unplanned" && a.status !== "Unplanned") return 1;
-      const ka = `${a.origin}||${a.dest}`;
-      const kb = `${b.origin}||${b.dest}`;
-      if (ka !== kb) return ka.localeCompare(kb);
-      const av = String(a[sortCol] || "").toLowerCase();
-      const bv = String(b[sortCol] || "").toLowerCase();
-      return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      // Only do Unplanned-first grouping when sorting by default column (id)
+      if (sortCol === "id") {
+        if (a.status === "Unplanned" && b.status !== "Unplanned") return -1;
+        if (b.status === "Unplanned" && a.status !== "Unplanned") return 1;
+        const ka = `${a.origin}||${a.dest}`;
+        const kb = `${b.origin}||${b.dest}`;
+        if (a.status === "Unplanned" && ka !== kb) return ka.localeCompare(kb);
+      }
+      // Apply user-chosen column sort
+      const av = String(a[sortCol] || "").replace(/[$%,\s]|lbs/gi, "");
+      const bv = String(b[sortCol] || "").replace(/[$%,\s]|lbs/gi, "");
+      const an = parseFloat(av), bn = parseFloat(bv);
+      const cmp = (!isNaN(an) && !isNaN(bn)) ? (an - bn) : av.toLowerCase().localeCompare(bv.toLowerCase(), undefined, { numeric: true, sensitivity: "base" });
+      return sortAsc ? cmp : -cmp;
     });
   }, [orders, q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, sortCol, sortAsc]);
 
@@ -166,8 +184,22 @@ export default function OrdersPage() {
   const hasFilters = statusFilter !== "All" || customerFilter !== "All" || q || readyFrom || readyTo || dueFrom || dueTo;
 
   /* ── Actions ── */
+  async function cancelOrder(id) {
+    const o = orders.find((x) => x.id === id);
+    if (!o) return;
+    if (o.status !== "Unplanned") { toast("Only Unplanned orders can be cancelled", "warning"); return; }
+    if (!window.confirm(`Cancel order ${id}?`)) return;
+    setBusyId(id);
+    try {
+      await DbApi.patch("orders", id, { status: "Cancelled", notes: (o.notes ? o.notes + " | " : "") + "CANCELLED: Manual user action (" + new Date().toLocaleDateString() + ")" });
+      toast(`🚫 Order ${id} cancelled`, "warning");
+      await refreshData();
+    } catch (err) { toast(`Failed: ${err.message}`, "error"); }
+    finally { setBusyId(""); }
+  }
+
   async function deleteOrder(id) {
-    if (!window.confirm(`Delete order ${id}?`)) return;
+    if (!window.confirm(`Permanently delete order ${id}?`)) return;
     setBusyId(id);
     try {
       await DbApi.patch("orders", id, { status: "Cancelled" });
@@ -735,18 +767,18 @@ export default function OrdersPage() {
         <thead>
           <tr>
             <th style={{ width: 36 }}><input type="checkbox" checked={selectedOrders.size === rows.length && rows.length > 0} onChange={toggleSelectAll} /></th>
-            <th onClick={() => toggleSort("id")}>Order ID <SortIcon col="id" /></th>
-            <th onClick={() => toggleSort("customer")}>Customer <SortIcon col="customer" /></th>
-            <th onClick={() => toggleSort("origin")}>Origin <SortIcon col="origin" /></th>
-            <th onClick={() => toggleSort("dest")}>Destination <SortIcon col="dest" /></th>
-            <th onClick={() => toggleSort("weight")}>Weight <SortIcon col="weight" /></th>
-            <th>Pieces</th>
-            <th onClick={() => toggleSort("commodity")}>Commodity <SortIcon col="commodity" /></th>
-            <th>Ready</th>
-            <th>Due</th>
-            <th>Shipment</th>
+            <th onClick={() => toggleSort("id")} style={{ cursor: "pointer" }}>Order ID <SortIcon col="id" /></th>
+            <th onClick={() => toggleSort("customer")} style={{ cursor: "pointer" }}>Customer <SortIcon col="customer" /></th>
+            <th onClick={() => toggleSort("origin")} style={{ cursor: "pointer" }}>Origin <SortIcon col="origin" /></th>
+            <th onClick={() => toggleSort("dest")} style={{ cursor: "pointer" }}>Destination <SortIcon col="dest" /></th>
+            <th onClick={() => toggleSort("weight")} style={{ cursor: "pointer" }}>Weight <SortIcon col="weight" /></th>
+            <th onClick={() => toggleSort("pieces")} style={{ cursor: "pointer" }}>Pieces <SortIcon col="pieces" /></th>
+            <th onClick={() => toggleSort("commodity")} style={{ cursor: "pointer" }}>Commodity <SortIcon col="commodity" /></th>
+            <th onClick={() => toggleSort("ready")} style={{ cursor: "pointer" }}>Ready <SortIcon col="ready" /></th>
+            <th onClick={() => toggleSort("due")} style={{ cursor: "pointer" }}>Due <SortIcon col="due" /></th>
+            <th onClick={() => toggleSort("shipment_id")} style={{ cursor: "pointer" }}>Shipment <SortIcon col="shipment_id" /></th>
             <th>Constraints</th>
-            <th>Status</th>
+            <th onClick={() => toggleSort("status")} style={{ cursor: "pointer" }}>Status <SortIcon col="status" /></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -773,9 +805,19 @@ export default function OrdersPage() {
             }
             const o = row.order;
             const badges = constraintBadges(o);
+            const isChecked = selectedOrders.has(o.id);
+            const isSpot = o.noContractRate;
+            const sc = STATUS_ROW_COLORS[o.status];
+            const rowStyle = isChecked
+              ? { background: "rgba(59,130,246,.1)", borderLeft: "3px solid var(--accent)" }
+              : isSpot
+              ? SPOT_ROW_STYLE
+              : sc
+              ? { background: sc.bg, borderLeft: `3px solid ${sc.border}` }
+              : {};
             return (
-              <tr key={o.id}>
-                <td><input type="checkbox" checked={selectedOrders.has(o.id)} onChange={() => toggleSelect(o.id)} /></td>
+              <tr key={o.id} style={rowStyle}>
+                <td><input type="checkbox" checked={isChecked} onChange={() => toggleSelect(o.id)} /></td>
                 <td>
                   {row.inGroup && <span style={{ color: "var(--text3)", marginRight: 4 }}>└</span>}
                   <a href="#" onClick={(e) => { e.preventDefault(); openDetail(o.id); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>{o.id}</a>
@@ -794,10 +836,11 @@ export default function OrdersPage() {
                 <td style={{ whiteSpace: "nowrap" }}>
                   {o.status === "Unplanned" && (<>
                     <button className="btn btn-primary btn-sm" disabled={busyId === o.id} onClick={() => openPlanModal(o.id)}>⚡ Plan</button>{" "}
+                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }} onClick={() => openPlanModal(o.id)} title="Cross-dock">🔄</button>{" "}
                     <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="Edit">✏️</button>{" "}
-                    <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="Constraints">📋</button>{" "}
                     <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="View">👁</button>{" "}
-                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.2)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer" }} disabled={busyId === o.id} onClick={() => deleteOrder(o.id)} title="Delete">🗑️</button>
+                    <button style={{ background: "rgba(245,158,11,.10)", color: "#b45309", border: "1px solid rgba(245,158,11,.35)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer", marginLeft: 4 }} disabled={busyId === o.id} onClick={() => cancelOrder(o.id)} title="Cancel order">🚫</button>{" "}
+                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.2)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer", marginLeft: 4 }} disabled={busyId === o.id} onClick={() => deleteOrder(o.id)} title="Delete">🗑️</button>
                   </>)}
                   {o.status === "Planned" && (<>
                     <button className="btn btn-secondary btn-sm" style={{ background: "rgba(16,185,129,.08)", color: "#059669", borderColor: "rgba(16,185,129,.35)", fontSize: 11 }}>📤 Tender</button>{" "}

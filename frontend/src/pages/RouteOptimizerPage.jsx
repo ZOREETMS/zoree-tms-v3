@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 /* ─────────── Static Data ─────────── */
@@ -191,218 +191,195 @@ export default function RouteOptimizerPage() {
   }
 
   /* ── Keep ZIP inputs in sync ── */
-  function handleOriginZipChange(val) {
-    setOriginZip(val);
-    setCzarOriginZip(val);
-  }
-  function handleDestZipChange(val) {
-    setDestZip(val);
-    setCzarDestZip(val);
-  }
-  function handleCzarOriginZipChange(val) {
-    setCzarOriginZip(val);
-    setOriginZip(val);
-  }
-  function handleCzarDestZipChange(val) {
-    setCzarDestZip(val);
-    setDestZip(val);
-  }
-  function handleWeightChange(val) {
-    setWeight(val);
-    setCzarWeight(val);
-  }
-  function handleCzarWeightChange(val) {
-    setCzarWeight(val);
-    setWeight(val);
-  }
+  function handleOriginZipChange(val) { setOriginZip(val); setCzarOriginZip(val); }
+  function handleDestZipChange(val) { setDestZip(val); setCzarDestZip(val); }
+  function handleCzarOriginZipChange(val) { setCzarOriginZip(val); setOriginZip(val); }
+  function handleCzarDestZipChange(val) { setCzarDestZip(val); setDestZip(val); }
+  function handleWeightChange(val) { setWeight(val); setCzarWeight(val); }
+  function handleCzarWeightChange(val) { setCzarWeight(val); setWeight(val); }
 
-  /* ── Build rate comparison rows ── */
-  const buildRateCompare = useCallback(
-    async (o, d) => {
-      const dist = getDist(o, d);
-      const showTL = mode === "ALL" || mode === "TL";
-      const showLTL = mode === "ALL" || mode === "LTL";
-      const w = parseInt(czarWeight) || parseInt(weight) || 5000;
+  /* ── Build rate comparison rows (pure function — all values passed in) ── */
+  async function fetchRateRows({ o, d, modeFilter, wt, oZip, dZip }) {
+    const dist = getDist(o, d);
+    const showTL = modeFilter === "ALL" || modeFilter === "TL";
+    const showLTL = modeFilter === "ALL" || modeFilter === "LTL";
+    const w = parseInt(wt) || 5000;
 
-      let rows = [];
+    let rows = [];
 
-      // TL rates
-      if (showTL) {
-        let tlRates = getActiveRates(o, d).filter((r) => r.mode === "TL");
-        if (!tlRates.length) {
-          // Use fallback spot rates
-          rows = rows.concat(
-            FALLBACK_TL_RATES.map((r) => {
-              const c = calcCost(r.rate, r.fsc, dist);
-              return {
-                carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
-                acc: c.acc, total: c.total, transit: Math.max(1, Math.ceil(dist / 500)),
-                _czarlite: false,
-              };
-            })
-          );
-        } else {
-          rows = rows.concat(
-            tlRates.map((r) => {
-              const c = calcCost(r.rate, r.fsc, dist);
-              return {
-                carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
-                acc: c.acc, total: c.total, transit: r.transit_days || Math.max(1, Math.ceil(dist / 500)),
-                _czarlite: false,
-              };
-            })
-          );
-        }
-      }
-
-      // Non-CzarLite LTL
-      if (showLTL) {
-        const nonCzLtl = getActiveRates(o, d).filter((r) => r.mode === "LTL" && !r.czarlite);
+    // TL rates
+    if (showTL) {
+      let tlRates = getActiveRates(o, d).filter((r) => r.mode === "TL");
+      if (!tlRates.length) {
         rows = rows.concat(
-          nonCzLtl.map((r) => {
+          FALLBACK_TL_RATES.map((r) => {
             const c = calcCost(r.rate, r.fsc, dist);
             return {
-              carrier: r.carrier, mode: "LTL", base: c.base, fsc: c.fuel,
-              acc: c.acc, total: c.total, transit: r.transit_days || null,
+              carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
+              acc: c.acc, total: c.total, transit: Math.max(1, Math.ceil(dist / 500)),
+              _czarlite: false,
+            };
+          })
+        );
+      } else {
+        rows = rows.concat(
+          tlRates.map((r) => {
+            const c = calcCost(r.rate, r.fsc, dist);
+            return {
+              carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
+              acc: c.acc, total: c.total, transit: r.transit_days || Math.max(1, Math.ceil(dist / 500)),
               _czarlite: false,
             };
           })
         );
       }
+    }
 
-      // CzarLite LTL — call live /api/ltl/quote API (same as old HTML)
-      if (showLTL) {
-        const oZip = czarOriginZip || originZip || CITY_ZIP_MAP[o] || "";
-        const dZip = czarDestZip || destZip || CITY_ZIP_MAP[d] || "";
-        if (oZip.length >= 4 && dZip.length >= 4) {
-          try {
-            const apiBase = import.meta.env.VITE_API_BASE || window.ZOREE_API_URL || "http://localhost:3001/api";
-            const token = localStorage.getItem("zoree_token") || "";
-            const resp = await fetch(`${apiBase}/ltl/quote`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              },
-              body: JSON.stringify({
-                originZip: oZip, destZip: dZip, weight: w,
-                freightClass: 70, originCity: o, destCity: d,
-              }),
-            });
-            const data = await resp.json();
-            if (data.quotes && data.quotes.length) {
-              const czRows = data.quotes.map((q) => ({
-                carrier: q.carrier, mode: "LTL",
-                base: q.czarBaseGross || q.czarBase || 0,
-                fsc: q.fscCharge || 0,
-                acc: 0, total: q.totalCharge || 0,
-                transit: q.transitDays || null,
-                _czarlite: true, _czarliteClass: q.class || 70,
-                _cwt: ((q.billedWeight || w) / 100).toFixed(1),
-                ratePerCwt: ((q.czarBase || 0) / ((q.billedWeight || w) / 100)).toFixed(2),
-                czarBase: q.czarBase, czarBaseGross: q.czarBaseGross || q.czarBase || 0,
-                fscCharge: q.fscCharge || 0,
-                discountPct: q.discountPct || 0, discountAmt: q.discountAmt || 0,
-                _ccLive: !!q._ccLive, _ccFailed: !!q._ccFailed, _pref: false,
-              }));
-              rows = rows.concat(czRows);
-            }
-          } catch (e) {
-            console.warn("[RouteOptimizer] LTL API error, using local fallback:", e.message);
-            // Fallback to local CzarLite calculation if API fails
-            const synthCarrierDefs = [
-              { name: "Old Dominion Freight", fscPct: 0, ccLive: false, ccFailed: true },
-              { name: "Averitt Express", fscPct: 0, ccLive: true, transit: 1, pref: true },
-            ];
-            const synthResults = synthCarrierDefs.map((def) => {
-              const czRate = getCzarliteRate(w, 70, dist, `${def.fscPct}%`);
-              if (!czRate) return null;
-              return {
-                carrier: def.name, mode: "LTL", base: czRate.base, fsc: czRate.fuel,
-                acc: czRate.acc, total: czRate.total,
-                transit: def.transit || null,
-                _czarlite: true, _czarliteClass: czRate.resolvedClass,
-                _cwt: czRate.cwt, ratePerCwt: czRate.ratePerCwt,
-                czarBase: czRate.base, czarBaseGross: czRate.base,
-                fscCharge: czRate.fuel, discountPct: 0, discountAmt: 0,
-                _ccLive: def.ccLive || false, _ccFailed: def.ccFailed || false, _pref: def.pref || false,
-              };
-            }).filter(Boolean);
-            rows = rows.concat(synthResults);
+    // Non-CzarLite LTL
+    if (showLTL) {
+      const nonCzLtl = getActiveRates(o, d).filter((r) => r.mode === "LTL" && !r.czarlite);
+      rows = rows.concat(
+        nonCzLtl.map((r) => {
+          const c = calcCost(r.rate, r.fsc, dist);
+          return {
+            carrier: r.carrier, mode: "LTL", base: c.base, fsc: c.fuel,
+            acc: c.acc, total: c.total, transit: r.transit_days || null,
+            _czarlite: false,
+          };
+        })
+      );
+    }
+
+    // CzarLite LTL — call live /api/ltl/quote API (same as old HTML)
+    if (showLTL) {
+      const effectiveOZip = oZip || CITY_ZIP_MAP[o] || "";
+      const effectiveDZip = dZip || CITY_ZIP_MAP[d] || "";
+      if (effectiveOZip.length >= 4 && effectiveDZip.length >= 4) {
+        try {
+          const apiBase = import.meta.env.VITE_API_BASE || window.ZOREE_API_URL || "http://localhost:3001/api";
+          const token = localStorage.getItem("zoree_token") || "";
+          const resp = await fetch(`${apiBase}/ltl/quote`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              originZip: effectiveOZip, destZip: effectiveDZip, weight: w,
+              freightClass: 70, originCity: o, destCity: d,
+            }),
+          });
+          const data = await resp.json();
+          if (data.quotes && data.quotes.length) {
+            const czRows = data.quotes.map((q) => ({
+              carrier: q.carrier, mode: "LTL",
+              base: q.czarBaseGross || q.czarBase || 0,
+              fsc: q.fscCharge || 0,
+              acc: 0, total: q.totalCharge || 0,
+              transit: q.transitDays || null,
+              _czarlite: true, _czarliteClass: q.class || 70,
+              _cwt: ((q.billedWeight || w) / 100).toFixed(1),
+              ratePerCwt: ((q.czarBase || 0) / ((q.billedWeight || w) / 100)).toFixed(2),
+              czarBase: q.czarBase, czarBaseGross: q.czarBaseGross || q.czarBase || 0,
+              fscCharge: q.fscCharge || 0,
+              discountPct: q.discountPct || 0, discountAmt: q.discountAmt || 0,
+              _ccLive: !!q._ccLive, _ccFailed: !!q._ccFailed, _pref: false,
+            }));
+            rows = rows.concat(czRows);
           }
-        } else {
-          // No ZIPs — use local CzarLite fallback
-          const synthCarrierDefs = [
-            { name: "Old Dominion Freight", fscPct: 0, ccLive: false, ccFailed: true },
-            { name: "Averitt Express", fscPct: 0, ccLive: true, transit: 1, pref: true },
-          ];
-          const synthResults = synthCarrierDefs.map((def) => {
-            const czRate = getCzarliteRate(w, 70, dist, `${def.fscPct}%`);
-            if (!czRate) return null;
-            return {
-              carrier: def.name, mode: "LTL", base: czRate.base, fsc: czRate.fuel,
-              acc: czRate.acc, total: czRate.total,
-              transit: def.transit || null,
-              _czarlite: true, _czarliteClass: czRate.resolvedClass,
-              _cwt: czRate.cwt, ratePerCwt: czRate.ratePerCwt,
-              czarBase: czRate.base, czarBaseGross: czRate.base,
-              fscCharge: czRate.fuel, discountPct: 0, discountAmt: 0,
-              _ccLive: def.ccLive || false, _ccFailed: def.ccFailed || false, _pref: def.pref || false,
-            };
-          }).filter(Boolean);
-          rows = rows.concat(synthResults);
+        } catch (e) {
+          console.warn("[RouteOptimizer] LTL API error, using local fallback:", e.message);
+          rows = rows.concat(localCzarliteFallback(w, dist));
         }
+      } else {
+        rows = rows.concat(localCzarliteFallback(w, dist));
       }
+    }
 
-      rows.sort((a, b) => a.total - b.total);
-      setRateCompareRows(rows);
-      return rows;
-    },
-    [mode, czarWeight, weight, czarOriginZip, czarDestZip, originZip, destZip]
-  );
+    rows.sort((a, b) => a.total - b.total);
+    return rows;
+  }
+
+  /* ── Local CzarLite fallback when API unavailable ── */
+  function localCzarliteFallback(w, dist) {
+    const synthCarrierDefs = [
+      { name: "Old Dominion Freight", fscPct: 0, ccLive: false, ccFailed: true },
+      { name: "Averitt Express", fscPct: 0, ccLive: true, transit: 1, pref: true },
+    ];
+    return synthCarrierDefs.map((def) => {
+      const czRate = getCzarliteRate(w, 70, dist, `${def.fscPct}%`);
+      if (!czRate) return null;
+      return {
+        carrier: def.name, mode: "LTL", base: czRate.base, fsc: czRate.fuel,
+        acc: czRate.acc, total: czRate.total,
+        transit: def.transit || null,
+        _czarlite: true, _czarliteClass: czRate.resolvedClass,
+        _cwt: czRate.cwt, ratePerCwt: czRate.ratePerCwt,
+        czarBase: czRate.base, czarBaseGross: czRate.base,
+        fscCharge: czRate.fuel, discountPct: 0, discountAmt: 0,
+        _ccLive: def.ccLive || false, _ccFailed: def.ccFailed || false, _pref: def.pref || false,
+      };
+    }).filter(Boolean);
+  }
 
   /* ── Optimize handler ── */
-  async function handleOptimize() {
+  async function handleOptimize(silent) {
     const dist = getDist(origin, dest);
     const hrs = (dist / 55).toFixed(1);
     const hosOk = parseFloat(hrs) <= 11;
-    const util = Math.min(100, Math.round(((parseInt(weight) || 5000) / 44000) * 100));
+    const wNum = parseInt(weight) || 5000;
+    const util = Math.min(100, Math.round((wNum / 44000) * 100));
 
     setLoadingCzarlite(true);
     try {
-      const rows = await buildRateCompare(origin, dest);
+      const rows = await fetchRateRows({
+        o: origin, d: dest, modeFilter: mode, wt: czarWeight || weight,
+        oZip: czarOriginZip || originZip, dZip: czarDestZip || destZip,
+      });
       const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
 
+      setRateCompareRows(rows);
       setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
       setOptimized(true);
-      showToast(`Route optimized \u2014 ${rows.length} carriers compared (${mode})`, "success");
+      if (!silent) showToast(`Route optimized \u2014 ${rows.length} carriers compared (${mode})`, "success");
     } finally {
       setLoadingCzarlite(false);
     }
   }
 
-  /* ── Auto-refresh rates when ZIP/weight changes (like old HTML) ── */
+  /* ── Auto-refresh when ZIP or weight changes (like old HTML onRateZipChange) ── */
   const debounceRef = useRef(null);
+  const isFirstRender = useRef(true);
   useEffect(() => {
-    // Only auto-refresh if we've already optimized once
-    if (!optimized) return;
+    // Skip on first render
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    // Auto-refresh: if not yet optimized, only trigger when both ZIPs are valid
+    const oZ = czarOriginZip || originZip;
+    const dZ = czarDestZip || destZip;
+    if (!optimized && (oZ.length < 4 || dZ.length < 4)) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
+      const dist = getDist(origin, dest);
+      const hrs = (dist / 55).toFixed(1);
+      const hosOk = parseFloat(hrs) <= 11;
+      const wNum = parseInt(weight) || 5000;
+      const util = Math.min(100, Math.round((wNum / 44000) * 100));
       setLoadingCzarlite(true);
       try {
-        const rows = await buildRateCompare(origin, dest);
-        const dist = getDist(origin, dest);
-        const hrs = (dist / 55).toFixed(1);
-        const hosOk = parseFloat(hrs) <= 11;
-        const util = Math.min(100, Math.round(((parseInt(weight) || 5000) / 44000) * 100));
+        const rows = await fetchRateRows({
+          o: origin, d: dest, modeFilter: mode, wt: czarWeight || weight,
+          oZip: czarOriginZip || originZip, dZip: czarDestZip || destZip,
+        });
         const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
+        setRateCompareRows(rows);
         setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
       } finally {
         setLoadingCzarlite(false);
       }
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [czarOriginZip, czarDestZip, czarWeight, originZip, destZip, weight, buildRateCompare, origin, dest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [czarOriginZip, czarDestZip, czarWeight, originZip, destZip, weight]);
 
   /* ── Sorted rate compare rows ── */
   const sortedRows = useMemo(() => {

@@ -69,15 +69,18 @@ function formatMessage(text) {
     .replace(/\n/g, "<br>");
 }
 
+const ENV_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
+
 export default function ZoreeAI() {
   const data = useOutletContext();
   const [open, setOpen] = useState(false);
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(ENV_KEY);
   const [keyInput, setKeyInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [inputVal, setInputVal] = useState("");
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(!!ENV_KEY);
+  const [initialized, setInitialized] = useState(false);
   const chatHistoryRef = useRef([]);
   const msgsEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -88,8 +91,12 @@ export default function ZoreeAI() {
 
   useEffect(scrollToBottom, [messages, typing, scrollToBottom]);
 
-  // Focus input when chat opens
+  // Auto-init chat when env key is present and panel opens
   useEffect(() => {
+    if (open && connected && !initialized) {
+      initChat();
+      setInitialized(true);
+    }
     if (open && connected) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
