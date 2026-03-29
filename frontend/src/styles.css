@@ -233,3 +233,42 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .text-muted{color:var(--text3);}
 .text-green{color:var(--green);}.text-red{color:var(--red);}
 .fw-700{font-weight:700;}.w-full{width:100%;}
+
+/* ═══════════════════════════════════════════════════════
+   ZOREE AI CHATBOT
+   ═══════════════════════════════════════════════════════ */
+.zoree-ai-fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#1e2d6b,#3b82f6);box-shadow:0 4px 20px rgba(59,130,246,.5);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;z-index:99990;transition:transform .2s,box-shadow .2s;user-select:none;}
+.zoree-ai-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(59,130,246,.65);}
+
+.zoree-ai-panel{position:fixed;bottom:88px;right:24px;width:400px;height:560px;background:#fff;border-radius:18px;box-shadow:0 8px 40px rgba(0,0,0,.18);z-index:99991;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(59,130,246,.15);}
+
+.zoree-ai-header{background:linear-gradient(135deg,#1e2d6b,#3b82f6);padding:16px 18px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.zoree-ai-header-icon{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.zoree-ai-close{margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+
+.zoree-ai-apikey-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f8faff;gap:16px;}
+.zoree-ai-key-input{width:100%;padding:10px 13px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13px;font-family:monospace;outline:none;box-sizing:border-box;text-transform:none !important;}
+.zoree-ai-key-input:focus{border-color:var(--accent);}
+.zoree-ai-connect-btn{width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#1e2d6b,#3b82f6);border:none;color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+
+.zoree-ai-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f8faff;}
+.zoree-ai-msg{max-width:86%;padding:10px 13px;border-radius:12px;font-size:13px;line-height:1.5;animation:chatFadeIn .2s ease;}
+.zoree-ai-msg.user{align-self:flex-end;background:linear-gradient(135deg,#1e2d6b,#3b82f6);color:#fff;border-bottom-right-radius:4px;}
+.zoree-ai-msg.ai{align-self:flex-start;background:#fff;color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+
+.zoree-ai-typing{display:flex;gap:4px;padding:4px 0;}
+.zoree-ai-typing span{width:7px;height:7px;border-radius:50%;background:var(--text3);animation:chatBounce 1.2s infinite;}
+.zoree-ai-typing span:nth-child(2){animation-delay:.2s;}
+.zoree-ai-typing span:nth-child(3){animation-delay:.4s;}
+
+.zoree-ai-prompts{padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;background:#f0f4ff;border-top:1px solid rgba(59,130,246,.1);flex-shrink:0;}
+.zoree-ai-prompt-btn{font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid rgba(59,130,246,.25);background:#fff;color:var(--accent);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+.zoree-ai-prompt-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+.zoree-ai-input-bar{padding:12px 14px;background:#fff;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.zoree-ai-input{flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s;}
+.zoree-ai-input:focus{border-color:var(--accent);}
+.zoree-ai-send-btn{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#1e2d6b,#3b82f6);border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .15s;}
+
+@keyframes chatBounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+@keyframes chatFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}

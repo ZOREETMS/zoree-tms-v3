@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useOutletContext } from "react-router-dom";
+import ZoreeAI from "./ZoreeAI";
 
 const navStructure = [
   { section: "Overview", items: [
@@ -118,6 +119,9 @@ export default function Layout({ data }) {
       <main className="main">
         <Outlet context={data} />
       </main>
+
+      {/* ZoreeAI Floating Chat Assistant */}
+      <ZoreeAI />
     </div>
   );
 }

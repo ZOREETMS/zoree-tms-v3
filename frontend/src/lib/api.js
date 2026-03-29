@@ -58,6 +58,9 @@ export const DbApi = {
   locations() {
     return api("/db/locations?q=select=*%26order=name.asc%26limit=500");
   },
+  packagingUnits() {
+    return api("/db/packaging_units?q=select=*%26order=id.asc%26limit=500");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

@@ -158,7 +158,9 @@
       "Bash(curl -s http://localhost:5173/shipments)",
       "Bash(grep -r \"RateOptimizer\\\\|rateOptimizer\" /c/Zoree/zoree-tms-v3/zoree-tms-v3 --include=*.jsx --include=*.js)",
       "Bash(taskkill /F /PID 9292)",
-      "Bash(taskkill /F /PID 41148)"
+      "Bash(taskkill /F /PID 41148)",
+      "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -type f \\\\\\(-name *track*.jsx -o -name *live*.jsx -o -name *tracking*.html \\\\\\))",
+      "Bash(grep -r \"leaflet\\\\|mapbox\\\\|google.*map\\\\|react-map\\\\|Leaflet\" C:/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src --include=*.jsx --include=*.js)"
     ]
   }
 }

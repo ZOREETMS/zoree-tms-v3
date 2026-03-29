@@ -55,7 +55,7 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [] });
+  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -68,8 +68,9 @@ export default function App() {
       DbApi.lanePreferences().catch(() => []),
       DbApi.items().catch(() => []),
       DbApi.locations().catch(() => []),
+      DbApi.packagingUnits().catch(() => []),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits]) => {
         setData({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -77,6 +78,7 @@ export default function App() {
           lanePreferences: Array.isArray(lanePreferences) ? lanePreferences : [],
           items: Array.isArray(items) ? items : [],
           locations: Array.isArray(locations) ? locations : [],
+          packagingUnits: Array.isArray(packagingUnits) ? packagingUnits : [],
         });
       })
       .catch((e) => setError(e.message || "Failed loading data"))

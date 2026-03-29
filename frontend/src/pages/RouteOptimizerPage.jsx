@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 /* ─────────── Static Data ─────────── */
@@ -166,14 +166,14 @@ export default function RouteOptimizerPage() {
   const [origin, setOrigin] = useState("Chicago, IL");
   const [dest, setDest] = useState("Dallas, TX");
   const [mode, setMode] = useState("ALL");
-  const [weight, setWeight] = useState(40000);
+  const [weight, setWeight] = useState("4000");
   const [originZip, setOriginZip] = useState("");
   const [destZip, setDestZip] = useState("");
 
   /* ── CzarLite compare state ── */
   const [czarOriginZip, setCzarOriginZip] = useState("");
   const [czarDestZip, setCzarDestZip] = useState("");
-  const [czarWeight, setCzarWeight] = useState(5000);
+  const [czarWeight, setCzarWeight] = useState("4000");
 
   /* ── Results ── */
   const [optimized, setOptimized] = useState(false);
@@ -208,9 +208,12 @@ export default function RouteOptimizerPage() {
     setDestZip(val);
   }
   function handleWeightChange(val) {
-    const w = parseInt(val) || 5000;
-    setWeight(w);
-    setCzarWeight(w);
+    setWeight(val);
+    setCzarWeight(val);
+  }
+  function handleCzarWeightChange(val) {
+    setCzarWeight(val);
+    setWeight(val);
   }
 
   /* ── Build rate comparison rows ── */
@@ -219,7 +222,7 @@ export default function RouteOptimizerPage() {
       const dist = getDist(o, d);
       const showTL = mode === "ALL" || mode === "TL";
       const showLTL = mode === "ALL" || mode === "LTL";
-      const w = czarWeight || weight || 5000;
+      const w = parseInt(czarWeight) || parseInt(weight) || 5000;
 
       let rows = [];
 
@@ -363,7 +366,7 @@ export default function RouteOptimizerPage() {
     const dist = getDist(origin, dest);
     const hrs = (dist / 55).toFixed(1);
     const hosOk = parseFloat(hrs) <= 11;
-    const util = Math.min(100, Math.round((weight / 44000) * 100));
+    const util = Math.min(100, Math.round(((parseInt(weight) || 5000) / 44000) * 100));
 
     setLoadingCzarlite(true);
     try {
@@ -377,6 +380,29 @@ export default function RouteOptimizerPage() {
       setLoadingCzarlite(false);
     }
   }
+
+  /* ── Auto-refresh rates when ZIP/weight changes (like old HTML) ── */
+  const debounceRef = useRef(null);
+  useEffect(() => {
+    // Only auto-refresh if we've already optimized once
+    if (!optimized) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoadingCzarlite(true);
+      try {
+        const rows = await buildRateCompare(origin, dest);
+        const dist = getDist(origin, dest);
+        const hrs = (dist / 55).toFixed(1);
+        const hosOk = parseFloat(hrs) <= 11;
+        const util = Math.min(100, Math.round(((parseInt(weight) || 5000) / 44000) * 100));
+        const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
+        setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
+      } finally {
+        setLoadingCzarlite(false);
+      }
+    }, 600);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [czarOriginZip, czarDestZip, czarWeight, originZip, destZip, weight, buildRateCompare, origin, dest]);
 
   /* ── Sorted rate compare rows ── */
   const sortedRows = useMemo(() => {
@@ -648,7 +674,7 @@ export default function RouteOptimizerPage() {
               <label style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600, whiteSpace: "nowrap" }}>Weight:</label>
               <input
                 type="number" value={czarWeight} min={100} max={44000} step={500}
-                onChange={(e) => setCzarWeight(parseInt(e.target.value) || 5000)}
+                onChange={(e) => handleCzarWeightChange(e.target.value)}
                 style={{
                   width: 80, padding: "5px 8px",
                   border: "1.5px solid rgba(99,102,241,.35)", borderRadius: 7,
