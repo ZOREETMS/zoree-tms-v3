@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { DbApi } from "../lib/api";
+import { saveCarrierRecord } from "../services/carriersService";
 
 export default function CarriersPage() {
   const { carriers, setData, refreshData } = useOutletContext();
@@ -52,23 +53,8 @@ export default function CarriersPage() {
     if (!editCarrier.name || !editCarrier.scac) { toast("Name and SCAC required", "warning"); return; }
     setBusyId("saving");
     try {
-      const row = {
-        name: (editCarrier.name || "").toUpperCase(),
-        scac: (editCarrier.scac || "").toUpperCase(),
-        mode: (editCarrier.mode || "TL").toUpperCase(),
-        status: editCarrier.status || "Active",
-        on_time_pct: parseFloat(editCarrier.on_time_pct) || 0,
-        claim_ratio: parseFloat(editCarrier.claim_ratio) || 0,
-        cost_per_mile: parseFloat(editCarrier.cost_per_mile) || 0,
-        contact: (editCarrier.contact || "").toUpperCase() || null,
-        phone: editCarrier.phone || null,
-        email: (editCarrier.email || "").toLowerCase() || null,
-        czarlite_enabled: !!editCarrier.czarlite_enabled,
-        carrierconnect_enabled: !!editCarrier.carrierconnect_enabled,
-      };
-      if (editCarrier.id) await DbApi.patch("carriers", editCarrier.id, row);
-      else { row.id = "CAR-" + Date.now(); await DbApi.upsert("carriers", row); }
-      toast(`Carrier ${row.name} saved`, "success");
+      await saveCarrierRecord(editCarrier);
+      toast(`Carrier ${(editCarrier.name || "").toUpperCase()} saved`, "success");
       setEditCarrier(null);
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
+import { sendTenderEmailIfAvailable } from "../services/tenderService";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -310,14 +311,6 @@ export default function ShipmentsPage() {
     setTimeout(() => setMessage({ text: "", type: "" }), 4000);
   }
 
-  const carrierByName = useMemo(() => {
-    const map = new Map();
-    carriers.forEach((c) => {
-      if (c?.name) map.set(String(c.name).toLowerCase(), c);
-    });
-    return map;
-  }, [carriers]);
-
   function resolveCarrierName(s) {
     if (s?.carrier) return s.carrier;
     const linked = orders.filter(
@@ -366,26 +359,43 @@ export default function ShipmentsPage() {
 
   async function onTender(row) {
     const carrierName = row._carrier || "";
-    const carrier = carrierByName.get(carrierName.toLowerCase());
-    const to = carrier?.email || "";
-    if (!to) {
-      toast(`Cannot tender ${row.id}: carrier email missing`, "warning");
-      return;
-    }
     setBusyId(row.id);
     try {
       await DbApi.patch("shipments", row.id, { status: "Tendered", carrier: carrierName });
-      await TenderApi.sendEmail({
-        to, shipmentId: row.id, carrierName,
-        origin: row.origin || "", dest: row.dest || "",
-        pickup: row.pickup_date || "", delivery: row.delivery_date || "",
-        mode: row.mode || "", cost: row.total_cost || "",
-        weight: row.weight || "", pieces: row.pieces || "",
+      const origin = row.origin || "";
+      const dest = row.dest || "";
+      const refNum =
+        "TND-" + String(row.id || "").replace(/^SHP-/i, "") + "-" + String(Math.floor(Math.random() * 9000 + 1000));
+      const tenderPayload = {
+        shipmentId: row.id,
+        refNum,
+        subject: `Load Tender: ${row.id} — ${origin} → ${dest}`,
+        origin,
+        dest,
+        pickup: row.pickup_date || "",
+        delivery: row.delivery_date || "",
+        mode: row.mode || "",
+        cost: row.total_cost ?? row.cost ?? "",
+        weight: row.weight ?? "",
+        pieces: row.pieces || "",
         commodity: row.commodity || row._commodity || "",
+        specialInstructions: row.special_instructions || row.specialInstructions || row.notes || "",
         dockDoor: row.dock_door || "Door 1",
         dockTime: row.dock_time || "06:00–08:00",
-      });
-      toast(`Tendered ${row.id} → ${to}`, "success");
+      };
+      try {
+        const result = await sendTenderEmailIfAvailable({
+          carriers,
+          carrierName,
+          tenderPayload,
+        });
+        if (result.sent) toast(`Tendered ${row.id} → ${result.to}`, "success");
+        else if (result.reason === "missing_email") toast(`Tendered ${row.id} (no carrier email configured)`, "info");
+        else toast(`Tendered ${row.id} (${result.message || "email not sent"})`, "warning");
+      } catch (emailErr) {
+        console.warn("Tender email failed:", emailErr);
+        toast(`Tendered ${row.id} (email failed)`, "warning");
+      }
       await refreshData();
     } catch (err) {
       toast(`Tender failed: ${err.message}`, "error");

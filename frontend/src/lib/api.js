@@ -1,7 +1,14 @@
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  window.ZOREE_API_URL ||
-  "http://localhost:3001/api";
+/** Same idea as legacy `zoreeApiOrigin() + '/api'` in test/index.html — always end with exactly one `/api`. */
+function normalizeApiBase(raw) {
+  let b = String(raw || "").trim();
+  if (!b) b = "http://localhost:3001";
+  b = b.replace(/\/+$/, "").replace(/\/api$/i, "");
+  return `${b}/api`;
+}
+
+const API_BASE = normalizeApiBase(
+  import.meta.env.VITE_API_BASE || window.ZOREE_API_URL || "http://localhost:3001/api"
+);
 
 function token() {
   return localStorage.getItem("zoree_token") || "";
