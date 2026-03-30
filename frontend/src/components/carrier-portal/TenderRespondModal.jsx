@@ -38,6 +38,7 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
   function handleSubmit() {
     if (!choice) return;
     if (choice === "reject" && !rejectReason) return;
+    if (choice === "accept" && !String(carrierPickupDate || "").trim()) return;
 
     const now = new Date();
     const respondedAt = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -174,13 +175,13 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
           <button
             className="btn"
             onClick={handleSubmit}
-            disabled={!choice || (isReject && !rejectReason)}
+            disabled={!choice || (isReject && !rejectReason) || (isAccept && !String(carrierPickupDate || "").trim())}
             style={{
               minWidth: 140,
               background: isAccept ? "var(--green)" : isReject ? "var(--red)" : "var(--accent)",
               color: "#fff",
               border: `1px solid ${isAccept ? "var(--green)" : isReject ? "var(--red)" : "var(--accent)"}`,
-              opacity: (!choice || (isReject && !rejectReason)) ? 0.5 : 1,
+              opacity: (!choice || (isReject && !rejectReason) || (isAccept && !String(carrierPickupDate || "").trim())) ? 0.5 : 1,
             }}
           >
             {isAccept ? "Confirm Acceptance" : isReject ? "Submit Rejection" : "Submit Response"}

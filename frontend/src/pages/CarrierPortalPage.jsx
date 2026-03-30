@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
-import { resolveCarrierName } from "../utils/carrierPortal";
+import { plannedDeliveryDate, plannedPickupDate, resolveCarrierName } from "../utils/carrierPortal";
 import {
   ACTIVE_PORTAL_CARRIER,
   buildPersistedTenderResponses,
@@ -28,6 +28,8 @@ export default function CarrierPortalPage() {
   // Modal state
   const [respondModal, setRespondModal] = useState({ open: false, shipId: null, preselect: null });
   const [detailModal, setDetailModal] = useState({ open: false, shipId: null });
+  /** `"table"` = line-by-line; `"cards"` = original grid */
+  const [listView, setListView] = useState("table");
 
   function toast(text, type = "info") {
     setMessage({ text, type });
@@ -78,10 +80,12 @@ export default function CarrierPortalPage() {
     // Search filter
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter((s) =>
-        [s.id, resolveCarrierName(s), s.origin, s.dest, s.commodity]
-          .some((v) => String(v || "").toLowerCase().includes(q))
-      );
+      list = list.filter((s) => {
+        const r = tenderResponses[s.id];
+        const pro = (r?.proNumber || s.pro_number || "").toString();
+        return [s.id, resolveCarrierName(s), s.origin, s.dest, s.commodity, pro]
+          .some((v) => String(v || "").toLowerCase().includes(q));
+      });
     }
 
     // Sort: pending first, then by pickup
@@ -103,8 +107,9 @@ export default function CarrierPortalPage() {
         .map((oid) => orders.find((o) => o.id === oid))
         .filter(Boolean);
     }
-    const linked = orders.find((o) => o.shipmentId === shipment.id || o.shipment_id === shipment.id);
-    return linked ? [linked] : [];
+    return orders.filter(
+      (o) => String(o.shipment_id || o.shipmentId || "") === String(shipment.id || "")
+    );
   }, [orders]);
 
   // Handlers
@@ -131,7 +136,9 @@ export default function CarrierPortalPage() {
 
     let savedResponse = responseData;
     try {
-      savedResponse = await saveTenderResponse(ship, responseData);
+      savedResponse = await saveTenderResponse(ship, responseData, {
+        orders: getRelatedOrders(ship),
+      });
       setLocalTenderResponses((prev) => ({ ...prev, [shipId]: savedResponse }));
       await refreshData();
     } catch (err) {
@@ -172,9 +179,46 @@ export default function CarrierPortalPage() {
         {/* KPI Strip */}
         <KpiStrip kpis={kpis} />
 
-        {/* Tender Cards Grid */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.6 }}>View</span>
+          <div style={{ display: "flex", gap: 2, background: "#f0f4ff", borderRadius: 10, padding: 3, border: "1px solid rgba(59,130,246,.15)" }}>
+            <button
+              type="button"
+              onClick={() => setListView("table")}
+              style={{
+                padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit", background: listView === "table" ? "var(--accent)" : "transparent",
+                color: listView === "table" ? "#fff" : "var(--text3)",
+              }}
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setListView("cards")}
+              style={{
+                padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit", background: listView === "cards" ? "var(--accent)" : "transparent",
+                color: listView === "cards" ? "#fff" : "var(--text3)",
+              }}
+            >
+              Cards
+            </button>
+          </div>
+          <span style={{ fontSize: 11, color: "var(--text3)" }}>Table shows one row per shipment with PRO # and quick actions.</span>
+        </div>
+
         {filteredShipments.length === 0 ? (
           <EmptyState />
+        ) : listView === "table" ? (
+          <TenderTable
+            rows={filteredShipments}
+            tenderResponses={tenderResponses}
+            onAccept={(id) => openRespond(id, "accept")}
+            onReject={(id) => openRespond(id, "reject")}
+            onViewDetail={openDetail}
+            onChangeResponse={(id) => openRespond(id)}
+          />
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: 16 }}>
             {filteredShipments.map((s) => (
@@ -315,6 +359,134 @@ function EmptyState() {
       <div style={{ fontSize: 48, marginBottom: 12 }}>&#128237;</div>
       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>No tenders found</div>
       <div style={{ fontSize: 13 }}>Tender shipments from the Shipments page to see them here</div>
+    </div>
+  );
+}
+
+function portalStatusBadge(response) {
+  if (!response) return { label: "Pending", bg: "rgba(245,158,11,.12)", color: "#b45309", border: "rgba(245,158,11,.35)" };
+  if (response.action === "accept") return { label: "Accepted", bg: "rgba(16,185,129,.12)", color: "#059669", border: "rgba(16,185,129,.35)" };
+  return { label: "Rejected", bg: "rgba(239,68,68,.1)", color: "#dc2626", border: "rgba(239,68,68,.3)" };
+}
+
+function TenderTable({ rows, tenderResponses, onAccept, onReject, onViewDetail, onChangeResponse }) {
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="table-wrap" style={{ overflowX: "auto" }}>
+        <table className="grid" style={{ border: "none", boxShadow: "none", minWidth: 920, fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={{ whiteSpace: "nowrap" }}>Shipment</th>
+              <th>Status</th>
+              <th>Lane</th>
+              <th>Mode</th>
+              <th style={{ whiteSpace: "nowrap" }}>Planned pickup</th>
+              <th style={{ whiteSpace: "nowrap" }}>Planned delivery</th>
+              <th style={{ textAlign: "right" }}>Est. rate</th>
+              <th style={{ whiteSpace: "nowrap" }}>PRO #</th>
+              <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => {
+              const response = tenderResponses[s.id];
+              const b = portalStatusBadge(response);
+              const pro =
+                (response?.proNumber && String(response.proNumber).trim())
+                || (s.pro_number && String(s.pro_number).trim())
+                || "—";
+              const rate = s.total_cost ?? s.cost;
+              const laneShort = `${(s.origin || "").split(",")[0] || "—"} → ${(s.dest || "").split(",")[0] || "—"}`;
+              const pending = !response;
+              return (
+                <tr key={s.id}>
+                  <td>
+                    <button
+                      type="button"
+                      className="mono"
+                      onClick={() => onViewDetail(s.id)}
+                      style={{
+                        background: "none", border: "none", padding: 0, cursor: "pointer",
+                        color: "var(--accent)", fontWeight: 700, fontSize: 13, textDecoration: "underline",
+                        textUnderlineOffset: 2, fontFamily: "inherit",
+                      }}
+                    >
+                      {s.id}
+                    </button>
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+                        background: b.bg, color: b.color, border: `1px solid ${b.border}`,
+                      }}
+                    >
+                      {b.label}
+                    </span>
+                  </td>
+                  <td className="text-sm" title={`${s.origin || ""} → ${s.dest || ""}`} style={{ maxWidth: 220 }}>
+                    {laneShort}
+                  </td>
+                  <td><span className={`badge ${s.mode === "LTL" ? "badge-blue" : "badge-green"}`} style={{ fontSize: 10 }}>{s.mode || "—"}</span></td>
+                  <td className="mono text-sm">{plannedPickupDate(s)}</td>
+                  <td className="mono text-sm">{plannedDeliveryDate(s)}</td>
+                  <td className="mono text-sm" style={{ textAlign: "right" }}>
+                    {rate != null && rate !== "" ? `$${Number(rate).toLocaleString()}` : "—"}
+                  </td>
+                  <td className="mono text-sm" style={{ fontWeight: 600 }}>{pro}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: "4px 8px", fontSize: 11 }}
+                        onClick={() => onViewDetail(s.id)}
+                      >
+                        Details
+                      </button>
+                      {pending ? (
+                        <>
+                          <button
+                            type="button"
+                            style={{
+                              padding: "4px 8px", fontSize: 11, fontWeight: 700, borderRadius: 6, cursor: "pointer",
+                              border: "1.5px solid var(--green)", background: "rgba(16,185,129,.1)", color: "var(--green)", fontFamily: "inherit",
+                            }}
+                            onClick={() => onAccept(s.id)}
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            style={{
+                              padding: "4px 8px", fontSize: 11, fontWeight: 700, borderRadius: 6, cursor: "pointer",
+                              border: "1.5px solid var(--red)", background: "rgba(239,68,68,.08)", color: "var(--red)", fontFamily: "inherit",
+                            }}
+                            onClick={() => onReject(s.id)}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          style={{
+                            padding: "4px 8px", fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: "pointer",
+                            border: "1px solid var(--border)", background: "var(--bg2)", color: "var(--text2)", fontFamily: "inherit",
+                          }}
+                          onClick={() => onChangeResponse(s.id)}
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

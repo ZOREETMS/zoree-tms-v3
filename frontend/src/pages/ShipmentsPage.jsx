@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
 import { sendTenderEmailIfAvailable } from "../services/tenderService";
+import { effectiveShipmentStatus } from "../services/carrierPortalService";
+import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
+import "leaflet/dist/leaflet.css";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -12,6 +16,48 @@ const STATUS_BADGES = {
   Exception: "badge badge-red",
   Cancelled: "badge badge-red",
 };
+
+const STATE_CENTROIDS = {
+  AL: [32.8, -86.8], AZ: [34.2, -111.7], AR: [34.9, -92.4], CA: [37.1, -119.7],
+  CO: [39.0, -105.5], CT: [41.6, -72.7], FL: [27.8, -81.7], GA: [32.7, -83.3],
+  IA: [42.1, -93.5], ID: [44.2, -114.4], IL: [40.0, -89.2], IN: [39.9, -86.3],
+  KS: [38.5, -98.3], KY: [37.6, -85.3], LA: [31.1, -91.9], MA: [42.2, -71.8],
+  MD: [39.0, -76.7], MI: [44.3, -85.4], MN: [46.4, -94.6], MO: [38.5, -92.6],
+  MS: [32.7, -89.7], NC: [35.5, -79.4], NE: [41.5, -99.8], NJ: [40.1, -74.7],
+  NM: [34.5, -106.0], NV: [39.3, -116.6], NY: [43.0, -75.0], OH: [40.3, -82.8],
+  OK: [35.6, -97.5], OR: [43.9, -120.6], PA: [40.9, -77.6], SC: [33.8, -80.9],
+  TN: [35.7, -86.4], TX: [31.4, -99.3], UT: [39.3, -111.7], VA: [37.5, -78.6],
+  WA: [47.4, -120.5], WI: [44.6, -89.6],
+};
+
+function hashInt(value) {
+  let h = 0;
+  const str = String(value || "");
+  for (let i = 0; i < str.length; i += 1) h = ((h << 5) - h) + str.charCodeAt(i);
+  return Math.abs(h);
+}
+
+function stateFromLocation(location) {
+  const m = String(location || "").toUpperCase().match(/,\s*([A-Z]{2})\b/);
+  return m ? m[1] : "";
+}
+
+function coordForLocation(location) {
+  const st = stateFromLocation(location);
+  const base = STATE_CENTROIDS[st];
+  if (base) {
+    const jitter = ((hashInt(location) % 20) - 10) * 0.04;
+    return [Number((base[0] + jitter).toFixed(4)), Number((base[1] - jitter).toFixed(4))];
+  }
+  return null;
+}
+
+function statusColor(status) {
+  if (status === "In Transit") return "#3b82f6";
+  if (status === "Exception") return "#ef4444";
+  if (status === "Delivered") return "#22c55e";
+  return "#f59e0b";
+}
 
 /* ── InfoBox helper ── */
 function InfoBox({ icon, label, value }) {
@@ -26,6 +72,7 @@ function InfoBox({ icon, label, value }) {
 /* ── Shipment Detail Modal ── */
 function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES }) {
   const linked = ds._linkedOrders || [];
+  const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
   const [linesLoading, setLinesLoading] = useState(true);
   const [events, setEvents] = useState([]);
@@ -46,9 +93,9 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
     }).catch(() => setLinesLoading(false));
   }, [ds.id]);
   const consolidated = linked.length > 1;
-  const pct = ds.status === "Delivered" ? 100 : ds.status === "In Transit" ? 62 : ds.status === "Tendered" ? 20 : ds.status === "Exception" ? 55 : 5;
-  const barCol = ds.status === "Exception" ? "var(--red)" : ds.status === "Delivered" ? "var(--green)" : "var(--accent)";
-  const isTendered = ds.status !== "Planned";
+  const pct = displayStatus === "Delivered" ? 100 : displayStatus === "In Transit" ? 62 : displayStatus === "Confirmed" ? 32 : displayStatus === "Tendered" ? 20 : displayStatus === "Exception" ? 55 : 5;
+  const barCol = displayStatus === "Exception" ? "var(--red)" : displayStatus === "Delivered" ? "var(--green)" : "var(--accent)";
+  const isTendered = displayStatus !== "Planned" && displayStatus !== "Tender Rejected";
   const isPickedUp = ["In Transit", "Delivered", "Exception"].includes(ds.status);
   const isInTransit = ["In Transit", "Delivered"].includes(ds.status);
   const isDelivered = ds.status === "Delivered";
@@ -82,7 +129,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
           {/* Status bar */}
           <div style={{ padding: "14px 20px", background: "#f8faff", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span className={STATUS_BADGES[ds.status] || "badge"}>{ds.status}</span>
+              <span className={STATUS_BADGES[displayStatus] || "badge"}>{displayStatus}</span>
               <span style={{ fontSize: 13, color: "var(--text2)" }}>{ds._carrier || "—"} · <span className={`badge ${ds.mode === "LTL" ? "badge-blue" : "badge-green"}`} style={{ fontSize: 11 }}>{ds.mode || "—"}</span></span>
               {consolidated && <span style={{ fontSize: 11, background: "rgba(99,102,241,.1)", color: "#6366f1", border: "1px solid rgba(99,102,241,.2)", padding: "2px 9px", borderRadius: 10, fontWeight: 600 }}>🔗 Consolidated · {linked.length} orders</span>}
             </div>
@@ -258,14 +305,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
         </div>
 
         {/* Action Footer */}
-        <div style={{ padding: "14px 20px", background: "#f8faff", borderTop: "1px solid var(--border)", display: "flex", gap: 8, flexWrap: "wrap", borderRadius: "0 0 16px 16px" }}>
-          {["Planned", "Tender Rejected"].includes(ds.status) && (
+                <div style={{ padding: "14px 20px", background: "#f8faff", borderTop: "1px solid var(--border)", display: "flex", gap: 8, flexWrap: "wrap", borderRadius: "0 0 16px 16px" }}>
+          {["Planned", "Tender Rejected"].includes(displayStatus) && (
             <button className="btn btn-primary btn-sm" onClick={() => onTender(ds)}>📤 Tender to Carrier</button>
           )}
-          {ds.status === "Tendered" && (
+          {displayStatus === "Tendered" && (
             <button style={{ background: "#ea580c", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => onWithdraw(ds)}>📤 Withdraw Tender</button>
           )}
-          {["Planned", "Tendered", "Tender Rejected", "In Transit"].includes(ds.status) && (
+          {["Planned", "Tendered", "Tender Rejected", "In Transit"].includes(displayStatus) && (
             <button className="btn btn-secondary btn-sm">🔄 Change Carrier</button>
           )}
           <button className="btn btn-secondary btn-sm">🚪 Dock schedule</button>
@@ -331,26 +378,67 @@ export default function ShipmentsPage() {
       return {
         ...s,
         _carrier: resolveCarrierName(s),
+        _displayStatus: effectiveShipmentStatus(s),
         _linkedOrders: linkedOrders,
         _orderCount: linkedOrders.length,
         _commodity: commodities.join(", ") || s.commodity || "",
       };
     });
-    if (statusFilter !== "All") list = list.filter((s) => s.status === statusFilter);
+    if (statusFilter !== "All") list = list.filter((s) => s._displayStatus === statusFilter);
     if (modeFilter !== "All") list = list.filter((s) => (s.mode || "").toUpperCase() === modeFilter);
     if (q.trim()) {
       const t = q.toLowerCase().trim();
       list = list.filter((s) =>
-        [s.id, s._carrier, s.origin, s.dest, s.mode, s.status]
+        [s.id, s._carrier, s.origin, s.dest, s.mode, s.status, s._displayStatus]
           .some((v) => String(v || "").toLowerCase().includes(t))
       );
     }
     return [...list].sort((a, b) => {
-      const av = String(a[sortCol] || "").toLowerCase();
-      const bv = String(b[sortCol] || "").toLowerCase();
+      const av = String((sortCol === "status" ? a._displayStatus : a[sortCol]) || "").toLowerCase();
+      const bv = String((sortCol === "status" ? b._displayStatus : b[sortCol]) || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
   }, [shipments, orders, q, statusFilter, modeFilter, sortCol, sortAsc]);
+
+  const laneRoutes = useMemo(() => {
+    const lanes = new Map();
+    rows.forEach((s) => {
+      const origin = String(s.origin || "");
+      const dest = String(s.dest || "");
+      const os = stateFromLocation(origin) || "NA";
+      const ds = stateFromLocation(dest) || "NA";
+      const key = `${os}->${ds}`;
+      if (!lanes.has(key)) {
+        lanes.set(key, {
+          key,
+          from: os,
+          to: ds,
+          origin,
+          dest,
+          count: 0,
+          statuses: {},
+          originCoord: coordForLocation(origin),
+          destCoord: coordForLocation(dest),
+        });
+      }
+      const lane = lanes.get(key);
+      lane.count += 1;
+      lane.statuses[s._displayStatus] = (lane.statuses[s._displayStatus] || 0) + 1;
+    });
+
+    return [...lanes.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 18)
+      .map((lane) => {
+        const topStatus = Object.entries(lane.statuses).sort((a, b) => b[1] - a[1])[0]?.[0] || "Planned";
+        return {
+          ...lane,
+          topStatus,
+          color: statusColor(topStatus),
+          hasCoords: Array.isArray(lane.originCoord) && Array.isArray(lane.destCoord),
+        };
+      });
+  }, [rows]);
 
   function toggleSort(col) {
     if (sortCol === col) setSortAsc(!sortAsc);
@@ -517,7 +605,7 @@ export default function ShipmentsPage() {
   }
 
   async function deleteShipment(row) {
-    if (row.status === "Tendered") {
+    if (effectiveShipmentStatus(row) === "Tendered") {
       toast("Withdraw tender first before deleting", "warning");
       return;
     }
@@ -540,7 +628,10 @@ export default function ShipmentsPage() {
 
   const statusCounts = useMemo(() => {
     const c = { All: shipments.length };
-    shipments.forEach((s) => { c[s.status] = (c[s.status] || 0) + 1; });
+    shipments.forEach((s) => {
+      const st = effectiveShipmentStatus(s);
+      c[st] = (c[st] || 0) + 1;
+    });
     return c;
   }, [shipments]);
 
@@ -648,13 +739,13 @@ export default function ShipmentsPage() {
               <td className="mono text-sm">{s.pickup_date || "—"}</td>
               <td className="mono text-sm">{s.delivery_date || "—"}</td>
               <td>
-                <span className={STATUS_BADGES[s.status] || "badge badge-blue"}>
-                  {s.status || "—"}
+                <span className={STATUS_BADGES[s._displayStatus] || "badge badge-blue"}>
+                  {s._displayStatus || "—"}
                 </span>
               </td>
               <td style={{ whiteSpace: "nowrap" }}>
                 <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-                {["Planned", "Tender Rejected"].includes(s.status) && (
+                {["Planned", "Tender Rejected"].includes(s._displayStatus) && (
                   <button
                     style={{ background: "#2563eb", color: "#fff", borderColor: "#2563eb", padding: "4px 10px", fontSize: 12, borderRadius: 6, fontWeight: 700, cursor: "pointer", border: "none" }}
                     disabled={busyId === s.id}
@@ -663,7 +754,7 @@ export default function ShipmentsPage() {
                     📤 Tender
                   </button>
                 )}
-                {s.status === "Tendered" && (<>
+                {s._displayStatus === "Tendered" && (<>
                   <button
                     style={{ background: "#16a34a", color: "#fff", border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                     disabled={busyId === s.id}
@@ -686,7 +777,7 @@ export default function ShipmentsPage() {
                     ↩ Withdraw
                   </button>
                 </>)}
-                {s.status === "Confirmed" && (
+                {s._displayStatus === "Confirmed" && (
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Confirmed</span>
                 )}
                 <button
@@ -715,41 +806,65 @@ export default function ShipmentsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f59e0b" }} />Planned / Tendered</div>
           </div>
           {/* Map Container */}
-          <div className="card" style={{ padding: 20, minHeight: 500, position: "relative", overflow: "hidden" }}>
-            {/* US Map SVG */}
-            <svg viewBox="0 0 960 600" style={{ width: "100%", height: 500 }}>
-              {/* Simplified US outline */}
-              <path d="M150,450 L200,500 L350,520 L500,510 L600,500 L700,480 L750,440 L800,400 L850,350 L860,300 L850,250 L830,200 L800,180 L750,150 L700,130 L650,120 L600,110 L550,100 L500,95 L450,100 L400,110 L350,130 L300,160 L250,200 L200,250 L170,300 L150,350 L140,400 Z"
-                fill="#f0f4ff" stroke="var(--border)" strokeWidth="1.5" />
-              {/* Plot shipment routes */}
-              {rows.map((s, i) => {
-                // Simple hash-based positioning for demo
-                const hash = (str) => { let h = 0; for (let c = 0; c < (str||"").length; c++) h = ((h << 5) - h) + (str||"").charCodeAt(c); return Math.abs(h); };
-                const ox = 200 + (hash(s.origin) % 600);
-                const oy = 150 + (hash(s.origin + "y") % 300);
-                const dx = 200 + (hash(s.dest) % 600);
-                const dy = 150 + (hash(s.dest + "y") % 300);
-                const col = s.status === "In Transit" ? "#3b82f6" : s.status === "Exception" ? "#ef4444" : s.status === "Delivered" ? "#22c55e" : "#f59e0b";
-                return (
-                  <g key={s.id + i}>
-                    <line x1={ox} y1={oy} x2={dx} y2={dy} stroke={col} strokeWidth="1.5" opacity="0.5" />
-                    <circle cx={ox} cy={oy} r="4" fill={col} stroke="#fff" strokeWidth="1" />
-                    <circle cx={dx} cy={dy} r="4" fill={col} stroke="#fff" strokeWidth="1" />
-                  </g>
-                );
-              })}
-            </svg>
+          <div className="card" style={{ padding: 16, minHeight: 500, position: "relative", overflow: "hidden" }}>
+            <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
+              US map with top lanes by volume (grouped by origin/destination state)
+              {getHereApiKey()
+                ? " · HERE basemap (Raster Tile API v3)"
+                : " · HERE basemap — add VITE_HERE_API_KEY to frontend/.env (same key as developer.here.com)"}
+            </div>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", height: 460 }}>
+              <MapContainer
+                center={[39.5, -98.35]}
+                zoom={4}
+                minZoom={3}
+                maxZoom={6}
+                maxBounds={[[22, -130], [52, -64]]}
+                style={{ height: "100%", width: "100%" }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://developer.here.com">HERE</a>'
+                  url={hereRasterTileUrl(resolveHereApiKey())}
+                />
+                {laneRoutes.filter((lane) => lane.hasCoords).map((lane) => {
+                  const width = Math.min(8, 2 + lane.count * 0.55);
+                  return (
+                    <Polyline
+                      key={lane.key}
+                      positions={[lane.originCoord, lane.destCoord]}
+                      pathOptions={{ color: lane.color, weight: width, opacity: 0.62 }}
+                    >
+                      <Tooltip sticky>{`${lane.from} → ${lane.to} (${lane.count})`}</Tooltip>
+                    </Polyline>
+                  );
+                })}
+                {laneRoutes.filter((lane) => lane.hasCoords).flatMap((lane) => ([
+                  <CircleMarker
+                    key={`${lane.key}-o`}
+                    center={lane.originCoord}
+                    radius={4}
+                    pathOptions={{ color: "#ffffff", weight: 1, fillColor: lane.color, fillOpacity: 1 }}
+                  />,
+                  <CircleMarker
+                    key={`${lane.key}-d`}
+                    center={lane.destCoord}
+                    radius={4}
+                    pathOptions={{ color: "#ffffff", weight: 1, fillColor: lane.color, fillOpacity: 1 }}
+                  />,
+                ]))}
+              </MapContainer>
+            </div>
             {/* Shipment summary cards below map */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, marginTop: 16 }}>
               {rows.slice(0, 12).map((s) => {
-                const col = s.status === "In Transit" ? "var(--accent)" : s.status === "Exception" ? "var(--red)" : s.status === "Delivered" ? "var(--green)" : "var(--yellow)";
+                const col = s._displayStatus === "In Transit" ? "var(--accent)" : s._displayStatus === "Exception" ? "var(--red)" : s._displayStatus === "Delivered" ? "var(--green)" : "var(--yellow)";
                 return (
                   <div key={s.id} style={{ padding: "10px 14px", border: "1.5px solid var(--border)", borderRadius: 10, cursor: "pointer", borderLeft: `3px solid ${col}` }}
                     onClick={() => setDetailShipment(s)}>
                     <div className="mono" style={{ fontWeight: 700, color: "var(--accent)", fontSize: 12 }}>{s.id}</div>
                     <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{s.origin} → {s.dest}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11 }}>
-                      <span className={STATUS_BADGES[s.status] || "badge badge-blue"} style={{ fontSize: 10 }}>{s.status}</span>
+                      <span className={STATUS_BADGES[s._displayStatus] || "badge badge-blue"} style={{ fontSize: 10 }}>{s._displayStatus}</span>
                       <span className="mono" style={{ fontWeight: 700 }}>${(s.total_cost || 0).toLocaleString()}</span>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
+import { resolveHereApiKey } from "../config/hereMaps";
 
 /* ── City coordinates for map plotting ── */
 const CITY_COORDS = {
@@ -33,7 +34,7 @@ const CITY_COORDS = {
   "sacramento, ca": { lat: 38.5816, lng: -121.4944 },
 };
 
-const HERE_API_KEY = "zAN1Ew81w46BFqHj9whubZBtRRU2AuPlmV2yVPxMRRE";
+const HERE_API_KEY = resolveHereApiKey();
 
 function getCityCoords(city) {
   if (!city) return null;
