@@ -18,7 +18,7 @@ const navStructure = [
   { section: "Execution", items: [
     { to: "/live-tracking", label: "Live Tracking", icon: "📡", badgeVal: "3", badgeColor: "red" },
     { to: "/carriers", label: "Carriers", icon: "🚛" },
-    { to: "/carrier-portal", label: "Carrier Portal", icon: "🏢" },
+    { to: "/carrier-portal", label: "Carrier Portal", icon: "🏢", badgeKey: "tenderedShipments" },
     { to: "/dock-scheduling", label: "Dock Scheduling", icon: "🚪" },
     { to: "/fleet-management", label: "Fleet Management", icon: "🏎️" },
     { to: "/compliance", label: "Compliance", icon: "⚖️" },
@@ -51,6 +51,7 @@ export default function Layout({ data }) {
   // Dynamic badge counts
   const orderCount = (data?.orders || []).filter(o => o.status === "Unplanned").length;
   const shipCount = (data?.shipments || []).length;
+  const tenderedCount = (data?.shipments || []).filter(s => s.status === "Tendered").length;
 
   return (
     <div className="app-shell">
@@ -70,6 +71,7 @@ export default function Layout({ data }) {
                 let badgeVal = item.badgeVal || null;
                 if (item.badgeKey === "orders") badgeVal = orderCount || null;
                 if (item.badgeKey === "shipments") badgeVal = shipCount || null;
+                if (item.badgeKey === "tenderedShipments") badgeVal = tenderedCount || null;
 
                 return (
                   <NavLink

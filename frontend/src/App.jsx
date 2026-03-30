@@ -16,6 +16,17 @@ import RateManagementPage from "./pages/RateManagementPage";
 import RouteOptimizerPage from "./pages/RouteOptimizerPage";
 import LiveTrackingPage from "./pages/LiveTrackingPage";
 import DockSchedulingPage from "./pages/DockSchedulingPage";
+import CarrierPortalPage from "./pages/CarrierPortalPage";
+import CompliancePage from "./pages/CompliancePage";
+import FleetManagementPage from "./pages/FleetManagementPage";
+import FreightAuditPage from "./pages/FreightAuditPage";
+import CarrierBidsPage from "./pages/CarrierBidsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import CustomerPortalPage from "./pages/CustomerPortalPage";
+import FreightInvoicesPage from "./pages/FreightInvoicesPage";
+import ReportsPage from "./pages/ReportsPage";
+import DocumentsPage from "./pages/DocumentsPage";
+import AlertsPage from "./pages/AlertsPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
 
@@ -34,20 +45,20 @@ function PrivateRoutes({ data }) {
         <Route path="location-master" element={<LocationMasterPage />} />
         <Route path="route-optimizer" element={<RouteOptimizerPage />} />
         <Route path="live-tracking" element={<LiveTrackingPage />} />
-        <Route path="carrier-portal" element={<PlaceholderPage title="Carrier Portal" icon="🏢" description="Carrier self-service portal for tenders and updates" />} />
+        <Route path="carrier-portal" element={<CarrierPortalPage />} />
         <Route path="dock-scheduling" element={<DockSchedulingPage />} />
-        <Route path="fleet-management" element={<PlaceholderPage title="Fleet Management" icon="🔧" description="Manage drivers, vehicles, and fleet operations" />} />
-        <Route path="compliance" element={<PlaceholderPage title="Compliance" icon="📜" description="Regulatory compliance, HOS, and safety management" />} />
-        <Route path="freight-invoices" element={<PlaceholderPage title="Freight Invoices" icon="💰" description="Manage carrier invoices and payment processing" />} />
+        <Route path="fleet-management" element={<FleetManagementPage />} />
+        <Route path="compliance" element={<CompliancePage />} />
+        <Route path="freight-invoices" element={<FreightInvoicesPage />} />
         <Route path="rate-management" element={<RateManagementPage />} />
         <Route path="lane-preferences" element={<LanePreferencesPage />} />
-        <Route path="carrier-bids" element={<PlaceholderPage title="Carrier Bids" icon="🎯" description="Request and manage carrier bid responses" />} />
-        <Route path="freight-audit" element={<PlaceholderPage title="Freight Audit" icon="🔍" description="Audit carrier invoices against contracted rates" />} />
-        <Route path="documents" element={<PlaceholderPage title="Documents & BOL" icon="📄" description="Manage bills of lading, PODs, and shipping documents" />} />
-        <Route path="customer-portal" element={<PlaceholderPage title="Customer Portal" icon="👁️" description="Customer self-service portal for shipment visibility" />} />
-        <Route path="analytics" element={<PlaceholderPage title="Analytics" icon="📈" description="Transportation analytics and insights" />} />
-        <Route path="reports" element={<PlaceholderPage title="Reports" icon="📊" description="Generate and schedule reports" />} />
-        <Route path="alerts" element={<PlaceholderPage title="Alerts" icon="🔔" description="Manage alert rules and notifications" />} />
+        <Route path="carrier-bids" element={<CarrierBidsPage />} />
+        <Route path="freight-audit" element={<FreightAuditPage />} />
+        <Route path="documents" element={<DocumentsPage />} />
+        <Route path="customer-portal" element={<CustomerPortalPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="alerts" element={<AlertsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

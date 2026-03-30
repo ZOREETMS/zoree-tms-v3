@@ -123,6 +123,25 @@ export const OmsApi = {
   },
 };
 
+export const InvoicesApi = {
+  list() {
+    return api("/db/invoices?q=select=*%26order=created_at.desc%26limit=500");
+  },
+  save(invoice) {
+    if (invoice.id) return api(`/db/invoices/${encodeURIComponent(invoice.id)}`, { method: "PATCH", body: JSON.stringify(invoice) });
+    return api("/db/invoices", { method: "POST", body: JSON.stringify(invoice) });
+  },
+  remove(id) {
+    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  approve(id) {
+    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) });
+  },
+  dispute(id) {
+    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status: "Disputed" }) });
+  },
+};
+
 export const BulkPlanApi = {
   rate(lanes, optimizeBy = "cost") {
     return api("/bulk-plan/rate", {
