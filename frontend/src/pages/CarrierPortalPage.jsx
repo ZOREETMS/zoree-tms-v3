@@ -1,6 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DbApi } from "../lib/api";
+import { resolveCarrierName } from "../utils/carrierPortal";
+import {
+  ACTIVE_PORTAL_CARRIER,
+  buildPersistedTenderResponses,
+  isActivePortalCarrierShipment,
+  saveTenderResponse,
+} from "../services/carrierPortalService";
 import TenderCard from "../components/carrier-portal/TenderCard";
 import TenderRespondModal from "../components/carrier-portal/TenderRespondModal";
 import TenderDetailModal from "../components/carrier-portal/TenderDetailModal";
@@ -15,9 +21,8 @@ const TABS = [
 export default function CarrierPortalPage() {
   const { shipments, orders, refreshData } = useOutletContext();
   const [tab, setTab] = useState("all");
-  const [carrierFilter, setCarrierFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [tenderResponses, setTenderResponses] = useState({});
+  const [localTenderResponses, setLocalTenderResponses] = useState({});
   const [message, setMessage] = useState({ text: "", type: "" });
 
   // Modal state
@@ -29,10 +34,21 @@ export default function CarrierPortalPage() {
     setTimeout(() => setMessage({ text: "", type: "" }), 4000);
   }
 
+  const persistedTenderResponses = useMemo(
+    () => buildPersistedTenderResponses(shipments),
+    [shipments]
+  );
+
+  const tenderResponses = useMemo(
+    () => ({ ...persistedTenderResponses, ...localTenderResponses }),
+    [persistedTenderResponses, localTenderResponses]
+  );
+
   // All shipments visible in carrier portal: tendered + those with responses
   const portalShipments = useMemo(() => {
-    const tendered = (shipments || []).filter((s) => s.status === "Tendered");
-    const responded = (shipments || []).filter((s) => tenderResponses[s.id]);
+    const carrierShipments = (shipments || []).filter(isActivePortalCarrierShipment);
+    const tendered = carrierShipments.filter((s) => s.status === "Tendered");
+    const responded = carrierShipments.filter((s) => tenderResponses[s.id]);
     const merged = [...tendered];
     responded.forEach((s) => {
       if (!merged.find((x) => x.id === s.id)) merged.push(s);
@@ -50,11 +66,6 @@ export default function CarrierPortalPage() {
     return { total, pending, accepted, rejected, rate };
   }, [portalShipments, tenderResponses]);
 
-  // Carrier options for filter dropdown
-  const carrierOptions = useMemo(() => {
-    return [...new Set(portalShipments.map((s) => s.carrier).filter(Boolean))].sort();
-  }, [portalShipments]);
-
   // Filtered and sorted list
   const filteredShipments = useMemo(() => {
     let list = [...portalShipments];
@@ -64,14 +75,11 @@ export default function CarrierPortalPage() {
     else if (tab === "accepted") list = list.filter((s) => tenderResponses[s.id]?.action === "accept");
     else if (tab === "rejected") list = list.filter((s) => tenderResponses[s.id]?.action === "reject");
 
-    // Carrier filter
-    if (carrierFilter) list = list.filter((s) => s.carrier === carrierFilter);
-
     // Search filter
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((s) =>
-        [s.id, s.carrier, s.origin, s.dest, s.commodity]
+        [s.id, resolveCarrierName(s), s.origin, s.dest, s.commodity]
           .some((v) => String(v || "").toLowerCase().includes(q))
       );
     }
@@ -85,7 +93,7 @@ export default function CarrierPortalPage() {
     });
 
     return list;
-  }, [portalShipments, tab, carrierFilter, search, tenderResponses]);
+  }, [portalShipments, tab, search, tenderResponses]);
 
   // Get related orders for a shipment
   const getRelatedOrders = useCallback((shipment) => {
@@ -121,25 +129,23 @@ export default function CarrierPortalPage() {
     const ship = shipments.find((s) => s.id === shipId);
     if (!ship) return;
 
-    // Save response locally
-    setTenderResponses((prev) => ({ ...prev, [shipId]: responseData }));
-
-    // If rejected, revert shipment status to Planned via API
-    if (responseData.action === "reject") {
-      try {
-        await DbApi.patch("shipments", shipId, { status: "Planned" });
-        await refreshData();
-      } catch (err) {
-        console.error("Failed to update shipment status:", err);
-      }
+    let savedResponse = responseData;
+    try {
+      savedResponse = await saveTenderResponse(ship, responseData);
+      setLocalTenderResponses((prev) => ({ ...prev, [shipId]: savedResponse }));
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to save carrier portal response:", err);
+      toast(`Failed to save response: ${err.message}`, "error");
+      return;
     }
 
     closeRespond();
 
     if (responseData.action === "accept") {
-      toast(`Tender accepted by ${ship.carrier} for ${shipId}`, "success");
+      toast(`Tender accepted by ${resolveCarrierName(ship)} for ${shipId}`, "success");
     } else {
-      toast(`Tender rejected by ${ship.carrier} — shipment reverted to Planned`, "warning");
+      toast(`Tender rejected by ${resolveCarrierName(ship)} — shipment set to Tender Rejected`, "warning");
     }
   }
 
@@ -153,9 +159,6 @@ export default function CarrierPortalPage() {
       <PageHeader
         tab={tab}
         onTabChange={setTab}
-        carrierFilter={carrierFilter}
-        carrierOptions={carrierOptions}
-        onCarrierChange={setCarrierFilter}
         search={search}
         onSearchChange={setSearch}
       />
@@ -216,7 +219,7 @@ export default function CarrierPortalPage() {
 
 /* ── Sub-components ── */
 
-function PageHeader({ tab, onTabChange, carrierFilter, carrierOptions, onCarrierChange, search, onSearchChange }) {
+function PageHeader({ tab, onTabChange, search, onSearchChange }) {
   return (
     <div style={{
       padding: "16px 28px", borderBottom: "1px solid var(--border)",
@@ -226,7 +229,9 @@ function PageHeader({ tab, onTabChange, carrierFilter, carrierOptions, onCarrier
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <h2 style={{ margin: 0 }}>Carrier Portal</h2>
-          <div className="page-subtitle">Tendered shipments awaiting carrier acceptance or rejection</div>
+          <div className="page-subtitle">
+            Tendered shipments awaiting carrier acceptance or rejection ({ACTIVE_PORTAL_CARRIER})
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {/* Tab Buttons */}
@@ -251,20 +256,20 @@ function PageHeader({ tab, onTabChange, carrierFilter, carrierOptions, onCarrier
             ))}
           </div>
 
-          {/* Carrier Filter */}
-          <select
-            value={carrierFilter}
-            onChange={(e) => onCarrierChange(e.target.value)}
+          <div
             style={{
-              padding: "7px 10px", border: "1.5px solid var(--border)",
-              borderRadius: 8, fontSize: 13, fontFamily: "inherit", background: "#fff",
+              padding: "7px 10px",
+              border: "1.5px solid var(--border)",
+              borderRadius: 8,
+              fontSize: 13,
+              fontFamily: "inherit",
+              background: "#fff",
+              color: "var(--text2)",
+              minWidth: 120,
             }}
           >
-            <option value="">All Carriers</option>
-            {carrierOptions.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+            {ACTIVE_PORTAL_CARRIER}
+          </div>
 
           {/* Search */}
           <input

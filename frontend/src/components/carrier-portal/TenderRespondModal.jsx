@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 import { REJECTION_REASONS } from "./TenderCard";
+import { plannedDeliveryDate, plannedPickupDate, resolveCarrierName } from "../../utils/carrierPortal";
 
 export default function TenderRespondModal({ shipment, preselect, onClose, onSubmit }) {
   const [choice, setChoice] = useState(preselect || null);
   const [driverName, setDriverName] = useState("");
   const [driverPhone, setDriverPhone] = useState("");
   const [truckNum, setTruckNum] = useState("");
+  const [proNumber, setProNumber] = useState("");
+  const [carrierPickupDate, setCarrierPickupDate] = useState("");
   const [pickupEta, setPickupEta] = useState("");
   const [acceptNotes, setAcceptNotes] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -17,12 +20,14 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
     setDriverName("");
     setDriverPhone("");
     setTruckNum("");
+    setProNumber("");
     setAcceptNotes("");
     setRejectReason("");
     setRejectNotes("");
+    setCarrierPickupDate(plannedPickupDate(shipment) !== "—" ? plannedPickupDate(shipment) : "");
     // Default pickup ETA to shipment pickup date
     try {
-      const d = new Date(shipment.pickup + "T08:00");
+      const d = new Date(plannedPickupDate(shipment) + "T08:00");
       d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
       setPickupEta(d.toISOString().slice(0, 16));
     } catch { setPickupEta(""); }
@@ -44,10 +49,12 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
         driver: driverName.trim(),
         phone: driverPhone.trim(),
         truck: truckNum.trim(),
+        proNumber: proNumber.trim(),
+        carrierPickupDate,
         pickupEta,
         notes: acceptNotes.trim(),
         respondedAt,
-        carrierName: shipment.carrier,
+        carrierName: resolveCarrierName(shipment),
       });
     } else {
       onSubmit({
@@ -55,7 +62,7 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
         reason: rejectReason,
         notes: rejectNotes.trim(),
         respondedAt,
-        carrierName: shipment.carrier,
+        carrierName: resolveCarrierName(shipment),
       });
     }
   }
@@ -85,11 +92,11 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
           {/* Shipment Summary */}
           <div style={{ padding: "18px 20px", background: "#f8faff", borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              <SummaryCell label="Carrier" value={shipment.carrier} />
+              <SummaryCell label="Carrier" value={resolveCarrierName(shipment)} />
               <SummaryCell label="Lane" value={`${(shipment.origin || "").split(",")[0]} \u2192 ${(shipment.dest || "").split(",")[0]}`} />
               <SummaryCell label="Rate" value={shipment.cost || shipment.total_cost || "N/A"} valueColor="var(--green)" />
-              <SummaryCell label="Pickup" value={shipment.pickup} mono />
-              <SummaryCell label="Delivery" value={shipment.delivery} mono />
+              <SummaryCell label="Planned Pickup" value={plannedPickupDate(shipment)} mono />
+              <SummaryCell label="Planned Delivery" value={plannedDeliveryDate(shipment)} mono />
               <SummaryCell label="Weight" value={`${Number(shipment.weight || 0).toLocaleString()} lbs`} />
             </div>
           </div>
@@ -129,7 +136,11 @@ export default function TenderRespondModal({ shipment, preselect, onClose, onSub
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                   <FormField label="Truck / Unit #" value={truckNum} onChange={setTruckNum} placeholder="Truck or trailer number" />
-                  <FormField label="Estimated Pickup" type="datetime-local" value={pickupEta} onChange={setPickupEta} />
+                  <FormField label="Carrier Pickup Date" type="date" value={carrierPickupDate} onChange={setCarrierPickupDate} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                  <FormField label="PRO Number" value={proNumber} onChange={setProNumber} placeholder="Enter PRO number" />
+                  <FormField label="Estimated Pickup (Optional)" type="datetime-local" value={pickupEta} onChange={setPickupEta} />
                 </div>
                 <FormField label="Notes to Shipper" value={acceptNotes} onChange={setAcceptNotes} placeholder="Any special instructions or notes..." textarea />
               </div>

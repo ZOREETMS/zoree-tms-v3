@@ -5,6 +5,7 @@ import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
   Tendered: "badge badge-purple",
+  "Tender Rejected": "badge badge-red",
   "In Transit": "badge badge-blue",
   Delivered: "badge badge-green",
   Exception: "badge badge-red",
@@ -257,13 +258,13 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
 
         {/* Action Footer */}
         <div style={{ padding: "14px 20px", background: "#f8faff", borderTop: "1px solid var(--border)", display: "flex", gap: 8, flexWrap: "wrap", borderRadius: "0 0 16px 16px" }}>
-          {ds.status === "Planned" && (
+          {["Planned", "Tender Rejected"].includes(ds.status) && (
             <button className="btn btn-primary btn-sm" onClick={() => onTender(ds)}>📤 Tender to Carrier</button>
           )}
           {ds.status === "Tendered" && (
             <button style={{ background: "#ea580c", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => onWithdraw(ds)}>📤 Withdraw Tender</button>
           )}
-          {["Planned", "Tendered", "In Transit"].includes(ds.status) && (
+          {["Planned", "Tendered", "Tender Rejected", "In Transit"].includes(ds.status) && (
             <button className="btn btn-secondary btn-sm">🔄 Change Carrier</button>
           )}
           <button className="btn btn-secondary btn-sm">🚪 Dock schedule</button>
@@ -576,7 +577,7 @@ export default function ShipmentsPage() {
           className="search"
         />
         <select className="fsel" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          {["All", "Planned", "Tendered", "Confirmed", "In Transit", "Delivered", "Cancelled"].map((s) => (
+          {["All", "Planned", "Tendered", "Tender Rejected", "Confirmed", "In Transit", "Delivered", "Cancelled"].map((s) => (
             <option key={s} value={s}>{s === "All" ? "ALL STATUSES" : s} {statusCounts[s] ? `(${statusCounts[s]})` : ""}</option>
           ))}
         </select>
@@ -643,7 +644,7 @@ export default function ShipmentsPage() {
               </td>
               <td style={{ whiteSpace: "nowrap" }}>
                 <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-                {s.status === "Planned" && (
+                {["Planned", "Tender Rejected"].includes(s.status) && (
                   <button
                     style={{ background: "#2563eb", color: "#fff", borderColor: "#2563eb", padding: "4px 10px", fontSize: 12, borderRadius: 6, fontWeight: 700, cursor: "pointer", border: "none" }}
                     disabled={busyId === s.id}

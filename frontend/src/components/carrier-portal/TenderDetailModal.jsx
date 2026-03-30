@@ -1,3 +1,5 @@
+import { plannedDeliveryDate, plannedPickupDate, resolveCarrierName } from "../../utils/carrierPortal";
+
 function InfoCell({ label, value, icon }) {
   return (
     <div style={{ background: "#f8faff", borderRadius: 8, padding: "8px 10px", border: "1px solid var(--border)" }}>
@@ -23,7 +25,7 @@ export default function TenderDetailModal({ shipment, response, relatedOrders, o
             <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>
               Tender Details
             </div>
-            <h3 style={{ color: "#fff", margin: 0 }}>{shipment.id} — {shipment.carrier}</h3>
+            <h3 style={{ color: "#fff", margin: 0 }}>{shipment.id} — {resolveCarrierName(shipment)}</h3>
           </div>
           <button className="modal-close" onClick={onClose} style={{ color: "rgba(255,255,255,.7)" }}>&#10005;</button>
         </div>
@@ -52,8 +54,8 @@ export default function TenderDetailModal({ shipment, response, relatedOrders, o
             display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
             borderBottom: "1px solid var(--border)",
           }}>
-            <InfoCell label="Pickup Date" value={shipment.pickup} icon="" />
-            <InfoCell label="Delivery Date" value={shipment.delivery} icon="" />
+            <InfoCell label="Planned Pickup Date" value={plannedPickupDate(shipment)} icon="" />
+            <InfoCell label="Planned Delivery Date" value={plannedDeliveryDate(shipment)} icon="" />
             <InfoCell label="Agreed Rate" value={shipment.cost || shipment.total_cost || "N/A"} icon="" />
           </div>
 
@@ -119,6 +121,18 @@ export default function TenderDetailModal({ shipment, response, relatedOrders, o
                     <div style={{ fontSize: 12, marginBottom: 4 }}>
                       <span style={{ color: "var(--text3)" }}>Unit #: </span>
                       <strong>{response.truck}</strong>
+                    </div>
+                  )}
+                  {response.proNumber && (
+                    <div style={{ fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: "var(--text3)" }}>PRO #: </span>
+                      <strong>{response.proNumber}</strong>
+                    </div>
+                  )}
+                  {response.carrierPickupDate && (
+                    <div style={{ fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: "var(--text3)" }}>Carrier Pickup Date: </span>
+                      <strong>{response.carrierPickupDate}</strong>
                     </div>
                   )}
                   {response.pickupEta && (

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { plannedDeliveryDate, plannedPickupDate, resolveCarrierName, safeDateUrgency } from "../../utils/carrierPortal";
 
 const REJECTION_REASONS = [
   "No capacity available on this lane",
@@ -12,14 +13,6 @@ const REJECTION_REASONS = [
 ];
 
 export { REJECTION_REASONS };
-
-function getUrgency(pickupDate) {
-  const days = Math.ceil((new Date(pickupDate) - new Date()) / 86400000);
-  if (days <= 0) return { color: "var(--red)", label: "TODAY" };
-  if (days === 1) return { color: "var(--red)", label: "TOMORROW" };
-  if (days <= 3) return { color: "var(--yellow)", label: `in ${days} days` };
-  return { color: "var(--green)", label: `in ${days} days` };
-}
 
 function getStatusDisplay(response) {
   if (!response) {
@@ -54,7 +47,10 @@ function InfoCell({ label, value, icon }) {
 
 export default function TenderCard({ shipment, response, consolidatedOrders, onAccept, onReject, onViewDetail, onChangeResponse }) {
   const isPending = !response;
-  const urgency = useMemo(() => getUrgency(shipment.pickup), [shipment.pickup]);
+  const pickupDate = plannedPickupDate(shipment);
+  const deliveryDate = plannedDeliveryDate(shipment);
+  const carrierName = resolveCarrierName(shipment);
+  const urgency = useMemo(() => safeDateUrgency(pickupDate), [pickupDate]);
   const status = useMemo(() => getStatusDisplay(response), [response]);
   const relOrders = consolidatedOrders || 0;
 
@@ -79,7 +75,7 @@ export default function TenderCard({ shipment, response, consolidatedOrders, onA
             {status.badge.icon} {status.badge.label}
           </span>
         </div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.85)" }}>{shipment.carrier}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.85)" }}>{carrierName}</div>
       </div>
 
       {/* Lane + Pickup Urgency */}
@@ -96,8 +92,8 @@ export default function TenderCard({ shipment, response, consolidatedOrders, onA
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".6px" }}>Pickup</div>
-          <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace", marginTop: 1 }}>{shipment.pickup}</div>
+          <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".6px" }}>Planned Pickup</div>
+          <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace", marginTop: 1 }}>{pickupDate}</div>
           <div style={{ fontSize: 10, fontWeight: 700, color: urgency.color, marginTop: 2 }}>{urgency.label}</div>
         </div>
       </div>
@@ -112,7 +108,7 @@ export default function TenderCard({ shipment, response, consolidatedOrders, onA
         <InfoCell label="Weight" value={`${Number(shipment.weight || 0).toLocaleString()} lbs`} icon="" />
         <InfoCell label="Pieces" value={String(shipment.pieces || 0)} icon="" />
         <InfoCell label="Commodity" value={shipment.commodity || "General"} icon="" />
-        <InfoCell label="Delivery" value={shipment.delivery} icon="" />
+        <InfoCell label="Planned Delivery" value={deliveryDate} icon="" />
         <InfoCell label="Est. Rate" value={shipment.cost || shipment.total_cost || "N/A"} icon="" />
       </div>
 
@@ -142,6 +138,8 @@ export default function TenderCard({ shipment, response, consolidatedOrders, onA
               {response.driver && <div><span style={{ color: "var(--text3)" }}>Driver: </span><strong>{response.driver}</strong></div>}
               {response.phone && <div><span style={{ color: "var(--text3)" }}>Phone: </span><strong>{response.phone}</strong></div>}
               {response.truck && <div><span style={{ color: "var(--text3)" }}>Unit #: </span><strong>{response.truck}</strong></div>}
+              {response.proNumber && <div><span style={{ color: "var(--text3)" }}>PRO #: </span><strong>{response.proNumber}</strong></div>}
+              {response.carrierPickupDate && <div><span style={{ color: "var(--text3)" }}>Carrier Pickup: </span><strong>{response.carrierPickupDate}</strong></div>}
               {response.pickupEta && <div><span style={{ color: "var(--text3)" }}>ETA: </span><strong>{response.pickupEta.replace("T", " ")}</strong></div>}
             </div>
           ) : (
