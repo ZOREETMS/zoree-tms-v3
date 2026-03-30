@@ -61,6 +61,9 @@ export const DbApi = {
   packagingUnits() {
     return api("/db/packaging_units?q=select=*%26order=id.asc%26limit=500");
   },
+  rates() {
+    return api("/db/rates?q=select=*%26order=lane%26limit=500");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

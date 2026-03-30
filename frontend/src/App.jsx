@@ -56,7 +56,7 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [] });
+  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -70,8 +70,9 @@ export default function App() {
       DbApi.items().catch(() => []),
       DbApi.locations().catch(() => []),
       DbApi.packagingUnits().catch(() => []),
+      DbApi.rates().catch(() => []),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates]) => {
         setData({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -80,6 +81,7 @@ export default function App() {
           items: Array.isArray(items) ? items : [],
           locations: Array.isArray(locations) ? locations : [],
           packagingUnits: Array.isArray(packagingUnits) ? packagingUnits : [],
+          rates: Array.isArray(rates) ? rates : [],
         });
       })
       .catch((e) => setError(e.message || "Failed loading data"))

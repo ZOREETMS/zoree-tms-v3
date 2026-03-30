@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 
@@ -24,6 +24,36 @@ const STATUS_ROW_COLORS = {
   Cancelled:    { bg: "#f9fafb", border: "#9ca3af" },
 };
 const SPOT_ROW_STYLE = { background: "#fef2f2", borderLeft: "3px solid #dc2626" };
+
+const EQUIPMENT_TYPES = {
+  "Dry Van 53'":    { maxWeight: 44000, icon: "🚛" },
+  "Flatbed":        { maxWeight: 48000, icon: "🏗️" },
+  "Reefer 53'":     { maxWeight: 43500, icon: "❄️" },
+  "Step Deck":      { maxWeight: 48000, icon: "📦" },
+  "Lowboy":         { maxWeight: 80000, icon: "⚙️" },
+  "Tanker":         { maxWeight: 46000, icon: "🛢️" },
+  "LTL Truck":      { maxWeight: 15000, icon: "📬" },
+  "Intermodal 53'": { maxWeight: 44000, icon: "🚂" },
+};
+const DEFAULT_EQUIP = "Dry Van 53'";
+const LTL_MAX_WEIGHT = 15000;
+
+/* ── Lane distance lookup (miles) — uppercase keys ── */
+const LANE_DISTANCES = {
+  "CHICAGO, IL|DALLAS, TX": 921, "COLUMBUS, OH|ATLANTA, GA": 640,
+  "DALLAS, TX|ATLANTA, GA": 781, "HOUSTON, TX|ATLANTA, GA": 795,
+  "ATLANTA, GA|NEW YORK, NY": 882, "DALLAS, TX|PHOENIX, AZ": 1072,
+  "MEMPHIS, TN|DENVER, CO": 1069, "CHICAGO, IL|NEW YORK, NY": 790,
+  "LOS ANGELES, CA|SEATTLE, WA": 1135, "MOUNTAIN VIEW, CA|SEATTLE, WA": 1300,
+  "CHARLOTTE, NC|HOUSTON, TX": 1290, "SAN JOSE, CA|COLUMBUS, OH": 2390,
+  "BOSTON, MA|PHOENIX, AZ": 2665, "MIAMI, FL|DENVER, CO": 2107,
+  "PHOENIX, AZ|BOSTON, MA": 2665, "DENVER, CO|MIAMI, FL": 2107,
+  "CHICAGO, IL|ATLANTA, GA": 720, "COLLEGE PARK, GA|DALLAS, TX": 781,
+  "COLLEGE PARK, GA|CHICAGO, IL": 720, "COLLEGE PARK, GA|NEW YORK, NY": 882,
+};
+function getDist(o, d) {
+  return LANE_DISTANCES[`${o}|${d}`] || 750;
+}
 
 function SdField({ icon, label, value }) {
   const display = value === null || value === undefined || value === "" ? "\u2014" : value;
@@ -84,6 +114,19 @@ export default function OrdersPage() {
   const [detailBusy, setDetailBusy] = useState(false);
   const [detailTab, setDetailTab] = useState("view");
   const [editForm, setEditForm] = useState({});
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Auto-open order detail from URL ?id=ORD-xxxx
+  useEffect(() => {
+    const idParam = searchParams.get("id");
+    if (idParam && orders.length > 0) {
+      const order = orders.find((o) => o.id === idParam);
+      if (order) {
+        openDetail(order.id);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [orders, searchParams]);
   const [editUser, setEditUser] = useState("Sridhar (Dispatcher)");
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}
@@ -381,23 +424,33 @@ export default function OrdersPage() {
   /* ── Date helpers ── */
   function addBusinessDays(dateStr, days) {
     const d = new Date(dateStr + "T12:00:00");
-    let added = 0;
-    while (added < days) { d.setDate(d.getDate() + 1); const dow = d.getDay(); if (dow !== 0 && dow !== 6) added++; }
+    const step = days >= 0 ? 1 : -1;
+    let remaining = Math.abs(days);
+    while (remaining > 0) { d.setDate(d.getDate() + step); const dow = d.getDay(); if (dow !== 0 && dow !== 6) remaining--; }
     return d.toISOString().slice(0, 10);
   }
   function calcDates(quote, dueDate, readyDate) {
     const today = new Date().toISOString().slice(0, 10);
-    let transit = quote.transitDays || 2;
+    let transit = quote.transitDays || null;
     const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
-    const rMode = quote.mode === "LTL" ? "LTL" : "TL";
-    if (!quote.transitDays && quote.miles) {
+    const rMode = (quote.mode || "").toUpperCase() === "LTL" ? "LTL" : "TL";
+    if (!transit && quote.miles) {
       const mpd = isExp ? 800 : rMode === "LTL" ? 350 : 500;
       transit = Math.max(1, Math.ceil(quote.miles / mpd));
     }
-    let pickup = readyDate || today;
-    if (pickup < today) pickup = today;
+    if (!transit) transit = 2; // fallback
+    // Pickup = latest of (today, readyDate) — can't ship before ready
+    const minPickup = today > (readyDate || "") ? today : (readyDate || today);
+    let pickup = minPickup;
+    // If due date exists, try to back-calculate pickup to arrive on time
+    if (dueDate) {
+      const idealPickup = addBusinessDays(dueDate, -transit);
+      if (idealPickup >= minPickup) pickup = idealPickup;
+      // else constrained by ready date — ship ASAP
+    }
     const delivery = addBusinessDays(pickup, transit);
-    return { pickup, delivery, transit };
+    const warning = dueDate && delivery > dueDate ? "Late — delivery after due date" : "";
+    return { pickup, delivery, transit, warning };
   }
 
   /* ── City → Zip fallback (for orders missing zip codes) ── */
@@ -426,14 +479,17 @@ export default function OrdersPage() {
     const totalPieces = sibs.reduce((s, x) => s + Number(x.pieces || 0), 0);
     const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
     const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.dest);
-    const maxWt = 44000;
+    // Auto-detect equipment: LTL if weight ≤ 15,000 lbs, else Dry Van 53'
+    const autoEquip = totalWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
+    const maxWt = EQUIPMENT_TYPES[autoEquip].maxWeight;
     const util = Math.round((totalWeight / maxWt) * 100);
+    const miles = getDist(o.origin || "", o.dest || "");
     const lane = {
       laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70", totalWeight, totalPieces,
-      orderIds: sibs.map((x) => x.id),
+      orderIds: sibs.map((x) => x.id), miles,
     };
-    setPlanModal({ order: o, siblings: sibs, lane, quotes: [], selectedIdx: 0, busy: true, error: "", maxWt, util, loadDuration: 120 });
+    setPlanModal({ order: o, siblings: sibs, lane, quotes: [], selectedIdx: 0, busy: true, error: "", maxWt, util, loadDuration: 120, equipType: autoEquip });
     setDetailOrder(null);
     try {
       const rateRes = await BulkPlanApi.rate([lane], "cost");
@@ -451,8 +507,9 @@ export default function OrdersPage() {
     const { lane, quotes, selectedIdx, bestQuote, siblings } = planModal;
     const chosen = quotes[selectedIdx] || bestQuote;
     if (!chosen) { toast("No carrier selected", "error"); return; }
-    const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort()[0] || "";
-    const dates = calcDates(chosen, "", readyDate);
+    const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
+    const earliestDue = siblings?.map((s) => s.due).filter(Boolean).sort()[0] || "";
+    const dates = calcDates(chosen, earliestDue, readyDate);
     setPlanModal((prev) => prev ? { ...prev, busy: true } : null);
     try {
       const plans = [{
@@ -504,6 +561,7 @@ export default function OrdersPage() {
         totalWeight: group.reduce((s, x) => s + Number(x.weight || 0), 0),
         totalPieces: group.reduce((s, x) => s + Number(x.pieces || 0), 0),
         orderIds: group.map((x) => x.id),
+        miles: getDist(o.origin || "", o.dest || ""),
       };
     });
     setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${lanes.length} lanes...`]);
@@ -597,20 +655,21 @@ export default function OrdersPage() {
   /* ── Build table rows with lane group headers ── */
   const tableRows = useMemo(() => {
     const result = [];
+    const showLaneGroups = sortCol === "id"; // only show lane grouping in default sort
     let lastLaneKey = null;
     rows.forEach((o) => {
       const laneKey = `${o.origin}||${o.dest}`;
       const group = laneGroups[laneKey];
-      if (o.status === "Unplanned" && group && group.orders.length > 1 && laneKey !== lastLaneKey) {
+      if (showLaneGroups && o.status === "Unplanned" && group && group.orders.length > 1 && laneKey !== lastLaneKey) {
         lastLaneKey = laneKey;
         const capacity = group.totalWeight >= 38000 ? "Full TL" : "Partial TL";
         const capacityClass = group.totalWeight >= 38000 ? "badge badge-green" : "badge badge-amber";
         result.push({ type: "lane-header", key: `lane-${laneKey}`, origin: o.origin, dest: o.dest, count: group.orders.length, weight: group.totalWeight, capacity, capacityClass, firstOrderId: group.orders[0] });
       }
-      result.push({ type: "order", key: o.id, order: o, inGroup: o.status === "Unplanned" && group && group.orders.length > 1 });
+      result.push({ type: "order", key: o.id, order: o, inGroup: showLaneGroups && o.status === "Unplanned" && group && group.orders.length > 1 });
     });
     return result;
-  }, [rows, laneGroups]);
+  }, [rows, laneGroups, sortCol]);
 
   return (
     <div>
@@ -830,7 +889,7 @@ export default function OrdersPage() {
                 <td className="text-sm">{o.commodity || "—"}</td>
                 <td className="mono text-sm">{o.ready || "—"}</td>
                 <td className="mono text-sm">{o.due || "—"}</td>
-                <td>{o.shipment_id ? <span className="mono text-sm" style={{ color: "var(--green)" }}>{o.shipment_id}</span> : "—"}</td>
+                <td>{o.shipment_id ? <a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono text-sm" style={{ color: "var(--green)", textDecoration: "none", cursor: "pointer" }}>{o.shipment_id}</a> : "—"}</td>
                 <td>{badges.map((b, i) => <span key={i} style={{ display: "inline-block", fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 600, marginLeft: i > 0 ? 4 : 0, background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>{b.label}</span>)}</td>
                 <td><span className={STATUS_BADGES[o.status] || "badge badge-blue"}>{o.status || "—"}</span></td>
                 <td style={{ whiteSpace: "nowrap" }}>
@@ -908,7 +967,7 @@ export default function OrdersPage() {
                     <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>{o.customer || "—"}</span>
                     {o.no_contract_rate && <span style={{ fontSize: 9, fontWeight: 700, background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", padding: "2px 7px", borderRadius: 8 }}>⚠️ SPOT RATE</span>}
                   </div>
-                  {o.shipment_id && <span className="mono" style={{ fontSize: 12, color: "var(--accent)", background: "var(--accent-glow)", padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(59,130,246,.2)" }}>{"\u2192"} {o.shipment_id}</span>}
+                  {o.shipment_id && <a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono" style={{ fontSize: 12, color: "var(--accent)", background: "var(--accent-glow)", padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(59,130,246,.2)", textDecoration: "none", cursor: "pointer" }}>{"\u2192"} {o.shipment_id}</a>}
                 </div>
 
                 {/* Lane visual */}
@@ -933,7 +992,7 @@ export default function OrdersPage() {
                   <SdField icon="📅" label="Ready Date" value={o.ready} />
                   <SdField icon="🗓️" label="Due Date" value={o.due} />
                   <SdField icon="🔗" label="Lane Peers" value={sibs.length > 0 ? `${sibs.length} eligible order(s)` : "No consolidation peers"} />
-                  {o.shipment_id && <SdField icon="🚚" label="Shipment ID" value={<span className="mono" style={{ color: "var(--accent)", cursor: "pointer" }}>{o.shipment_id} {"\u2197"}</span>} />}
+                  {o.shipment_id && <SdField icon="🚚" label="Shipment ID" value={<a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono" style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "none" }}>{o.shipment_id} {"\u2197"}</a>} />}
                   {o.ref_num && <SdField icon="📋" label="Reference #" value={o.ref_num} />}
                   {o.po_num && <SdField icon="🧾" label="PO Number" value={o.po_num} />}
                 </div>
@@ -1148,9 +1207,12 @@ export default function OrdersPage() {
 
       {/* ═══ PLAN CONFIRMATION MODAL (matches old HTML) ═══ */}
       {planModal && (() => {
-        const { lane, siblings, quotes, selectedIdx, bestQuote, busy, error, maxWt, util, loadDuration } = planModal;
+        const { lane, siblings, quotes, selectedIdx, bestQuote, busy, error, maxWt, util, loadDuration, equipType } = planModal;
+        const equip = EQUIPMENT_TYPES[equipType] || EQUIPMENT_TYPES[DEFAULT_EQUIP];
         const utilColor = util >= 90 ? "var(--green)" : util >= 70 ? "var(--yellow)" : "var(--accent)";
-        const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort()[0] || "";
+        // Latest ready date = can't ship before this
+        const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
+        const earliestDue = siblings?.map((s) => s.due).filter(Boolean).sort()[0] || "";
         return (
         <div className="modal-overlay" onClick={() => !busy && setPlanModal(null)}>
           <div className="modal-card" style={{ width: 680, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
@@ -1159,11 +1221,25 @@ export default function OrdersPage() {
               <button className="modal-close" onClick={() => !busy && setPlanModal(null)}>✕</button>
             </div>
             <div className="modal-body" style={{ overflowY: "auto", flex: 1 }}>
-              {/* Equipment */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--bg3)", borderRadius: 10, marginBottom: 12, border: "1px solid var(--border)" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)" }}>🚛 Equipment:</span>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>🚛 Dry Van 53' (Max 44,000 lbs)</span>
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text3)" }}>Max: <strong>44,000 lbs</strong> per trailer</span>
+              {/* Equipment Selector */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#f0f4ff", borderRadius: 10, marginBottom: 14, border: "1px solid rgba(59,130,246,.15)" }}>
+                <span style={{ fontSize: 14 }}>🚛</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)" }}>Equipment:</span>
+                <select
+                  value={equipType}
+                  onChange={(e) => {
+                    const newEquip = e.target.value;
+                    const newMax = EQUIPMENT_TYPES[newEquip].maxWeight;
+                    const newUtil = Math.round((lane.totalWeight / newMax) * 100);
+                    setPlanModal((p) => p ? { ...p, equipType: newEquip, maxWt: newMax, util: newUtil } : null);
+                  }}
+                  style={{ padding: "4px 9px", border: "1.5px solid var(--border)", borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }}
+                >
+                  {Object.entries(EQUIPMENT_TYPES).map(([name, eq]) => (
+                    <option key={name} value={name}>{eq.icon} {name} (Max {eq.maxWeight.toLocaleString()} lbs)</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>Max: <strong style={{ color: "var(--accent)" }}>{maxWt.toLocaleString()} lbs</strong> per trailer</span>
               </div>
 
               {/* Dock Reservation */}
@@ -1233,29 +1309,37 @@ export default function OrdersPage() {
                     const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
                     const svcTag = isExp ? "EXP" : "STD";
                     const rMode = quote.mode || "TL";
-                    const dates = calcDates(quote, "", readyDate);
+                    const dates = calcDates(quote, earliestDue, readyDate);
+                    const isPref = quote.preferred;
+                    const isCzarlite = quote.czarlite || rMode === "LTL";
                     return (
                       <div key={i}
                         onClick={() => setPlanModal((prev) => prev ? { ...prev, selectedIdx: i } : null)}
                         style={{
-                          display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", marginBottom: 6,
-                          borderRadius: 10, cursor: "pointer", border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-                          background: isSelected ? "rgba(59,130,246,.04)" : "#fff",
+                          display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", marginBottom: 4,
+                          borderRadius: 8, cursor: "pointer",
+                          border: isSelected ? "1px solid rgba(16,185,129,.2)" : "1px solid var(--border)",
+                          background: isSelected ? "rgba(16,185,129,.06)" : "var(--bg4)",
                         }}
                       >
-                        <input type="radio" name="plan-rate" checked={isSelected} readOnly style={{ accentColor: "var(--accent)" }} />
+                        <input type="radio" name="plan-rate" checked={isSelected} readOnly style={{ margin: 0, accentColor: "var(--accent)" }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: 12, textTransform: "uppercase" }}>{quote.carrier}</span>
+                            <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: 12 }}>{quote.carrier}</span>
                             <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: rMode === "LTL" ? "rgba(99,102,241,.12)" : "rgba(16,185,129,.12)", color: rMode === "LTL" ? "#4f46e5" : "#059669" }}>{rMode}</span>
                             <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: isExp ? "rgba(124,58,237,.12)" : "rgba(107,114,128,.1)", color: isExp ? "#7c3aed" : "#6b7280" }}>{svcTag}{isExp ? " 🚛🚛" : ""}</span>
-                            {isSelected && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "rgba(16,185,129,.12)", color: "#059669" }}>✓ Selected</span>}
+                            {isPref && <span style={{ fontSize: 9, background: "rgba(59,130,246,.1)", color: "var(--accent)", border: "1px solid rgba(59,130,246,.2)", padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>⭐ PREF</span>}
+                            {isSelected && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "rgba(16,185,129,.12)", color: "#059669" }}>✓ SELECTED</span>}
+                            {isCzarlite && <span style={{ fontSize: 9, background: "rgba(99,102,241,.1)", color: "#4f46e5", padding: "1px 6px", borderRadius: 8, fontWeight: 600 }}>CZARLITE</span>}
                           </div>
-                          <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 11, color: "var(--text3)" }}>
-                            <span>🚛 {dates.transit}D Transit</span>
-                            <span>📅 Pickup: {dates.pickup}</span>
+                          <div style={{ display: "flex", gap: 12, marginTop: 4, marginLeft: 0, fontSize: 10, color: "var(--text3)" }}>
+                            <span>🚚 {dates.transit}D Transit</span>
+                            {quote.miles && <span>📏 {quote.miles.toLocaleString()} mi</span>}
+                            {!quote.miles && lane.miles && <span>📏 {lane.miles.toLocaleString()} mi</span>}
+                            <span>📦 Pickup: {dates.pickup}</span>
                             <span>🏁 Delivery: {dates.delivery}</span>
                           </div>
+                          {dates.warning && <div style={{ marginTop: 3, fontSize: 9, color: "#dc2626", fontWeight: 600 }}>⚠️ {dates.warning}</div>}
                         </div>
                         <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: isSelected ? 800 : 600, fontSize: 13, color: isSelected ? "var(--green)" : "var(--text2)" }}>{fmt$(quote.totalCharge)}</span>
                       </div>

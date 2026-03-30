@@ -169,7 +169,27 @@
       "Bash(npx kill-port:*)",
       "Bash(npx -y acorn --ecma2020 --jsx --allow-import-export-everywhere frontend/src/pages/ShipmentsPage.jsx)",
       "Bash(node scripts/seed-locations.js)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -type f \\\\\\(-name *[Rr]ate* -o -name *[Rr]ates* \\\\\\))",
+      "Bash(ls -la /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/*.html)",
+      "Bash(ls -la /c/Zoree/zoree-tms-v3/zoree-tms-v3/test/*.html)",
+      "Bash(ls -la /c/Zoree/zoree-tms-v3/zoree-tms-v3/*.html)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -path */node_modules -prune -o -type f -name *.css -print)",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -path */node_modules -prune -o -type f \\\\\\(-name *Rate* -o -name *rate* \\\\\\) -print)",
+      "Bash(grep -r \"RateManagement\\\\|rates\\\\|Rate\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src --include=*.jsx --include=*.js)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/api -type f -name *.js)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -type f \\\\\\(-name *migration* -o -name *schema* -o -name *sql \\\\\\))",
+      "Bash(node scripts/fix-lane-ids.js)",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=id,lane,carrier&limit=3&order=lane\" -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE')",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=*&limit=1\" -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\)[0]; print\\(''''\\\\n''''.join\\(sorted\\(d.keys\\(\\)\\)\\)\\)\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=lane&limit=5&order=lane\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=lane&order=lane&limit=50\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=id,lane&lane=like.*20261231-20261231&order=lane&limit=50\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=id,lane&order=lane&limit=50\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(node scripts/fix-lane-ids-v2.js)",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=id,lane&lane=like.AVRT-ATL-DAL*&limit=5\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")"
     ]
   }
 }

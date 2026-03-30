@@ -138,7 +138,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
               </div>
               {linked.map((o) => (
                 <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", background: "#f8faff", borderRadius: 8, marginBottom: 6, border: "1px solid var(--border)" }}>
-                  <span className="mono" style={{ color: "var(--accent)", fontSize: 12, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>{o.id}</span>
+                  <a href={`/orders?id=${o.id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/orders?id=${o.id}`; }} className="mono" style={{ color: "var(--accent)", fontSize: 12, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>{o.id}</a>
                   <span style={{ fontSize: 12, color: "var(--text2)" }}>{o.customer || ""}</span>
                   <span style={{ fontSize: 12, color: "var(--text3)" }}>· {o.commodity || ""}</span>
                   <span style={{ fontSize: 11, color: "var(--text3)" }}>· {(o.origin || "").split(",")[0]} → {(o.dest || "").split(",")[0]}</span>

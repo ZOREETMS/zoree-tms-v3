@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useOutletContext } from "react-router-dom";
+import { DbApi } from "../lib/api";
 
 /* ─────────────────────────────────────────────
    ZoreeAI — Floating chat assistant
@@ -7,56 +7,91 @@ import { useOutletContext } from "react-router-dom";
    ───────────────────────────────────────────── */
 
 function buildTMSContext(data) {
-  const { orders = [], shipments = [], carriers = [] } = data || {};
+  const { orders = [], shipments = [], carriers = [], lanePreferences = [], rates = [] } = data || {};
   const unplanned = orders.filter((o) => o.status === "Unplanned");
+  const planned = orders.filter((o) => o.status === "Planned" || o.status === "Consolidated");
   const inTransit = shipments.filter((s) => s.status === "In Transit");
   const exceptions = shipments.filter((s) => s.status === "Exception");
 
   const carrierSummary = carriers
     .map((c) => {
       const cnt = shipments.filter((s) => s.carrier === c.name).length;
-      return `${c.name} (SCAC:${c.scac || "?"}, OTD:${c.otd || "?"}%, ${cnt} shipments)`;
+      const cost = parseFloat(c.cost) || 0;
+      return `${c.name} (SCAC:${c.scac || "?"}, OTD:${c.otd || "?"}%, ${cnt} shipments${cost ? `, $${cost.toFixed(2)}/mi` : ""})`;
     })
     .join("; ");
 
-  const recentShips = shipments
-    .slice(0, 10)
+  const shipmentsList = shipments
+    .slice(0, 30)
     .map(
       (s) =>
         `${s.id}: ${(s.origin || "").split(",")[0]}→${(s.dest || s.destination || "").split(",")[0]} | ${s.carrier || "?"} | ${s.status} | ${s.cost || "?"}`
     )
     .join("\n");
 
-  const unplannedList = unplanned
-    .slice(0, 20)
+  // Include ALL orders so the AI can find any order by ID
+  const allOrdersList = orders
     .map(
       (o) =>
-        `${o.id}: ${o.customer || "?"} | ${(o.origin || "").split(",")[0]}→${(o.dest || o.destination || "").split(",")[0]} | ${o.weight || "?"}lbs | Ready: ${o.ready || o.pickup_date || "?"} | Due: ${o.due || o.delivery_date || "?"}`
+        `${o.id}: ${o.customer || "?"} | ${o.origin || "?"}→${o.dest || o.destination || "?"} | ${o.weight || "?"}lbs | ${o.pieces || "?"} pcs | ${o.commodity || "—"} | Status: ${o.status} | Ready: ${o.ready || o.pickup_date || "?"} | Due: ${o.due || o.delivery_date || "?"}${o.shipment_id ? ` | Shipment: ${o.shipment_id}` : ""}${o.preferred_carrier ? ` [PREF:${o.preferred_carrier}]` : ""}`
     )
     .join("\n");
 
+  const rateSummary = rates.length > 0
+    ? rates.slice(0, 20).map(
+        (r) => `${r.carrier || "?"}|${(r.origin || "").split(",")[0]}→${(r.dest || r.destination || "").split(",")[0]} $${r.rate || "?"}/mi FSC:${r.fsc || "?"}`
+      ).join("; ")
+    : "No rates configured";
+
   return [
     "You are ZoreeAI, an AI assistant embedded in ZoreeTMS — a Transportation Management System.",
-    "You have live access to all TMS data below. Be concise, specific, and actionable. Reference actual IDs and numbers. Use bullet points for lists.",
+    "You have live access to all TMS data below. Be concise, specific, and actionable. Reference actual IDs and numbers.",
     "",
     `=== SHIPMENTS (total: ${shipments.length}) ===`,
     `In Transit: ${inTransit.length} | Exceptions: ${exceptions.length}`,
-    recentShips,
+    shipmentsList,
     "",
-    `=== ORDERS (total: ${orders.length}) ===`,
-    `Unplanned: ${unplanned.length}`,
-    unplannedList || "None",
+    `=== ALL ORDERS (total: ${orders.length}) ===`,
+    `Unplanned: ${unplanned.length} | Planned/Consolidated: ${planned.length}`,
+    allOrdersList || "None",
     "",
     "=== CARRIERS ===",
     carrierSummary || "None configured",
     "",
-    "Answer questions based on this data. Be professional, helpful, and precise.",
-    "When the user asks about shipments, orders, carriers, or any TMS data, reference actual IDs and numbers from the data above.",
+    "=== RATES ===",
+    rateSummary,
+    "",
+    "=== ACTIONS YOU CAN EXECUTE ===",
+    "You can perform real TMS actions. Respond with a JSON action block when the user wants to DO something.",
+    "IMPORTANT: When executing an action, end your response with a JSON block in this exact format:",
+    "```action",
+    '{ "action": "ACTION_NAME", "params": { ... } }',
+    "```",
+    "",
+    "Available actions:",
+    "PLAN_ORDER            — params: { orderIds: [string], carrier?: string } — Creates a real shipment. USE THIS when user says 'plan order X'.",
+    "UPDATE_ORDER_STATUS   — params: { orderId, newStatus }   — statuses: Unplanned, Planned, In Transit, Delivered, Cancelled, On Hold",
+    "UPDATE_SHIPMENT_STATUS — params: { shipmentId, newStatus } — statuses: Planned, Confirmed, In Transit, Delivered, Exception, Cancelled",
+    "ASSIGN_CARRIER        — params: { shipmentId, carrier }",
+    "HOLD_ORDER            — params: { orderId, reason }",
+    "CANCEL_ORDER          — params: { orderId, reason }",
+    "CANCEL_SHIPMENT       — params: { shipmentId, reason }",
+    "FLAG_EXCEPTION        — params: { shipmentId, issue }",
+    "",
+    "Rules for actions:",
+    '- "plan ORD-XXXX" = emit PLAN_ORDER action immediately. Keep text to 1-2 lines then the action block.',
+    "- PLAN_ORDER is safe and non-destructive — never ask for confirmation before planning.",
+    "- Only ask for confirmation before CANCEL_ORDER or CANCEL_SHIPMENT.",
+    "- Never fabricate order or shipment IDs — only use IDs from the data above.",
+    "",
+    "IMPORTANT: You can see ALL orders above. When a user asks about a specific order ID, find it in the list.",
   ].join("\n");
 }
 
 function formatMessage(text) {
-  return text
+  // Strip action blocks from display
+  const clean = text.replace(/```action[\s\S]*?```/g, "").trim();
+  return clean
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -69,10 +104,43 @@ function formatMessage(text) {
     .replace(/\n/g, "<br>");
 }
 
+function parseAction(text) {
+  const match = text.match(/```action\s*([\s\S]*?)```/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1].trim());
+  } catch {
+    return null;
+  }
+}
+
+function actionLabel(a) {
+  const p = a.params || {};
+  switch (a.action) {
+    case "PLAN_ORDER":
+      return `📋 Plan ${Array.isArray(p.orderIds) ? p.orderIds.join(", ") : p.orderIds} → new shipment${p.carrier ? ` with ${p.carrier}` : " · best available carrier"}`;
+    case "UPDATE_ORDER_STATUS":
+      return `Update Order ${p.orderId} → ${p.newStatus}`;
+    case "UPDATE_SHIPMENT_STATUS":
+      return `Update Shipment ${p.shipmentId} → ${p.newStatus}`;
+    case "ASSIGN_CARRIER":
+      return `Assign ${p.carrier} to Shipment ${p.shipmentId}`;
+    case "HOLD_ORDER":
+      return `Put Order ${p.orderId} On Hold — ${p.reason}`;
+    case "CANCEL_ORDER":
+      return `Cancel Order ${p.orderId} — ${p.reason}`;
+    case "CANCEL_SHIPMENT":
+      return `Cancel Shipment ${p.shipmentId} — ${p.reason}`;
+    case "FLAG_EXCEPTION":
+      return `Flag Shipment ${p.shipmentId} as Exception — ${p.issue}`;
+    default:
+      return `${a.action} — ${JSON.stringify(p)}`;
+  }
+}
+
 const ENV_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
 
-export default function ZoreeAI() {
-  const data = useOutletContext();
+export default function ZoreeAI({ data }) {
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState(ENV_KEY);
   const [keyInput, setKeyInput] = useState("");
@@ -82,6 +150,7 @@ export default function ZoreeAI() {
   const [connected, setConnected] = useState(!!ENV_KEY);
   const [initialized, setInitialized] = useState(false);
   const chatHistoryRef = useRef([]);
+  const pendingActionsRef = useRef({});
   const msgsEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -91,7 +160,6 @@ export default function ZoreeAI() {
 
   useEffect(scrollToBottom, [messages, typing, scrollToBottom]);
 
-  // Auto-init chat when env key is present and panel opens
   useEffect(() => {
     if (open && connected && !initialized) {
       initChat();
@@ -105,7 +173,7 @@ export default function ZoreeAI() {
   function initChat() {
     const welcome = {
       role: "ai",
-      text: "Hi! 👋 I'm ZoreeAI — your TMS copilot.\n\nAsk me anything about your shipments, orders, carriers, or costs. Here are some things I can help with:\n• **Shipment summary** — overview of all in-transit & exceptions\n• **Carrier performance** — OTD rates and shipment counts\n• **Unplanned orders** — what needs attention\n• **Freight spend** — cost breakdowns\n\nJust type your question below!",
+      text: "Hi! 👋 I'm ZoreeAI — your TMS copilot.\n\nJust tell me what to do and I'll execute it:\n• **\"Plan ORD-2026-XXXXX\"** → I pick the best carrier, price it, create the shipment\n• **Shipment summary** — overview of all in-transit & exceptions\n• **Carrier performance** — OTD rates and shipment counts\n• Assign / reassign carriers, hold or cancel orders, flag exceptions\n\nNo steps. No options. Just results.",
     };
     setMessages([welcome]);
     chatHistoryRef.current = [];
@@ -127,22 +195,182 @@ export default function ZoreeAI() {
     chatHistoryRef.current = [];
   }
 
-  async function handleSend() {
-    const text = inputVal.trim();
-    if (!text || typing) return;
-    setInputVal("");
+  // ── Action executor — calls real TMS API ──────────────
+  async function executeAction(actionData) {
+    const p = actionData.params || {};
+    const { orders = [], shipments = [], refreshData } = data || {};
 
-    // Add user message
-    setMessages((prev) => [...prev, { role: "user", text }]);
-    chatHistoryRef.current.push({ role: "user", content: text });
+    switch (actionData.action) {
+      case "PLAN_ORDER": {
+        let rawIds = p.orderIds || (p.orderId ? [p.orderId] : []);
+        if (!Array.isArray(rawIds)) rawIds = [rawIds];
+        if (rawIds.length === 0) throw new Error("No order IDs provided");
 
+        const planOrders = rawIds.map((oid) => {
+          const ord = orders.find((o) => o.id === oid);
+          if (!ord) throw new Error(`Order ${oid} not found`);
+          if (ord.status !== "Unplanned") throw new Error(`Order ${oid} is ${ord.status} — only Unplanned orders can be planned`);
+          return ord;
+        });
+
+        const o0 = planOrders[0];
+        const tw = planOrders.reduce((s, x) => s + (Number(x.weight) || 0), 0);
+        const tp = planOrders.reduce((s, x) => s + (parseInt(x.pieces) || 0), 0);
+
+        // Pick carrier — use preferred or first available
+        let chosenCarrier = p.carrier;
+        if (!chosenCarrier && data.carriers?.length > 0) {
+          chosenCarrier = data.carriers[0].name;
+        }
+        chosenCarrier = chosenCarrier || "TBD";
+
+        const newId = `SHP-${new Date().getFullYear()}-${1860 + Math.floor(Date.now() % 100000)}`;
+        // Match exact DB column names from shipments table
+        const newShip = {
+          id: newId,
+          origin: o0.origin,
+          dest: o0.dest || o0.destination,
+          mode: tw <= 15000 ? "LTL" : "TL",
+          carrier: chosenCarrier,
+          weight: tw,
+          pieces: tp,
+          total_cost: 0,
+          pickup_date: planOrders.map((x) => x.ready || x.pickup_date).filter(Boolean).sort()[0] || null,
+          delivery_date: planOrders.map((x) => x.due || x.delivery_date).filter(Boolean).sort().reverse()[0] || null,
+          status: "Planned",
+          order_ids: rawIds,
+          notes: `Planned by ZoreeAI. Orders: ${rawIds.join(", ")}`,
+        };
+
+        await DbApi.upsert("shipments", newShip);
+
+        // Update orders to Planned
+        for (const ord of planOrders) {
+          await DbApi.patch("orders", ord.id, {
+            status: planOrders.length > 1 ? "Consolidated" : "Planned",
+            shipment_id: newId,
+          });
+        }
+
+        if (refreshData) await refreshData();
+        return `Shipment **${newId}** created · ${rawIds.length} order(s) · Carrier: ${chosenCarrier} · ${(o0.origin || "").split(",")[0]} → ${(o0.dest || o0.destination || "").split(",")[0]}`;
+      }
+
+      case "UPDATE_ORDER_STATUS": {
+        const o = orders.find((x) => x.id === p.orderId);
+        if (!o) throw new Error(`Order ${p.orderId} not found`);
+        const prev = o.status;
+        await DbApi.patch("orders", p.orderId, { status: p.newStatus });
+        if (refreshData) await refreshData();
+        return `Order ${p.orderId} status changed from ${prev} → ${p.newStatus}`;
+      }
+
+      case "UPDATE_SHIPMENT_STATUS": {
+        const s = shipments.find((x) => x.id === p.shipmentId);
+        if (!s) throw new Error(`Shipment ${p.shipmentId} not found`);
+        const prev = s.status;
+        const patch = { status: p.newStatus };
+        if (p.newStatus === "In Transit" && !s.shipped_at) patch.shipped_at = new Date().toISOString();
+        if (p.newStatus === "Delivered" && !s.delivered_at) patch.delivered_at = new Date().toISOString();
+        await DbApi.patch("shipments", p.shipmentId, patch);
+        if (refreshData) await refreshData();
+        return `Shipment ${p.shipmentId} status changed from ${prev} → ${p.newStatus}`;
+      }
+
+      case "ASSIGN_CARRIER": {
+        const s = shipments.find((x) => x.id === p.shipmentId);
+        if (!s) throw new Error(`Shipment ${p.shipmentId} not found`);
+        const prev = s.carrier || "None";
+        await DbApi.patch("shipments", p.shipmentId, { carrier: p.carrier });
+        if (refreshData) await refreshData();
+        return `Carrier for shipment ${p.shipmentId} set to ${p.carrier} (was: ${prev})`;
+      }
+
+      case "HOLD_ORDER": {
+        await DbApi.patch("orders", p.orderId, { status: "On Hold", notes: `HOLD: ${p.reason || "AI action"}` });
+        if (refreshData) await refreshData();
+        return `Order ${p.orderId} placed On Hold — ${p.reason}`;
+      }
+
+      case "CANCEL_ORDER": {
+        await DbApi.patch("orders", p.orderId, { status: "Cancelled", notes: `CANCELLED: ${p.reason || "AI action"}` });
+        if (refreshData) await refreshData();
+        return `Order ${p.orderId} cancelled — ${p.reason}`;
+      }
+
+      case "CANCEL_SHIPMENT": {
+        const linked = orders.filter((o) => o.shipment_id === p.shipmentId);
+        for (const o of linked) {
+          await DbApi.patch("orders", o.id, { status: "Unplanned", shipment_id: null });
+        }
+        await DbApi.patch("shipments", p.shipmentId, { status: "Cancelled", notes: `CANCELLED: ${p.reason || "AI action"}` });
+        if (refreshData) await refreshData();
+        return `Shipment ${p.shipmentId} cancelled · ${linked.length} order(s) returned to Unplanned`;
+      }
+
+      case "FLAG_EXCEPTION": {
+        await DbApi.patch("shipments", p.shipmentId, { status: "Exception", notes: `EXCEPTION: ${p.issue || "Flagged by AI"}` });
+        if (refreshData) await refreshData();
+        return `Shipment ${p.shipmentId} flagged as Exception — ${p.issue}`;
+      }
+
+      default:
+        throw new Error(`Unknown action: ${actionData.action}`);
+    }
+  }
+
+  async function handleConfirmAction(actionId) {
+    const actionData = pendingActionsRef.current[actionId];
+    if (!actionData) return;
+    delete pendingActionsRef.current[actionId];
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.actionId === actionId ? { ...m, actionStatus: "executing" } : m
+      )
+    );
+
+    try {
+      const result = await executeAction(actionData);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.actionId === actionId ? { ...m, actionStatus: "done", actionResult: result } : m
+        )
+      );
+      chatHistoryRef.current.push({ role: "user", content: `[SYSTEM: Action executed successfully — ${result}]` });
+      setMessages((prev) => [...prev, { role: "ai", text: `✅ **Action completed:** ${result}\n\nIs there anything else you need?` }]);
+    } catch (e) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.actionId === actionId ? { ...m, actionStatus: "error", actionResult: e.message } : m
+        )
+      );
+    }
+  }
+
+  function handleDeclineAction(actionId) {
+    delete pendingActionsRef.current[actionId];
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.actionId === actionId ? { ...m, actionStatus: "cancelled" } : m
+      )
+    );
+    setMessages((prev) => [...prev, { role: "ai", text: "Got it — action cancelled. Let me know if you need anything else." }]);
+  }
+
+  async function callAPI(userText) {
+    setMessages((prev) => [...prev, { role: "user", text: userText }]);
+    chatHistoryRef.current.push({ role: "user", content: userText });
     setTyping(true);
 
     try {
       const systemPrompt = (() => {
         try {
-          return buildTMSContext(data);
-        } catch {
+          const ctx = buildTMSContext(data);
+          console.log("[ZoreeAI] Context length:", ctx.length, "| Orders:", (data?.orders || []).length);
+          return ctx;
+        } catch (e) {
+          console.error("[ZoreeAI] Context build error:", e);
           return "You are ZoreeAI, a TMS assistant for Zoree. Answer questions about transportation and logistics.";
         }
       })();
@@ -157,7 +385,7 @@ export default function ZoreeAI() {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
+          max_tokens: 2048,
           system: systemPrompt,
           messages: chatHistoryRef.current.slice(-14),
         }),
@@ -168,15 +396,21 @@ export default function ZoreeAI() {
       if (respData.content?.[0]?.text) {
         const reply = respData.content[0].text;
         chatHistoryRef.current.push({ role: "assistant", content: reply });
-        setMessages((prev) => [...prev, { role: "ai", text: reply }]);
+
+        // Check for action block
+        const action = parseAction(reply);
+        if (action) {
+          const actionId = `act-${Date.now()}`;
+          pendingActionsRef.current[actionId] = action;
+          setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "pending" }]);
+        } else {
+          setMessages((prev) => [...prev, { role: "ai", text: reply }]);
+        }
       } else if (respData.error) {
         const errMsg = respData.error.message || JSON.stringify(respData.error);
         setMessages((prev) => [
           ...prev,
-          {
-            role: "ai",
-            text: `⚠️ API error: ${errMsg}\n\nIf this says "invalid x-api-key", click "change key" in the header and re-enter your key.`,
-          },
+          { role: "ai", text: `⚠️ API error: ${errMsg}\n\nIf this says "invalid x-api-key", click "change key" in the header and re-enter your key.` },
         ]);
       } else {
         setMessages((prev) => [
@@ -195,64 +429,16 @@ export default function ZoreeAI() {
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
-  function handleQuickPrompt(text) {
-    setInputVal(text);
-    setTimeout(() => {
-      setInputVal("");
-      handleSendDirect(text);
-    }, 0);
+  function handleSend() {
+    const text = inputVal.trim();
+    if (!text || typing) return;
+    setInputVal("");
+    callAPI(text);
   }
 
-  async function handleSendDirect(text) {
-    if (!text || typing) return;
-    setMessages((prev) => [...prev, { role: "user", text }]);
-    chatHistoryRef.current.push({ role: "user", content: text });
-    setTyping(true);
-
-    try {
-      const systemPrompt = (() => {
-        try {
-          return buildTMSContext(data);
-        } catch {
-          return "You are ZoreeAI, a TMS assistant for Zoree.";
-        }
-      })();
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: chatHistoryRef.current.slice(-14),
-        }),
-      });
-
-      const respData = await response.json();
-      if (respData.content?.[0]?.text) {
-        const reply = respData.content[0].text;
-        chatHistoryRef.current.push({ role: "assistant", content: reply });
-        setMessages((prev) => [...prev, { role: "ai", text: reply }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "ai", text: "⚠️ Unexpected response from API." },
-        ]);
-      }
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "ai", text: `⚠️ Error: ${err.message}` },
-      ]);
-    }
-
-    setTyping(false);
+  function handleQuickPrompt(text) {
+    if (typing) return;
+    callAPI(text);
   }
 
   const quickPrompts = [
@@ -306,14 +492,7 @@ export default function ZoreeAI() {
               <div style={{ fontWeight: 700, fontSize: 15, color: "#1e2d6b", textAlign: "center" }}>
                 Connect ZoreeAI
               </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "#64748b",
-                  textAlign: "center",
-                  lineHeight: 1.6,
-                }}
-              >
+              <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", lineHeight: 1.6 }}>
                 Enter your Anthropic API key to enable the AI assistant. Your key is stored only in
                 memory and never sent anywhere except the Anthropic API.
               </div>
@@ -350,6 +529,43 @@ export default function ZoreeAI() {
                       style={{ margin: 0 }}
                       dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }}
                     />
+                    {/* Action confirm card */}
+                    {msg.action && msg.actionStatus === "pending" && (
+                      <div className="zoree-ai-action-card">
+                        <div className="zoree-ai-action-label">⚡ Proposed Action</div>
+                        <div style={{ color: "#1e2d6b", fontWeight: 600, marginBottom: 10, fontSize: 12 }}>
+                          {actionLabel(msg.action)}
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="zoree-ai-action-confirm" onClick={() => handleConfirmAction(msg.actionId)}>
+                            ✅ Confirm & Execute
+                          </button>
+                          <button className="zoree-ai-action-cancel" onClick={() => handleDeclineAction(msg.actionId)}>
+                            ✗ Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {msg.actionStatus === "executing" && (
+                      <div className="zoree-ai-action-card" style={{ borderColor: "rgba(59,130,246,.3)" }}>
+                        <div style={{ color: "#3b82f6", fontWeight: 600, fontSize: 12 }}>⏳ Executing…</div>
+                      </div>
+                    )}
+                    {msg.actionStatus === "done" && (
+                      <div className="zoree-ai-action-card" style={{ background: "rgba(16,185,129,.08)", borderColor: "rgba(16,185,129,.3)" }}>
+                        <div style={{ color: "#34d399", fontWeight: 600, fontSize: 12 }}>✅ Done — {msg.actionResult}</div>
+                      </div>
+                    )}
+                    {msg.actionStatus === "error" && (
+                      <div className="zoree-ai-action-card" style={{ background: "rgba(239,68,68,.08)", borderColor: "rgba(239,68,68,.3)" }}>
+                        <div style={{ color: "#f87171", fontWeight: 600, fontSize: 12 }}>❌ Failed — {msg.actionResult}</div>
+                      </div>
+                    )}
+                    {msg.actionStatus === "cancelled" && (
+                      <div className="zoree-ai-action-card" style={{ background: "rgba(255,255,255,.03)", borderColor: "rgba(255,255,255,.08)" }}>
+                        <div style={{ color: "#64748b", fontSize: 12 }}>Action cancelled.</div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {typing && (

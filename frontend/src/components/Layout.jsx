@@ -121,7 +121,7 @@ export default function Layout({ data }) {
       </main>
 
       {/* ZoreeAI Floating Chat Assistant */}
-      <ZoreeAI />
+      <ZoreeAI data={data} />
     </div>
   );
 }
