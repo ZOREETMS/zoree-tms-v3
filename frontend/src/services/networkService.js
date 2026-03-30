@@ -1,3 +1,5 @@
+import { OPPORTUNITY_LEVELS, UTILIZATION_THRESHOLDS, VARIANCE_THRESHOLDS } from "../types/network";
+
 /**
  * Seed lane data for network modeling.
  */
@@ -17,8 +19,8 @@ export const SEED_LANES = [
  */
 export function computeNetworkKpis(lanes) {
   const active = lanes.length;
-  const optimized = lanes.filter((l) => l.util >= 80).length;
-  const underUtilized = lanes.filter((l) => l.util < 65).length;
+  const optimized = lanes.filter((l) => l.util >= UTILIZATION_THRESHOLDS.HIGH).length;
+  const underUtilized = lanes.filter((l) => l.util < UTILIZATION_THRESHOLDS.MEDIUM).length;
   const totalSavings = lanes.reduce((sum, l) => {
     const diff = l.avgCostMi - l.benchmark;
     return sum + (diff > 0 ? diff * l.loads * 500 : 0); // estimated miles per load
@@ -40,23 +42,29 @@ export function runScenario(lanes, params) {
 }
 
 /**
+ * Get utilization bar color based on percentage.
+ */
+export function getUtilizationColor(util) {
+  if (util >= UTILIZATION_THRESHOLDS.HIGH) return OPPORTUNITY_LEVELS.Low.color;
+  if (util >= UTILIZATION_THRESHOLDS.MEDIUM) return OPPORTUNITY_LEVELS.Medium.color;
+  return OPPORTUNITY_LEVELS.High.color;
+}
+
+/**
  * Get variance color based on cost vs benchmark.
  */
 export function getVarianceColor(avgCost, benchmark) {
   const pct = ((avgCost - benchmark) / benchmark) * 100;
-  if (pct > 10) return "#dc2626";
-  if (pct > 5) return "#f59e0b";
-  return "#16a34a";
+  if (pct > VARIANCE_THRESHOLDS.DANGER) return OPPORTUNITY_LEVELS.High.color;
+  if (pct > VARIANCE_THRESHOLDS.WARNING) return OPPORTUNITY_LEVELS.Medium.color;
+  return OPPORTUNITY_LEVELS.Low.color;
 }
 
 /**
  * Get opportunity badge style.
  */
 export function getOpportunityStyle(level) {
-  switch (level) {
-    case "High": return { color: "#dc2626", background: "#fef2f2" };
-    case "Medium": return { color: "#f59e0b", background: "#fffbeb" };
-    case "Low": return { color: "#16a34a", background: "#f0fdf4" };
-    default: return { color: "#64748b", background: "#f8fafc" };
-  }
+  const config = OPPORTUNITY_LEVELS[level];
+  if (config) return { color: config.color, background: config.bg };
+  return { color: "#64748b", background: "#f8fafc" };
 }

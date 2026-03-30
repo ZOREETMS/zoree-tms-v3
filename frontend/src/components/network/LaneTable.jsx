@@ -1,4 +1,4 @@
-import { getVarianceColor, getOpportunityStyle } from "../../services/networkService";
+import { getVarianceColor, getOpportunityStyle, getUtilizationColor } from "../../services/networkService";
 
 export default function LaneTable({ lanes }) {
   return (
@@ -41,7 +41,7 @@ export default function LaneTable({ lanes }) {
                           width: `${lane.util}%`,
                           height: "100%",
                           borderRadius: 3,
-                          background: lane.util >= 80 ? "#16a34a" : lane.util >= 65 ? "#f59e0b" : "#dc2626",
+                          background: getUtilizationColor(lane.util),
                         }} />
                       </div>
                       <span style={{ fontSize: 12, fontWeight: 600, minWidth: 32 }}>{lane.util}%</span>

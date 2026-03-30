@@ -4,6 +4,16 @@ export const OPPORTUNITY_LEVELS = {
   Low: { color: "#16a34a", bg: "#f0fdf4" },
 };
 
+export const UTILIZATION_THRESHOLDS = {
+  HIGH: 80,
+  MEDIUM: 65,
+};
+
+export const VARIANCE_THRESHOLDS = {
+  DANGER: 10,
+  WARNING: 5,
+};
+
 export const LANE_TABLE_COLUMNS = [
   "Lane",
   "Loads/Mo",

@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { SEVERITY_CONFIG, ALERT_STATUS } from "../../types/alerts";
+import { formatTimestamp } from "../../utils/formatters";
 
 export default function AlertCard({ alert, onResolve, onAcknowledge }) {
   const navigate = useNavigate();
@@ -62,17 +63,4 @@ export default function AlertCard({ alert, onResolve, onAcknowledge }) {
       </div>
     </div>
   );
-}
-
-function formatTimestamp(ts) {
-  if (!ts) return "";
-  const d = new Date(ts);
-  const now = new Date();
-  const diffMs = now - d;
-  const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-
-  if (diffHrs < 1) return "Just now";
-  if (diffHrs < 24) return `${diffHrs}h ago`;
-
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }

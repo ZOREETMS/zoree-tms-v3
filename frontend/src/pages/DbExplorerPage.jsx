@@ -8,14 +8,9 @@ export default function DbExplorerPage() {
   const data = useOutletContext();
   const { sql, setSql, results, error, isRunning, runQuery, exportCSV, clearResults } = useDbExplorer(data);
 
-  function handleSetQuery(newSql) {
-    setSql(newSql);
-  }
-
   function handleRunQueryFromSidebar(querySql) {
     setSql(querySql);
-    // Run after state update
-    setTimeout(() => runQuery(querySql), 0);
+    runQuery(querySql);
   }
 
   return (

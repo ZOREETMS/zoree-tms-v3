@@ -1,3 +1,5 @@
+import { formatCell as formatValue } from "../../utils/formatters";
+
 export default function ResultsPanel({ results, error, isRunning }) {
   if (isRunning) {
     return (
@@ -110,7 +112,6 @@ function ResultsHeader({ meta, time }) {
 
 function formatCell(value) {
   if (value === null || value === undefined) return <span style={{ color: "#94a3b8" }}>null</span>;
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  const formatted = formatValue(value);
+  return formatted === null ? <span style={{ color: "#94a3b8" }}>null</span> : formatted;
 }

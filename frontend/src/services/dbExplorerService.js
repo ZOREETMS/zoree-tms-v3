@@ -20,6 +20,7 @@ export function executeQuery(sql, data) {
     shipments: data.shipments || [],
     carriers: data.carriers || [],
     rates: data.rates || [],
+    drivers: data.drivers || [],
     locations: data.locations || [],
     items: data.items || [],
     invoices: data.invoices || [],

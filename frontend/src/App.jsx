@@ -27,6 +27,9 @@ import FreightInvoicesPage from "./pages/FreightInvoicesPage";
 import ReportsPage from "./pages/ReportsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AlertsPage from "./pages/AlertsPage";
+import MessagingHubPage from "./pages/MessagingHubPage";
+import NetworkModelingPage from "./pages/NetworkModelingPage";
+import DbExplorerPage from "./pages/DbExplorerPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
 
@@ -59,6 +62,9 @@ function PrivateRoutes({ data }) {
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="alerts" element={<AlertsPage />} />
+        <Route path="messaging" element={<MessagingHubPage />} />
+        <Route path="network-modeling" element={<NetworkModelingPage />} />
+        <Route path="db-explorer" element={<DbExplorerPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -67,7 +73,7 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [] });
+  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -82,8 +88,10 @@ export default function App() {
       DbApi.locations().catch(() => []),
       DbApi.packagingUnits().catch(() => []),
       DbApi.rates().catch(() => []),
+      DbApi.drivers().catch(() => []),
+      DbApi.invoices().catch(() => []),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices]) => {
         setData({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -93,6 +101,8 @@ export default function App() {
           locations: Array.isArray(locations) ? locations : [],
           packagingUnits: Array.isArray(packagingUnits) ? packagingUnits : [],
           rates: Array.isArray(rates) ? rates : [],
+          drivers: Array.isArray(drivers) ? drivers : [],
+          invoices: Array.isArray(invoices) ? invoices : [],
         });
       })
       .catch((e) => setError(e.message || "Failed loading data"))

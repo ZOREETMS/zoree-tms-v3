@@ -1,11 +1,12 @@
+import { formatCurrency } from "../../utils/formatters";
+
 export default function NetworkStats({ kpis }) {
-  const fmt = (n) => n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${Math.round(n)}`;
 
   const cards = [
     { label: "Active Lanes", value: kpis.active, cls: "blue" },
     { label: "Optimized Lanes", value: kpis.optimized, cls: "green" },
     { label: "Under-utilized", value: kpis.underUtilized, cls: "yellow" },
-    { label: "Potential Annual Savings", value: fmt(kpis.savings), cls: "green" },
+    { label: "Potential Annual Savings", value: formatCurrency(kpis.savings), cls: "green" },
   ];
 
   return (

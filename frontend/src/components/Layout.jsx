@@ -34,10 +34,15 @@ const navStructure = [
     { to: "/documents", label: "Documents & BOL", icon: "📄" },
     { to: "/customer-portal", label: "Customer Portal", icon: "👁️" },
   ]},
+  { section: "Integration", items: [
+    { to: "/messaging", label: "Messaging Hub", icon: "📨", badgeVal: "3", badgeColor: "red" },
+  ]},
   { section: "Insights", items: [
+    { to: "/network-modeling", label: "Network Modeling", icon: "🌐" },
     { to: "/analytics", label: "Analytics", icon: "📈" },
     { to: "/reports", label: "Reports", icon: "📊" },
     { to: "/alerts", label: "Alerts", icon: "🔔", badgeVal: "2", badgeColor: "red" },
+    { to: "/db-explorer", label: "DB Explorer", icon: "🗄️" },
   ]},
   { section: "System", items: [
     { to: "/settings", label: "Settings", icon: "⚙️" },
