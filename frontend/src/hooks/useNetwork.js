@@ -1,34 +1,32 @@
 import { useState, useMemo, useCallback } from "react";
-import { SEED_LANES, computeNetworkKpis, runScenario } from "../services/networkService";
+import { SEED_LANES, computeNetworkKpis, runLaneScenario } from "../services/networkService";
 
 export function useNetwork() {
-  const [lanes, setLanes] = useState(SEED_LANES);
-  const [scenarioParams, setScenarioParams] = useState({ rateChange: 0, volumeChange: 0 });
+  const [lanes] = useState(SEED_LANES);
+  const [scenarioParams, setScenarioParams] = useState({ rateChange: -5, volumeChange: 10 });
   const [scenarioResult, setScenarioResult] = useState(null);
 
   const kpis = useMemo(() => computeNetworkKpis(lanes), [lanes]);
 
-  const applyScenario = useCallback(() => {
-    const result = runScenario(lanes, scenarioParams);
+  const applyScenario = useCallback((laneName) => {
+    const result = runLaneScenario(lanes, laneName, scenarioParams.rateChange, scenarioParams.volumeChange);
     setScenarioResult(result);
     return result;
   }, [lanes, scenarioParams]);
 
   const resetScenario = useCallback(() => {
-    setScenarioParams({ rateChange: 0, volumeChange: 0 });
+    setScenarioParams({ rateChange: -5, volumeChange: 10 });
     setScenarioResult(null);
   }, []);
 
-  const displayLanes = scenarioResult || lanes;
-
   return {
-    lanes: displayLanes,
-    baseLanes: lanes,
+    lanes,
     kpis,
     scenarioParams,
     setScenarioParams,
     applyScenario,
     resetScenario,
+    scenarioResult,
     isScenarioActive: !!scenarioResult,
   };
 }

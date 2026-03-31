@@ -4,14 +4,14 @@ import { OPPORTUNITY_LEVELS, UTILIZATION_THRESHOLDS, VARIANCE_THRESHOLDS } from 
  * Seed lane data for network modeling.
  */
 export const SEED_LANES = [
-  { lane: "CHI → DAL", loads: 42, avgCostMi: 2.18, benchmark: 2.05, util: 87, opportunity: "Medium" },
-  { lane: "CMH → ATL", loads: 28, avgCostMi: 1.95, benchmark: 1.90, util: 72, opportunity: "Low" },
-  { lane: "LAX → SEA", loads: 35, avgCostMi: 2.42, benchmark: 2.10, util: 91, opportunity: "High" },
-  { lane: "NYC → CHI", loads: 51, avgCostMi: 1.88, benchmark: 1.85, util: 94, opportunity: "Low" },
-  { lane: "HOU → MIA", loads: 19, avgCostMi: 2.65, benchmark: 2.30, util: 54, opportunity: "High" },
-  { lane: "ATL → CMH", loads: 22, avgCostMi: 2.01, benchmark: 1.90, util: 68, opportunity: "Medium" },
-  { lane: "DAL → CHI", loads: 38, avgCostMi: 2.12, benchmark: 2.05, util: 83, opportunity: "Low" },
-  { lane: "SEA → LAX", loads: 30, avgCostMi: 2.38, benchmark: 2.10, util: 78, opportunity: "Medium" },
+  { lane: "CHI → DAL", loads: 12, avgCostMi: 2.31, benchmark: 2.20, util: 78, opportunity: "Low — consider consolidation" },
+  { lane: "CMH → ATL", loads: 8, avgCostMi: 2.18, benchmark: 2.25, util: 85, opportunity: "Optimized" },
+  { lane: "LAX → SEA", loads: 5, avgCostMi: 2.58, benchmark: 2.40, util: 62, opportunity: "High — rebid lane" },
+  { lane: "NYC → CHI", loads: 15, avgCostMi: 2.15, benchmark: 2.20, util: 91, opportunity: "Optimized" },
+  { lane: "HOU → MIA", loads: 4, avgCostMi: 2.72, benchmark: 2.45, util: 55, opportunity: "High — rebid lane" },
+  { lane: "ATL → CMH", loads: 9, avgCostMi: 2.22, benchmark: 2.25, util: 80, opportunity: "Optimized" },
+  { lane: "DAL → CHI", loads: 7, avgCostMi: 2.44, benchmark: 2.35, util: 70, opportunity: "Medium — review rates" },
+  { lane: "SEA → LAX", loads: 6, avgCostMi: 2.49, benchmark: 2.40, util: 68, opportunity: "Medium — review rates" },
 ];
 
 /**
@@ -30,7 +30,7 @@ export function computeNetworkKpis(lanes) {
 }
 
 /**
- * Run what-if scenario analysis.
+ * Run what-if scenario analysis on all lanes.
  */
 export function runScenario(lanes, params) {
   const { rateChange = 0, volumeChange = 0 } = params;
@@ -39,6 +39,23 @@ export function runScenario(lanes, params) {
     avgCostMi: +(lane.avgCostMi * (1 + rateChange / 100)).toFixed(2),
     loads: Math.round(lane.loads * (1 + volumeChange / 100)),
   }));
+}
+
+/**
+ * Run what-if scenario on a single lane (matches old HTML runScenario).
+ */
+export function runLaneScenario(lanes, laneName, rateChange, volumeChange) {
+  const lane = lanes.find((l) => l.lane === laneName);
+  if (!lane) return null;
+  const baseCost = lane.loads * lane.avgCostMi * 500;
+  const newRate = lane.avgCostMi * (1 + rateChange / 100);
+  const newLoads = lane.loads * (1 + volumeChange / 100);
+  const newCost = newLoads * newRate * 500;
+  const saving = baseCost - newCost;
+  const sign = saving >= 0 ? "-" : "+";
+  const savingStr = sign + "$" + Math.round(Math.abs(saving)).toLocaleString();
+  const annualStr = sign + "$" + Math.round(Math.abs(saving) * 12).toLocaleString();
+  return { newRate: newRate.toFixed(3), newLoads: Math.round(newLoads), saving, savingStr, annualStr };
 }
 
 /**
@@ -63,8 +80,9 @@ export function getVarianceColor(avgCost, benchmark) {
 /**
  * Get opportunity badge style.
  */
-export function getOpportunityStyle(level) {
-  const config = OPPORTUNITY_LEVELS[level];
-  if (config) return { color: config.color, background: config.bg };
-  return { color: "#64748b", background: "#f8fafc" };
+export function getOpportunityStyle(opportunity) {
+  if (opportunity.startsWith("High")) return { color: OPPORTUNITY_LEVELS.High.color };
+  if (opportunity.startsWith("Medium")) return { color: OPPORTUNITY_LEVELS.Medium.color };
+  if (opportunity.startsWith("Low")) return { color: OPPORTUNITY_LEVELS.Low?.color || "var(--green)" };
+  return { color: "var(--green)" };
 }

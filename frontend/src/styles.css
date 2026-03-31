@@ -14,6 +14,15 @@
   --cyan:#0891b2; --purple:#7c3aed;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
+/* Thin scrollbars globally */
+*{scrollbar-width:thin;scrollbar-color:rgba(100,116,160,.3) transparent;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(100,116,160,.3);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(100,116,160,.5);}
+.sidebar{scrollbar-color:rgba(255,255,255,.08) transparent;}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);}
+.sidebar::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.18);}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;text-transform:uppercase;}
 input[type="text"],input:not([type]):not([id^="login"]),textarea,select{text-transform:uppercase;}
 input[type="password"]{text-transform:none !important;}
@@ -155,9 +164,9 @@ select.fsel{background:#fff;border:1px solid var(--border2);color:var(--text2);b
 
 /* ── MODALS (exact match) ───────────────────────────────────── */
 .modal-overlay{position:fixed;inset:0;background:rgba(30,45,107,.4);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
-.modal-card{background:#fff;border:1px solid var(--border);border-radius:16px;width:min(640px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(30,45,107,0.20);}
+.modal-card,.modal{background:#fff;border:1px solid var(--border);border-radius:16px;width:min(640px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(30,45,107,0.20);}
 .modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#1a2744,#0f1d3d);color:#fff;border-radius:16px 16px 0 0;}
-.modal-header h3{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;}
+.modal-header h3,.modal-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;}
 .modal-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:4px 8px;border-radius:6px;}
 .modal-close:hover{background:rgba(255,255,255,0.15);}
 .modal-body{padding:24px;}

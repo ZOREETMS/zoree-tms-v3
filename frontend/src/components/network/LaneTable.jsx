@@ -28,35 +28,25 @@ export default function LaneTable({ lanes }) {
               return (
                 <tr key={lane.lane}>
                   <td style={{ fontWeight: 600 }}>{lane.lane}</td>
-                  <td>{lane.loads}</td>
-                  <td>${lane.avgCostMi.toFixed(2)}</td>
-                  <td>${lane.benchmark.toFixed(2)}</td>
-                  <td style={{ color: varColor, fontWeight: 600 }}>
+                  <td className="mono">{lane.loads}</td>
+                  <td className="mono">${lane.avgCostMi.toFixed(2)}/mi</td>
+                  <td className="mono" style={{ color: "var(--text3)" }}>${lane.benchmark.toFixed(2)}/mi</td>
+                  <td className="mono" style={{ color: varColor, fontWeight: 700 }}>
                     {variance > 0 ? "+" : ""}{variance}%
                   </td>
                   <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ flex: 1, height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div className="progress-wrap" style={{ width: 60, height: 6 }}>
+                        <div className="progress-bar" style={{
                           width: `${lane.util}%`,
-                          height: "100%",
-                          borderRadius: 3,
                           background: getUtilizationColor(lane.util),
                         }} />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 600, minWidth: 32 }}>{lane.util}%</span>
+                      <span className="mono" style={{ fontSize: 11 }}>{lane.util}%</span>
                     </div>
                   </td>
-                  <td>
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: 8,
-                      ...oppStyle,
-                    }}>
-                      {lane.opportunity === "High" ? "🔴 Rebid" : lane.opportunity === "Medium" ? "🟡 Review" : "✅ OK"}
-                    </span>
+                  <td style={{ fontSize: 11, fontWeight: 600, ...oppStyle }}>
+                    {lane.opportunity}
                   </td>
                 </tr>
               );

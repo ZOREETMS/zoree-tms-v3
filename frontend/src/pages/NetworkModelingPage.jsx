@@ -7,7 +7,7 @@ import ScenarioBuilder from "../components/network/ScenarioBuilder";
 export default function NetworkModelingPage() {
   const {
     lanes, kpis, scenarioParams, setScenarioParams,
-    applyScenario, resetScenario, isScenarioActive,
+    applyScenario, resetScenario, isScenarioActive, scenarioResult,
   } = useNetwork();
 
   const [toast, setToast] = useState(null);
@@ -49,11 +49,13 @@ export default function NetworkModelingPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
           <LaneTable lanes={lanes} />
           <ScenarioBuilder
+            lanes={lanes}
             params={scenarioParams}
             onChange={setScenarioParams}
-            onApply={handleRunAnalysis}
+            onApply={applyScenario}
             onReset={resetScenario}
             isActive={isScenarioActive}
+            scenarioResult={scenarioResult}
           />
         </div>
       </div>

@@ -50,8 +50,8 @@ export function computeSpendByMode(shipments) {
 
 export function computeCarrierScorecard(carriers) {
   return carriers.slice(0, 8).map((c) => {
-    const otd = parseFloat(c.otd) || 0;
-    const claims = parseFloat(c.claim) || 0;
+    const otd = parseFloat(c.otd) || parseFloat(c.on_time_pct) || 0;
+    const claims = parseFloat(c.claimRatio) || parseFloat(c.claim_ratio) || parseFloat(c.claim) || 0;
     const grade = getCarrierGrade(otd);
     return {
       name: c.name,

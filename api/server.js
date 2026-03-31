@@ -1736,6 +1736,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           czarlite_rate: !!plan.czarliteRate || (plan.mode || '').toUpperCase() === 'LTL',
           service_level: plan.serviceLevel || null,
           miles: plan.miles || null,
+          transit_days: plan.transitDays || null,
         };
 
         // Create shipment

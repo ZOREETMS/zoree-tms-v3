@@ -1014,7 +1014,7 @@ export default function OrdersPage() {
                   <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🚛 Related Shipments ({relShips.length})</div>
                     {relShips.map((sh) => (
-                      <div key={sh.id} style={{ background: "#f0f9ff", border: "1px solid rgba(59,130,246,.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 8 }}>
+                      <div key={sh.id} onClick={() => { setDetailOrder(null); window.location.href = `/shipments?id=${sh.id}`; }} style={{ background: "#f0f9ff", border: "1px solid rgba(59,130,246,.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 8, cursor: "pointer", transition: "all .15s" }} onMouseOver={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(59,130,246,.12)"; }} onMouseOut={(e) => { e.currentTarget.style.borderColor = "rgba(59,130,246,.2)"; e.currentTarget.style.boxShadow = "none"; }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                           <span className="mono" style={{ color: "var(--accent)", fontWeight: 700 }}>{sh.id}</span>
                           <span className={STATUS_BADGES[sh.status] || "badge"}>{sh.status}</span>

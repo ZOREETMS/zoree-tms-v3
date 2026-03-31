@@ -77,6 +77,7 @@ function buildTMSContext(data) {
     "CANCEL_ORDER          — params: { orderId, reason }",
     "CANCEL_SHIPMENT       — params: { shipmentId, reason }",
     "FLAG_EXCEPTION        — params: { shipmentId, issue }",
+    "GET_RATES             — params: { originZip, destZip, weight, freightClass?, originCity?, destCity? } — fetch live rates for ALL modes (LTL via CzarLite + TL from rate table + PC*Miler mileage). Returns quotes from all available carriers. CRITICAL: ALWAYS include originCity and destCity derived from the zip: 770xx='Houston, TX', 752xx='Dallas, TX', 606xx='Chicago, IL', 303xx='Atlanta, GA', 100xx-104xx='New York, NY', 432xx='Columbus, OH', 981xx='Seattle, WA', 900xx='Los Angeles, CA', 331xx='Miami, FL'. Example: zip 77003 → originCity 'Houston, TX'. Without these, LTL discounts are NOT applied.",
     "",
     "Rules for actions:",
     '- "plan ORD-XXXX" = emit PLAN_ORDER action immediately. Keep text to 1-2 lines then the action block.',
@@ -133,6 +134,8 @@ function actionLabel(a) {
       return `Cancel Shipment ${p.shipmentId} — ${p.reason}`;
     case "FLAG_EXCEPTION":
       return `Flag Shipment ${p.shipmentId} as Exception — ${p.issue}`;
+    case "GET_RATES":
+      return `📊 Get live rates (all modes): ${p.originZip} → ${p.destZip} (${p.weight || 5000} lbs)`;
     default:
       return `${a.action} — ${JSON.stringify(p)}`;
   }
@@ -312,6 +315,86 @@ export default function ZoreeAI({ data }) {
         await DbApi.patch("shipments", p.shipmentId, { status: "Exception", notes: `EXCEPTION: ${p.issue || "Flagged by AI"}` });
         if (refreshData) await refreshData();
         return `Shipment ${p.shipmentId} flagged as Exception — ${p.issue}`;
+      }
+
+      case "GET_RATES": {
+        const originZip = p.originZip || "";
+        const destZip = p.destZip || "";
+        const weight = parseInt(p.weight) || 5000;
+        const freightClass = parseInt(p.freightClass) || 70;
+        const originCity = p.originCity || "";
+        const destCity = p.destCity || "";
+        if (!originZip || !destZip) throw new Error("originZip and destZip are required");
+
+        const apiBase = import.meta.env.VITE_API_BASE || window.ZOREE_API_URL || "http://localhost:3001/api";
+        const token = localStorage.getItem("zoree_token") || "";
+        const lane = {
+          laneKey: `${originZip}-${destZip}`,
+          originZip, destZip,
+          totalWeight: weight,
+          freightClass,
+          origin: originCity || originZip,
+          destination: destCity || destZip,
+          orderIds: [],
+        };
+        const res = await fetch(`${apiBase.replace(/\/api\/?$/, "")}/api/bulk-plan/rate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ lanes: [lane], optimizeBy: "cost" }),
+        });
+        const rateData = await res.json();
+        const result = rateData?.results?.[0];
+        if (!result || !result.quotes?.length) {
+          return `No rates available for ${originZip}→${destZip} (${weight} lbs). Check that carriers/rates are configured for this lane.`;
+        }
+
+        const ltlQuotes = result.quotes.filter((q) => q.mode === "LTL");
+        const tlQuotes = result.quotes.filter((q) => q.mode === "TL");
+        const otherQuotes = result.quotes.filter((q) => q.mode !== "LTL" && q.mode !== "TL");
+        const best = result.bestQuote;
+        const lines = [];
+
+        lines.push(`**Load type:** ${result.loadType || "—"}`);
+        if (best) lines.push(`**Best quote:** ${best.carrier} (${best.mode}) — **$${best.totalCharge}**`);
+        lines.push("");
+
+        if (ltlQuotes.length > 0) {
+          lines.push(`**LTL Rates** (${ltlQuotes.length} carriers):`);
+          ltlQuotes.forEach((q) => {
+            const disc = q.discountPct > 0 ? ` | Disc: ${q.discountPct}%` : "";
+            const fsc = q.fscCharge > 0 ? ` | FSC: $${q.fscCharge}` : "";
+            const transit = q.transitDays ? ` | Transit: ${q.transitDays}d` : "";
+            const svc = q.serviceLevel ? ` | ${q.serviceLevel}` : "";
+            const rec = q.recommended ? " ⭐" : "";
+            lines.push(`• ${q.carrier}: **$${q.totalCharge}**${disc}${fsc}${transit}${svc}${rec}`);
+          });
+          lines.push("");
+        }
+
+        if (tlQuotes.length > 0) {
+          lines.push(`**TL Rates** (${tlQuotes.length} carriers):`);
+          tlQuotes.forEach((q) => {
+            const miles = q.pcmilerMiles || q.miles ? ` | ${q.pcmilerMiles || q.miles} mi` : "";
+            const fsc = q.fscCharge > 0 ? ` | FSC: $${Math.round(q.fscCharge)}` : "";
+            const transit = q.transitDays ? ` | Transit: ${q.transitDays}d` : "";
+            const rec = q.recommended ? " ⭐" : "";
+            lines.push(`• ${q.carrier}: **$${q.totalCharge}**${miles}${fsc}${transit}${rec}`);
+          });
+          lines.push("");
+        }
+
+        if (otherQuotes.length > 0) {
+          lines.push(`**Other Modes** (${otherQuotes.length}):`);
+          otherQuotes.forEach((q) => {
+            lines.push(`• ${q.carrier} (${q.mode}): **$${q.totalCharge}**`);
+          });
+        }
+
+        if (!ltlQuotes.length && !tlQuotes.length && !otherQuotes.length) {
+          return `No carrier quotes returned for ${originZip}→${destZip} (${weight} lbs).`;
+        }
+
+        return `Live rates for ${originCity || originZip} → ${destCity || destZip} (${weight.toLocaleString()} lbs, Class ${freightClass}):\n\n${lines.join("\n")}`;
       }
 
       default:

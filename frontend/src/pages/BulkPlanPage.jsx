@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { BulkPlanApi } from "../lib/api";
+import PlanSummaryModal from "../components/bulk-plan/PlanSummaryModal";
 
 /* ── helpers ── */
 function normalizeZip(value) {
@@ -23,6 +24,7 @@ export default function BulkPlanPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [results, setResults] = useState(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   /* ── filters ── */
   const [q, setQ] = useState("");
@@ -148,6 +150,22 @@ export default function BulkPlanPage() {
         .map((r) => {
           const lane = lanes.find((l) => l.laneKey === r.laneKey);
           if (!lane || !r?.bestQuote) return null;
+          // Compute pickup from order ready dates, delivery from transit days
+          const readyDates = lane.orderIds
+            .map((id) => orders.find((o) => o.id === id))
+            .filter(Boolean)
+            .map((o) => o.ready || o.pickup_date)
+            .filter(Boolean)
+            .sort();
+          const pickupDate = readyDates[0] || new Date().toISOString().slice(0, 10);
+          const transitDays = r.bestQuote.transitDays || null;
+          let deliveryDate = r.bestQuote.deliveryDate || "";
+          if (!deliveryDate && transitDays && pickupDate) {
+            const d = new Date(pickupDate);
+            d.setDate(d.getDate() + transitDays);
+            deliveryDate = d.toISOString().slice(0, 10);
+          }
+
           return {
             laneKey: lane.laneKey,
             origin: lane.origin,
@@ -160,8 +178,11 @@ export default function BulkPlanPage() {
             carrier: r.bestQuote.carrier || "",
             mode: r.bestQuote.mode || "LTL",
             totalCost: r.bestQuote.totalCharge || 0,
-            pickupDate: "",
-            deliveryDate: r.bestQuote.deliveryDate || "",
+            pickupDate,
+            deliveryDate,
+            transitDays,
+            serviceLevel: r.bestQuote.serviceLevel || "Standard",
+            miles: r.bestQuote.pcmilerMiles || r.bestQuote.miles || null,
             czarliteRate: r.bestQuote.mode === "LTL",
           };
         })
@@ -178,10 +199,7 @@ export default function BulkPlanPage() {
       const execRes = await BulkPlanApi.execute(plans);
       setResults(execRes);
       setSelectedIds(new Set());
-      toast(
-        `Done! ${execRes?.shipments?.length || 0} shipment(s) created, ${execRes?.ordersUpdated || 0} order(s) planned.`,
-        "success"
-      );
+      setSummaryOpen(true);
       await refreshData();
     } catch (err) {
       toast(`Planning failed: ${err.message || "Unknown error"}`, "error");
@@ -315,13 +333,15 @@ export default function BulkPlanPage() {
                 <th>Commodity</th>
                 <th>Weight</th>
                 <th>Pieces</th>
-                <th>Ready Date</th>
+                <th>Pickup Date</th>
+                <th>Delivery Date</th>
+                <th style={{ width: 60 }}>Edit</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: 30, color: "var(--text3)" }}>
+                  <td colSpan={10} style={{ textAlign: "center", padding: 30, color: "var(--text3)" }}>
                     No unplanned orders found
                   </td>
                 </tr>
@@ -343,7 +363,8 @@ export default function BulkPlanPage() {
                     <td>{o.commodity || "-"}</td>
                     <td>{Number(o.weight || 0).toLocaleString()}</td>
                     <td>{o.pieces || "-"}</td>
-                    <td>{o.ready_date || "-"}</td>
+                    <td className="mono">{o.ready || o.pickup_date || o.ready_date || "—"}</td>
+                    <td className="mono">{o.due || o.delivery_date || o.due_date || "—"}</td>
                   </tr>
                 ))
               )}
@@ -365,6 +386,14 @@ export default function BulkPlanPage() {
           </div>
         )}
       </div>
+
+      {/* Plan Summary Modal */}
+      <PlanSummaryModal
+        isOpen={summaryOpen}
+        shipments={results?.shipments || []}
+        ordersUpdated={results?.ordersUpdated || 0}
+        onClose={() => setSummaryOpen(false)}
+      />
     </div>
   );
 }
