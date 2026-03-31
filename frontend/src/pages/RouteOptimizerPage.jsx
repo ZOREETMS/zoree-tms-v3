@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { BulkPlanApi } from "../lib/api";
 
 /* ─────────── Static Data ─────────── */
 
@@ -189,27 +190,38 @@ export default function RouteOptimizerPage() {
 
     let rows = [];
 
-    // TL rates
+    // TL rates — call backend bulk-plan/rate (uses PC*MILER + rate.miles from DB)
     if (showTL) {
-      let tlRates = getActiveRates(o, d).filter((r) => r.mode === "TL");
-      if (!tlRates.length) {
+      try {
+        const lane = {
+          laneKey: `${o} -> ${d}`, origin: o, destination: d,
+          originZip: oZip || CITY_ZIP_MAP[o] || "", destZip: dZip || CITY_ZIP_MAP[d] || "",
+          freightClass: "70", totalWeight: w, totalPieces: 1, orderIds: [],
+        };
+        const rateRes = await BulkPlanApi.rate([lane], "cost");
+        const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
+        const tlQuotes = (results[0]?.quotes || []).filter((q) => q.mode === "TL");
+        rows = rows.concat(
+          tlQuotes.map((q) => ({
+            carrier: q.carrier, mode: "TL",
+            base: q.czarBaseGross || 0, fsc: q.fscCharge || 0,
+            acc: 0, total: q.totalCharge || 0,
+            transit: q.transitDays || null,
+            _czarlite: false,
+            miles: q.miles || null,
+            pcmilerMiles: q.pcmilerMiles || null,
+            serviceLevel: q.serviceLevel || "",
+          }))
+        );
+      } catch (e) {
+        console.warn("[RouteOptimizer] TL bulk-plan/rate error:", e.message);
+        // Fallback to local calc with 750 mi
         rows = rows.concat(
           FALLBACK_TL_RATES.map((r) => {
             const c = calcCost(r.rate, r.fsc, dist);
             return {
               carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
               acc: c.acc, total: c.total, transit: Math.max(1, Math.ceil(dist / 500)),
-              _czarlite: false,
-            };
-          })
-        );
-      } else {
-        rows = rows.concat(
-          tlRates.map((r) => {
-            const c = calcCost(r.rate, r.fsc, dist);
-            return {
-              carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
-              acc: c.acc, total: c.total, transit: r.transit_days || Math.max(1, Math.ceil(dist / 500)),
               _czarlite: false,
             };
           })
@@ -266,6 +278,7 @@ export default function RouteOptimizerPage() {
               fscCharge: q.fscCharge || 0,
               discountPct: q.discountPct || 0, discountAmt: q.discountAmt || 0,
               _ccLive: !!q._ccLive, _ccFailed: !!q._ccFailed, _pref: false,
+              serviceLevel: q.serviceLevel || "",
             }));
             rows = rows.concat(czRows);
           }
@@ -306,9 +319,6 @@ export default function RouteOptimizerPage() {
 
   /* ── Optimize handler ── */
   async function handleOptimize(silent) {
-    const dist = getDist(origin, dest);
-    const hrs = (dist / 55).toFixed(1);
-    const hosOk = parseFloat(hrs) <= 11;
     const wNum = parseInt(weight) || 5000;
     const util = Math.min(100, Math.round((wNum / 44000) * 100));
 
@@ -319,6 +329,11 @@ export default function RouteOptimizerPage() {
         oZip: czarOriginZip || originZip, dZip: czarDestZip || destZip,
       });
       const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
+
+      // Use best carrier's miles, fallback to 750
+      const dist = best.miles || getDist(origin, dest);
+      const hrs = (dist / 55).toFixed(1);
+      const hosOk = parseFloat(hrs) <= 11;
 
       setRateCompareRows(rows);
       setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
@@ -341,9 +356,6 @@ export default function RouteOptimizerPage() {
     if (!optimized && (oZ.length < 4 || dZ.length < 4)) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      const dist = getDist(origin, dest);
-      const hrs = (dist / 55).toFixed(1);
-      const hosOk = parseFloat(hrs) <= 11;
       const wNum = parseInt(weight) || 5000;
       const util = Math.min(100, Math.round((wNum / 44000) * 100));
       setLoadingCzarlite(true);
@@ -353,6 +365,9 @@ export default function RouteOptimizerPage() {
           oZip: czarOriginZip || originZip, dZip: czarDestZip || destZip,
         });
         const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
+        const dist = best.miles || getDist(origin, dest);
+        const hrs = (dist / 55).toFixed(1);
+        const hosOk = parseFloat(hrs) <= 11;
         setRateCompareRows(rows);
         setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
       } finally {
@@ -647,15 +662,16 @@ export default function RouteOptimizerPage() {
             <div className="table-wrap">
               <table style={{ width: "100%", tableLayout: "fixed", textTransform: "uppercase" }}>
                 <colgroup>
-                  <col style={{ width: "17%" }} />  {/* Carrier */}
-                  <col style={{ width: "7%" }} />   {/* Mode */}
-                  <col style={{ width: "9%" }} />   {/* Base Rate */}
-                  <col style={{ width: "9%" }} />   {/* Discount */}
-                  <col style={{ width: "8%" }} />   {/* FSC */}
+                  <col style={{ width: "16%" }} />  {/* Carrier */}
+                  <col style={{ width: "6%" }} />   {/* Mode */}
+                  <col style={{ width: "8%" }} />   {/* Base Rate */}
+                  <col style={{ width: "8%" }} />   {/* Discount */}
+                  <col style={{ width: "7%" }} />   {/* FSC */}
                   <col style={{ width: "9%" }} />   {/* Total */}
-                  <col style={{ width: "12%" }} />  {/* Transit Days */}
-                  <col style={{ width: "11%" }} />  {/* Est. Delivery */}
-                  <col style={{ width: "8%" }} />   {/* Score */}
+                  <col style={{ width: "9%" }} />   {/* Service Level */}
+                  <col style={{ width: "10%" }} />  {/* Transit Days */}
+                  <col style={{ width: "10%" }} />  {/* Est. Delivery */}
+                  <col style={{ width: "7%" }} />   {/* Score */}
                   <col style={{ width: "10%" }} />  {/* Actions */}
                 </colgroup>
                 <thead>
@@ -667,6 +683,7 @@ export default function RouteOptimizerPage() {
                       { col: null, label: "Discount" },
                       { col: "fsc", label: "FSC" },
                       { col: "total", label: "Total" },
+                      { col: "serviceLevel", label: "Service Level" },
                       { col: "transit", label: "Transit Days" },
                       { col: null, label: "Est. Delivery" },
                       { col: null, label: "Score" },
@@ -690,7 +707,7 @@ export default function RouteOptimizerPage() {
                 <tbody>
                   {sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={10} style={{ textAlign: "center", padding: 40, color: "var(--text3)", fontSize: 13 }}>
+                      <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--text3)", fontSize: 13 }}>
                         {optimized
                           ? "No carrier rates found for this lane"
                           : "Click Optimize Route above to compare carrier rates"}
@@ -779,6 +796,11 @@ export default function RouteOptimizerPage() {
                               }}>CC</span>
                             )}
                             {rateNote}
+                            {o.miles && !o._czarlite && (
+                              <div style={{ fontSize: 9, color: o.pcmilerMiles ? "#a855f7" : "var(--text3)", marginTop: 3, textTransform: "none" }}>
+                                📏 {o.miles.toLocaleString()} mi{o.pcmilerMiles ? " (PC*MILER)" : ""}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: "16px 14px" }}><span className="tag">{o.mode}</span></td>
                           <td className="mono" style={{ padding: "16px 14px" }}>${(o.base || 0).toLocaleString()}</td>
@@ -798,6 +820,9 @@ export default function RouteOptimizerPage() {
                           >
                             ${(o.total || 0).toLocaleString()}
                           </td>
+                          <td className="text-sm" style={{ padding: "16px 14px", textAlign: "center" }}>
+                            {(o.serviceLevel || "\u2014").toUpperCase()}
+                          </td>
                           <td className="mono" style={{ padding: "16px 14px" }}>{transitCell}</td>
                           <td className="mono" style={{ padding: "16px 14px" }}>{"\u2014"}</td>
                           <td style={{ padding: "16px 14px" }}>{score}</td>
@@ -816,7 +841,7 @@ export default function RouteOptimizerPage() {
                   {/* Hint row for ZIPs */}
                   {optimized && sortedRows.length > 0 && (!czarOriginZip || !czarDestZip) && (
                     <tr>
-                      <td colSpan={10} style={{ textAlign: "center", color: "#9ca3af", padding: "14px 12px", fontSize: 11, letterSpacing: 0.5 }}>
+                      <td colSpan={11} style={{ textAlign: "center", color: "#9ca3af", padding: "14px 12px", fontSize: 11, letterSpacing: 0.5 }}>
                         Enter Origin ZIP + Dest ZIP above for live LTL rates
                       </td>
                     </tr>

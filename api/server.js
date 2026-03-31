@@ -1171,7 +1171,7 @@ app.post('/api/ltl/quote', async (req, res) => {
   let adderRates = [];
   try {
     const rr = await fetch(
-      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&czarlite=eq.true&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane`,
+      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&czarlite=eq.true&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane,service_level`,
       { headers: sbHeaders(null) }
     );
     if (rr.ok) adderRates = await rr.json();
@@ -1212,7 +1212,7 @@ app.post('/api/ltl/quote', async (req, res) => {
       carrier:      carrier.name,
       scac:         carrier.scac,
       mode:         'LTL',
-      serviceLevel: 'LTL',
+      serviceLevel: (r && r.service_level) || 'Standard',
       transitDays:  null,
       deliveryDate: null,
       czarBase:     Math.round(discountedBase),
@@ -1570,6 +1570,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 deliveryDate: q.deliveryDate || '',
                 recommended: false,
                 mode: 'LTL',
+                serviceLevel: q.serviceLevel || '',
               });
             });
           }
@@ -1580,12 +1581,15 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       }
 
       // Fetch PC*MILER mileage for this lane (if any carrier has pcmiler_enabled)
+      // Include zip codes for more accurate zip-to-zip routing
       let pcmilerMiles = null;
       const anyPcMiler = Object.values(carrierFlags).some(f => f.pcmiler);
       if (anyPcMiler && lane.origin && lane.destination) {
         try {
-          pcmilerMiles = await pcMilerMileage(lane.origin, lane.destination);
-          console.log(`[BulkPlan/rate] PC*MILER ${lane.origin} → ${lane.destination} = ${pcmilerMiles} mi`);
+          const pcOrigin = lane.originZip ? `${lane.origin} ${lane.originZip}` : lane.origin;
+          const pcDest = lane.destZip ? `${lane.destination} ${lane.destZip}` : lane.destination;
+          pcmilerMiles = await pcMilerMileage(pcOrigin, pcDest);
+          console.log(`[BulkPlan/rate] PC*MILER ${pcOrigin} → ${pcDest} = ${pcmilerMiles} mi`);
         } catch (e) {
           console.warn(`[BulkPlan/rate] PC*MILER error for ${lane.origin}→${lane.destination}: ${e.message}`);
         }
