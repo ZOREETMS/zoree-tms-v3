@@ -1521,14 +1521,14 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     // Load carriers table once for carrierconnect_enabled flag
     let carrierFlags = {};
     try {
-      const cfRes = await fetch(`${SUPABASE_URL}/rest/v1/carriers?select=name,scac,czarlite_enabled,carrierconnect_enabled&limit=200`, {
+      const cfRes = await fetch(`${SUPABASE_URL}/rest/v1/carriers?select=name,scac,czarlite_enabled,carrierconnect_enabled,pcmiler_enabled&limit=200`, {
         headers: { 'apikey': ANON_KEY },
       });
       const cfData = await cfRes.json();
       if (Array.isArray(cfData)) {
         cfData.forEach(c => {
           const key = (c.name || '').toUpperCase();
-          carrierFlags[key] = { czarlite: c.czarlite_enabled, ccxl: c.carrierconnect_enabled, scac: c.scac };
+          carrierFlags[key] = { czarlite: c.czarlite_enabled, ccxl: c.carrierconnect_enabled, pcmiler: c.pcmiler_enabled, scac: c.scac };
           if (c.scac) carrierFlags[c.scac.toUpperCase()] = carrierFlags[key];
         });
       }
@@ -1579,10 +1579,22 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         }
       }
 
+      // Fetch PC*MILER mileage for this lane (if any carrier has pcmiler_enabled)
+      let pcmilerMiles = null;
+      const anyPcMiler = Object.values(carrierFlags).some(f => f.pcmiler);
+      if (anyPcMiler && lane.origin && lane.destination) {
+        try {
+          pcmilerMiles = await pcMilerMileage(lane.origin, lane.destination);
+          console.log(`[BulkPlan/rate] PC*MILER ${lane.origin} → ${lane.destination} = ${pcmilerMiles} mi`);
+        } catch (e) {
+          console.warn(`[BulkPlan/rate] PC*MILER error for ${lane.origin}→${lane.destination}: ${e.message}`);
+        }
+      }
+
       // Always fetch TL rates from DB (for all weight classes)
       {
         try {
-          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level`;
+          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles`;
           const tlRes = await fetch(tlUrl, {
             headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
           });
@@ -1608,8 +1620,10 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               if (!rpm) return;
               // Parse FSC string like "22.5%" → 22.5
               const fscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
-              // Use actual miles from distance lookup (passed from frontend)
-              const miles = lane.miles || 500;
+              // Use PC*MILER miles if carrier has pcmiler_enabled, else rate.miles from DB, else fallback
+              const carrierKey = (rate.carrier || '').toUpperCase();
+              const cFlags = carrierFlags[carrierKey] || {};
+              const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || 500);
               const baseCost = Math.round(rpm * miles);
               const fscCharge = Math.round(baseCost * (fscPct / 100));
               quotes.push({
@@ -1625,6 +1639,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 recommended: false,
                 mode: 'TL',
                 serviceLevel: rate.service_level || '',
+                miles,
+                pcmilerMiles: (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : null,
               });
             });
           }
@@ -1634,11 +1650,14 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         }
       }
 
-      // Tag each quote with carrier flags (carrierconnect_enabled, feasibility)
+      // Tag each quote with carrier flags (carrierconnect_enabled, pcmiler, feasibility)
       quotes.forEach(q => {
         const key = (q.carrier || '').toUpperCase();
         const flags = carrierFlags[key] || carrierFlags[(q.scac || '').toUpperCase()] || {};
         q.ccxlEnabled = !!flags.ccxl;
+        q.pcmilerEnabled = !!flags.pcmiler;
+        if (!q.miles) q.miles = (flags.pcmiler && pcmilerMiles) ? pcmilerMiles : (lane.miles || null);
+        if (!q.pcmilerMiles && flags.pcmiler && pcmilerMiles) q.pcmilerMiles = pcmilerMiles;
         // Infeasible: only for TL carriers where CCXL is enabled but no transit data returned
         // LTL carriers are never infeasible just because transit data is missing (CzarLite doesn't always return transit)
         q.infeasible = !!(q.mode === 'TL' && flags.ccxl && !q.transitDays);
@@ -1711,6 +1730,8 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           pickup_date: plan.pickupDate || null,
           delivery_date: plan.deliveryDate || null,
           czarlite_rate: !!plan.czarliteRate || (plan.mode || '').toUpperCase() === 'LTL',
+          service_level: plan.serviceLevel || null,
+          miles: plan.miles || null,
         };
 
         // Create shipment
@@ -1855,6 +1876,97 @@ app.post('/api/deploy-index', async (req, res) => {
     fs.writeFileSync(targetPath, content, 'utf8');
     res.json({ok:true, path:targetPath, bytes:content.length});
   } catch(e) { res.status(500).json({error:e.message}); }
+});
+
+// ── PC*MILER Mileage ─────────────────────────────────────────────────────────
+const PC_MILER_API_KEY = process.env.PC_MILER_API_KEY || '';
+const mileageCache = {};                                    // "ORIGIN|DEST" → { miles, ts }
+const MILEAGE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;         // 7 days
+
+async function pcMilerMileage(origin, dest) {
+  const key = `${origin.toUpperCase().trim()}|${dest.toUpperCase().trim()}`;
+  const cached = mileageCache[key];
+  if (cached && Date.now() - cached.ts < MILEAGE_CACHE_TTL) return cached.miles;
+
+  if (!PC_MILER_API_KEY) throw new Error('PC_MILER_API_KEY not configured');
+
+  // Parse address into City, State, Zip for PC*MILER
+  function parseStop(addr) {
+    const city = (addr.split(',')[0] || '').trim();
+    const stateRaw = (addr.split(',')[1] || '').trim();
+    const zipMatch = stateRaw.match(/\b(\d{5}(-\d{4})?)\b/);
+    const zip = zipMatch ? zipMatch[1] : '';
+    const state = stateRaw.replace(/\s*\d{5}(-\d{4})?\s*/g, '').trim() || city;
+    const address = { City: city, State: state };
+    if (zip) address.Zip = zip;
+    return { Address: address };
+  }
+  const stops = [parseStop(origin), parseStop(dest)];
+
+  const url = 'https://pcmiler.alk.com/apis/rest/v1.0/Service.svc/route/routeReports';
+  const body = {
+    ReportRoutes: [{
+      RouteId: 'mileage',
+      Stops: stops,
+      ReportTypes: [{ __type: 'MileageReportType:http://pcmiler.alk.com/APIs/v1.0' }],
+    }],
+  };
+
+  const resp = await fetch(`${url}?authToken=${encodeURIComponent(PC_MILER_API_KEY)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`PC*MILER API error (${resp.status}): ${errText}`);
+  }
+
+  const data = await resp.json();
+  const report = data?.[0]?.ReportLines;
+  if (!report || !report.length) throw new Error('PC*MILER returned no mileage data');
+
+  // The last ReportLine contains the total — parse the miles value
+  const totalLine = report[report.length - 1];
+  const milesStr = totalLine?.TMiles || totalLine?.Miles || totalLine?.LMiles || '';
+  const rawMiles = parseFloat(String(milesStr).replace(/,/g, ''));
+  if (isNaN(rawMiles)) throw new Error('Could not parse mileage from PC*MILER response');
+  const miles = Math.round(rawMiles);
+
+  console.log(`[PC*MILER] ${origin} → ${dest} = ${miles} mi`);
+  mileageCache[key] = { miles, ts: Date.now() };
+  return miles;
+}
+
+app.get('/api/mileage', async (req, res) => {
+  try {
+    const { origin, dest } = req.query;
+    if (!origin || !dest) return res.status(400).json({ error: 'origin and dest query params required' });
+
+    const miles = await pcMilerMileage(origin, dest);
+    res.json({ origin, dest, miles });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Bulk mileage — accepts array of { origin, dest } pairs
+app.post('/api/mileage/bulk', async (req, res) => {
+  try {
+    const pairs = req.body.pairs;
+    if (!Array.isArray(pairs)) return res.status(400).json({ error: 'pairs array required' });
+
+    const results = await Promise.allSettled(
+      pairs.map(p => pcMilerMileage(p.origin, p.dest).then(miles => ({ origin: p.origin, dest: p.dest, miles })))
+    );
+
+    res.json({
+      results: results.map((r, i) =>
+        r.status === 'fulfilled' ? r.value : { origin: pairs[i].origin, dest: pairs[i].dest, miles: null, error: r.reason?.message }
+      ),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── 404 catch-all (must be AFTER all route definitions) ──────────────────────

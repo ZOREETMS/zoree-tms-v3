@@ -192,7 +192,26 @@
       "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=id,lane&lane=like.AVRT-ATL-DAL*&limit=5\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
       "Bash(wc -l /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/pages/*.jsx /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/components/*.jsx /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/lib/*.js /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/state/*.jsx)",
       "Bash(xargs wc:*)",
-      "Bash(ls /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/components/ -d */)"
+      "Bash(ls /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/components/ -d */)",
+      "Bash(taskkill /PID 69368 /F)",
+      "Bash(taskkill /PID 37732 /F)",
+      "Bash(taskkill //PID 69368 //F)",
+      "Bash(taskkill //PID 37732 //F)",
+      "Bash(curl -s \"http://localhost:3001/api/mileage?origin=Chicago,IL&dest=Dallas,TX\")",
+      "Bash(curl -s -X POST \"http://localhost:3001/api/mileage/bulk\" -H \"Content-Type: application/json\" -d '{\"\"pairs\"\":[{\"\"origin\"\":\"\"Chicago, IL\"\",\"\"dest\"\":\"\"Dallas, TX\"\"}]}')",
+      "Bash(curl -s -X POST \"http://localhost:3001/api/mileage/bulk\" -H \"Content-Type: application/json\" -d '{\"\"pairs\"\":[{\"\"origin\"\":\"\"Atlanta, GA\"\",\"\"dest\"\":\"\"Dallas, TX\"\"},{\"\"origin\"\":\"\"Columbus, OH\"\",\"\"dest\"\":\"\"Atlanta, GA\"\"},{\"\"origin\"\":\"\"Miami, FL\"\",\"\"dest\"\":\"\"Denver, CO\"\"}]}')",
+      "Bash(curl -s \"http://localhost:3001/api/mileage/bulk\" -X POST -H \"Content-Type: application/json\" -d '{\"\"pairs\"\":[{\"\"origin\"\":\"\"CHICAGO, IL\"\",\"\"dest\"\":\"\"DALLAS, TX\"\"}]}')",
+      "Bash(curl -s http://localhost:3001/api/rates -H 'Authorization: Bearer test')",
+      "Bash(curl -s \"http://localhost:3001/api/mileage?origin=Atlanta,GA&dest=Dallas,TX\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/carriers?select=name,pcmiler_enabled&limit=3\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=lane,miles&limit=3\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"http://localhost:3001/api/mileage?origin=CHICAGO,%20IL%2060602&dest=DALLAS,%20TX%2075202\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=lane,carrier,service_level&limit=5\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=lane,service_level&limit=5&order=lane\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/shipments?select=id,service_level,miles&limit=3&order=created_at.desc\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/shipments?select=id,service_level&limit=1\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/rates?select=lane,carrier,service_level,miles&miles=not.is.null&limit=10\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/shipments?select=id,carrier,service_level,miles,total_cost&order=created_at.desc&limit=5\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")"
     ]
   }
 }

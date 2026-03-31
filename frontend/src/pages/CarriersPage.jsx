@@ -44,7 +44,7 @@ export default function CarriersPage() {
       id: "", name: "", scac: "", mode: "TL", status: "Active",
       on_time_pct: 95, claim_ratio: 0.5, cost_per_mile: 0,
       contact: "", phone: "", email: "",
-      czarlite_enabled: false, carrierconnect_enabled: false,
+      czarlite_enabled: false, carrierconnect_enabled: false, pcmiler_enabled: false,
     });
   }
 
@@ -107,6 +107,7 @@ export default function CarriersPage() {
             <th>Status</th>
             <th style={{ textAlign: "center" }}>CzarLite</th>
             <th style={{ textAlign: "center" }}>CC XL</th>
+            <th style={{ textAlign: "center" }}>PC*MILER</th>
             <th>Contact</th>
             <th>Actions</th>
           </tr>
@@ -124,6 +125,7 @@ export default function CarriersPage() {
               <td><span className={`badge ${c.status === "Active" ? "badge-green" : "badge-red"}`}>{c.status || "—"}</span></td>
               <td style={{ textAlign: "center" }}>{c.czarlite_enabled ? "✅" : "☐"}</td>
               <td style={{ textAlign: "center" }}>{c.carrierconnect_enabled ? "✅" : "☐"}</td>
+              <td style={{ textAlign: "center" }}>{c.pcmiler_enabled ? "✅" : "☐"}</td>
               <td className="text-xs text-muted">{c.contact || c.email || "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>
                 <button className="btn btn-sm" onClick={() => openEdit(c)}>✏️ Edit</button>{" "}
@@ -201,6 +203,17 @@ export default function CarriersPage() {
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: editCarrier.carrierconnect_enabled ? "#059669" : "var(--text)" }}>📡 CARRIERCONNECT® XL</div>
                     <div style={{ fontSize: 10, color: "var(--text3)" }}>Fetch live transit days via SMC³</div>
+                  </div>
+                </label>
+                <label className="flex items-center gap-2" style={{
+                  padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+                  background: editCarrier.pcmiler_enabled ? "rgba(168,85,247,0.08)" : "var(--bg2)",
+                  border: `1px solid ${editCarrier.pcmiler_enabled ? "rgba(168,85,247,0.3)" : "var(--border)"}`,
+                }}>
+                  <input type="checkbox" checked={!!editCarrier.pcmiler_enabled} onChange={(e) => editField("pcmiler_enabled", e.target.checked)} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: editCarrier.pcmiler_enabled ? "#a855f7" : "var(--text)" }}>🗺️ PC*MILER ENABLED</div>
+                    <div style={{ fontSize: 10, color: "var(--text3)" }}>Use PC*MILER distance API for mileage during rating</div>
                   </div>
                 </label>
               </div>

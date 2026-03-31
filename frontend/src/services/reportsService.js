@@ -16,27 +16,67 @@ const NETWORK_LANES = [
 // ~0.161 kg CO2 per mile for average TL
 const CO2_PER_MILE = 0.161;
 
+// Normalized to uppercase for case-insensitive matching
+const LANE_DISTANCES = {};
+const _rawLanes = {
+  "Chicago, IL|Dallas, TX": 921, "Columbus, OH|Atlanta, GA": 640,
+  "Dallas, TX|Atlanta, GA": 781, "Houston, TX|Atlanta, GA": 795,
+  "Atlanta, GA|New York, NY": 882, "Dallas, TX|Phoenix, AZ": 1072,
+  "Memphis, TN|Denver, CO": 1069, "Chicago, IL|New York, NY": 790,
+  "Los Angeles, CA|Seattle, WA": 1135, "Mountain View, CA|Seattle, WA": 1300,
+  "Charlotte, NC|Houston, TX": 1290, "San Jose, CA|Columbus, OH": 2390,
+  "Boston, MA|Phoenix, AZ": 2665, "Miami, FL|Denver, CO": 2107,
+  "Phoenix, AZ|Boston, MA": 2665, "Denver, CO|Miami, FL": 2107,
+};
+// Build both uppercase and title-case keys for matching
+for (const [key, val] of Object.entries(_rawLanes)) {
+  LANE_DISTANCES[key] = val;
+  LANE_DISTANCES[key.toUpperCase()] = val;
+}
+
+const DEFAULT_DISTANCE = 750;
+
+// PC*MILER mileage cache — populated by calling setMileageCache() from report components
+let _pcMilerCache = {};
+export function setMileageCache(map) { _pcMilerCache = map || {}; }
+
 function estimateDistance(origin, dest) {
   if (!origin || !dest) return 0;
-  const hash = (origin.length + dest.length) * 17 + origin.charCodeAt(0);
-  return 200 + (hash % 1800);
+  // Check PC*MILER cache first
+  const pcKey = `${(origin).toUpperCase().trim()}|${(dest).toUpperCase().trim()}`;
+  if (_pcMilerCache[pcKey]) return _pcMilerCache[pcKey];
+  // Fall back to hardcoded lanes
+  const fwd = `${origin}|${dest}`;
+  const rev = `${dest}|${origin}`;
+  return LANE_DISTANCES[fwd] || LANE_DISTANCES[rev]
+    || LANE_DISTANCES[fwd.toUpperCase()] || LANE_DISTANCES[rev.toUpperCase()]
+    || DEFAULT_DISTANCE;
+}
+
+function carrierMatch(shipCarrier, carrierName) {
+  return (shipCarrier || "").toUpperCase() === (carrierName || "").toUpperCase();
 }
 
 export function buildCarrierPerformance(carriers, shipments) {
-  return carriers.map((car) => {
-    const grade = car.otd > 95 ? "A" : car.otd > 90 ? "B" : "C";
-    const shipCount = shipments.filter((s) => s.carrier === car.name).length;
-    return {
-      name: car.name,
-      scac: car.scac,
-      mode: car.mode,
-      otd: car.otd,
-      claim: car.claim,
-      avgRate: parseFloat(car.cost) || 0,
-      shipments: shipCount,
-      grade,
-    };
-  });
+  return carriers
+    .map((car) => {
+      const otd = parseFloat(car.otd ?? car.on_time_pct) || 0;
+      const claim = parseFloat(car.claim ?? car.claim_ratio) || 0;
+      const cost = parseFloat(car.cost ?? car.cost_per_mile) || 0;
+      const grade = otd > 95 ? "A" : otd > 90 ? "B" : "C";
+      const shipCount = shipments.filter((s) => carrierMatch(s.carrier, car.name)).length;
+      return {
+        name: car.name,
+        scac: car.scac,
+        mode: car.mode,
+        otd,
+        claim,
+        avgRate: cost,
+        shipments: shipCount,
+        grade,
+      };
+    })
+    .sort((a, b) => b.otd - a.otd);
 }
 
 export function buildLaneCostAnalysis() {
@@ -49,8 +89,8 @@ export function buildLaneCostAnalysis() {
 export function buildOnTimeDelivery(carriers, shipments) {
   const rows = carriers.map((c) => ({
     name: c.name,
-    otd: c.otd,
-    shipments: shipments.filter((s) => s.carrier === c.name).length,
+    otd: parseFloat(c.otd ?? c.on_time_pct) || 0,
+    shipments: shipments.filter((s) => carrierMatch(s.carrier, c.name)).length,
   }));
   const avg = rows.length > 0
     ? (rows.reduce((s, c) => s + c.otd, 0) / rows.length).toFixed(1)
@@ -73,23 +113,34 @@ export function buildFreightSpend(shipments) {
   return { total, breakdown };
 }
 
+/**
+ * Deterministic hash from a string — produces a stable number for a given shipment ID.
+ */
+function stableHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function estimateSaving(shipmentId) {
+  return 200 + (stableHash(shipmentId) % 800);
+}
+
 export function buildConsolidationSavings(shipments) {
-  const consolidated = shipments.filter(
-    (s) => s.consolidatedOrders && s.consolidatedOrders.length > 1
-  );
-  const savings = consolidated.reduce(
-    (s, sh) => s + (sh._savings || Math.floor(Math.random() * 800 + 200)),
-    0
-  );
-  const avgSaving = consolidated.length > 0 ? Math.round(savings / consolidated.length) : 0;
+  const getOrders = (s) => s.consolidatedOrders || s.order_ids || [];
+  const consolidated = shipments.filter((s) => getOrders(s).length > 1);
   const rows = consolidated.map((sh) => ({
     id: sh.id,
     origin: (sh.origin || "").split(",")[0],
     dest: (sh.dest || "").split(",")[0],
-    orderCount: sh.consolidatedOrders.length,
-    saving: sh._savings || Math.floor(Math.random() * 800 + 200),
+    orderCount: getOrders(sh).length,
+    saving: sh._savings || estimateSaving(sh.id),
   }));
-  return { count: consolidated.length, totalSavings: savings, avgSaving, rows };
+  const totalSavings = rows.reduce((s, r) => s + r.saving, 0);
+  const avgSaving = rows.length > 0 ? Math.round(totalSavings / rows.length) : 0;
+  return { count: consolidated.length, totalSavings, avgSaving, rows };
 }
 
 export function buildSustainability(carriers, shipments) {
@@ -98,7 +149,7 @@ export function buildSustainability(carriers, shipments) {
   const savedViaConsolidation = Math.round(co2kg * 0.18);
   const byCarrier = carriers.map((car) => {
     const cMiles = shipments
-      .filter((s) => s.carrier === car.name)
+      .filter((s) => carrierMatch(s.carrier, car.name))
       .reduce((s, sh) => s + estimateDistance(sh.origin, sh.dest), 0);
     return { name: car.name, miles: cMiles, co2: Math.round(cMiles * CO2_PER_MILE) };
   });

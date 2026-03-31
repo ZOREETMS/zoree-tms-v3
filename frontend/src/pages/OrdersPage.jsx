@@ -38,22 +38,6 @@ const EQUIPMENT_TYPES = {
 const DEFAULT_EQUIP = "Dry Van 53'";
 const LTL_MAX_WEIGHT = 15000;
 
-/* ── Lane distance lookup (miles) — uppercase keys ── */
-const LANE_DISTANCES = {
-  "CHICAGO, IL|DALLAS, TX": 921, "COLUMBUS, OH|ATLANTA, GA": 640,
-  "DALLAS, TX|ATLANTA, GA": 781, "HOUSTON, TX|ATLANTA, GA": 795,
-  "ATLANTA, GA|NEW YORK, NY": 882, "DALLAS, TX|PHOENIX, AZ": 1072,
-  "MEMPHIS, TN|DENVER, CO": 1069, "CHICAGO, IL|NEW YORK, NY": 790,
-  "LOS ANGELES, CA|SEATTLE, WA": 1135, "MOUNTAIN VIEW, CA|SEATTLE, WA": 1300,
-  "CHARLOTTE, NC|HOUSTON, TX": 1290, "SAN JOSE, CA|COLUMBUS, OH": 2390,
-  "BOSTON, MA|PHOENIX, AZ": 2665, "MIAMI, FL|DENVER, CO": 2107,
-  "PHOENIX, AZ|BOSTON, MA": 2665, "DENVER, CO|MIAMI, FL": 2107,
-  "CHICAGO, IL|ATLANTA, GA": 720, "COLLEGE PARK, GA|DALLAS, TX": 781,
-  "COLLEGE PARK, GA|CHICAGO, IL": 720, "COLLEGE PARK, GA|NEW YORK, NY": 882,
-};
-function getDist(o, d) {
-  return LANE_DISTANCES[`${o}|${d}`] || 750;
-}
 
 function SdField({ icon, label, value }) {
   const display = value === null || value === undefined || value === "" ? "\u2014" : value;
@@ -95,6 +79,8 @@ export default function OrdersPage() {
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [sortCol, setSortCol] = useState("id");
   const [sortAsc, setSortAsc] = useState(false);
+
+
 
   /* ── Scheduler state ── */
   const [schedRunning, setSchedRunning] = useState(false);
@@ -483,11 +469,10 @@ export default function OrdersPage() {
     const autoEquip = totalWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
     const maxWt = EQUIPMENT_TYPES[autoEquip].maxWeight;
     const util = Math.round((totalWeight / maxWt) * 100);
-    const miles = getDist(o.origin || "", o.dest || "");
     const lane = {
       laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70", totalWeight, totalPieces,
-      orderIds: sibs.map((x) => x.id), miles,
+      orderIds: sibs.map((x) => x.id),
     };
     setPlanModal({ order: o, siblings: sibs, lane, quotes: [], selectedIdx: 0, busy: true, error: "", maxWt, util, loadDuration: 120, equipType: autoEquip });
     setDetailOrder(null);
@@ -519,6 +504,8 @@ export default function OrdersPage() {
         carrier: chosen.carrier || "", mode: chosen.mode || "LTL",
         totalCost: chosen.totalCharge || 0, pickupDate: dates.pickup,
         deliveryDate: dates.delivery, czarliteRate: chosen.mode === "LTL",
+        serviceLevel: chosen.serviceLevel || "",
+        miles: chosen.miles || null,
       }];
       const execRes = await BulkPlanApi.execute(plans);
       setPlanModal(null);
@@ -561,7 +548,6 @@ export default function OrdersPage() {
         totalWeight: group.reduce((s, x) => s + Number(x.weight || 0), 0),
         totalPieces: group.reduce((s, x) => s + Number(x.pieces || 0), 0),
         orderIds: group.map((x) => x.id),
-        miles: getDist(o.origin || "", o.dest || ""),
       };
     });
     setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${lanes.length} lanes...`]);
@@ -1334,8 +1320,7 @@ export default function OrdersPage() {
                           </div>
                           <div style={{ display: "flex", gap: 12, marginTop: 4, marginLeft: 0, fontSize: 10, color: "var(--text3)" }}>
                             <span>🚚 {dates.transit}D Transit</span>
-                            {quote.miles && <span>📏 {quote.miles.toLocaleString()} mi</span>}
-                            {!quote.miles && lane.miles && <span>📏 {lane.miles.toLocaleString()} mi</span>}
+                            {quote.miles && <span>📏 {quote.miles.toLocaleString()} mi{quote.pcmilerMiles ? " (PC*MILER)" : ""}</span>}
                             <span>📦 Pickup: {dates.pickup}</span>
                             <span>🏁 Delivery: {dates.delivery}</span>
                           </div>

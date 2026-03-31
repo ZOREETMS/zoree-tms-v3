@@ -3,24 +3,6 @@ import { useOutletContext } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
 
-/* ── Lane distance lookup (miles) ── */
-const LANE_DISTANCES = {
-  "CHICAGO, IL|DALLAS, TX": 921, "COLUMBUS, OH|ATLANTA, GA": 640,
-  "DALLAS, TX|ATLANTA, GA": 781, "HOUSTON, TX|ATLANTA, GA": 795,
-  "ATLANTA, GA|NEW YORK, NY": 882, "DALLAS, TX|PHOENIX, AZ": 1072,
-  "MEMPHIS, TN|DENVER, CO": 1069, "CHICAGO, IL|NEW YORK, NY": 790,
-  "LOS ANGELES, CA|SEATTLE, WA": 1135, "MOUNTAIN VIEW, CA|SEATTLE, WA": 1300,
-  "CHARLOTTE, NC|HOUSTON, TX": 1290, "SAN JOSE, CA|COLUMBUS, OH": 2390,
-  "BOSTON, MA|PHOENIX, AZ": 2665, "MIAMI, FL|DENVER, CO": 2107,
-  "PHOENIX, AZ|BOSTON, MA": 2665, "DENVER, CO|MIAMI, FL": 2107,
-  "CHICAGO, IL|ATLANTA, GA": 720, "COLLEGE PARK, GA|DALLAS, TX": 781,
-  "COLLEGE PARK, GA|CHICAGO, IL": 720, "COLLEGE PARK, GA|NEW YORK, NY": 882,
-  "ATLANTA, GA|LOS ANGELES, CA": 2175, "ATLANTA, GA|DALLAS, TX": 781,
-};
-function getDist(o, d) {
-  return LANE_DISTANCES[`${(o || "").toUpperCase()}|${(d || "").toUpperCase()}`] || null;
-}
-
 const STATUS_BADGES = {
   Active: "badge badge-green",
   Expired: "badge badge-red",
@@ -141,6 +123,11 @@ export default function RateManagementPage() {
 
   // Use real data from context
   const rates = contextRates || [];
+
+  // Miles from DB field (saved via edit modal)
+  function getDist(r) {
+    return r.miles || r.distance || null;
+  }
 
   function toast(text, type = "info") {
     setMessage({ text, type });
@@ -511,6 +498,7 @@ export default function RateManagementPage() {
                   <th onClick={() => toggleSort("fsc")} style={{ cursor: "pointer" }}>FSC <SortIcon col="fsc" /></th>
                   <th onClick={() => toggleSort("discount")} style={{ cursor: "pointer", color: "#059669" }}>DISCOUNT% <SortIcon col="discount" /></th>
                   <th onClick={() => toggleSort("discountFlat")} style={{ cursor: "pointer", color: "#059669" }}>DISC $ <SortIcon col="discountFlat" /></th>
+                  <th onClick={() => toggleSort("service_level")} style={{ cursor: "pointer" }}>SERVICE LEVEL <SortIcon col="service_level" /></th>
                   <th onClick={() => toggleSort("transitDays")} style={{ cursor: "pointer" }}>TRANSIT DAYS <SortIcon col="transitDays" /></th>
                   <th onClick={() => toggleSort("miles")} style={{ cursor: "pointer" }}>MILES <SortIcon col="miles" /></th>
                   <th onClick={() => toggleSort("eff")} style={{ cursor: "pointer" }}>EFFECTIVE <SortIcon col="eff" /></th>
@@ -522,7 +510,7 @@ export default function RateManagementPage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={17} className="empty-state">No rates found</td></tr>
+                  <tr><td colSpan={18} className="empty-state">No rates found</td></tr>
                 ) : rows.map((r, idx) => (
                   <tr
                     key={r.id || idx}
@@ -552,11 +540,14 @@ export default function RateManagementPage() {
                     <td className="mono text-sm" style={{ color: "#059669", textAlign: "center" }}>
                       {getDiscountFlat(r) ? `$${getDiscountFlat(r)}` : "\u2014"}
                     </td>
+                    <td className="text-sm" style={{ textAlign: "center" }}>
+                      {(r.service_level || r.serviceLevel || "\u2014").toUpperCase()}
+                    </td>
                     <td className="mono text-sm" style={{ textAlign: "center" }}>
                       {formatTransitDays(r)}
                     </td>
                     <td className="mono text-sm" style={{ textAlign: "center" }}>
-                      {getDist(r.origin, r.dest) ? getDist(r.origin, r.dest).toLocaleString() : "\u2014"}
+                      {getDist(r) ? getDist(r).toLocaleString() : "\u2014"}
                     </td>
                     <td className="mono text-sm">{getEff(r) || "\u2014"}</td>
                     <td className="mono text-sm">{getExp(r) || "\u2014"}</td>

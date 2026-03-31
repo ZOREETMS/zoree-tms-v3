@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 
 const MODE_OPTIONS = ["TL", "LTL", "Intermodal", "Flatbed", "Reefer", "Air Freight"];
 const STATUS_OPTIONS = ["Active", "Expiring", "Expired"];
+const SERVICE_LEVEL_OPTIONS = ["Standard", "Express", "Expedited", "Economy"];
 const UNIT_OPTIONS = [
   { value: "per mile", label: "PER MILE" },
   { value: "per cwt", label: "PER CWT" },
@@ -18,24 +19,6 @@ function normalizeUnit(raw) {
   if (u === "flat") return "flat";
   if (u.includes("container")) return "container";
   return "per mile";
-}
-
-/* ── Lane distance lookup ── */
-const LANE_DISTANCES = {
-  "CHICAGO, IL|DALLAS, TX": 921, "COLUMBUS, OH|ATLANTA, GA": 640,
-  "DALLAS, TX|ATLANTA, GA": 781, "HOUSTON, TX|ATLANTA, GA": 795,
-  "ATLANTA, GA|NEW YORK, NY": 882, "DALLAS, TX|PHOENIX, AZ": 1072,
-  "MEMPHIS, TN|DENVER, CO": 1069, "CHICAGO, IL|NEW YORK, NY": 790,
-  "LOS ANGELES, CA|SEATTLE, WA": 1135, "MOUNTAIN VIEW, CA|SEATTLE, WA": 1300,
-  "CHARLOTTE, NC|HOUSTON, TX": 1290, "SAN JOSE, CA|COLUMBUS, OH": 2390,
-  "BOSTON, MA|PHOENIX, AZ": 2665, "MIAMI, FL|DENVER, CO": 2107,
-  "PHOENIX, AZ|BOSTON, MA": 2665, "DENVER, CO|MIAMI, FL": 2107,
-  "CHICAGO, IL|ATLANTA, GA": 720, "COLLEGE PARK, GA|DALLAS, TX": 781,
-  "COLLEGE PARK, GA|CHICAGO, IL": 720, "COLLEGE PARK, GA|NEW YORK, NY": 882,
-  "ATLANTA, GA|LOS ANGELES, CA": 2175, "ATLANTA, GA|DALLAS, TX": 781,
-};
-function getDist(o, d) {
-  return LANE_DISTANCES[`${(o || "").toUpperCase()}|${(d || "").toUpperCase()}`] || null;
 }
 const FREIGHT_CLASSES = [
   "50", "55", "60", "65", "70", "77.5", "85", "92.5",
@@ -66,6 +49,7 @@ function buildInitialForm(rate) {
     discountFlat: getField(rate, "discountFlat", "discount_flat", "discount_amt"),
     eff: getField(rate, "eff", "effective", "effective_date", "effectiveDate"),
     exp: getField(rate, "exp", "expires", "expiry_date", "expiryDate"),
+    miles: getField(rate, "miles", "distance") || "",
     transitDays: getField(rate, "transitDays", "transit_days"),
     serviceLevel: getField(rate, "serviceLevel", "service_level"),
     czarlite: !!rate.czarlite,
@@ -93,6 +77,7 @@ function buildPayload(form) {
     discount_flat: form.discountFlat ? parseFloat(form.discountFlat) : null,
     eff: form.eff || null,
     exp: form.exp || null,
+    miles: form.miles ? Number(form.miles) : null,
     transit_days: form.transitDays ? Number(form.transitDays) : null,
     service_level: form.serviceLevel || null,
     czarlite: form.czarlite,
@@ -109,6 +94,7 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
   useEffect(() => {
     if (rate) setForm(buildInitialForm(rate));
   }, [rate]);
+
 
   if (!rate) return null;
 
@@ -211,8 +197,15 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
             </div>
           </div>
 
-          {/* Transit Days + Miles */}
-          <div className="form-row">
+          {/* Service Level + Transit Days + Miles */}
+          <div className="form-row-3">
+            <div className="form-group">
+              <label className="form-label">⭐ SERVICE LEVEL</label>
+              <select value={form.serviceLevel || ""} onChange={(e) => setField("serviceLevel", e.target.value)}>
+                <option value="">— Select —</option>
+                {SERVICE_LEVEL_OPTIONS.map((s) => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+              </select>
+            </div>
             <div className="form-group">
               <label className="form-label">📅 TRANSIT DAYS</label>
               <input type="number" min="1" max="30" value={form.transitDays || ""} onChange={(e) => setField("transitDays", e.target.value)} />
@@ -220,20 +213,15 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
             </div>
             <div className="form-group">
               <label className="form-label">📏 DISTANCE (MILES)</label>
-              {(() => {
-                const miles = getDist(form.origin, form.dest);
-                return (
-                  <>
-                    <input
-                      type="text"
-                      value={miles ? `${miles.toLocaleString()} mi` : "—"}
-                      readOnly
-                      style={{ background: "var(--bg2)", color: miles ? "var(--text)" : "var(--text3)", cursor: "default" }}
-                    />
-                    {!miles && <span style={{ fontSize: 9, color: "#b45309", marginTop: 2 }}>NO DISTANCE DATA FOR THIS LANE</span>}
-                  </>
-                );
-              })()}
+              <input
+                type="number"
+                min="1"
+                max="99999"
+                placeholder="Manual or from PC*MILER"
+                value={form.miles || ""}
+                onChange={(e) => setField("miles", e.target.value ? Number(e.target.value) : "")}
+              />
+              <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>EDITABLE — PC*MILER FILLS DURING RATING</span>
             </div>
           </div>
 

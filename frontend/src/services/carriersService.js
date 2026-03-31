@@ -51,6 +51,7 @@ function buildCarrierPayload(editCarrier) {
   const costKey = firstExistingKey(source, ["cost_per_mile", "avg_cost_per_mile"], "cost_per_mile");
   const ccKey = firstExistingKey(source, ["carrierconnect_enabled", "carrier_connect_enabled"], "carrierconnect_enabled");
   const czKey = firstExistingKey(source, ["czarlite_enabled", "czar_lite_enabled"], "czarlite_enabled");
+  const pcKey = firstExistingKey(source, ["pcmiler_enabled", "pc_miler_enabled"], "pcmiler_enabled");
 
   const payload = {
     name: (source.name || "").toUpperCase(),
@@ -65,6 +66,7 @@ function buildCarrierPayload(editCarrier) {
     [emailKey]: ((source.email ?? source.contact_email) || "").toLowerCase() || null,
     [czKey]: !!source.czarlite_enabled,
     [ccKey]: !!source.carrierconnect_enabled,
+    [pcKey]: !!source.pcmiler_enabled,
   };
 
   return payload;

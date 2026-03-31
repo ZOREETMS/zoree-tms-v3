@@ -2,24 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 /* ─────────── Static Data ─────────── */
-const LANE_DISTANCES = {
-  "Chicago, IL|Dallas, TX": 921,
-  "Columbus, OH|Atlanta, GA": 640,
-  "Dallas, TX|Atlanta, GA": 781,
-  "Houston, TX|Atlanta, GA": 795,
-  "Atlanta, GA|New York, NY": 882,
-  "Dallas, TX|Phoenix, AZ": 1072,
-  "Memphis, TN|Denver, CO": 1069,
-  "Chicago, IL|New York, NY": 790,
-  "Los Angeles, CA|Seattle, WA": 1135,
-  "Mountain View, CA|Seattle, WA": 1300,
-  "Charlotte, NC|Houston, TX": 1290,
-  "San Jose, CA|Columbus, OH": 2390,
-  "Boston, MA|Phoenix, AZ": 2665,
-  "Miami, FL|Denver, CO": 2107,
-  "Phoenix, AZ|Boston, MA": 2665,
-  "Denver, CO|Miami, FL": 2107,
-};
 
 const CITY_ZIP_MAP = {
   "Chicago, IL": "60601",
@@ -87,7 +69,7 @@ const CZARLITE_WEIGHT_BREAKS = [
 
 /* ─────────── Helper Functions ─────────── */
 function getDist(o, d) {
-  return LANE_DISTANCES[`${o}|${d}`] || LANE_DISTANCES[`${d}|${o}`] || 750;
+  return 750; // Placeholder — real mileage comes from PC*MILER during rating
 }
 
 function normLaneCity(addr) {

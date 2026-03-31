@@ -155,6 +155,18 @@ export const InvoicesApi = {
   },
 };
 
+export const MileageApi = {
+  get(origin, dest) {
+    return api(`/mileage?origin=${encodeURIComponent(origin)}&dest=${encodeURIComponent(dest)}`);
+  },
+  bulk(pairs) {
+    return api("/mileage/bulk", {
+      method: "POST",
+      body: JSON.stringify({ pairs }),
+    });
+  },
+};
+
 export const BulkPlanApi = {
   rate(lanes, optimizeBy = "cost") {
     return api("/bulk-plan/rate", {
