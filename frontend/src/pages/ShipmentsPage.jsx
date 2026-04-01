@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
 import { sendTenderEmailIfAvailable } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
 import "leaflet/dist/leaflet.css";
+import TenderResultModal from "../components/shipments/TenderResultModal";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -70,7 +71,7 @@ function InfoBox({ icon, label, value }) {
 }
 
 /* ── Shipment Detail Modal ── */
-function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES }) {
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES }) {
   const linked = ds._linkedOrders || [];
   const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
@@ -193,7 +194,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
                   <span style={{ fontSize: 11, color: "var(--text3)" }}>· {(o.origin || "").split(",")[0]} → {(o.dest || "").split(",")[0]}</span>
                   <span style={{ marginLeft: "auto", fontSize: 12, fontFamily: "monospace", color: "var(--text2)" }}>{(o.weight || 0).toLocaleString()} lbs</span>
                   {ds.status === "Planned" && (
-                    <button style={{ padding: "3px 10px", background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 7, fontSize: 11, fontWeight: 600, color: "#b45309", cursor: "pointer", fontFamily: "inherit" }}>🔓 Unassign</button>
+                    <button onClick={() => onUnassign(o.id, ds.id)} style={{ padding: "3px 10px", background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 7, fontSize: 11, fontWeight: 600, color: "#b45309", cursor: "pointer", fontFamily: "inherit" }}>🔓 Unassign</button>
                   )}
                 </div>
               ))}
@@ -313,12 +314,12 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
             <button style={{ background: "#ea580c", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => onWithdraw(ds)}>📤 Withdraw Tender</button>
           )}
           {["Planned", "Tendered", "Tender Rejected", "In Transit"].includes(displayStatus) && (
-            <button className="btn btn-secondary btn-sm">🔄 Change Carrier</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/carriers"); }}>🔄 Change Carrier</button>
           )}
-          <button className="btn btn-secondary btn-sm">🚪 Dock schedule</button>
-          <button className="btn btn-secondary btn-sm">📄 Documents</button>
-          <button className="btn btn-secondary btn-sm">📧 Contact Carrier</button>
-          <button className="btn btn-secondary btn-sm">📨 Send to WMS</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/dock-scheduling"); }}>🚪 Dock schedule</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/documents"); }}>📄 Documents</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/messaging`); }}>📧 Contact Carrier</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/messaging"); }}>📨 Send to WMS</button>
         </div>
       </div>
     </div>
@@ -327,10 +328,12 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, STATUS_BADGES 
 
 export default function ShipmentsPage() {
   const { shipments, orders, carriers, setData, refreshData } = useOutletContext();
+  const navigate = useNavigate();
   const [shipView, setShipView] = useState("list");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [modeFilter, setModeFilter] = useState("All");
+  const [idsFilter, setIdsFilter] = useState(null); // Set from ?ids= URL param for bulk plan filtering
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState({ text: "", type: "" });
   const [detailShipment, setDetailShipment] = useState(null);
@@ -339,13 +342,20 @@ export default function ShipmentsPage() {
   const [autoOpened, setAutoOpened] = useState(false);
   useEffect(() => {
     if (autoOpened) return;
-    const idParam = new URLSearchParams(window.location.search).get("id");
+    const params = new URLSearchParams(window.location.search);
+    const idParam = params.get("id");
+    const idsParam = params.get("ids");
     if (idParam && shipments.length > 0) {
       const ship = shipments.find((s) => s.id === idParam);
       if (ship) {
         const linkedOrders = orders.filter((o) => String(o.shipment_id || "") === String(ship.id || ""));
         setDetailShipment({ ...ship, _linkedOrders: linkedOrders, _carrier: ship.carrier || "" });
       }
+      setAutoOpened(true);
+      window.history.replaceState({}, "", "/shipments");
+    }
+    if (idsParam && shipments.length > 0) {
+      setIdsFilter(new Set(idsParam.split(",")));
       setAutoOpened(true);
       window.history.replaceState({}, "", "/shipments");
     }
@@ -356,6 +366,28 @@ export default function ShipmentsPage() {
   function toast(text, type = "info") {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: "", type: "" }), 4000);
+  }
+
+  async function unassignOrder(orderId, shipmentId) {
+    try {
+      await DbApi.patch("orders", orderId, { status: "Unplanned", shipment_id: null });
+      // Recalculate shipment weight from remaining orders
+      const remaining = orders.filter((o) => o.shipment_id === shipmentId && o.id !== orderId);
+      if (remaining.length === 0) {
+        // No orders left — delete the shipment
+        await DbApi.patch("shipments", shipmentId, { status: "Cancelled", notes: "All orders unassigned" });
+        toast(`Order ${orderId} unassigned. Shipment ${shipmentId} cancelled (no orders left).`, "info");
+      } else {
+        const newWeight = remaining.reduce((s, o) => s + (Number(o.weight) || 0), 0);
+        const newPieces = remaining.reduce((s, o) => s + (Number(o.pieces) || 0), 0);
+        await DbApi.patch("shipments", shipmentId, { weight: newWeight, pieces: newPieces });
+        toast(`Order ${orderId} unassigned from shipment ${shipmentId}`, "success");
+      }
+      await refreshData();
+      setDetailShipment(null);
+    } catch (e) {
+      toast(`Unassign failed: ${e.message}`, "error");
+    }
   }
 
   function resolveCarrierName(s) {
@@ -384,6 +416,7 @@ export default function ShipmentsPage() {
         _commodity: commodities.join(", ") || s.commodity || "",
       };
     });
+    if (idsFilter) list = list.filter((s) => idsFilter.has(s.id));
     if (statusFilter !== "All") list = list.filter((s) => s._displayStatus === statusFilter);
     if (modeFilter !== "All") list = list.filter((s) => (s.mode || "").toUpperCase() === modeFilter);
     if (q.trim()) {
@@ -398,7 +431,7 @@ export default function ShipmentsPage() {
       const bv = String((sortCol === "status" ? b._displayStatus : b[sortCol]) || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [shipments, orders, q, statusFilter, modeFilter, sortCol, sortAsc]);
+  }, [shipments, orders, q, statusFilter, modeFilter, idsFilter, sortCol, sortAsc]);
 
   const laneRoutes = useMemo(() => {
     const lanes = new Map();
@@ -445,8 +478,13 @@ export default function ShipmentsPage() {
     else { setSortCol(col); setSortAsc(true); }
   }
 
+  const [tenderResult, setTenderResult] = useState(null); // { shipment, result }
+
   async function onTender(row) {
-    const carrierName = row._carrier || "";
+    const carrierName = row._carrier || row.carrier || "";
+    // Close detail modal and show tender result modal
+    setDetailShipment(null);
+    setTenderResult({ shipment: row, result: null }); // show "sending" phase
     setBusyId(row.id);
     try {
       await DbApi.patch("shipments", row.id, { status: "Tendered", carrier: carrierName });
@@ -471,22 +509,23 @@ export default function ShipmentsPage() {
         dockDoor: row.dock_door || "Door 1",
         dockTime: row.dock_time || "06:00–08:00",
       };
+      let emailSent = false;
+      let emailTo = "";
       try {
         const result = await sendTenderEmailIfAvailable({
           carriers,
           carrierName,
           tenderPayload,
         });
-        if (result.sent) toast(`Tendered ${row.id} → ${result.to}`, "success");
-        else if (result.reason === "missing_email") toast(`Tendered ${row.id} (no carrier email configured)`, "info");
-        else toast(`Tendered ${row.id} (${result.message || "email not sent"})`, "warning");
+        emailSent = !!result.sent;
+        emailTo = result.to || "";
       } catch (emailErr) {
         console.warn("Tender email failed:", emailErr);
-        toast(`Tendered ${row.id} (email failed)`, "warning");
       }
       await refreshData();
+      setTenderResult({ shipment: row, result: { refNum, emailSent, to: emailTo } });
     } catch (err) {
-      toast(`Tender failed: ${err.message}`, "error");
+      setTenderResult({ shipment: row, result: { error: true, errorMessage: err.message } });
     } finally {
       setBusyId("");
     }
@@ -876,7 +915,22 @@ export default function ShipmentsPage() {
       )}
 
       {/* Shipment Detail Modal */}
-      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} STATUS_BADGES={STATUS_BADGES} />}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} />}
+
+      {/* Tender Result Modal */}
+      <TenderResultModal
+        isOpen={!!tenderResult}
+        shipment={tenderResult?.shipment}
+        result={tenderResult?.result}
+        onClose={() => setTenderResult(null)}
+        onViewShipment={(id) => {
+          const ship = shipments.find((s) => s.id === id);
+          if (ship) {
+            const linked = orders.filter((o) => String(o.shipment_id || "") === String(id));
+            setDetailShipment({ ...ship, _linkedOrders: linked, _carrier: ship.carrier || "" });
+          }
+        }}
+      />
 
       {/* Accept Tender Modal */}
       {acceptModal && (

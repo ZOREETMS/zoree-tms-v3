@@ -129,7 +129,7 @@ async function verifyToken(req, res) {
 }
 
 // Allowed tables — security whitelist
-const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history'];
+const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','route_templates'];
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -1680,13 +1680,15 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         if (!a.infeasible && b.infeasible) return -1;
         return (a[sortBy] || 99999) - (b[sortBy] || 99999);
       });
-      if (quotes.length > 0) quotes[0].recommended = true;
+      // Only consider quotes with valid transit data for bestQuote
+      const validQuotes = quotes.filter(q => q.transitDays > 0);
+      if (validQuotes.length > 0) validQuotes[0].recommended = true;
 
       return {
         laneKey,
         loadType,
         quotes,
-        bestQuote: quotes[0] || null,
+        bestQuote: validQuotes[0] || null,
       };
     }));
 
@@ -1736,7 +1738,6 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           czarlite_rate: !!plan.czarliteRate || (plan.mode || '').toUpperCase() === 'LTL',
           service_level: plan.serviceLevel || null,
           miles: plan.miles || null,
-          transit_days: plan.transitDays || null,
         };
 
         // Create shipment
@@ -1761,7 +1762,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
 
         // Update each order
         for (const orderId of (plan.orderIds || [])) {
-          await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
+          const ordPatchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
             method: 'PATCH',
             headers: {
               'apikey': ANON_KEY,
@@ -1770,7 +1771,11 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
             },
             body: JSON.stringify({ status: 'Planned', shipment_id: shipId }),
           });
-          ordersUpdated++;
+          if (ordPatchRes.ok) {
+            ordersUpdated++;
+          } else {
+            console.error(`[BulkPlan/execute] Order PATCH failed for ${orderId}:`, ordPatchRes.status, await ordPatchRes.text().catch(() => ''));
+          }
         }
 
         console.log(`[BulkPlan/execute] ${shipId}: ${plan.origin} → ${plan.destination} | ${plan.carrier} | $${plan.totalCost} | ${(plan.orderIds || []).length} orders`);

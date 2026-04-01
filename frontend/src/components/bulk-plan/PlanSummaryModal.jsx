@@ -13,8 +13,9 @@ export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, onC
   const totalWeight = shipments.reduce((s, sh) => s + (parseInt(sh.weight) || 0), 0);
 
   function handleViewShipments() {
+    const ids = shipments.map((s) => s.id).join(",");
     onClose();
-    navigate("/shipments");
+    navigate(`/shipments?ids=${encodeURIComponent(ids)}`);
   }
 
   return (
@@ -56,7 +57,7 @@ export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, onC
         {/* Footer */}
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Close</button>
-          <button className="btn btn-primary" onClick={handleViewShipments}>📦 View All Shipments</button>
+          <button className="btn btn-primary" onClick={handleViewShipments}>📦 View Shipments</button>
         </div>
       </div>
     </div>

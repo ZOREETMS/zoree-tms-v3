@@ -418,13 +418,9 @@ export default function OrdersPage() {
   function calcDates(quote, dueDate, readyDate) {
     const today = new Date().toISOString().slice(0, 10);
     let transit = quote.transitDays || null;
-    const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
-    const rMode = (quote.mode || "").toUpperCase() === "LTL" ? "LTL" : "TL";
-    if (!transit && quote.miles) {
-      const mpd = isExp ? 800 : rMode === "LTL" ? 350 : 500;
-      transit = Math.max(1, Math.ceil(quote.miles / mpd));
+    if (!transit) {
+      return { pickup: null, delivery: null, transit: null, warning: "", error: "No transit time available — configure transit_days in rate table, add miles, or enable CarrierConnect" };
     }
-    if (!transit) transit = 2; // fallback
     // Pickup = latest of (today, readyDate) — can't ship before ready
     const minPickup = today > (readyDate || "") ? today : (readyDate || today);
     let pickup = minPickup;
@@ -495,6 +491,10 @@ export default function OrdersPage() {
     const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
     const earliestDue = siblings?.map((s) => s.due).filter(Boolean).sort()[0] || "";
     const dates = calcDates(chosen, earliestDue, readyDate);
+    if (dates.error) {
+      toast(`Planning failed: ${dates.error}`, "error");
+      return;
+    }
     setPlanModal((prev) => prev ? { ...prev, busy: true } : null);
     try {
       const plans = [{
@@ -1290,7 +1290,7 @@ export default function OrdersPage() {
                     </div>
                   )}
                   {error && <div style={{ padding: "10px 14px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, color: "#991b1b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
-                  {quotes.map((quote, i) => {
+                  {quotes.filter((q) => q.transitDays > 0).map((quote, i) => {
                     const isSelected = selectedIdx === i;
                     const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
                     const svcTag = isExp ? "EXP" : "STD";
@@ -1330,7 +1330,7 @@ export default function OrdersPage() {
                       </div>
                     );
                   })}
-                  {!busy && quotes.length === 0 && !error && <div style={{ textAlign: "center", padding: 20, color: "var(--text3)", fontSize: 12 }}>No carrier quotes available.</div>}
+                  {!busy && quotes.filter((q) => q.transitDays > 0).length === 0 && !error && <div style={{ textAlign: "center", padding: 20, color: "var(--text3)", fontSize: 12 }}>No carrier quotes with valid transit data. Configure transit_days in rate table or enable CarrierConnect.</div>}
                 </div>
               </div>
             </div>

@@ -30,6 +30,8 @@ import AlertsPage from "./pages/AlertsPage";
 import MessagingHubPage from "./pages/MessagingHubPage";
 import NetworkModelingPage from "./pages/NetworkModelingPage";
 import DbExplorerPage from "./pages/DbExplorerPage";
+import MultiStopRoutesPage from "./pages/MultiStopRoutesPage";
+import HomePage from "./pages/HomePage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
 
@@ -37,7 +39,8 @@ function PrivateRoutes({ data }) {
   return (
     <Routes>
       <Route path="/" element={<Layout data={data} />}>
-        <Route index element={<DashboardPage />} />
+        <Route index element={<HomePage />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="shipments" element={<ShipmentsPage />} />
         <Route path="carriers" element={<CarriersPage />} />
@@ -65,6 +68,7 @@ function PrivateRoutes({ data }) {
         <Route path="messaging" element={<MessagingHubPage />} />
         <Route path="network-modeling" element={<NetworkModelingPage />} />
         <Route path="db-explorer" element={<DbExplorerPage />} />
+        <Route path="multi-stop-routes" element={<MultiStopRoutesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -73,7 +77,7 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [] });
+  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -90,8 +94,9 @@ export default function App() {
       DbApi.rates().catch(() => []),
       DbApi.drivers().catch(() => []),
       DbApi.invoices().catch(() => []),
+      DbApi.routeTemplates().catch(() => []),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates]) => {
         setData({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -103,6 +108,7 @@ export default function App() {
           rates: Array.isArray(rates) ? rates : [],
           drivers: Array.isArray(drivers) ? drivers : [],
           invoices: Array.isArray(invoices) ? invoices : [],
+          routeTemplates: Array.isArray(routeTemplates) ? routeTemplates : [],
         });
       })
       .catch((e) => setError(e.message || "Failed loading data"))

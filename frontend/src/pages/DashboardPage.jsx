@@ -102,7 +102,7 @@ export default function DashboardPage() {
               <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 60 }}>
                 {[35, 42, 28, 51, 39, 45, 40].map((v, i) => (
                   <div key={i} style={{
-                    flex: 1, background: "linear-gradient(180deg,#6366f1,#3b82f6)",
+                    flex: 1, background: "var(--accent)",
                     borderRadius: "3px 3px 0 0", opacity: 0.7, minWidth: 8,
                     height: `${(v / 51) * 100}%`
                   }} />
@@ -183,7 +183,7 @@ export default function DashboardPage() {
                   <div className="progress-wrap">
                     <div className="progress-bar" style={{
                       width: `${(count / maxVol) * 100}%`,
-                      background: i === 0 ? "linear-gradient(90deg,#3b82f6,#6366f1)" : i === 1 ? "#818cf8" : "var(--green)"
+                      background: i === 0 ? "var(--accent)" : i === 1 ? "#818cf8" : "var(--green)"
                     }} />
                   </div>
                 </div>

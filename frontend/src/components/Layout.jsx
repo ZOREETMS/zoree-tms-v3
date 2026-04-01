@@ -5,7 +5,8 @@ import ZoreeAI from "./ZoreeAI";
 
 const navStructure = [
   { section: "Overview", items: [
-    { to: "/", label: "Dashboard", icon: "📊" },
+    { to: "/", label: "Home", icon: "🏠" },
+    { to: "/dashboard", label: "Dashboard", icon: "📊" },
   ]},
   { section: "Planning", items: [
     { to: "/item-master", label: "Item Master", icon: "📦" },
@@ -14,6 +15,7 @@ const navStructure = [
     { to: "/orders", label: "Orders", icon: "🧾", badgeKey: "orders", badgeColor: "yellow" },
     { to: "/route-optimizer", label: "Route Optimizer", icon: "🗺️" },
     { to: "/bulk-plan", label: "Bulk Plan", icon: "⚡" },
+    { to: "/multi-stop-routes", label: "Multi-Stop Routes", icon: "🛣️" },
   ]},
   { section: "Execution", items: [
     { to: "/live-tracking", label: "Live Tracking", icon: "📡", badgeVal: "3", badgeColor: "red" },
@@ -106,18 +108,7 @@ export default function Layout({ data }) {
               <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>Admin · Zoree</div>
             </div>
           </div>
-          <button
-            onClick={logout}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 8,
-              padding: "9px 10px", borderRadius: 8, cursor: "pointer",
-              color: "rgba(255,255,255,0.65)", fontSize: 13, fontWeight: 500,
-              background: "transparent", border: "none", fontFamily: "inherit",
-              marginTop: 4, transition: "all .15s",
-            }}
-            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "#fff"; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = ""; e.currentTarget.style.color = "rgba(255,255,255,0.65)"; }}
-          >
+          <button onClick={logout} className="sidebar-logout-btn">
             <span style={{ fontSize: 15 }}>🚪</span> Sign Out
           </button>
         </div>

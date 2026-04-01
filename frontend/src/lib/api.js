@@ -77,6 +77,9 @@ export const DbApi = {
   invoices() {
     return api("/db/invoices?q=select=*%26order=created_at.desc%26limit=500");
   },
+  routeTemplates() {
+    return api("/db/route_templates?q=select=*%26order=created_at.desc%26limit=200");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { BulkPlanApi } from "../lib/api";
 import PlanSummaryModal from "../components/bulk-plan/PlanSummaryModal";
+import OrderEditModal from "../components/bulk-plan/OrderEditModal";
 
 /* ── helpers ── */
 function normalizeZip(value) {
@@ -17,14 +18,40 @@ function fmt$(n) {
   return "$" + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function addBusinessDays(dateStr, days) {
+  const d = new Date(dateStr + "T12:00:00");
+  const step = days >= 0 ? 1 : -1;
+  let remaining = Math.abs(days);
+  while (remaining > 0) { d.setDate(d.getDate() + step); const dow = d.getDay(); if (dow !== 0 && dow !== 6) remaining--; }
+  return d.toISOString().slice(0, 10);
+}
+
+function calcDates(quote, dueDate, readyDate) {
+  const today = new Date().toISOString().slice(0, 10);
+  let transit = quote.transitDays || null;
+  if (!transit) {
+    // No transit data available — cannot calculate dates
+    return { pickup: null, delivery: null, transit: null, error: "No transit time available from carrier or rate table" };
+  }
+  const minPickup = today > (readyDate || "") ? today : (readyDate || today);
+  let pickup = minPickup;
+  if (dueDate) {
+    const idealPickup = addBusinessDays(dueDate, -transit);
+    if (idealPickup >= minPickup) pickup = idealPickup;
+  }
+  const delivery = addBusinessDays(pickup, transit);
+  return { pickup, delivery, transit, error: null };
+}
+
 export default function BulkPlanPage() {
-  const { orders, refreshData } = useOutletContext();
+  const { orders, items = [], refreshData } = useOutletContext();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [results, setResults] = useState(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [editOrder, setEditOrder] = useState(null);
 
   /* ── filters ── */
   const [q, setQ] = useState("");
@@ -150,20 +177,26 @@ export default function BulkPlanPage() {
         .map((r) => {
           const lane = lanes.find((l) => l.laneKey === r.laneKey);
           if (!lane || !r?.bestQuote) return null;
-          // Compute pickup from order ready dates, delivery from transit days
-          const readyDates = lane.orderIds
+          // Get order dates for this lane
+          const laneOrders = lane.orderIds
             .map((id) => orders.find((o) => o.id === id))
-            .filter(Boolean)
+            .filter(Boolean);
+          const readyDate = laneOrders
             .map((o) => o.ready || o.pickup_date)
             .filter(Boolean)
-            .sort();
-          const pickupDate = readyDates[0] || new Date().toISOString().slice(0, 10);
-          const transitDays = r.bestQuote.transitDays || null;
-          let deliveryDate = r.bestQuote.deliveryDate || "";
-          if (!deliveryDate && transitDays && pickupDate) {
-            const d = new Date(pickupDate);
-            d.setDate(d.getDate() + transitDays);
-            deliveryDate = d.toISOString().slice(0, 10);
+            .sort()[0] || "";
+          const dueDate = laneOrders
+            .map((o) => o.due || o.delivery_date)
+            .filter(Boolean)
+            .sort()
+            .reverse()[0] || "";
+
+          // Use same date logic as regular planning
+          const dates = calcDates(r.bestQuote, dueDate, readyDate);
+
+          if (dates.error) {
+            // No transit data — reject this plan
+            return { _error: true, laneKey: lane.laneKey, carrier: r.bestQuote.carrier, reason: dates.error };
           }
 
           return {
@@ -178,9 +211,9 @@ export default function BulkPlanPage() {
             carrier: r.bestQuote.carrier || "",
             mode: r.bestQuote.mode || "LTL",
             totalCost: r.bestQuote.totalCharge || 0,
-            pickupDate,
-            deliveryDate,
-            transitDays,
+            pickupDate: dates.pickup,
+            deliveryDate: dates.delivery,
+            transitDays: dates.transit,
             serviceLevel: r.bestQuote.serviceLevel || "Standard",
             miles: r.bestQuote.pcmilerMiles || r.bestQuote.miles || null,
             czarliteRate: r.bestQuote.mode === "LTL",
@@ -188,19 +221,34 @@ export default function BulkPlanPage() {
         })
         .filter(Boolean);
 
-      if (!plans.length) {
-        toast("No executable plans — no carriers returned quotes.", "error");
+      // Separate valid plans from errors
+      const failedPlans = plans.filter((p) => p._error);
+      const validPlans = plans.filter((p) => !p._error);
+
+      if (failedPlans.length > 0) {
+        const failMsgs = failedPlans.map((f) => `${f.laneKey} (${f.carrier}): ${f.reason}`).join("\n");
+        toast(`Planning failed for ${failedPlans.length} lane(s):\n${failMsgs}`, "error");
+      }
+
+      if (!validPlans.length) {
+        toast("No executable plans — no carriers returned quotes or transit data is missing. Check rate table for transit_days, miles, or enable CarrierConnect.", "error");
         setBusy(false);
         return;
       }
 
       // Step 3: Execute — create shipments + update orders
       toast("Creating shipments...", "info");
-      const execRes = await BulkPlanApi.execute(plans);
+      const execRes = await BulkPlanApi.execute(validPlans);
       setResults(execRes);
       setSelectedIds(new Set());
-      setSummaryOpen(true);
       await refreshData();
+
+      if (execRes?.shipments?.length > 0) {
+        setSummaryOpen(true);
+        setMessage({ text: "", type: "" });
+      } else {
+        toast(`Planning completed but no shipments were created. ${execRes?.errors?.length ? execRes.errors.map((e) => e.error).join("; ") : "Check API logs."}`, "error");
+      }
     } catch (err) {
       toast(`Planning failed: ${err.message || "Unknown error"}`, "error");
     } finally {
@@ -247,7 +295,7 @@ export default function BulkPlanPage() {
         )}
 
         {/* Results banner */}
-        {results && (
+        {results && results?.shipments?.length > 0 && (
           <div className="card" style={{ marginBottom: 16, border: "1px solid #86efac" }}>
             <div className="card-body" style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 22 }}>&#9989;</span>
@@ -341,7 +389,7 @@ export default function BulkPlanPage() {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: "center", padding: 30, color: "var(--text3)" }}>
+                  <td colSpan={11} style={{ textAlign: "center", padding: 30, color: "var(--text3)" }}>
                     No unplanned orders found
                   </td>
                 </tr>
@@ -356,7 +404,15 @@ export default function BulkPlanPage() {
                         style={{ accentColor: "var(--accent)" }}
                       />
                     </td>
-                    <td style={{ fontWeight: 600, color: "var(--text)" }}>{o.id}</td>
+                    <td>
+                      <span
+                        className="mono"
+                        style={{ fontWeight: 700, color: "var(--accent)", cursor: "pointer" }}
+                        onClick={() => setEditOrder(o)}
+                      >
+                        {o.id}
+                      </span>
+                    </td>
                     <td>{o.customer || "-"}</td>
                     <td>{o.origin || "-"}</td>
                     <td>{o.dest || "-"}</td>
@@ -365,6 +421,15 @@ export default function BulkPlanPage() {
                     <td>{o.pieces || "-"}</td>
                     <td className="mono">{o.ready || o.pickup_date || o.ready_date || "—"}</td>
                     <td className="mono">{o.due || o.delivery_date || o.due_date || "—"}</td>
+                    <td>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={(e) => { e.stopPropagation(); setEditOrder(o); }}
+                        title="Edit order"
+                      >
+                        ✏️
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -386,6 +451,18 @@ export default function BulkPlanPage() {
           </div>
         )}
       </div>
+
+      {/* Order Edit Modal */}
+      <OrderEditModal
+        isOpen={!!editOrder}
+        order={editOrder}
+        items={items}
+        onClose={() => setEditOrder(null)}
+        onSaved={async (orderId) => {
+          await refreshData();
+          toast(`Saved changes to ${orderId}`, "success");
+        }}
+      />
 
       {/* Plan Summary Modal */}
       <PlanSummaryModal
