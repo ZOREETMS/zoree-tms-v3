@@ -1,4 +1,4 @@
-import { configureApi } from '@zoree/shared/src/api';
+import { configureApi } from '../shared/api';
 import { storage } from './storage';
 import { API_BASE } from '../config/env';
 
@@ -24,4 +24,4 @@ export {
   InvoicesApi,
   MileageApi,
   BulkPlanApi,
-} from '@zoree/shared/src/api';
+} from '../shared/api';

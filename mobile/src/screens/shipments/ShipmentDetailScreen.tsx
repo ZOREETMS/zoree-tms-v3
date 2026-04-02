@@ -17,7 +17,7 @@ import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useData } from '../../state/DataContext';
 import { TenderApi } from '../../lib/api';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import { formatCurrency } from '../../shared/utils/formatters';
 import {
   borderRadius,
   colors,

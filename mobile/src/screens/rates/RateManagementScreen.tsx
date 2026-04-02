@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import { formatCurrency } from '../../shared/utils/formatters';
 import Card from '../../components/ui/Card';
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';

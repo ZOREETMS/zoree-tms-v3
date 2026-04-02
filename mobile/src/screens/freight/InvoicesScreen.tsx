@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
-import useInvoices from '@zoree/shared/src/hooks/useInvoices';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import useInvoices from '../../shared/hooks/useInvoices';
+import { formatCurrency } from '../../shared/utils/formatters';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import SearchBar from '../../components/ui/SearchBar';

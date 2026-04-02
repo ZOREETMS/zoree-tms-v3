@@ -268,7 +268,27 @@
       "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -path */shared/src/api* -name *.ts)",
       "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -path */shared/src/api* -type f)",
       "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -name useCustomerPortal* -o -name useMessaging*)",
-      "Bash(ipconfig)"
+      "Bash(ipconfig)",
+      "Bash(npm view:*)",
+      "Bash(npx install-expo-modules@latest --yes)",
+      "Bash(npx install-expo-modules@latest)",
+      "Bash(node -e \"try { require.resolve\\(''expo''\\); console.log\\(''Expo is installed''\\); } catch\\(e\\) { console.log\\(''Expo NOT installed''\\); }\")",
+      "Bash(npx expo:*)",
+      "WebFetch(domain:www.compass.com)",
+      "WebFetch(domain:www.cityofbartlett.org)",
+      "WebFetch(domain:riskfactor.com)",
+      "WebFetch(domain:firststreet.org)",
+      "Bash(curl -s -X POST \"http://localhost:3001/api/db/route_templates\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer test\" -d '{\"\"\"\"id\"\"\"\":\"\"\"\"x\"\"\"\",\"\"\"\"name\"\"\"\":\"\"\"\"x\"\"\"\"}')",
+      "Bash(npm run:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(node ZOREE_MultiStop_Design.js)",
+      "Bash(python \"C:\\\\Users\\\\tulasi konathala\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\3e229580-49a8-4f0e-8e19-a321e5b01936\\\\7498d081-3dd6-4a49-b308-5a18b94a20e2\\\\skills\\\\docx\\\\scripts\\\\office\\\\validate.py\" \"C:\\\\Users\\\\tulasi konathala\\\\Downloads\\\\ZOREE_MultiStop_Route_Design.docx\")",
+      "Bash(node ZOREE_MultiStop_Design_v2.js)",
+      "Bash(find C:Zoreezoree-tms-v3zoree-tms-v3frontendsrcpages -type f \\\\\\(-name *.jsx -o -name *.js -o -name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(find C:Zoreezoree-tms-v3zoree-tms-v3frontendsrccomponents -type f \\\\\\(-name *.jsx -o -name *.js -o -name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(node ZOREE_TMS_Design_Doc.js)",
+      "Bash(node ZOREE_TMS_Functional_Spec.js)",
+      "WebFetch(domain:www.homes.com)"
     ]
   }
 }

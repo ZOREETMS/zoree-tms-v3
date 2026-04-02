@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
 import { DbApi, MileageApi } from "../lib/api";
+import ExecuteRouteModal from "../components/home/ExecuteRouteModal";
 
 const MODE_OPTIONS = ["TL", "LTL", "FTL"];
 const STATUS_OPTIONS = ["Active", "Inactive"];
@@ -77,14 +78,14 @@ const emptyRoute = () => ({
   status: "Active",
   notes: "",
   stops: [
-    { sequence: 1, location: "", type: "pickup", lat: null, lng: null },
-    { sequence: 2, location: "", type: "delivery", lat: null, lng: null },
+    { sequence: 1, city: "", state: "", location: "", type: "pickup", stop_seq: 1, load_seq: "", lat: null, lng: null },
+    { sequence: 2, city: "", state: "", location: "", type: "delivery", stop_seq: 2, load_seq: 1, lat: null, lng: null },
   ],
   total_miles: 0,
 });
 
 /* ── Location search dropdown ─────────────────────────────────── */
-function LocationPicker({ value, locations, onChange }) {
+function LocationPicker({ value, locations, onChange, hasError = false }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState(value || "");
   const ref = useRef(null);
@@ -118,14 +119,17 @@ function LocationPicker({ value, locations, onChange }) {
       <input
         type="text"
         value={search}
-        placeholder="Search or type location..."
+        placeholder="Search city..."
         onChange={(e) => {
           setSearch(e.target.value);
           setOpen(true);
           onChange({ location: e.target.value, lat: null, lng: null });
         }}
         onFocus={() => setOpen(true)}
-        style={{ width: "100%" }}
+        style={{
+          width: "100%",
+          ...(hasError ? { borderColor: "#DC2626", boxShadow: "0 0 0 3px rgba(220,38,38,0.08)" } : {}),
+        }}
       />
       {open && filtered.length > 0 && (
         <div
@@ -188,10 +192,35 @@ function LocationPicker({ value, locations, onChange }) {
 }
 
 /* ── Stops Editor ──────────────────────────────────────────────── */
-function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles = false }) {
+function recalcLoadSeq(stopsList) {
+  // Only delivery stops get load_seq (reverse order, LIFO)
+  const deliveries = stopsList.filter((s) => s.type === "delivery");
+  const deliveryCount = deliveries.length;
+  let dIdx = 0;
+  return stopsList.map((s, i) => {
+    const base = { ...s, sequence: i + 1, stop_seq: i + 1 };
+    if (s.type === "delivery") {
+      base.load_seq = deliveryCount - dIdx;
+      dIdx++;
+    } else {
+      base.load_seq = "";
+    }
+    return base;
+  });
+}
+
+function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles = false, validationErrors = {} }) {
   function updateStop(idx, field, val) {
     const next = stops.map((s, i) =>
       i === idx ? { ...s, [field]: val } : s
+    );
+    // Recalc load_seq if stop_seq changed
+    onChange(field === "stop_seq" ? recalcLoadSeq(next) : next);
+  }
+
+  function updateStopFields(idx, fields) {
+    const next = stops.map((s, i) =>
+      i === idx ? { ...s, ...fields } : s
     );
     onChange(next);
   }
@@ -206,24 +235,27 @@ function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles 
   }
 
   function addStop() {
-    onChange([
+    const next = [
       ...stops,
       {
         sequence: stops.length + 1,
+        city: "",
+        state: "",
         location: "",
         type: "delivery",
+        stop_seq: stops.length + 1,
+        load_seq: 1,
         lat: null,
         lng: null,
       },
-    ]);
+    ];
+    onChange(recalcLoadSeq(next));
   }
 
   function removeStop(idx) {
     if (stops.length <= 2) return;
-    const next = stops
-      .filter((_, i) => i !== idx)
-      .map((s, i) => ({ ...s, sequence: i + 1 }));
-    onChange(next);
+    const next = stops.filter((_, i) => i !== idx);
+    onChange(recalcLoadSeq(next));
   }
 
   function moveStop(idx, dir) {
@@ -231,7 +263,7 @@ function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles 
     if (ni < 0 || ni >= stops.length) return;
     const next = [...stops];
     [next[idx], next[ni]] = [next[ni], next[idx]];
-    onChange(next.map((s, i) => ({ ...s, sequence: i + 1 })));
+    onChange(recalcLoadSeq(next));
   }
 
   return (
@@ -253,7 +285,7 @@ function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles 
             color: "var(--text2)",
           }}
         >
-          Stops ({stops.length})
+          Stops / Cities ({stops.length})
         </div>
         <button
           type="button"
@@ -387,11 +419,69 @@ function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles 
                 ))}
               </select>
 
-              <LocationPicker
-                value={stop.location}
-                locations={locations}
-                onChange={(data) => updateStopLocation(idx, data)}
+              <input
+                type="text"
+                value={stop.city || ""}
+                onChange={(e) => {
+                  const city = e.target.value;
+                  const loc = city && stop.state ? `${city}, ${stop.state}` : city || "";
+                  updateStopFields(idx, { city, location: loc });
+                }}
+                placeholder="City"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  ...(validationErrors[`stop_${idx}`] && !stop.city?.trim()
+                    ? { borderColor: "#DC2626", boxShadow: "0 0 0 3px rgba(220,38,38,0.08)" }
+                    : {}),
+                }}
               />
+              <input
+                type="text"
+                value={stop.state || ""}
+                onChange={(e) => {
+                  const state = e.target.value.toUpperCase();
+                  const loc = stop.city && state ? `${stop.city}, ${state}` : stop.city || "";
+                  updateStopFields(idx, { state, location: loc });
+                }}
+                placeholder="ST"
+                style={{
+                  width: 55,
+                  flexShrink: 0,
+                  textAlign: "center",
+                  ...(validationErrors[`stop_${idx}`] && !stop.state?.trim()
+                    ? { borderColor: "#DC2626", boxShadow: "0 0 0 3px rgba(220,38,38,0.08)" }
+                    : {}),
+                }}
+                maxLength={2}
+              />
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0, alignItems: "center" }}>
+                <span style={{ fontSize: 8, color: "var(--text3)", fontWeight: 600, letterSpacing: "0.04em" }}>STOP#</span>
+                <input
+                  type="number"
+                  value={stop.stop_seq || stop.sequence || ""}
+                  onChange={(e) => updateStop(idx, "stop_seq", e.target.value)}
+                  title="Stop Sequence"
+                  min="1"
+                  style={{ width: 42, textAlign: "center", fontSize: 12, padding: "0 2px", fontWeight: 600 }}
+                />
+              </div>
+              {stop.type === "delivery" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0, alignItems: "center" }}>
+                  <span style={{ fontSize: 8, color: "var(--text3)", fontWeight: 600, letterSpacing: "0.04em" }}>LOAD#</span>
+                  <input
+                    type="number"
+                    value={stop.load_seq || ""}
+                    onChange={(e) => updateStop(idx, "load_seq", e.target.value)}
+                    title="Load Sequence"
+                    min="1"
+                    style={{ width: 42, textAlign: "center", fontSize: 12, padding: "0 2px", fontWeight: 600 }}
+                  />
+                </div>
+              ) : (
+                <div style={{ width: 42, flexShrink: 0 }} />
+              )}
 
               <div
                 style={{
@@ -460,8 +550,9 @@ function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles 
 
 /* ── Main Page ─────────────────────────────────────────────────── */
 export default function MultiStopRoutesPage() {
-  const { carriers, locations, rates, routeTemplates, refreshData } =
+  const { carriers, locations, rates, routeTemplates, orders, refreshData } =
     useOutletContext();
+  const [executeRoute, setExecuteRoute] = useState(null);
   const templates = Array.isArray(routeTemplates) ? routeTemplates : [];
 
   const [q, setQ] = useState("");
@@ -471,6 +562,7 @@ export default function MultiStopRoutesPage() {
   const [editRoute, setEditRoute] = useState(null);
   const [saving, setSaving] = useState(false);
   const [detailRoute, setDetailRoute] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
   const [legMiles, setLegMiles] = useState([]); // [{miles, origin, dest}] per leg
   const [fetchingMiles, setFetchingMiles] = useState(false);
 
@@ -566,13 +658,25 @@ export default function MultiStopRoutesPage() {
   }
 
   async function saveRoute() {
-    if (!editRoute.name.trim()) {
-      toast("Route name is required", "error");
+    const errors = {};
+    if (!editRoute.name.trim()) errors.name = true;
+    editRoute.stops.forEach((s, i) => {
+      if (!s.city || !s.city.trim()) errors[`stop_${i}`] = true;
+    });
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      toast(errors.name ? "Route name is required" : "All stops must have a city and state", "error");
       return;
     }
-    const validStops = editRoute.stops.filter((s) => s.location.trim());
+    setValidationErrors({});
+    // Build location from city + state before saving
+    const stopsWithLocation = editRoute.stops.map((s) => ({
+      ...s,
+      location: [s.city, s.state].filter(Boolean).join(", "),
+    }));
+    const validStops = stopsWithLocation.filter((s) => s.location.trim());
     if (validStops.length < 2) {
-      toast("At least 2 stops with locations are required", "error");
+      toast("At least 2 stops with cities are required", "error");
       return;
     }
     setSaving(true);
@@ -585,7 +689,7 @@ export default function MultiStopRoutesPage() {
         transit_days: editRoute.transit_days ? Number(editRoute.transit_days) : null,
         miles_override: editRoute.miles_override ? Number(editRoute.miles_override) : null,
         cost_override: editRoute.cost_override ? Number(editRoute.cost_override) : null,
-        stops: editRoute.stops,
+        stops: stopsWithLocation,
       };
       await DbApi.upsert("route_templates", payload);
       toast("Route template saved", "success");
@@ -628,7 +732,7 @@ export default function MultiStopRoutesPage() {
         <div className="header-actions">
           <button
             className="btn btn-primary"
-            onClick={() => setEditRoute(emptyRoute())}
+            onClick={() => { setEditRoute(emptyRoute()); setValidationErrors({}); }}
           >
             + New Route
           </button>
@@ -1043,25 +1147,31 @@ export default function MultiStopRoutesPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => setExecuteRoute(route)}
+                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6 }}
+                      >
+                        Execute
+                      </button>
+                      <button
                         className="btn btn-sm"
-                        onClick={() => setEditRoute({ ...route, stops: [...(route.stops || [])] })}
-                        style={{
-                          fontSize: 11,
-                          padding: "4px 10px",
-                          borderRadius: 6,
+                        onClick={() => {
+                          const stops = (route.stops || []).map((s) => {
+                            if (s.city) return s;
+                            const parts = String(s.location || "").split(",").map((p) => p.trim());
+                            return { ...s, city: parts[0] || "", state: parts[1] || "" };
+                          });
+                          setEditRoute({ ...route, stops: recalcLoadSeq(stops) });
+                          setValidationErrors({});
                         }}
+                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6 }}
                       >
                         Edit
                       </button>
                       <button
                         className="btn btn-sm"
                         onClick={() => deleteRoute(route.id)}
-                        style={{
-                          fontSize: 11,
-                          padding: "4px 10px",
-                          borderRadius: 6,
-                          color: "var(--red)",
-                        }}
+                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, color: "var(--red)" }}
                       >
                         Delete
                       </button>
@@ -1103,17 +1213,29 @@ export default function MultiStopRoutesPage() {
               className="modal-body"
               style={{ maxHeight: "75vh", overflowY: "auto" }}
             >
+              {/* Inline toast for modal errors */}
+              {message.text && message.type === "error" && (
+                <div style={{
+                  padding: "10px 14px", borderRadius: 10, marginBottom: 14,
+                  fontSize: 13, fontWeight: 600,
+                  background: "#FEF2F2", color: "#B91C1C", border: "1px solid #FECACA",
+                }}>
+                  {message.text}
+                </div>
+              )}
               {/* Basic Info */}
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Route Name *</label>
+                  <label className="form-label" style={validationErrors.name ? { color: "#DC2626" } : undefined}>Route Name *</label>
                   <input
                     type="text"
                     value={editRoute.name}
-                    onChange={(e) =>
-                      setEditRoute({ ...editRoute, name: e.target.value })
-                    }
-                    placeholder="e.g., Texas Corridor"
+                    onChange={(e) => {
+                      setEditRoute({ ...editRoute, name: e.target.value });
+                      if (validationErrors.name) setValidationErrors((v) => ({ ...v, name: false }));
+                    }}
+                    placeholder="e.g., PHX-Memphis-Nashville"
+                    style={validationErrors.name ? { borderColor: "#DC2626", boxShadow: "0 0 0 3px rgba(220,38,38,0.08)" } : undefined}
                   />
                 </div>
                 <div className="form-group">
@@ -1185,9 +1307,10 @@ export default function MultiStopRoutesPage() {
                 <StopsEditor
                   stops={editRoute.stops}
                   locations={locations || []}
-                  onChange={(stops) => setEditRoute({ ...editRoute, stops })}
+                  onChange={(stops) => { setEditRoute({ ...editRoute, stops }); setValidationErrors({}); }}
                   legMiles={legMiles}
                   fetchingMiles={fetchingMiles}
+                  validationErrors={validationErrors}
                 />
               </div>
 
@@ -1518,10 +1641,13 @@ export default function MultiStopRoutesPage() {
                 className="btn btn-primary"
                 onClick={() => {
                   setDetailRoute(null);
-                  setEditRoute({
-                    ...detailRoute,
-                    stops: [...(detailRoute.stops || [])],
+                  const stops = (detailRoute.stops || []).map((s) => {
+                    if (s.city) return s;
+                    const parts = String(s.location || "").split(",").map((p) => p.trim());
+                    return { ...s, city: parts[0] || "", state: parts[1] || "" };
                   });
+                  setEditRoute({ ...detailRoute, stops: recalcLoadSeq(stops) });
+                  setValidationErrors({});
                 }}
               >
                 Edit Route
@@ -1529,6 +1655,20 @@ export default function MultiStopRoutesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Execute Route Modal */}
+      {executeRoute && (
+        <ExecuteRouteModal
+          route={executeRoute}
+          orders={orders}
+          onClose={() => setExecuteRoute(null)}
+          onSuccess={(masterId, cbolCount) => {
+            setExecuteRoute(null);
+            toast(`Created MBOL ${masterId} with ${cbolCount} CBOLs`, "success");
+            refreshData();
+          }}
+        />
       )}
     </div>
   );

@@ -12,10 +12,10 @@ export default function OverviewStack() {
       screenOptions={{
         headerShown: false,
       }}>
+      <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="Home">
         {() => <PlaceholderScreen title="Home" icon="🏠" />}
       </Stack.Screen>
-      <Stack.Screen name="Dashboard" component={DashboardScreen} />
     </Stack.Navigator>
   );
 }

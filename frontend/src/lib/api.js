@@ -170,6 +170,31 @@ export const MileageApi = {
   },
 };
 
+export const RouteApi = {
+  async executeRoute(masterShipment, childShipments, orderUpdates) {
+    // 1. Create MBOL
+    await api(`/db/shipments`, {
+      method: "POST",
+      body: JSON.stringify(masterShipment),
+    });
+    // 2. Create CBOLs
+    for (const child of childShipments) {
+      await api(`/db/shipments`, {
+        method: "POST",
+        body: JSON.stringify(child),
+      });
+    }
+    // 3. Update orders with shipment assignments
+    for (const update of orderUpdates) {
+      await api(`/db/orders/${encodeURIComponent(update.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Planned", shipment_id: update.shipment_id }),
+      });
+    }
+    return { ok: true };
+  },
+};
+
 export const BulkPlanApi = {
   rate(lanes, optimizeBy = "cost") {
     return api("/bulk-plan/rate", {

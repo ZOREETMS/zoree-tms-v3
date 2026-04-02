@@ -13,7 +13,7 @@ import {
   fontWeight,
   spacing,
 } from '../../theme';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import { formatCurrency } from '../../shared/utils/formatters';
 import type { PlanningTabParamList } from '../../navigation/types';
 
 interface ShipmentCardProps {

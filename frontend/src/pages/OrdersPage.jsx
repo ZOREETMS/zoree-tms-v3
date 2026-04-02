@@ -154,11 +154,20 @@ export default function OrdersPage() {
     if (dueFrom) filtered = filtered.filter((o) => (o.due || "") >= dueFrom);
     if (dueTo) filtered = filtered.filter((o) => (o.due || "") <= dueTo);
     if (q.trim()) {
-      const t = q.toLowerCase().trim();
-      filtered = filtered.filter((o) =>
-        [o.id, o.customer, o.origin, o.dest, o.commodity, o.shipment_id]
-          .some((v) => String(v || "").toLowerCase().includes(t))
-      );
+      // Support comma-separated search: "ORD-546192, ORD-2024-009" matches either
+      const terms = q.split(",").map((s) => {
+        let t = s.toLowerCase().trim();
+        t = t.replace(/^order\s*/i, "ord-").replace(/^ord\s+/i, "ord-").replace(/^shp\s+/i, "shp-");
+        return t;
+      }).filter(Boolean);
+      if (terms.length > 0) {
+        filtered = filtered.filter((o) =>
+          terms.some((t) =>
+            [o.id, o.customer, o.origin, o.dest, o.commodity, o.shipment_id]
+              .some((v) => String(v || "").toLowerCase().includes(t))
+          )
+        );
+      }
     }
     // Sort: when sorting by default (id), group Unplanned first by lane; otherwise sort purely by chosen column
     return [...filtered].sort((a, b) => {
@@ -322,7 +331,7 @@ export default function OrdersPage() {
       const patch = {
         customer: f.customer || null, status: f.status || null,
         origin: newOrigin || null, dest: newDest || null,
-        weight: Number(f.weight) || 0, pieces: Number(f.pieces) || 0,
+        weight: parseFloat(f.weight) || 0, pieces: parseInt(f.pieces) || 0,
         commodity: f.commodity || null,
         ready: f.ready || null, due: f.due || null,
       };

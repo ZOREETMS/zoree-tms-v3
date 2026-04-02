@@ -8,8 +8,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import useAlerts from '@zoree/shared/src/hooks/useAlerts';
-import { ALERT_SEVERITY, ALERT_STATUS } from '@zoree/shared/src/types/alerts';
+import useAlerts from '../../shared/hooks/useAlerts';
+import { ALERT_SEVERITY, ALERT_STATUS } from '../../shared/types/alerts';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';

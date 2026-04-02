@@ -756,12 +756,21 @@ export default function ShipmentsPage() {
           {rows.length === 0 ? (
             <tr><td colSpan={10} className="empty-state">No shipments found</td></tr>
           ) : rows.map((s) => (
-            <tr key={s.id}>
+            <tr key={s.id} style={s.bol_type === "CBOL" ? { background: "#FAFBFE" } : undefined}>
               <td>
-                <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(s); }}
-                   className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>
-                  {s.id}
-                </a>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {s.bol_type === "MBOL" && <span className="badge badge-blue" style={{ fontSize: 9, padding: "0 6px", height: 18, lineHeight: "18px" }}>MBOL</span>}
+                  {s.bol_type === "CBOL" && <span className="badge badge-teal" style={{ fontSize: 9, padding: "0 6px", height: 18, lineHeight: "18px" }}>CBOL</span>}
+                  <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(s); }}
+                     className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>
+                    {s.id}
+                  </a>
+                </div>
+                {s.bol_type === "CBOL" && s.master_shipment_id && (
+                  <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 1 }}>
+                    Master: {s.master_shipment_id}
+                  </div>
+                )}
               </td>
               <td className="text-sm">{s.origin || "—"}</td>
               <td className="text-sm">{s.dest || "—"}</td>

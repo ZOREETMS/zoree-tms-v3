@@ -8,8 +8,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useData } from '../../state/DataContext';
-import { useAnalytics } from '@zoree/shared/src/hooks/useAnalytics';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import { useAnalytics } from '../../shared/hooks/useAnalytics';
+import { formatCurrency } from '../../shared/utils/formatters';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';

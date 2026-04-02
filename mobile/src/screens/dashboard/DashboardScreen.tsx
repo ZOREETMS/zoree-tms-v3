@@ -12,8 +12,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
-import { computeKpis } from '@zoree/shared/src/services/analyticsService';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import { computeKpis } from '../../shared/services/analyticsService';
+import { formatCurrency } from '../../shared/utils/formatters';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';

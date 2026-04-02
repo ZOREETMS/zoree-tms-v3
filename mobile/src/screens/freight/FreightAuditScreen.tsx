@@ -9,10 +9,10 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFreightAudit } from '@zoree/shared/src/hooks/useFreightAudit';
-import { SEED_AUDIT_DATA, formatVariance } from '@zoree/shared/src/services/freightAuditService';
-import { AUDIT_STATUS, PAY_STATUS } from '@zoree/shared/src/types/freightAudit';
-import { formatCurrency } from '@zoree/shared/src/utils/formatters';
+import { useFreightAudit } from '../../shared/hooks/useFreightAudit';
+import { SEED_AUDIT_DATA, formatVariance } from '../../shared/services/freightAuditService';
+import { AUDIT_STATUS, PAY_STATUS } from '../../shared/types/freightAudit';
+import { formatCurrency } from '../../shared/utils/formatters';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';

@@ -9,9 +9,9 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useCarrierBids } from '@zoree/shared/src/hooks/useCarrierBids';
-import { SEED_BIDS } from '@zoree/shared/src/services/carrierBidsService';
-import { BID_STATUSES } from '@zoree/shared/src/types/carrierBids';
+import { useCarrierBids } from '../../shared/hooks/useCarrierBids';
+import { SEED_BIDS } from '../../shared/services/carrierBidsService';
+import { BID_STATUSES } from '../../shared/types/carrierBids';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';

@@ -6,8 +6,7 @@
   "workspaces": [
     "api",
     "frontend",
-    "shared",
-    "mobile"
+    "shared"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=api\" \"npm run dev --workspace=frontend\"",
