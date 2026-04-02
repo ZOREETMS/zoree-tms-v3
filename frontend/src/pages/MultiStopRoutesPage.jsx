@@ -1,6 +1,6 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DbApi } from "../lib/api";
+import { DbApi, MileageApi } from "../lib/api";
 
 const MODE_OPTIONS = ["TL", "LTL", "FTL"];
 const STATUS_OPTIONS = ["Active", "Inactive"];
@@ -20,14 +20,31 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function calcLegMiles(a, b) {
+  if (a.lat && a.lng && b.lat && b.lng) {
+    return Math.round(haversine(a.lat, a.lng, b.lat, b.lng) * 1.3);
+  }
+  return 0;
+}
+
+function calcLegTransitHours(miles) {
+  if (!miles) return 0;
+  const AVG_MPH = 50;
+  return Math.round((miles / AVG_MPH) * 10) / 10;
+}
+
+function formatTransitTime(hours) {
+  if (!hours) return "--";
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (h === 0) return `${m}m`;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 function calcTotalMiles(stops) {
   let total = 0;
   for (let i = 1; i < stops.length; i++) {
-    const a = stops[i - 1];
-    const b = stops[i];
-    if (a.lat && a.lng && b.lat && b.lng) {
-      total += haversine(a.lat, a.lng, b.lat, b.lng) * 1.3;
-    }
+    total += calcLegMiles(stops[i - 1], stops[i]);
   }
   return Math.round(total);
 }
@@ -55,6 +72,8 @@ const emptyRoute = () => ({
   carrier: "",
   max_weight: 44000,
   cost_override: "",
+  miles_override: "",
+  transit_days: "",
   status: "Active",
   notes: "",
   stops: [
@@ -169,7 +188,7 @@ function LocationPicker({ value, locations, onChange }) {
 }
 
 /* ── Stops Editor ──────────────────────────────────────────────── */
-function StopsEditor({ stops, locations, onChange }) {
+function StopsEditor({ stops, locations, onChange, legMiles = [], fetchingMiles = false }) {
   function updateStop(idx, field, val) {
     const next = stops.map((s, i) =>
       i === idx ? { ...s, [field]: val } : s
@@ -254,123 +273,187 @@ function StopsEditor({ stops, locations, onChange }) {
         </button>
       </div>
 
-      {stops.map((stop, idx) => (
-        <div
-          key={idx}
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            marginBottom: 8,
-            padding: "8px 10px",
-            background: idx === 0 ? "rgba(59,130,246,0.04)" : "#f8faff",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
-              background:
-                stop.type === "pickup" ? "var(--accent)" : "var(--green)",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 11,
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
-            {stop.sequence}
+      {stops.map((stop, idx) => {
+        const leg = idx > 0 ? (legMiles[idx - 1] || {}) : {};
+        const miles = leg.miles || 0;
+        const hours = calcLegTransitHours(miles);
+        return (
+          <div key={idx}>
+            {idx > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 0 6px 34px",
+                  fontSize: 11,
+                  color: "var(--text3)",
+                }}
+              >
+                <div
+                  style={{
+                    width: 2,
+                    height: 20,
+                    background: (stop.leg_miles || miles) > 0 ? "var(--accent)" : "var(--border2)",
+                    marginLeft: -22,
+                    borderRadius: 1,
+                  }}
+                />
+                <input
+                  type="number"
+                  value={stop.leg_miles || ""}
+                  onChange={(e) => updateStop(idx, "leg_miles", e.target.value)}
+                  placeholder={miles > 0 ? String(miles) : "miles"}
+                  style={{
+                    width: 70,
+                    padding: "3px 6px",
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    background: "#FAFBFC",
+                    height: 26,
+                    textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: 10, color: "var(--text3)" }}>mi</span>
+                <span style={{ color: "var(--border2)", margin: "0 2px" }}>|</span>
+                <input
+                  type="number"
+                  value={stop.leg_transit_hrs || ""}
+                  onChange={(e) => updateStop(idx, "leg_transit_hrs", e.target.value)}
+                  placeholder={hours > 0 ? String(hours) : "hrs"}
+                  step="0.5"
+                  style={{
+                    width: 60,
+                    padding: "3px 6px",
+                    fontSize: 11,
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    background: "#FAFBFC",
+                    height: 26,
+                    textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: 10, color: "var(--text3)" }}>hrs transit</span>
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                marginBottom: 0,
+                padding: "8px 10px",
+                background: idx === 0 ? "rgba(59,130,246,0.04)" : "#f8faff",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  background:
+                    stop.type === "pickup" ? "var(--accent)" : "var(--green)",
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {stop.sequence}
+              </div>
+
+              <select
+                value={stop.type}
+                onChange={(e) => updateStop(idx, "type", e.target.value)}
+                style={{
+                  width: 100,
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid var(--border2)",
+                  fontSize: 11,
+                  flexShrink: 0,
+                }}
+              >
+                {STOP_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </option>
+                ))}
+              </select>
+
+              <LocationPicker
+                value={stop.location}
+                locations={locations}
+                onChange={(data) => updateStopLocation(idx, data)}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 2,
+                  flexShrink: 0,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => moveStop(idx, -1)}
+                  disabled={idx === 0}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: idx === 0 ? "default" : "pointer",
+                    opacity: idx === 0 ? 0.3 : 1,
+                    fontSize: 14,
+                    padding: "2px 4px",
+                  }}
+                  title="Move up"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveStop(idx, 1)}
+                  disabled={idx === stops.length - 1}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: idx === stops.length - 1 ? "default" : "pointer",
+                    opacity: idx === stops.length - 1 ? 0.3 : 1,
+                    fontSize: 14,
+                    padding: "2px 4px",
+                  }}
+                  title="Move down"
+                >
+                  ▼
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeStop(idx)}
+                  disabled={stops.length <= 2}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: stops.length <= 2 ? "default" : "pointer",
+                    opacity: stops.length <= 2 ? 0.3 : 1,
+                    fontSize: 14,
+                    padding: "2px 4px",
+                    color: "var(--red)",
+                  }}
+                  title="Remove stop"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
           </div>
-
-          <select
-            value={stop.type}
-            onChange={(e) => updateStop(idx, "type", e.target.value)}
-            style={{
-              width: 100,
-              padding: "6px 8px",
-              borderRadius: 6,
-              border: "1px solid var(--border2)",
-              fontSize: 11,
-              flexShrink: 0,
-            }}
-          >
-            {STOP_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </select>
-
-          <LocationPicker
-            value={stop.location}
-            locations={locations}
-            onChange={(data) => updateStopLocation(idx, data)}
-          />
-
-          <div
-            style={{
-              display: "flex",
-              gap: 2,
-              flexShrink: 0,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => moveStop(idx, -1)}
-              disabled={idx === 0}
-              style={{
-                border: "none",
-                background: "transparent",
-                cursor: idx === 0 ? "default" : "pointer",
-                opacity: idx === 0 ? 0.3 : 1,
-                fontSize: 14,
-                padding: "2px 4px",
-              }}
-              title="Move up"
-            >
-              ▲
-            </button>
-            <button
-              type="button"
-              onClick={() => moveStop(idx, 1)}
-              disabled={idx === stops.length - 1}
-              style={{
-                border: "none",
-                background: "transparent",
-                cursor: idx === stops.length - 1 ? "default" : "pointer",
-                opacity: idx === stops.length - 1 ? 0.3 : 1,
-                fontSize: 14,
-                padding: "2px 4px",
-              }}
-              title="Move down"
-            >
-              ▼
-            </button>
-            <button
-              type="button"
-              onClick={() => removeStop(idx)}
-              disabled={stops.length <= 2}
-              style={{
-                border: "none",
-                background: "transparent",
-                cursor: stops.length <= 2 ? "default" : "pointer",
-                opacity: stops.length <= 2 ? 0.3 : 1,
-                fontSize: 14,
-                padding: "2px 4px",
-                color: "var(--red)",
-              }}
-              title="Remove stop"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -388,11 +471,60 @@ export default function MultiStopRoutesPage() {
   const [editRoute, setEditRoute] = useState(null);
   const [saving, setSaving] = useState(false);
   const [detailRoute, setDetailRoute] = useState(null);
+  const [legMiles, setLegMiles] = useState([]); // [{miles, origin, dest}] per leg
+  const [fetchingMiles, setFetchingMiles] = useState(false);
 
   function toast(text, type = "info") {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: "", type: "" }), 5000);
   }
+
+  // Fetch PC*MILER mileage for all legs whenever stops change
+  const fetchLegMiles = useCallback(async (stops) => {
+    if (!stops || stops.length < 2) { setLegMiles([]); return; }
+    const filled = stops.filter((s) => s.location && s.location.trim());
+    if (filled.length < 2) { setLegMiles([]); return; }
+
+    // Build pairs for consecutive stops that have locations
+    const pairs = [];
+    for (let i = 1; i < stops.length; i++) {
+      const origin = stops[i - 1].location?.trim();
+      const dest = stops[i].location?.trim();
+      if (origin && dest) {
+        pairs.push({ origin, dest });
+      } else {
+        pairs.push(null);
+      }
+    }
+
+    const validPairs = pairs.filter(Boolean);
+    if (validPairs.length === 0) { setLegMiles(pairs.map(() => ({ miles: 0 }))); return; }
+
+    setFetchingMiles(true);
+    try {
+      const resp = await MileageApi.bulk(validPairs);
+      const results = resp.results || [];
+      // Map back to full pairs array (including nulls)
+      let ri = 0;
+      const mapped = pairs.map((p) => {
+        if (!p) return { miles: 0 };
+        const r = results[ri++] || {};
+        return { miles: r.miles || 0, origin: r.origin, dest: r.dest };
+      });
+      setLegMiles(mapped);
+    } catch {
+      setLegMiles(pairs.map(() => ({ miles: 0 })));
+    } finally {
+      setFetchingMiles(false);
+    }
+  }, []);
+
+  // Debounced fetch when editRoute stops change
+  useEffect(() => {
+    if (!editRoute) { setLegMiles([]); return; }
+    const timer = setTimeout(() => fetchLegMiles(editRoute.stops), 500);
+    return () => clearTimeout(timer);
+  }, [editRoute?.stops, fetchLegMiles]);
 
   const filtered = useMemo(() => {
     let list = templates;
@@ -445,13 +577,14 @@ export default function MultiStopRoutesPage() {
     }
     setSaving(true);
     try {
-      const totalMiles = calcTotalMiles(editRoute.stops);
+      const autoMiles = legMiles.reduce((s, l) => s + (l.miles || 0), 0) || calcTotalMiles(editRoute.stops);
+      const totalMiles = editRoute.miles_override ? Number(editRoute.miles_override) : autoMiles;
       const payload = {
         ...editRoute,
         total_miles: totalMiles,
-        cost_override: editRoute.cost_override
-          ? Number(editRoute.cost_override)
-          : null,
+        transit_days: editRoute.transit_days ? Number(editRoute.transit_days) : null,
+        miles_override: editRoute.miles_override ? Number(editRoute.miles_override) : null,
+        cost_override: editRoute.cost_override ? Number(editRoute.cost_override) : null,
         stops: editRoute.stops,
       };
       await DbApi.upsert("route_templates", payload);
@@ -1053,6 +1186,8 @@ export default function MultiStopRoutesPage() {
                   stops={editRoute.stops}
                   locations={locations || []}
                   onChange={(stops) => setEditRoute({ ...editRoute, stops })}
+                  legMiles={legMiles}
+                  fetchingMiles={fetchingMiles}
                 />
               </div>
 
@@ -1083,50 +1218,64 @@ export default function MultiStopRoutesPage() {
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr 1fr",
                     gap: 14,
+                    marginBottom: 16,
                   }}
                 >
                   <div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text3)",
-                        fontWeight: 600,
-                        marginBottom: 4,
-                      }}
-                    >
-                      CALCULATED MILES
+                    <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, marginBottom: 4 }}>
+                      AUTO-CALCULATED MILES
                     </div>
-                    <div
-                      style={{
-                        fontSize: 20,
-                        fontWeight: 700,
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >
-                      {calcTotalMiles(editRoute.stops).toLocaleString()} mi
+                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                      {fetchingMiles ? "..." : (() => {
+                        const total = legMiles.reduce((s, l) => s + (l.miles || 0), 0);
+                        return total > 0 ? `${total.toLocaleString()} mi` : "0 mi";
+                      })()}
                     </div>
                   </div>
                   <div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text3)",
-                        fontWeight: 600,
-                        marginBottom: 4,
-                      }}
-                    >
+                    <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, marginBottom: 4 }}>
+                      AUTO TRANSIT EST.
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "var(--accent)" }}>
+                      {fetchingMiles ? "..." : (() => {
+                        const totalMiles = legMiles.reduce((s, l) => s + (l.miles || 0), 0);
+                        const totalHours = calcLegTransitHours(totalMiles);
+                        return totalHours > 0 ? formatTransitTime(totalHours) : "--";
+                      })()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, marginBottom: 4 }}>
                       ESTIMATED COST
                     </div>
-                    <div
-                      style={{
-                        fontSize: 20,
-                        fontWeight: 700,
-                        fontFamily: "'JetBrains Mono', monospace",
-                        color: "var(--green)",
-                      }}
-                    >
+                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "var(--green)" }}>
                       {fmt$(calcCost({ ...editRoute, cost_override: "" }))}
                     </div>
+                  </div>
+                </div>
+                <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                  <div className="form-group">
+                    <label className="form-label">Total Miles (override)</label>
+                    <input
+                      type="number"
+                      value={editRoute.miles_override || ""}
+                      onChange={(e) =>
+                        setEditRoute({ ...editRoute, miles_override: e.target.value })
+                      }
+                      placeholder="Auto if blank"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Transit Days</label>
+                    <input
+                      type="number"
+                      value={editRoute.transit_days || ""}
+                      onChange={(e) =>
+                        setEditRoute({ ...editRoute, transit_days: e.target.value })
+                      }
+                      placeholder="e.g., 2"
+                      step="0.5"
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Cost Override ($)</label>
@@ -1134,12 +1283,9 @@ export default function MultiStopRoutesPage() {
                       type="number"
                       value={editRoute.cost_override || ""}
                       onChange={(e) =>
-                        setEditRoute({
-                          ...editRoute,
-                          cost_override: e.target.value,
-                        })
+                        setEditRoute({ ...editRoute, cost_override: e.target.value })
                       }
-                      placeholder="Leave blank for auto"
+                      placeholder="Auto if blank"
                       step="0.01"
                     />
                   </div>

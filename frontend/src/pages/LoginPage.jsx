@@ -40,6 +40,7 @@ export default function LoginPage() {
           </svg>
           <div className="login-brand">zoree</div>
           <div className="login-subtitle">TMS PLATFORM</div>
+          <div className="login-tagline">Intelligent Transportation Management</div>
         </div>
 
         <form onSubmit={onSubmit}>
@@ -66,6 +67,10 @@ export default function LoginPage() {
             autoComplete="current-password"
             required
           />
+
+          <a className="login-forgot" href="#" onClick={(e) => { e.preventDefault(); alert("Password reset coming soon"); }}>
+            Forgot password?
+          </a>
 
           {error && <div className="login-error">{error}</div>}
 

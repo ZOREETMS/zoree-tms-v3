@@ -5,7 +5,9 @@
   "private": true,
   "workspaces": [
     "api",
-    "frontend"
+    "frontend",
+    "shared",
+    "mobile"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=api\" \"npm run dev --workspace=frontend\"",
