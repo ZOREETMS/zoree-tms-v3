@@ -266,7 +266,9 @@
       "Bash(cp frontend/src/utils/*.js shared/src/utils/)",
       "Bash(npm start:*)",
       "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -path */shared/src/api* -name *.ts)",
-      "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -path */shared/src/api* -type f)"
+      "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -path */shared/src/api* -type f)",
+      "Bash(find C:/Zoree/zoree-tms-v3/zoree-tms-v3 -name useCustomerPortal* -o -name useMessaging*)",
+      "Bash(ipconfig)"
     ]
   }
 }

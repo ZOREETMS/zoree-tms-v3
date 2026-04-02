@@ -5,10 +5,17 @@ import { Platform } from 'react-native';
  * Android emulator uses 10.0.2.2 to reach host machine's localhost.
  * iOS simulator can use localhost directly.
  */
+/**
+ * IMPORTANT: Replace this IP with your computer's local network IP.
+ * Find it by running: ipconfig (Windows) or ifconfig (Mac/Linux)
+ * Your iPhone must be on the same Wi-Fi network as your computer.
+ */
+const LOCAL_IP = '100.110.157.135';
+
 const DEV_API_BASE = Platform.select({
-  android: 'http://10.0.2.2:3001/api',
-  ios: 'http://localhost:3001/api',
-  default: 'http://localhost:3001/api',
+  android: `http://10.0.2.2:3001/api`,
+  ios: `http://${LOCAL_IP}:3001/api`,
+  default: `http://${LOCAL_IP}:3001/api`,
 });
 
 const PROD_API_BASE = 'https://api.zoree.com/api'; // Replace with production URL
