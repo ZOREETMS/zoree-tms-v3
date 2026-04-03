@@ -117,7 +117,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div className="modal-header">
           <div>
             <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1 }}>SHIPMENT DETAILS</div>
@@ -125,7 +125,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+        <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
 
           {/* Status bar */}
           <div style={{ padding: "14px 20px", background: "#f8faff", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -317,7 +317,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/carriers"); }}>🔄 Change Carrier</button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/dock-scheduling"); }}>🚪 Dock schedule</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/documents"); }}>📄 Documents</button>
+          <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onNavigate(`/documents?shipmentId=${encodeURIComponent(ds.id)}`); onClose(); }}>📄 Documents</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/messaging`); }}>📧 Contact Carrier</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/messaging"); }}>📨 Send to WMS</button>
         </div>
@@ -420,11 +420,12 @@ export default function ShipmentsPage() {
     if (statusFilter !== "All") list = list.filter((s) => s._displayStatus === statusFilter);
     if (modeFilter !== "All") list = list.filter((s) => (s.mode || "").toUpperCase() === modeFilter);
     if (q.trim()) {
-      const t = q.toLowerCase().trim();
-      list = list.filter((s) =>
-        [s.id, s._carrier, s.origin, s.dest, s.mode, s.status, s._displayStatus]
-          .some((v) => String(v || "").toLowerCase().includes(t))
-      );
+      const terms = q.split(",").map((s) => s.toLowerCase().trim()).filter(Boolean);
+      list = list.filter((s) => {
+        const fields = [s.id, s._carrier, s.origin, s.dest, s.mode, s.status, s._displayStatus]
+          .map((v) => String(v || "").toLowerCase());
+        return terms.some((t) => fields.some((f) => f.includes(t)));
+      });
     }
     return [...list].sort((a, b) => {
       const av = String((sortCol === "status" ? a._displayStatus : a[sortCol]) || "").toLowerCase();

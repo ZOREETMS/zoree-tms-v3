@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { DbApi, OrdersApi, BulkPlanApi } from "../lib/api";
+import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 
 const STATUS_BADGES = {
@@ -65,7 +65,7 @@ function constraintBadges(o) {
 }
 
 export default function OrdersPage() {
-  const { orders, shipments, carriers, setData, refreshData } = useOutletContext();
+  const { orders, shipments, carriers, setData, refreshData, routeTemplates } = useOutletContext();
   const [itemMaster, setItemMaster] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -117,6 +117,15 @@ export default function OrdersPage() {
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}
   const DEMO_USERS = ["Sridhar (Dispatcher)", "Tulasi (Admin)", "System (Auto)"];
+
+  // Auto-sync weight/pieces from line items into edit form
+  useEffect(() => {
+    if (detailTab === "edit" && detailLines.length > 0) {
+      const totalWeight = Math.round(detailLines.reduce((s, l) => s + (parseFloat(l.total_weight ?? l.totalWt) || 0), 0) * 10000) / 10000;
+      const totalPieces = detailLines.reduce((s, l) => s + (parseInt(l.qty_ordered ?? l.qty) || 0), 0);
+      setEditForm((f) => ({ ...f, weight: totalWeight || f.weight, pieces: totalPieces || f.pieces }));
+    }
+  }, [detailLines, detailTab]);
 
   /* ── New Order Modal state ── */
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -297,6 +306,12 @@ export default function OrdersPage() {
       await OrdersApi.saveLines(detailOrder.id, detailLines);
       toast(`Saved lines for ${detailOrder.id}`, "success");
       await refreshData();
+      // Re-fetch order+lines so the Details tab header shows updated weight/pieces
+      const full = await OrdersApi.full(detailOrder.id);
+      if (full) {
+        setDetailOrder(full);
+        setDetailLines(Array.isArray(full.lines) ? full.lines : []);
+      }
     } finally { setDetailBusy(false); }
   }
 
@@ -339,13 +354,8 @@ export default function OrdersPage() {
       if (f.originZip) patch.origin_zip = f.originZip;
       if (f.destZip) patch.dest_zip = f.destZip;
       patch.notes = f.notes || null;
-      // If there are line items, auto-compute weight/pieces from them (matches old HTML behavior)
-      if (detailLines.length > 0) {
-        const linesWeight = detailLines.reduce((s, l) => s + (parseFloat(l.total_weight || l.totalWt || 0)), 0);
-        const linesPieces = detailLines.reduce((s, l) => s + (parseInt(l.qty_ordered || l.qty || 0)), 0);
-        if (linesWeight > 0) patch.weight = linesWeight;
-        if (linesPieces > 0) patch.pieces = linesPieces;
-      }
+      // Weight and pieces are taken directly from the form — user's input always wins.
+      // Line items display their own totals separately for reference.
       await DbApi.patch("orders", o.id, patch);
       // Log to history (only if changes detected)
       if (changes.length > 0) {
@@ -378,7 +388,7 @@ export default function OrdersPage() {
       id: newId, customer: f.customer || "Customer",
       origin: origin || "Chicago, IL", dest: dest || "Dallas, TX",
       origin_zip: f.originZip || null, dest_zip: f.destZip || null,
-      weight: autoWeight || 10000, pieces: autoPieces || 1,
+      weight: parseFloat(f.weight) || autoWeight || 0, pieces: parseInt(f.pieces) || autoPieces || 0,
       commodity: f.commodity || "General", ready: f.ready || null, due: f.due || null,
       status: "Unplanned",
       preferred_carrier: f.preferredCarrier || null,
@@ -458,14 +468,192 @@ export default function OrdersPage() {
     return CITY_ZIPS[city] || "";
   };
 
+  /* ── Create shipments directly from a multi-stop route ── */
+  async function createShipmentsFromRoute(route, ordersList) {
+    const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
+    const stops = Array.isArray(route.stops) ? route.stops : [];
+    const pickups = stops.filter((s) => s.type === "pickup");
+    const deliveries = stops.filter((s) => s.type === "delivery");
+    const firstPickup = pickups[0] || stops[0];
+    const lastDelivery = deliveries[deliveries.length - 1] || stops[stops.length - 1];
+    const totalCost = parseFloat(route.cost_override) || 0;
+    const totalMiles = parseFloat(route.total_miles) || 0;
+
+    // Auto-assign orders to delivery stops by matching destination
+    const assignments = {};
+    for (const d of deliveries) {
+      const dCity = normalize(d.location || d.city);
+      const matched = ordersList.filter((o) => {
+        const oCity = normalize(o.dest);
+        return oCity.includes(dCity) || dCity.includes(oCity);
+      });
+      if (matched.length > 0) {
+        const key = `${(firstPickup.stop_seq || 1)}.${d.stop_seq || d.sequence}`;
+        assignments[key] = { delivery: d, orders: matched };
+      }
+    }
+
+    if (Object.keys(assignments).length === 0) {
+      toast("Could not match orders to route stops", "error");
+      return;
+    }
+
+    setBusyId("multi-stop");
+    try {
+      const genId = () => `SHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const masterId = genId();
+      const allOrderIds = ordersList.map((o) => o.id);
+      const today = new Date().toISOString().slice(0, 10);
+      const readyDates = ordersList.map((o) => o.ready).filter(Boolean).sort();
+      const dueDates = ordersList.map((o) => o.due).filter(Boolean).sort();
+      // Pickup can't be in the past — use today or latest ready date, whichever is later
+      const earliestReady = readyDates[readyDates.length - 1] || today;
+      const pickupDate = earliestReady > today ? earliestReady : today;
+      const deliveryDate = dueDates[dueDates.length - 1] || null;
+
+      // Create MBOL
+      const masterShipment = {
+        id: masterId, carrier: route.carrier, mode: route.mode || "TL",
+        origin: firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`,
+        dest: lastDelivery.location || `${lastDelivery.city}, ${lastDelivery.state}`,
+        weight: ordersList.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
+        pieces: ordersList.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
+        status: "Planned", total_cost: totalCost, order_ids: allOrderIds,
+        miles: totalMiles, bol_type: "MBOL", route_template_id: route.id,
+        pickup_date: pickupDate, delivery_date: deliveryDate,
+        service_level: route.service_level || "Standard",
+      };
+      await DbApi.upsert("shipments", masterShipment);
+
+      // Create CBOLs and update orders
+      // Calculate leg miles from stops, or fetch via PC*Miler
+      const cbolKeys = Object.keys(assignments);
+      let totalLegMiles = 0;
+      const cbolMilesMap = {};
+      for (const [key, { delivery }] of Object.entries(assignments)) {
+        const pIdx = stops.indexOf(firstPickup);
+        const dIdx = stops.indexOf(delivery);
+        let miles = 0;
+        for (let i = pIdx + 1; i <= dIdx; i++) miles += parseFloat(stops[i].leg_miles) || 0;
+        cbolMilesMap[key] = miles;
+        totalLegMiles += miles;
+      }
+      // If no leg miles on stops, fetch from PC*Miler
+      if (totalLegMiles === 0 && cbolKeys.length > 0) {
+        try {
+          const pairs = Object.entries(assignments).map(([, { delivery }]) => ({
+            origin: firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`,
+            dest: delivery.location || `${delivery.city}, ${delivery.state}`,
+          }));
+          const mileageRes = await MileageApi.bulk(pairs);
+          const results = Array.isArray(mileageRes?.results) ? mileageRes.results : (Array.isArray(mileageRes) ? mileageRes : []);
+          cbolKeys.forEach((key, idx) => {
+            const mi = parseFloat(results[idx]?.miles || results[idx]?.distance) || 0;
+            cbolMilesMap[key] = mi;
+            totalLegMiles += mi;
+          });
+        } catch { /* PC*Miler unavailable — fall through to equal split */ }
+      }
+      // If still 0, split cost equally
+      const equalSplit = totalLegMiles === 0;
+
+      let cbolCount = 0;
+      const createdCbols = [];
+      for (const [key, { delivery, orders: cbolOrders }] of Object.entries(assignments)) {
+        const childId = `${masterId}.${key}`;
+        const legMiles = cbolMilesMap[key] || 0;
+        const cbolCost = equalSplit
+          ? Math.round((totalCost / cbolKeys.length) * 100) / 100
+          : Math.round((legMiles / totalLegMiles) * totalCost * 100) / 100;
+
+        const cbolOrigin = firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`;
+        const cbolDest = delivery.location || `${delivery.city}, ${delivery.state}`;
+        await DbApi.upsert("shipments", {
+          id: childId, carrier: route.carrier, mode: route.mode || "TL",
+          origin: cbolOrigin, dest: cbolDest,
+          weight: cbolOrders.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
+          pieces: cbolOrders.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
+          status: "Planned", total_cost: cbolCost, order_ids: cbolOrders.map((o) => o.id),
+          miles: legMiles, bol_type: "CBOL", master_shipment_id: masterId,
+          stop_from: key.split(".")[0], stop_to: key.split(".")[1],
+          route_template_id: route.id,
+          pickup_date: pickupDate, delivery_date: deliveryDate,
+          service_level: route.service_level || "Standard",
+        });
+        createdCbols.push({ id: childId, origin: cbolOrigin, dest: cbolDest, cost: cbolCost, miles: legMiles, orders: cbolOrders });
+
+        for (const ord of cbolOrders) {
+          await DbApi.patch("orders", ord.id, { status: "Planned", shipment_id: childId });
+        }
+        cbolCount++;
+      }
+
+      // Build full route path from stops
+      const routePath = stops.map((s) => (s.city || (s.location || "").split(",")[0] || "").trim()).filter(Boolean).join(" → ");
+
+      setPlanSummary({
+        isMultiStop: true,
+        masterShipment: { ...masterShipment, routePath },
+        childShipments: createdCbols,
+        ordersUpdated: ordersList.length,
+        totalCost,
+        carrier: route.carrier,
+        mode: route.mode || "TL",
+        siblings: ordersList,
+      });
+      await refreshData();
+    } catch (err) {
+      toast(`Multi-stop plan failed: ${err.message}`, "error");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   /* ── Open Plan Confirmation Modal ── */
-  async function openPlanModal(orderId, planGroup = false) {
+  async function openPlanModal(orderId, planGroup = false, selectedIds = null) {
     const o = orders.find((x) => x.id === orderId);
     if (!o || o.status !== "Unplanned") return;
-    // planGroup=true: consolidate all orders on same lane. false: just this order.
-    const sibs = planGroup
-      ? orders.filter((x) => x.status === "Unplanned" && x.origin === o.origin && x.dest === o.dest)
-      : [o];
+    // selectedIds: explicit list from multi-select. planGroup: auto-consolidate same lane. default: single order.
+    const sibs = selectedIds
+      ? orders.filter((x) => selectedIds.has(x.id) && x.status === "Unplanned")
+      : planGroup
+        ? orders.filter((x) => x.status === "Unplanned" && x.origin === o.origin && x.dest === o.dest)
+        : [o];
+
+    // If multiple orders have different origins or destinations, redirect to Multi-Stop Routes
+    if (sibs.length > 1) {
+      const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
+      const origins = new Set(sibs.map((x) => normalize(x.origin)));
+      const dests = new Set(sibs.map((x) => normalize(x.dest)));
+      if (origins.size > 1 || dests.size > 1) {
+        // Fetch route templates fresh to ensure we have latest data
+        let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
+        if (templates.length === 0) {
+          try {
+            const freshTemplates = await DbApi.routeTemplates();
+            templates = Array.isArray(freshTemplates) ? freshTemplates : [];
+          } catch { /* ignore */ }
+        }
+        const matchedRoute = templates.find((t) => {
+          if (!t.carrier) return false;
+          const tStops = Array.isArray(t.stops) ? t.stops : [];
+          const tPickups = tStops.filter((s) => s.type === "pickup").map((s) => normalize(s.location || s.city));
+          const tDeliveries = tStops.filter((s) => s.type === "delivery").map((s) => normalize(s.location || s.city));
+          return tPickups.some((p) => [...origins].some((oo) => oo.includes(p) || p.includes(oo)))
+            && [...dests].every((d) => tDeliveries.some((td) => td.includes(d) || d.includes(td)));
+        });
+        if (matchedRoute) {
+          // Create shipments directly from the route — no Execute modal needed
+          await createShipmentsFromRoute(matchedRoute, sibs);
+          return;
+        }
+        // No matching route — redirect to multi-stop page to create one
+        const ids = sibs.map((x) => x.id).join(",");
+        window.location.href = `/multi-stop-routes?orderIds=${encodeURIComponent(ids)}`;
+        return;
+      }
+    }
+
     const totalWeight = sibs.reduce((s, x) => s + Number(x.weight || 0), 0);
     const totalPieces = sibs.reduce((s, x) => s + Number(x.pieces || 0), 0);
     const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
@@ -484,9 +672,20 @@ export default function OrdersPage() {
     try {
       const rateRes = await BulkPlanApi.rate([lane], "cost");
       const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
-      const quotes = results[0]?.quotes || [];
+      const rawQuotes = results[0]?.quotes || [];
+      // Sort: feasible (on-time) first, then by cost ascending
+      const readyD = sibs.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
+      const dueD = sibs.map((s) => s.due).filter(Boolean).sort()[0] || "";
+      const sortedQuotes = [...rawQuotes].sort((a, b) => {
+        const datesA = calcDates(a, dueD, readyD);
+        const datesB = calcDates(b, dueD, readyD);
+        const lateA = datesA.warning ? 1 : 0;
+        const lateB = datesB.warning ? 1 : 0;
+        if (lateA !== lateB) return lateA - lateB; // on-time first
+        return (a.totalCharge || 0) - (b.totalCharge || 0); // then cheapest
+      });
       const bestQuote = results[0]?.bestQuote || null;
-      setPlanModal((prev) => prev ? { ...prev, quotes, bestQuote, busy: false } : null);
+      setPlanModal((prev) => prev ? { ...prev, quotes: sortedQuotes, bestQuote, busy: false } : null);
     } catch (err) {
       setPlanModal((prev) => prev ? { ...prev, busy: false, error: err.message } : null);
     }
@@ -796,7 +995,7 @@ export default function OrdersPage() {
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button onClick={() => setSelectedOrders(new Set())} style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.4)", background: "rgba(255,255,255,.15)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✕ Clear</button>
             {selectedStats.unplannedCount > 0 && (
-              <button onClick={() => { const first = orders.find((o) => selectedOrders.has(o.id) && o.status === "Unplanned"); if (first) openPlanModal(first.id, true); }}
+              <button onClick={() => { const first = orders.find((o) => selectedOrders.has(o.id) && o.status === "Unplanned"); if (first) openPlanModal(first.id, false, selectedOrders); }}
                 style={{ padding: "5px 14px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                 ⚡ Plan Selected
               </button>
@@ -1299,7 +1498,8 @@ export default function OrdersPage() {
                     </div>
                   )}
                   {error && <div style={{ padding: "10px 14px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, color: "#991b1b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
-                  {quotes.filter((q) => q.transitDays > 0).map((quote, i) => {
+                  {quotes.map((quote, i) => {
+                    if (!(quote.transitDays > 0)) return null;
                     const isSelected = selectedIdx === i;
                     const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
                     const svcTag = isExp ? "EXP" : "STD";
@@ -1327,11 +1527,11 @@ export default function OrdersPage() {
                             {isSelected && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "rgba(16,185,129,.12)", color: "#059669" }}>✓ SELECTED</span>}
                             {isCzarlite && <span style={{ fontSize: 9, background: "rgba(99,102,241,.1)", color: "#4f46e5", padding: "1px 6px", borderRadius: 8, fontWeight: 600 }}>CZARLITE</span>}
                           </div>
-                          <div style={{ display: "flex", gap: 12, marginTop: 4, marginLeft: 0, fontSize: 10, color: "var(--text3)" }}>
-                            <span>🚚 {dates.transit}D Transit</span>
+                          <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 10, color: "var(--text3)", whiteSpace: "nowrap", flexWrap: "nowrap", overflow: "hidden" }}>
+                            <span>🚚 {dates.transit}D</span>
                             {quote.miles && <span>📏 {quote.miles.toLocaleString()} mi{quote.pcmilerMiles ? " (PC*MILER)" : ""}</span>}
-                            <span>📦 Pickup: {dates.pickup}</span>
-                            <span>🏁 Delivery: {dates.delivery}</span>
+                            <span>📦 {dates.pickup}</span>
+                            <span>🏁 {dates.delivery}</span>
                           </div>
                           {dates.warning && <div style={{ marginTop: 3, fontSize: 9, color: "#dc2626", fontWeight: 600 }}>⚠️ {dates.warning}</div>}
                         </div>
@@ -1358,6 +1558,82 @@ export default function OrdersPage() {
 
       {/* ═══ PLAN SUMMARY MODAL (after shipment creation) ═══ */}
       {planSummary && (() => {
+        // Multi-stop summary
+        if (planSummary.isMultiStop) {
+          const { masterShipment, childShipments, ordersUpdated, totalCost, carrier, mode, siblings } = planSummary;
+          const totalShipments = 1 + childShipments.length;
+          return (
+          <div className="modal-overlay" onClick={() => setPlanSummary(null)}>
+            <div className="modal-card" style={{ width: 640, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ background: "linear-gradient(135deg,#1e40af,#6366f1)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete</div>
+                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>Multi-Stop Shipment Created</div>
+              </div>
+              <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
+                {/* KPI cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+                  <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(99,102,241,.2)", borderRadius: 12 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "#6366f1" }}>{totalShipments}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid var(--border)", borderRadius: 12 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26 }}>{ordersUpdated}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Orders Planned</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12 }}>
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)" }}>{fmt$(totalCost)}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Total Est. Cost</div>
+                  </div>
+                </div>
+
+                {/* MBOL Card */}
+                <div style={{ border: "2px solid rgba(99,102,241,.25)", borderRadius: 12, padding: "16px 18px", marginBottom: 16, background: "rgba(99,102,241,.03)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span className="badge badge-blue" style={{ fontSize: 10 }}>MBOL</span>
+                    <a href={`/shipments?id=${masterShipment.id}`} onClick={(e) => { e.preventDefault(); setPlanSummary(null); window.location.href = `/shipments?id=${masterShipment.id}`; }} style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)", textDecoration: "none", cursor: "pointer" }}>{masterShipment.id}</a>
+                    <span className="badge badge-green" style={{ fontSize: 10 }}>Planned</span>
+                    <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "var(--green)" }}>{fmt$(totalCost)}</span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>📍 {masterShipment.routePath}</div>
+                  <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)" }}>
+                    <span>{carrier} · {mode}</span>
+                    <span>{(masterShipment.miles || 0).toLocaleString()} mi</span>
+                    <span>{(masterShipment.weight || 0).toLocaleString()} lbs</span>
+                  </div>
+                </div>
+
+                {/* CBOL Cards */}
+                {childShipments.map((cbol, idx) => (
+                  <div key={cbol.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 18px", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span className="badge badge-teal" style={{ fontSize: 10 }}>CBOL</span>
+                      <a href={`/shipments?id=${cbol.id}`} onClick={(e) => { e.preventDefault(); setPlanSummary(null); window.location.href = `/shipments?id=${cbol.id}`; }} style={{ fontWeight: 600, fontSize: 13, color: "var(--accent)", textDecoration: "none", cursor: "pointer" }}>{cbol.id}</a>
+                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "var(--green)" }}>{fmt$(cbol.cost)}</span>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>📍 {(cbol.origin || "").split(",")[0]} → {(cbol.dest || "").split(",")[0]}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>{(cbol.miles || 0).toLocaleString()} mi</div>
+                    {/* Assigned orders */}
+                    {cbol.orders.map((o) => (
+                      <div key={o.id} style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--text2)", padding: "2px 0" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--accent)" }}>{o.id}</span>
+                        <span>{o.customer}</span>
+                        <span>{o.commodity || "General"}</span>
+                        <span style={{ marginLeft: "auto", fontWeight: 600 }}>{Number(o.weight || 0).toLocaleString()} lbs</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setPlanSummary(null)}>Close</button>
+                <button className="btn btn-primary" onClick={() => { setPlanSummary(null); window.location.href = "/shipments"; }}>📦 View All Shipments</button>
+              </div>
+            </div>
+          </div>
+          );
+        }
+
+        // Single shipment summary (existing)
         const { shipments, ordersUpdated, totalCost, carrier, mode, lane, siblings, dates } = planSummary;
         const shp = shipments[0];
         return (

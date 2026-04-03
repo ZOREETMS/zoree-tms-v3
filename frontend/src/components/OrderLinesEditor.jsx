@@ -4,6 +4,9 @@ function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
+function safeMultiply(a, b) {
+  return Math.round(a * b * 10000) / 10000;
+}
 
 /**
  * OrderLinesEditor
@@ -15,35 +18,35 @@ export default function OrderLinesEditor({ orderId, lines, onChange, onSave, onC
   const [localError, setLocalError] = useState("");
 
   const totals = useMemo(() => {
-    const totalWeight = lines.reduce((sum, l) => sum + toNumber(l.total_weight || l.totalWt), 0);
-    const totalPieces = lines.reduce((sum, l) => sum + toNumber(l.qty_ordered || l.qty), 0);
+    const totalWeight = Math.round(lines.reduce((sum, l) => sum + toNumber(l.total_weight ?? l.totalWt), 0) * 10000) / 10000;
+    const totalPieces = lines.reduce((sum, l) => sum + toNumber(l.qty_ordered ?? l.qty), 0);
     return { totalWeight, totalPieces };
   }, [lines]);
 
   function selectItem(index, itemId) {
     const item = items.find((it) => it.id === itemId);
-    const unitWt = parseFloat(item?.weight_unit || item?.weight_per_unit || item?.weightUnit || 0);
-    const qty = toNumber(lines[index]?.qty_ordered || lines[index]?.qty, 1);
+    const unitWt = parseFloat(item?.weight_unit ?? item?.weight_per_unit ?? item?.weightUnit ?? 0);
+    const qty = toNumber(lines[index]?.qty_ordered ?? lines[index]?.qty, 1);
     const next = lines.map((line, i) =>
       i === index
-        ? { ...line, item_id: itemId, description: item ? `${item.id} — ${(item.description || item.desc || "").slice(0, 30)}` : "", unit_weight: unitWt, total_weight: qty * unitWt }
+        ? { ...line, item_id: itemId, description: item ? `${item.id} — ${(item.description || item.desc || "").slice(0, 30)}` : "", unit_weight: unitWt, total_weight: safeMultiply(qty, unitWt) }
         : line
     );
     onChange(next);
   }
 
   function updateQty(index, qty) {
-    const unitWt = toNumber(lines[index]?.unit_weight || lines[index]?.unitWt);
+    const unitWt = toNumber(lines[index]?.unit_weight ?? lines[index]?.unitWt);
     const next = lines.map((line, i) =>
-      i === index ? { ...line, qty_ordered: qty, total_weight: qty * unitWt } : line
+      i === index ? { ...line, qty_ordered: qty, total_weight: safeMultiply(qty, unitWt) } : line
     );
     onChange(next);
   }
 
   function updateUnitWeight(index, unitWt) {
-    const qty = toNumber(lines[index]?.qty_ordered || lines[index]?.qty, 1);
+    const qty = toNumber(lines[index]?.qty_ordered ?? lines[index]?.qty, 1);
     const next = lines.map((line, i) =>
-      i === index ? { ...line, unit_weight: unitWt, total_weight: qty * unitWt } : line
+      i === index ? { ...line, unit_weight: unitWt, total_weight: safeMultiply(qty, unitWt) } : line
     );
     onChange(next);
   }
@@ -97,7 +100,7 @@ export default function OrderLinesEditor({ orderId, lines, onChange, onSave, onC
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{desc}</td>
                   <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono',monospace" }}>{line.qty_ordered ?? line.qty ?? 0}</td>
                   <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono',monospace" }}>{line.unit_weight ?? line.unitWt ?? 0}</td>
-                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: "var(--accent)" }}>{toNumber(line.total_weight || line.totalWt)} lbs</td>
+                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: "var(--accent)" }}>{toNumber(line.total_weight ?? line.totalWt)} lbs</td>
                 </tr>
               );
             })}
@@ -136,9 +139,9 @@ export default function OrderLinesEditor({ orderId, lines, onChange, onSave, onC
         ) : (
           <>
             {lines.map((line, index) => {
-              const qty = toNumber(line.qty_ordered || line.qty, 1);
-              const unitWt = toNumber(line.unit_weight || line.unitWt);
-              const totalWt = toNumber(line.total_weight || line.totalWt);
+              const qty = toNumber(line.qty_ordered ?? line.qty, 1);
+              const unitWt = toNumber(line.unit_weight ?? line.unitWt);
+              const totalWt = toNumber(line.total_weight ?? line.totalWt);
               const currentItemId = line.item_id || line.itemId || "";
               return (
                 <div key={`${orderId}-${index}`} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 28px", gap: 8, alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
@@ -148,7 +151,7 @@ export default function OrderLinesEditor({ orderId, lines, onChange, onSave, onC
                       <option key={it.id} value={it.id}>{it.id} — {(it.description || it.desc || "").slice(0, 22)}</option>
                     ))}
                   </select>
-                  <input type="number" value={qty} min={1} onChange={(e) => updateQty(index, Number(e.target.value || 0))} style={inputStyle} />
+                  <input type="number" value={qty || ""} min={1} onChange={(e) => updateQty(index, Number(e.target.value) || 0)} style={inputStyle} />
                   <input type="number" value={unitWt} readOnly style={{ ...inputStyle, background: "#f8faff", color: "var(--text3)" }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>{totalWt > 0 ? `${totalWt} lbs` : "— lbs"}</span>
                   <button onClick={() => removeLine(index)} disabled={busy} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 16, padding: "2px 6px" }}>✕</button>

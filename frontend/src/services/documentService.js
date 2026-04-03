@@ -13,7 +13,7 @@ export const SEED_DOCUMENTS = [
   { id: "POD-2024-1843", type: "POD", ship: "SHP-2024-1843", carrier: "FedEx Freight", generated: "2026-03-04", status: "Received" },
 ];
 
-export function generateBOLForShipment(shipment) {
+export function generateBOLForShipment(shipment, orders, lineItems) {
   return {
     id: "BOL-" + Date.now(),
     type: "BOL",
@@ -21,6 +21,18 @@ export function generateBOLForShipment(shipment) {
     carrier: shipment.carrier || "",
     generated: new Date().toISOString().split("T")[0],
     status: "Pending",
+    // Shipment details for BOL viewer
+    origin: shipment.origin || "",
+    dest: shipment.dest || "",
+    weight: shipment.weight || 0,
+    pieces: shipment.pieces || 0,
+    mode: shipment.mode || "",
+    pickupDate: shipment.pickup_date || "",
+    deliveryDate: shipment.delivery_date || "",
+    bolType: shipment.bol_type || "BOL",
+    orderIds: shipment.order_ids || [],
+    orders: orders || [],
+    lineItems: lineItems || [],
   };
 }
 

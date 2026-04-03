@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import useDocuments from "../hooks/useDocuments";
 import DocumentStats from "../components/documents/DocumentStats";
 import DocumentTable from "../components/documents/DocumentTable";
@@ -7,7 +7,13 @@ import DocumentViewerModal from "../components/documents/DocumentViewerModal";
 
 export default function DocumentsPage() {
   const { shipments = [], orders = [], carriers = [] } = useOutletContext();
-  const { documents, stats, typeFilter, setTypeFilter, generateBOL, findDocById } = useDocuments(shipments);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const shipmentIdFilter = searchParams.get("shipmentId") || "";
+  const { documents, stats, typeFilter, setTypeFilter, generateBOL, findDocById } = useDocuments(shipments, orders);
+  const filteredDocs = useMemo(() => {
+    if (!shipmentIdFilter) return documents;
+    return documents.filter((d) => d.ship === shipmentIdFilter);
+  }, [documents, shipmentIdFilter]);
   const [viewerDoc, setViewerDoc] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -16,8 +22,8 @@ export default function DocumentsPage() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  function handleGenerateBOL() {
-    const result = generateBOL();
+  async function handleGenerateBOL() {
+    const result = await generateBOL(shipmentIdFilter || undefined);
     showToast(result.message, result.success ? "success" : "warning");
   }
 
@@ -44,7 +50,11 @@ export default function DocumentsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Documents & BOL</div>
-          <div className="page-sub">Bill of Lading, POD, commercial invoices, and compliance docs</div>
+          <div className="page-sub">
+            {shipmentIdFilter
+              ? <>Documents for <strong>{shipmentIdFilter}</strong> · <a href="/documents" style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "none" }} onClick={(e) => { e.preventDefault(); setSearchParams({}); }}>View All</a></>
+              : "Bill of Lading, POD, commercial invoices, and compliance docs"}
+          </div>
         </div>
         <div className="header-actions">
           <button className="btn btn-primary btn-sm" onClick={handleGenerateBOL}>
@@ -56,7 +66,7 @@ export default function DocumentsPage() {
       <div className="page-content">
         <DocumentStats stats={stats} />
         <DocumentTable
-          documents={documents}
+          documents={filteredDocs}
           typeFilter={typeFilter}
           onTypeFilterChange={setTypeFilter}
           onView={handleView}

@@ -14,7 +14,32 @@ function token() {
   return localStorage.getItem("zoree_token") || "";
 }
 
-async function api(path, options = {}) {
+let _refreshing = null;
+async function tryRefreshToken() {
+  if (_refreshing) return _refreshing;
+  const rt = localStorage.getItem("zoree_refresh_token");
+  if (!rt) return false;
+  _refreshing = fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken: rt }),
+  })
+    .then(async (r) => {
+      if (!r.ok) return false;
+      const d = await r.json();
+      if (d.token) {
+        localStorage.setItem("zoree_token", d.token);
+        if (d.refreshToken) localStorage.setItem("zoree_refresh_token", d.refreshToken);
+        return true;
+      }
+      return false;
+    })
+    .catch(() => false)
+    .finally(() => { _refreshing = null; });
+  return _refreshing;
+}
+
+async function api(path, options = {}, _retried = false) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -23,6 +48,11 @@ async function api(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  // Auto-refresh on 401 and retry once
+  if (res.status === 401 && !_retried && !path.includes("/auth/")) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) return api(path, options, true);
+  }
   const text = await res.text();
   let data = {};
   try {

@@ -41,6 +41,7 @@ export function AuthProvider({ children }) {
       async login(email, password) {
         const data = await AuthApi.login(email, password);
         localStorage.setItem("zoree_token", data.token);
+        localStorage.setItem("zoree_refresh_token", data.refresh_token || "");
         localStorage.setItem("zoree_user", JSON.stringify(data.user || null));
         setUser(data.user || null);
         return data;

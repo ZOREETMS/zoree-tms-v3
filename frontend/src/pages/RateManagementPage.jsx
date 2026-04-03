@@ -516,8 +516,8 @@ export default function RateManagementPage() {
                     key={r.id || idx}
                     style={r.czarlite ? { borderLeft: "3px solid #6366f1", background: "rgba(99,102,241,.03)" } : undefined}
                   >
-                    <td>
-                      <span className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>
+                    <td style={{ whiteSpace: "nowrap", minWidth: 220 }}>
+                      <span className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 12 }}>
                         {buildLaneId(r)}
                       </span>
                     </td>
