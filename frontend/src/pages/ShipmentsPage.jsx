@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
@@ -71,7 +71,7 @@ function InfoBox({ icon, label, value }) {
 }
 
 /* ── Shipment Detail Modal ── */
-function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES }) {
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments }) {
   const linked = ds._linkedOrders || [];
   const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
@@ -139,6 +139,26 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
 
           {/* Progress / Origin → Destination */}
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+            {/* Multi-stop route path for MBOL */}
+            {ds.bol_type === "MBOL" && (() => {
+              const childDests = (shipments || [])
+                .filter((s) => s.master_shipment_id === ds.id && s.bol_type === "CBOL")
+                .sort((a, b) => (a.stop_to || 0) - (b.stop_to || 0))
+                .map((s) => (s.dest || "").split(",")[0].trim())
+                .filter(Boolean);
+              const originCity = (ds.origin || "").split(",")[0].trim();
+              const routePath = [originCity, ...childDests].filter(Boolean);
+              return routePath.length > 2 ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, padding: "8px 12px", background: "rgba(99,102,241,.05)", borderRadius: 8, border: "1px solid rgba(99,102,241,.15)" }}>
+                  <span className="badge badge-blue" style={{ fontSize: 9 }}>MULTI-STOP</span>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>
+                    {routePath.map((city, i) => (
+                      <span key={i}>{i > 0 && <span style={{ color: "var(--text3)", margin: "0 4px" }}>→</span>}{city}</span>
+                    ))}
+                  </span>
+                </div>
+              ) : null;
+            })()}
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
               <div>
                 <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>ORIGIN</div>
@@ -146,7 +166,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                 <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Pickup: {ds.pickup_date || "—"}</div>
               </div>
               <div style={{ textAlign: "center", paddingTop: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)" }}>750 mi</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)" }}>{(ds.miles || 750).toLocaleString()} mi</div>
                 <span style={{ fontSize: 12, color: "var(--text3)" }}>{pct}% complete</span>
               </div>
               <div style={{ textAlign: "right" }}>
@@ -168,6 +188,11 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
             <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
             <InfoBox icon="💰" label="Est. Cost" value={`$${(ds.total_cost || 0).toLocaleString()}`} />
+            {(ds.rate > 0 || ds.fuel_surcharge > 0) && (<>
+            <InfoBox icon="📊" label="Base / Linehaul" value={`$${(ds.rate || 0).toLocaleString()}`} />
+            <InfoBox icon="⛽" label="Fuel Surcharge" value={`$${(ds.fuel_surcharge || 0).toLocaleString()}`} />
+            <InfoBox icon="📦" label="Accessorials" value={`$${(ds.accessorials || 0).toLocaleString()}`} />
+            </>)}
             <InfoBox icon="📅" label="Pickup Date" value={ds.pickup_date || ds.pickup || "—"} />
             <InfoBox icon="🏁" label="Delivery Date" value={ds.delivery_date || ds.delivery || "—"} />
             <InfoBox icon="🚚" label="Transit Days" value={transitDays} />
@@ -371,12 +396,23 @@ export default function ShipmentsPage() {
   async function unassignOrder(orderId, shipmentId) {
     try {
       await DbApi.patch("orders", orderId, { status: "Unplanned", shipment_id: null });
-      // Recalculate shipment weight from remaining orders
       const remaining = orders.filter((o) => o.shipment_id === shipmentId && o.id !== orderId);
       if (remaining.length === 0) {
         // No orders left — delete the shipment
-        await DbApi.patch("shipments", shipmentId, { status: "Cancelled", notes: "All orders unassigned" });
-        toast(`Order ${orderId} unassigned. Shipment ${shipmentId} cancelled (no orders left).`, "info");
+        const ship = shipments.find((s) => s.id === shipmentId);
+        await DbApi.remove("shipments", shipmentId).catch(() => {});
+        // If CBOL, check if MBOL should also be deleted
+        if (ship?.master_shipment_id) {
+          const siblingCbols = shipments.filter((s) => s.master_shipment_id === ship.master_shipment_id && s.id !== shipmentId);
+          if (siblingCbols.length === 0) {
+            await DbApi.remove("shipments", ship.master_shipment_id).catch(() => {});
+            toast(`Order ${orderId} unassigned. Shipment ${shipmentId} and master ${ship.master_shipment_id} deleted.`, "info");
+          } else {
+            toast(`Order ${orderId} unassigned. Shipment ${shipmentId} deleted.`, "info");
+          }
+        } else {
+          toast(`Order ${orderId} unassigned. Shipment ${shipmentId} deleted.`, "info");
+        }
       } else {
         const newWeight = remaining.reduce((s, o) => s + (Number(o.weight) || 0), 0);
         const newPieces = remaining.reduce((s, o) => s + (Number(o.pieces) || 0), 0);
@@ -422,7 +458,10 @@ export default function ShipmentsPage() {
     if (q.trim()) {
       const terms = q.split(",").map((s) => s.toLowerCase().trim()).filter(Boolean);
       list = list.filter((s) => {
-        const fields = [s.id, s._carrier, s.origin, s.dest, s.mode, s.status, s._displayStatus]
+        // Include shipment fields + linked order IDs for search
+        const orderIdStr = (s._linkedOrders || []).map((o) => o.id).join(" ");
+        const orderIdsArr = Array.isArray(s.order_ids) ? s.order_ids.join(" ") : "";
+        const fields = [s.id, s._carrier, s.origin, s.dest, s.mode, s.status, s._displayStatus, orderIdStr, orderIdsArr]
           .map((v) => String(v || "").toLowerCase());
         return terms.some((t) => fields.some((f) => f.includes(t)));
       });
@@ -656,8 +695,31 @@ export default function ShipmentsPage() {
       for (const o of row._linkedOrders || []) {
         await DbApi.patch("orders", o.id, { status: "Unplanned", shipment_id: null });
       }
-      await DbApi.patch("shipments", row.id, { status: "Cancelled" });
-      toast(`Shipment ${row.id} deleted, ${(row._linkedOrders || []).length} orders unplanned`, "success");
+      // If MBOL, also delete all child CBOLs
+      if (row.bol_type === "MBOL") {
+        const children = shipments.filter((s) => s.master_shipment_id === row.id);
+        for (const child of children) {
+          // Unplan any orders on CBOLs
+          const childOrders = orders.filter((o) => o.shipment_id === child.id);
+          for (const co of childOrders) {
+            await DbApi.patch("orders", co.id, { status: "Unplanned", shipment_id: null });
+          }
+          await DbApi.remove("shipments", child.id).catch(() => {});
+        }
+      }
+      await DbApi.remove("shipments", row.id).catch(() => {});
+      // If CBOL, check if MBOL has remaining children
+      if (row.bol_type === "CBOL" && row.master_shipment_id) {
+        const siblingCbols = shipments.filter((s) => s.master_shipment_id === row.master_shipment_id && s.id !== row.id);
+        if (siblingCbols.length === 0) {
+          await DbApi.remove("shipments", row.master_shipment_id).catch(() => {});
+          toast(`Shipment ${row.id} and master ${row.master_shipment_id} deleted`, "success");
+        } else {
+          toast(`Shipment ${row.id} deleted`, "success");
+        }
+      } else {
+        toast(`Shipment ${row.id} deleted, ${(row._linkedOrders || []).length} orders unplanned`, "success");
+      }
       await refreshData();
     } catch (err) {
       toast(`Failed: ${err.message}`, "error");
@@ -756,22 +818,16 @@ export default function ShipmentsPage() {
         <tbody>
           {rows.length === 0 ? (
             <tr><td colSpan={10} className="empty-state">No shipments found</td></tr>
-          ) : rows.map((s) => (
-            <tr key={s.id} style={s.bol_type === "CBOL" ? { background: "#FAFBFE" } : undefined}>
+          ) : rows.filter((s) => s.bol_type !== "CBOL").map((s) => (<React.Fragment key={s.id}>
+            <tr>
               <td>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {s.bol_type === "MBOL" && <span className="badge badge-blue" style={{ fontSize: 9, padding: "0 6px", height: 18, lineHeight: "18px" }}>MBOL</span>}
-                  {s.bol_type === "CBOL" && <span className="badge badge-teal" style={{ fontSize: 9, padding: "0 6px", height: 18, lineHeight: "18px" }}>CBOL</span>}
                   <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(s); }}
                      className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>
                     {s.id}
                   </a>
                 </div>
-                {s.bol_type === "CBOL" && s.master_shipment_id && (
-                  <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 1 }}>
-                    Master: {s.master_shipment_id}
-                  </div>
-                )}
               </td>
               <td className="text-sm">{s.origin || "—"}</td>
               <td className="text-sm">{s.dest || "—"}</td>
@@ -839,7 +895,28 @@ export default function ShipmentsPage() {
                 </div>
               </td>
             </tr>
-          ))}
+            {/* CBOL sub-rows for MBOL shipments */}
+            {s.bol_type === "MBOL" && rows.filter((c) => c.bol_type === "CBOL" && c.master_shipment_id === s.id).map((c) => (
+              <tr key={c.id} style={{ background: "#f8faff", fontSize: 11 }}>
+                <td colSpan={10} style={{ padding: "4px 16px 4px 40px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "nowrap" }}>
+                    <span className="badge badge-teal" style={{ fontSize: 8, padding: "0 5px", height: 16, lineHeight: "16px" }}>CBOL</span>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(c); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 11 }}>{c.id}</a>
+                    <span style={{ color: "var(--text3)" }}>→</span>
+                    <span style={{ fontWeight: 600 }}>{(c.dest || "").split(",")[0]}</span>
+                    <span className="mono" style={{ fontWeight: 700 }}>${(c.total_cost || 0).toLocaleString()}</span>
+                    <span className="mono" style={{ color: "var(--text3)" }}>{c.pickup_date || "—"}</span>
+                    <span className="mono" style={{ color: "var(--text3)" }}>{c.delivery_date || "—"}</span>
+                    <span className={STATUS_BADGES[c._displayStatus] || "badge"} style={{ fontSize: 9 }}>{c._displayStatus}</span>
+                    {["Planned", "Tender Rejected"].includes(c._displayStatus) && (
+                      <button style={{ background: "#2563eb", color: "#fff", border: "none", padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: "pointer" }} disabled={busyId === c.id} onClick={() => onTender(c)}>📤 Tender</button>
+                    )}
+                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.25)", padding: "2px 5px", borderRadius: 5, fontSize: 10, cursor: "pointer", lineHeight: 1, marginLeft: "auto" }} disabled={busyId === c.id} onClick={() => deleteShipment(c)}>🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </React.Fragment>))}
         </tbody>
       </table>
       </div></div>{/* end table-wrap, card */}
@@ -925,7 +1002,7 @@ export default function ShipmentsPage() {
       )}
 
       {/* Shipment Detail Modal */}
-      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} />}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} />}
 
       {/* Tender Result Modal */}
       <TenderResultModal

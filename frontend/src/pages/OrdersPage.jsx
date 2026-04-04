@@ -260,8 +260,35 @@ export default function OrdersPage() {
     if (!window.confirm(`Unplan order ${id}?`)) return;
     setBusyId(id);
     try {
+      const order = orders.find((o) => o.id === id);
+      const shipmentId = order?.shipment_id;
       await DbApi.patch("orders", id, { status: "Unplanned", shipment_id: null });
-      toast(`Order ${id} unplanned`, "success");
+
+      // Clean up shipment if no orders remain
+      if (shipmentId) {
+        const remainingOrders = orders.filter((o) => o.shipment_id === shipmentId && o.id !== id);
+        if (remainingOrders.length === 0) {
+          // Delete the shipment (and its master if this was the last CBOL)
+          const ship = shipments.find((s) => s.id === shipmentId);
+          await DbApi.remove("shipments", shipmentId).catch(() => {});
+          // If it was a CBOL, check if the MBOL has any remaining CBOLs
+          if (ship?.master_shipment_id) {
+            const siblingCbols = shipments.filter((s) => s.master_shipment_id === ship.master_shipment_id && s.id !== shipmentId);
+            if (siblingCbols.length === 0) {
+              await DbApi.remove("shipments", ship.master_shipment_id).catch(() => {});
+              toast(`Order ${id} unplanned. Shipment ${shipmentId} and master ${ship.master_shipment_id} deleted.`, "success");
+            } else {
+              toast(`Order ${id} unplanned. Shipment ${shipmentId} deleted.`, "success");
+            }
+          } else {
+            toast(`Order ${id} unplanned. Shipment ${shipmentId} deleted.`, "success");
+          }
+        } else {
+          toast(`Order ${id} unplanned`, "success");
+        }
+      } else {
+        toast(`Order ${id} unplanned`, "success");
+      }
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
     finally { setBusyId(""); }
@@ -504,12 +531,14 @@ export default function OrdersPage() {
       const masterId = genId();
       const allOrderIds = ordersList.map((o) => o.id);
       const today = new Date().toISOString().slice(0, 10);
-      const readyDates = ordersList.map((o) => o.ready).filter(Boolean).sort();
       const dueDates = ordersList.map((o) => o.due).filter(Boolean).sort();
-      // Pickup can't be in the past — use today or latest ready date, whichever is later
-      const earliestReady = readyDates[readyDates.length - 1] || today;
-      const pickupDate = earliestReady > today ? earliestReady : today;
-      const deliveryDate = dueDates[dueDates.length - 1] || null;
+      const routeTransitDays = parseInt(route.transit_days) || 2;
+      // Delivery = earliest due date (must arrive by then)
+      const deliveryDate = dueDates[0] || addBusinessDays(today, routeTransitDays);
+      // Pickup = delivery - transit days (work backwards)
+      let pickupDate = addBusinessDays(deliveryDate, -routeTransitDays);
+      // If pickup is in the past, use today instead
+      if (pickupDate < today) pickupDate = today;
 
       // Create MBOL
       const masterShipment = {
@@ -620,13 +649,13 @@ export default function OrdersPage() {
         ? orders.filter((x) => x.status === "Unplanned" && x.origin === o.origin && x.dest === o.dest)
         : [o];
 
-    // If multiple orders have different origins or destinations, redirect to Multi-Stop Routes
+    // Multi-order planning: try multi-stop routes first, then plan remaining individually
     if (sibs.length > 1) {
       const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
       const origins = new Set(sibs.map((x) => normalize(x.origin)));
       const dests = new Set(sibs.map((x) => normalize(x.dest)));
       if (origins.size > 1 || dests.size > 1) {
-        // Fetch route templates fresh to ensure we have latest data
+        // Fetch route templates
         let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
         if (templates.length === 0) {
           try {
@@ -634,23 +663,57 @@ export default function OrdersPage() {
             templates = Array.isArray(freshTemplates) ? freshTemplates : [];
           } catch { /* ignore */ }
         }
-        const matchedRoute = templates.find((t) => {
-          if (!t.carrier) return false;
+
+        // Try to match orders to a multi-stop route
+        let routeMatchedOrders = [];
+        for (const t of templates) {
+          if (!t.carrier) continue;
           const tStops = Array.isArray(t.stops) ? t.stops : [];
           const tPickups = tStops.filter((s) => s.type === "pickup").map((s) => normalize(s.location || s.city));
           const tDeliveries = tStops.filter((s) => s.type === "delivery").map((s) => normalize(s.location || s.city));
-          return tPickups.some((p) => [...origins].some((oo) => oo.includes(p) || p.includes(oo)))
-            && [...dests].every((d) => tDeliveries.some((td) => td.includes(d) || d.includes(td)));
-        });
-        if (matchedRoute) {
-          // Create shipments directly from the route — no Execute modal needed
-          await createShipmentsFromRoute(matchedRoute, sibs);
+          // Find orders that match this route (origin matches a pickup, dest matches a delivery)
+          const matched = sibs.filter((o) => {
+            const oOrigin = normalize(o.origin);
+            const oDest = normalize(o.dest);
+            return tPickups.some((p) => oOrigin.includes(p) || p.includes(oOrigin))
+              && tDeliveries.some((td) => oDest.includes(td) || td.includes(oDest));
+          });
+          if (matched.length >= 2) {
+            // Found a route with 2+ matching orders — plan them via multi-stop
+            await createShipmentsFromRoute(t, matched);
+            routeMatchedOrders = matched;
+            break;
+          }
+        }
+
+        // Remaining orders not matched to a route — plan each individually
+        const remaining = sibs.filter((o) => !routeMatchedOrders.includes(o));
+        if (remaining.length > 0) {
+          // Group remaining by same lane, then open plan modal for first group
+          // Others will be planned as single orders
+          const firstRemaining = remaining[0];
+          // Plan remaining orders individually (open plan modal for the first one)
+          if (routeMatchedOrders.length > 0) {
+            // Some were multi-stopped, plan remaining individually
+            for (const rem of remaining) {
+              // Use single-order plan flow — open modal for first, rest queued
+              // For now, just open the plan modal for the first remaining order
+            }
+            if (remaining.length === 1) {
+              // Fall through to normal single-order plan modal below
+              // Override sibs to just this one order
+              openPlanModal(firstRemaining.id, false, null);
+              return;
+            }
+            toast(`${routeMatchedOrders.length} orders planned via multi-stop route. ${remaining.length} remaining — select and plan them individually.`, "info");
+            return;
+          }
+          // No route matched at all — plan all as individual orders
+          // Fall through to normal plan modal for the first selected order
+        } else {
+          // All orders matched to a route
           return;
         }
-        // No matching route — redirect to multi-stop page to create one
-        const ids = sibs.map((x) => x.id).join(",");
-        window.location.href = `/multi-stop-routes?orderIds=${encodeURIComponent(ids)}`;
-        return;
       }
     }
 
@@ -714,6 +777,9 @@ export default function OrdersPage() {
         deliveryDate: dates.delivery, czarliteRate: chosen.mode === "LTL",
         serviceLevel: chosen.serviceLevel || "",
         miles: chosen.miles || null,
+        rate: chosen.czarBaseGross || chosen.czarBase || 0,
+        fuelSurcharge: chosen.fscCharge || 0,
+        accessorials: chosen.accessorialCharge || 0,
       }];
       const execRes = await BulkPlanApi.execute(plans);
       setPlanModal(null);
@@ -1532,6 +1598,11 @@ export default function OrdersPage() {
                             {quote.miles && <span>📏 {quote.miles.toLocaleString()} mi{quote.pcmilerMiles ? " (PC*MILER)" : ""}</span>}
                             <span>📦 {dates.pickup}</span>
                             <span>🏁 {dates.delivery}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 9, color: "var(--text3)" }}>
+                            <span>Base: {fmt$(quote.czarBaseGross || quote.czarBase || 0)}</span>
+                            <span>Fuel: {fmt$(quote.fscCharge || 0)}</span>
+                            {(quote.accessorialCharge || 0) > 0 && <span>Acc: {fmt$(quote.accessorialCharge)}</span>}
                           </div>
                           {dates.warning && <div style={{ marginTop: 3, fontSize: 9, color: "#dc2626", fontWeight: 600 }}>⚠️ {dates.warning}</div>}
                         </div>

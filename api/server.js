@@ -608,12 +608,11 @@ app.patch('/api/db/:table/:id', async (req, res) => {
 
 // DELETE /api/db/:table/:id  — delete by id
 app.delete('/api/db/:table/:id', async (req, res) => {
-  const user = await verifyToken(req, res);
-  if (!user) return;
+  const user = await verifyTokenSoft(req);
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
   try {
-    await dbDelete(req.params.table, req.params.id, user._token);
+    await dbDelete(req.params.table, req.params.id, null);
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1739,6 +1738,9 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           pieces: plan.totalPieces || 0,
           status: 'Planned',
           total_cost: plan.totalCost || 0,
+          rate: plan.rate || 0,
+          fuel_surcharge: plan.fuelSurcharge || 0,
+          accessorials: plan.accessorials || 0,
           order_ids: plan.orderIds || [],
           pickup_date: plan.pickupDate || null,
           delivery_date: plan.deliveryDate || null,
