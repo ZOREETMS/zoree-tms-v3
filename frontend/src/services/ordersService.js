@@ -15,7 +15,7 @@ function genShipId() {
  * Create shipments (MBOL + CBOLs) from a multi-stop route template.
  * Returns { masterShipment, childShipments, ordersUpdated, routePath, error }.
  */
-export async function createShipmentsFromRoute(route, ordersList) {
+export async function createShipmentsFromRoute(route, ordersList, rates = []) {
   const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
   const stops = Array.isArray(route.stops) ? route.stops : [];
   const pickups = stops.filter((s) => s.type === "pickup");
@@ -111,6 +111,19 @@ export async function createShipmentsFromRoute(route, ordersList) {
 
     const cbolOrigin = firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`;
     const cbolDest = delivery.location || `${delivery.city}, ${delivery.state}`;
+    // Look up rate ID by matching carrier + origin + dest
+    const carrierNorm = normalize(route.carrier);
+    const oNorm = normalize(cbolOrigin);
+    const dNorm = normalize(cbolDest);
+    const matchedRate = rates.find((r) => {
+      const rc = normalize(r.carrier);
+      const ro = normalize(r.origin);
+      const rd = normalize(r.dest || r.destination);
+      return (rc.includes(carrierNorm) || carrierNorm.includes(rc)) &&
+             (ro.includes(oNorm) || oNorm.includes(ro)) &&
+             (rd.includes(dNorm) || dNorm.includes(rd));
+    });
+
     await DbApi.upsert("shipments", {
       id: childId, carrier: route.carrier, mode: route.mode || "TL",
       origin: cbolOrigin, dest: cbolDest,
@@ -122,6 +135,7 @@ export async function createShipmentsFromRoute(route, ordersList) {
       route_template_id: route.id,
       pickup_date: pickupDate, delivery_date: deliveryDate,
       service_level: route.service_level || "Standard",
+      rate_id: matchedRate ? (matchedRate.lane || matchedRate.id) : null,
     });
     createdCbols.push({ id: childId, origin: cbolOrigin, dest: cbolDest, cost: cbolCost, miles: legMiles, orders: cbolOrders });
 

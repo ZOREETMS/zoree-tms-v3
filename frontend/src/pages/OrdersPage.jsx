@@ -11,7 +11,7 @@ import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 
 export default function OrdersPage() {
-  const { orders, shipments, carriers, setData, refreshData, routeTemplates } = useOutletContext();
+  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates } = useOutletContext();
   const [itemMaster, setItemMaster] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -380,7 +380,7 @@ export default function OrdersPage() {
   async function handleCreateShipmentsFromRoute(route, ordersList, skipSummary = false) {
     setBusyId("multi-stop");
     try {
-      const result = await createShipmentsFromRoute(route, ordersList);
+      const result = await createShipmentsFromRoute(route, ordersList, rates);
       if (result.error) { toast(result.error, "error"); return null; }
       const summaryData = {
         isMultiStop: true,
@@ -412,6 +412,7 @@ export default function OrdersPage() {
 
     const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
     setBusyId("plan-selected");
+    const planStartTime = Date.now();
     try {
       // 1. Check for multi-stop route matches
       let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
@@ -452,6 +453,7 @@ export default function OrdersPage() {
         ordersUpdated: totalPlanned,
         totalCost: routeCost + bulkCost,
         siblings: selected,
+        elapsedMs: Date.now() - planStartTime,
       });
       setSelectedOrders(new Set());
       await refreshData();
@@ -515,6 +517,7 @@ export default function OrdersPage() {
       shipmentGroups,
     });
     setDetailOrder(null);
+    const ratingStart = Date.now();
 
     try {
       // Rate each shipment group independently
@@ -615,6 +618,7 @@ export default function OrdersPage() {
       setPlanModal((prev) => prev ? {
         ...prev, quotes: firstQuotes, bestQuote: firstBest, busy: false,
         shipmentGroups: finalGroups,
+        ratingElapsedMs: Date.now() - ratingStart,
       } : null);
     } catch (err) {
       setPlanModal((prev) => prev ? { ...prev, busy: false, error: err.message } : null);
@@ -654,6 +658,7 @@ export default function OrdersPage() {
     }
 
     setPlanModal((prev) => prev ? { ...prev, busy: true } : null);
+    const confirmStartTime = Date.now();
     try {
       const execRes = await executeSinglePlan(plans);
       setPlanModal(null);
@@ -666,6 +671,7 @@ export default function OrdersPage() {
         carrier: firstChosen.carrier || "",
         mode: firstChosen.mode || "TL",
         lane, siblings, dates: firstDates,
+        elapsedMs: Date.now() - confirmStartTime + (planModal?.ratingElapsedMs || 0),
       });
       refreshData();
     } catch (err) {

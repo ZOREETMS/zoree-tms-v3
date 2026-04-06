@@ -107,6 +107,7 @@ export default function BulkPlanPage() {
     setBusy(true);
     setMessage({ text: "", type: "" });
     setResults(null);
+    const planStartTime = Date.now();
 
     try {
       // Progressive consolidation: rate individually, try consolidation, compare costs
@@ -131,6 +132,7 @@ export default function BulkPlanPage() {
 
       // Execute — create shipments + update orders
       const execRes = await BulkPlanApi.execute(plans);
+      execRes._elapsedMs = Date.now() - planStartTime;
       setResults(execRes);
       setSelectedIds(new Set());
       await refreshData();
@@ -366,6 +368,7 @@ export default function BulkPlanPage() {
         isOpen={summaryOpen}
         shipments={results?.shipments || []}
         ordersUpdated={results?.ordersUpdated || 0}
+        elapsedMs={results?._elapsedMs || 0}
         onClose={() => setSummaryOpen(false)}
       />
     </div>

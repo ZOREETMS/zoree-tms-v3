@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { DbApi } from "../lib/api";
+import useSpeechRecognition from "../hooks/useSpeechRecognition";
+import useSpeechSynthesis from "../hooks/useSpeechSynthesis";
 
 /* ─────────────────────────────────────────────
    ZoreeAI — Floating chat assistant
@@ -152,10 +154,26 @@ export default function ZoreeAI({ data }) {
   const [inputVal, setInputVal] = useState("");
   const [connected, setConnected] = useState(!!ENV_KEY);
   const [initialized, setInitialized] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const chatHistoryRef = useRef([]);
   const pendingActionsRef = useRef({});
   const msgsEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Voice hooks
+  const { speak, stop: stopSpeaking, isSpeaking, isSupported: ttsSupported } = useSpeechSynthesis({ rate: 1.05 });
+  const handleVoiceResult = useCallback((finalText) => {
+    if (finalText) {
+      setInputVal(finalText);
+      // Auto-send after short delay so user sees what was recognized
+      setTimeout(() => {
+        setInputVal("");
+        callAPIRef.current?.(finalText);
+      }, 400);
+    }
+  }, []);
+  const { transcript, isListening, isSupported: sttSupported, startListening, stopListening } = useSpeechRecognition({ onResult: handleVoiceResult });
+  const callAPIRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => msgsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -442,6 +460,9 @@ export default function ZoreeAI({ data }) {
   }
 
   async function callAPI(userText) {
+    // Stop any ongoing speech when user sends new message
+    if (isSpeaking) stopSpeaking();
+
     setMessages((prev) => [...prev, { role: "user", text: userText }]);
     chatHistoryRef.current.push({ role: "user", content: userText });
     setTyping(true);
@@ -489,6 +510,8 @@ export default function ZoreeAI({ data }) {
         } else {
           setMessages((prev) => [...prev, { role: "ai", text: reply }]);
         }
+        // Auto-speak AI response if voice is enabled
+        if (voiceEnabled && ttsSupported) speak(reply);
       } else if (respData.error) {
         const errMsg = respData.error.message || JSON.stringify(respData.error);
         setMessages((prev) => [
@@ -511,6 +534,9 @@ export default function ZoreeAI({ data }) {
     setTyping(false);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
+
+  // Keep ref to callAPI for voice callback
+  callAPIRef.current = callAPI;
 
   function handleSend() {
     const text = inputVal.trim();
@@ -678,28 +704,62 @@ export default function ZoreeAI({ data }) {
               <div className="zoree-ai-input-bar">
                 <input
                   ref={inputRef}
-                  placeholder="Ask about shipments, carriers, costs..."
-                  value={inputVal}
-                  onChange={(e) => setInputVal(e.target.value)}
+                  placeholder={isListening ? "Listening..." : "Ask about shipments, carriers, costs..."}
+                  value={isListening ? transcript : inputVal}
+                  onChange={(e) => !isListening && setInputVal(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
                     }
                   }}
-                  disabled={typing}
+                  disabled={typing || isListening}
                   className="zoree-ai-input"
-                  style={{ textTransform: "none" }}
+                  style={{ textTransform: "none", color: isListening ? "#dc2626" : undefined }}
                 />
+                {/* Mic button */}
+                {sttSupported && (
+                  <button
+                    onClick={() => {
+                      if (isListening) { stopListening(); }
+                      else { if (isSpeaking) stopSpeaking(); startListening(); }
+                    }}
+                    className={`zoree-ai-mic-btn${isListening ? " listening" : ""}`}
+                    title={isListening ? "Stop listening" : "Voice input"}
+                    disabled={typing}
+                  >
+                    {isListening ? "⏹" : "🎙"}
+                  </button>
+                )}
+                {/* Voice toggle */}
+                {ttsSupported && (
+                  <button
+                    onClick={() => { setVoiceEnabled(!voiceEnabled); if (isSpeaking) stopSpeaking(); }}
+                    className="zoree-ai-voice-toggle"
+                    title={voiceEnabled ? "Voice responses ON — click to mute" : "Voice responses OFF — click to enable"}
+                    style={{ opacity: voiceEnabled ? 1 : 0.4 }}
+                  >
+                    {voiceEnabled ? "🔊" : "🔇"}
+                  </button>
+                )}
+                {/* Send button */}
                 <button
                   onClick={handleSend}
-                  disabled={typing}
+                  disabled={typing || isListening}
                   className="zoree-ai-send-btn"
-                  style={{ opacity: typing ? 0.5 : 1 }}
+                  style={{ opacity: typing || isListening ? 0.5 : 1 }}
                 >
                   ➤
                 </button>
               </div>
+              {/* Speaking indicator */}
+              {isSpeaking && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", fontSize: 10, color: "#2563eb" }}>
+                  <span className="zoree-ai-speaking-dot" />
+                  <span>Speaking...</span>
+                  <button onClick={stopSpeaking} style={{ fontSize: 10, background: "none", border: "none", color: "#dc2626", cursor: "pointer", padding: 0 }}>Stop</button>
+                </div>
+              )}
             </>
           )}
         </div>

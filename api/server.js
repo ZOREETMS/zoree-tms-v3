@@ -1216,7 +1216,7 @@ app.post('/api/ltl/quote', async (req, res) => {
 
     console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'}`);
     quotes.push({
-      rateId:       r ? (r.id || r.lane) : null,
+      rateId:       r ? (r.lane || r.id) : null,
       carrier:      carrier.name,
       scac:         carrier.scac,
       mode:         'LTL',
@@ -1652,7 +1652,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               quotes.push({
                 carrier: rate.carrier || 'Unknown',
                 scac: '',
-                rateId: rate.id || rate.lane || null,
+                rateId: rate.lane || rate.id || null,
                 totalCharge: baseCost + fscCharge,
                 czarBaseGross: baseCost,
                 discountPct: 0,

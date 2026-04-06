@@ -4,7 +4,13 @@ import { useNavigate } from "react-router-dom";
  * Post-plan summary modal — matches old HTML modal-plan-summary.
  * Shows KPIs, shipment cards with consolidated order details.
  */
-export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, onClose }) {
+function formatElapsed(ms) {
+  if (!ms) return null;
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, elapsedMs, onClose }) {
   const navigate = useNavigate();
 
   if (!isOpen || !shipments?.length) return null;
@@ -28,7 +34,7 @@ export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, onC
         >
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-              Planning Complete
+              Planning Complete{formatElapsed(elapsedMs) ? ` \u00b7 ${formatElapsed(elapsedMs)}` : ""}
             </div>
             <span className="modal-title" style={{ color: "#fff" }}>
               {shipments.length} Shipment{shipments.length !== 1 ? "s" : ""} Created Successfully
@@ -43,7 +49,7 @@ export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, onC
         <div className="modal-body" style={{ padding: 20 }}>
           {/* KPI Strip */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 18 }}>
-            <KpiCard value={shipments.length} label="Shipments" color="var(--green)" bg="rgba(16,185,129,.08)" border="rgba(16,185,129,.2)" />
+            <KpiCard value={shipments.length} label="Shipments" color="var(--green)" bg="rgba(16,185,129,.08)" border="rgba(16,185,129,.2)" onClick={handleViewShipments} />
             <KpiCard value={ordersUpdated || shipments.length} label="Orders Planned" color="var(--accent)" bg="rgba(59,130,246,.07)" border="rgba(59,130,246,.2)" />
             <KpiCard value={`$${totalCost.toLocaleString()}`} label="Total Est. Cost" color="var(--green)" bg="rgba(16,185,129,.08)" border="rgba(16,185,129,.2)" />
           </div>
@@ -64,10 +70,14 @@ export default function PlanSummaryModal({ isOpen, shipments, ordersUpdated, onC
   );
 }
 
-function KpiCard({ value, label, color, bg, border }) {
+function KpiCard({ value, label, color, bg, border, onClick, style: extraStyle }) {
   return (
-    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: 12, textAlign: "center" }}>
-      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
+    <div
+      style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: 12, textAlign: "center", cursor: onClick ? "pointer" : "default", ...extraStyle }}
+      onClick={onClick}
+      title={onClick ? "Click to view" : ""}
+    >
+      <div style={{ fontSize: 22, fontWeight: 800, color, textDecoration: onClick ? "underline" : "none", textUnderlineOffset: 4 }}>{value}</div>
       <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{label}</div>
     </div>
   );

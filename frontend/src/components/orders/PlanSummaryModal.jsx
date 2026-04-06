@@ -1,8 +1,54 @@
 import React from "react";
 import { fmt$ } from "../../utils/orderUtils.jsx";
 
+/**
+ * Collect all shipment IDs from a summary object for filtering.
+ */
+function collectShipmentIds(summary) {
+  const ids = [];
+  if (summary.isCombined) {
+    if (summary.multiStop?.masterShipment?.id) ids.push(summary.multiStop.masterShipment.id);
+    (summary.multiStop?.childShipments || []).forEach(c => ids.push(c.id));
+    (summary.bulkShipments || []).forEach(s => ids.push(s.id));
+  } else if (summary.isMultiStop) {
+    if (summary.masterShipment?.id) ids.push(summary.masterShipment.id);
+    (summary.childShipments || []).forEach(c => ids.push(c.id));
+  } else {
+    (summary.shipments || []).forEach(s => ids.push(s.id));
+  }
+  return ids;
+}
+
+function ShipmentCountKPI({ count, shipmentIds, onClose }) {
+  const handleClick = () => {
+    if (shipmentIds.length > 0) {
+      onClose();
+      window.location.href = `/shipments?ids=${shipmentIds.join(",")}`;
+    }
+  };
+  return (
+    <div
+      style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12, cursor: shipmentIds.length > 0 ? "pointer" : "default" }}
+      onClick={handleClick}
+      title={shipmentIds.length > 0 ? "Click to view these shipments" : ""}
+    >
+      <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)", textDecoration: shipmentIds.length > 0 ? "underline" : "none", textUnderlineOffset: 4 }}>{count}</div>
+      <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
+    </div>
+  );
+}
+
+function formatElapsed(ms) {
+  if (!ms) return null;
+  if (ms < 1000) return `${ms}ms`;
+  const secs = (ms / 1000).toFixed(1);
+  return `${secs}s`;
+}
+
 function PlanSummaryModal({ summary, onClose }) {
   if (!summary) return null;
+  const allShipmentIds = collectShipmentIds(summary);
+  const elapsed = formatElapsed(summary.elapsedMs);
 
   // Combined summary (multi-stop + bulk direct shipments)
   if (summary.isCombined) {
@@ -12,16 +58,13 @@ function PlanSummaryModal({ summary, onClose }) {
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-card" style={{ width: 660, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
           <div style={{ background: "linear-gradient(135deg,#059669,#10b981)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{elapsed ? ` \u00b7 ${elapsed}` : ""}</div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>{totalShipments} Shipment{totalShipments !== 1 ? "s" : ""} Created</div>
           </div>
           <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
             {/* KPI cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-              <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12 }}>
-                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)" }}>{totalShipments}</div>
-                <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
-              </div>
+              <ShipmentCountKPI count={totalShipments} shipmentIds={allShipmentIds} onClose={onClose} />
               <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid var(--border)", borderRadius: 12 }}>
                 <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26 }}>{ordersUpdated}</div>
                 <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Orders Planned</div>
@@ -108,16 +151,13 @@ function PlanSummaryModal({ summary, onClose }) {
       <div className="modal-overlay" onClick={() => onClose()}>
         <div className="modal-card" style={{ width: 640, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
           <div style={{ background: "linear-gradient(135deg,#1e40af,#6366f1)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{elapsed ? ` \u00b7 ${elapsed}` : ""}</div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>Multi-Stop Shipment Created</div>
           </div>
           <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
             {/* KPI cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-              <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(99,102,241,.2)", borderRadius: 12 }}>
-                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "#6366f1" }}>{totalShipments}</div>
-                <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
-              </div>
+              <ShipmentCountKPI count={totalShipments} shipmentIds={allShipmentIds} onClose={onClose} />
               <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid var(--border)", borderRadius: 12 }}>
                 <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26 }}>{ordersUpdated}</div>
                 <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Orders Planned</div>
@@ -188,10 +228,7 @@ function PlanSummaryModal({ summary, onClose }) {
         <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
           {/* KPI cards */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-            <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12 }}>
-              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)" }}>{shipmentCount}</div>
-              <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
-            </div>
+            <ShipmentCountKPI count={shipmentCount} shipmentIds={allShipmentIds} onClose={onClose} />
             <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid var(--border)", borderRadius: 12 }}>
               <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26 }}>{ordersUpdated}</div>
               <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Orders Planned</div>
