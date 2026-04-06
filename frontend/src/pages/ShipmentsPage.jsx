@@ -241,7 +241,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
               <div className="sd-field">
                 <div className="sd-field-label">📄 Rate ID</div>
                 <div className="sd-field-value">
-                  <a href={`/rates?q=${encodeURIComponent(ds.rate_id)}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/rates?q=${encodeURIComponent(ds.rate_id)}`; }} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer" }}>{ds.rate_id}</a>
+                  <a href={`/rate-management?q=${encodeURIComponent(ds.rate_id)}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/rate-management?q=${encodeURIComponent(ds.rate_id)}`; }} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer" }}>{ds.rate_id}</a>
                 </div>
               </div>
             )}

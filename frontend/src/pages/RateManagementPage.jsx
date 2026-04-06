@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
 
@@ -105,9 +105,10 @@ function CzarLiteBadge({ r, carriers }) {
 
 export default function RateManagementPage() {
   const { carriers, rates: contextRates, refreshData } = useOutletContext();
+  const [searchParams] = useSearchParams();
 
-  // State
-  const [q, setQ] = useState("");
+  // State — initialize search from URL ?q= param (e.g. linked from shipment rate_id)
+  const [q, setQ] = useState(searchParams.get("q") || "");
   const [carrierFilter, setCarrierFilter] = useState("All");
   const [modeFilter, setModeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -122,6 +123,16 @@ export default function RateManagementPage() {
   const [sortAsc, setSortAsc] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [editRate, setEditRate] = useState(null);
+
+  // Auto-open rate detail when navigating with ?q= (e.g. from shipment rate_id link)
+  useEffect(() => {
+    const qParam = searchParams.get("q");
+    if (!qParam || !contextRates?.length) return;
+    const match = contextRates.find((r) =>
+      (r.id && String(r.id) === qParam) || (r.lane && r.lane === qParam)
+    );
+    if (match) setEditRate(match);
+  }, [searchParams, contextRates]);
 
   // Use real data from context
   const rates = contextRates || [];

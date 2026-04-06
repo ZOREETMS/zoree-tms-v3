@@ -311,8 +311,13 @@ export function buildShipmentGroups(orders, baseLane, maxWeight = 15000) {
 }
 
 /**
- * Bulk-plan all unplanned orders: group by lane, rate with progressive splitting, execute.
- * Uses planAllLanes from bulkPlanService for progressive consolidation + cost validation.
+ * Bulk-plan all unplanned orders: same logic as Plan Group.
+ * 1. Group by lane
+ * 2. Group by equipment weight (TL max if over LTL)
+ * 3. Rate each group
+ * 4. Check date compatibility with actual transit
+ * 5. Split incompatible orders and re-rate individually
+ * 6. Execute plans
  * Returns { created, updated, cost, noQuotes, shipments, plans }.
  */
 export async function bulkPlanOrders(unplannedOrders) {
@@ -320,26 +325,159 @@ export async function bulkPlanOrders(unplannedOrders) {
     return { created: 0, updated: 0, cost: 0, noQuotes: true };
   }
 
-  // Import planAllLanes dynamically to avoid circular deps
-  const { planAllLanes } = await import("./bulkPlanService.js");
-  const { buildLaneGroups } = await import("../utils/laneUtils.js");
+  const LTL_MAX = 15000;
+  const TL_MAX = 44000;
+  const { calcDates } = await import("./bulkPlanService.js");
 
-  const lanes = buildLaneGroups(unplannedOrders);
+  // Group by lane
+  const normLane = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const laneMap = {};
+  unplannedOrders.forEach((o) => {
+    const key = `${normLane(o.origin)}||${normLane(o.dest)}`;
+    if (!laneMap[key]) laneMap[key] = [];
+    laneMap[key].push(o);
+  });
+
+  const allPlans = [];
+
+  for (const laneOrders of Object.values(laneMap)) {
+    const o = laneOrders[0];
+    const totalWeight = laneOrders.reduce((s, x) => s + Number(x.weight || 0), 0);
+    const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
+    const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || "";
+
+    // Use equipment max weight (TL if over LTL) — same as Plan Group
+    const equipMaxWeight = totalWeight <= LTL_MAX ? LTL_MAX : TL_MAX;
+    const groups = buildShipmentGroups(laneOrders, {
+      laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
+      originZip, destZip, freightClass: o.freight_class || "70",
+      totalWeight, totalPieces: laneOrders.reduce((s, x) => s + Number(x.pieces || 0), 0),
+      orderIds: laneOrders.map((x) => x.id),
+    }, equipMaxWeight);
+
+    // Rate each group
+    for (const sg of groups) {
+      const readyD = sg.orders.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
+      const dueD = sg.orders.map((s) => s.due).filter(Boolean).sort()[0] || "";
+      const { quotes, bestQuote } = await fetchCarrierQuotes(sg.lane, calcDates, dueD, readyD);
+
+      if (!bestQuote) continue;
+
+      const transit = bestQuote.transitDays;
+
+      // Check date compatibility with actual transit — same as Plan Group
+      if (sg.orders.length > 1 && transit && !datesCompatibleWithTransit(sg.orders, transit)) {
+        // Find best compatible subset — same logic as Plan Group
+        const sorted = [...sg.orders].sort((a, b) =>
+          (a.due || a.delivery_date || "9999").localeCompare(b.due || b.delivery_date || "9999")
+        );
+
+        let bestSubset = null;
+        for (let size = sorted.length - 1; size >= 2; size--) {
+          for (let skip = 0; skip < sorted.length; skip++) {
+            const subset = sorted.filter((_, idx) => idx !== skip);
+            if (subset.length === size && datesCompatibleWithTransit(subset, transit)) {
+              bestSubset = subset;
+              break;
+            }
+          }
+          if (bestSubset) break;
+        }
+
+        if (bestSubset) {
+          // Rate consolidated subset
+          const subsetWeight = bestSubset.reduce((s, x) => s + Number(x.weight || 0), 0);
+          const subsetLane = { ...sg.lane, totalWeight: subsetWeight, totalPieces: bestSubset.reduce((s, x) => s + Number(x.pieces || 0), 0), orderIds: bestSubset.map(x => x.id) };
+          const subReadyD = bestSubset.map(s => s.ready).filter(Boolean).sort().reverse()[0] || "";
+          const subDueD = bestSubset.map(s => s.due).filter(Boolean).sort()[0] || "";
+          const { bestQuote: subBest } = await fetchCarrierQuotes(subsetLane, calcDates, subDueD, subReadyD);
+          if (subBest) {
+            const dates = calcDates(subBest, subDueD, subReadyD);
+            if (!dates.error) {
+              allPlans.push({
+                laneKey: subsetLane.laneKey, origin: subsetLane.origin, destination: subsetLane.destination,
+                originZip: subsetLane.originZip, destZip: subsetLane.destZip,
+                totalWeight: subsetLane.totalWeight, totalPieces: subsetLane.totalPieces, orderIds: subsetLane.orderIds,
+                carrier: subBest.carrier || "", mode: subBest.mode || "LTL",
+                totalCost: subBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
+                czarliteRate: subBest.mode === "LTL", serviceLevel: subBest.serviceLevel || "Standard",
+                miles: subBest.miles || null, rateId: subBest.rateId || null,
+              });
+            }
+          }
+
+          // Rate remainder individually
+          const remainder = sg.orders.filter(x => !bestSubset.some(s => s.id === x.id));
+          for (const order of remainder) {
+            const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
+            const { bestQuote: indBest } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
+            if (indBest) {
+              const dates = calcDates(indBest, order.due || "", order.ready || "");
+              if (!dates.error) {
+                allPlans.push({
+                  laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
+                  originZip: singleLane.originZip, destZip: singleLane.destZip,
+                  totalWeight: singleLane.totalWeight, totalPieces: singleLane.totalPieces, orderIds: [order.id],
+                  carrier: indBest.carrier || "", mode: indBest.mode || "LTL",
+                  totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
+                  czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
+                  miles: indBest.miles || null, rateId: indBest.rateId || null,
+                });
+              }
+            }
+          }
+        } else {
+          // No compatible subset — plan all individually
+          for (const order of sg.orders) {
+            const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
+            const { bestQuote: indBest } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
+            if (indBest) {
+              const dates = calcDates(indBest, order.due || "", order.ready || "");
+              if (!dates.error) {
+                allPlans.push({
+                  laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
+                  originZip: singleLane.originZip, destZip: singleLane.destZip,
+                  totalWeight: singleLane.totalWeight, totalPieces: singleLane.totalPieces, orderIds: [order.id],
+                  carrier: indBest.carrier || "", mode: indBest.mode || "LTL",
+                  totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
+                  czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
+                  miles: indBest.miles || null, rateId: indBest.rateId || null,
+                });
+              }
+            }
+          }
+        }
+      } else {
+        // Dates compatible or single order — plan as-is
+        const dates = calcDates(bestQuote, dueD, readyD);
+        if (!dates.error) {
+          allPlans.push({
+            laneKey: sg.lane.laneKey, origin: sg.lane.origin, destination: sg.lane.destination,
+            originZip: sg.lane.originZip, destZip: sg.lane.destZip,
+            totalWeight: sg.lane.totalWeight, totalPieces: sg.lane.totalPieces, orderIds: sg.lane.orderIds,
+            carrier: bestQuote.carrier || "", mode: bestQuote.mode || "LTL",
+            totalCost: bestQuote.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
+            czarliteRate: bestQuote.mode === "LTL", serviceLevel: bestQuote.serviceLevel || "Standard",
+            miles: bestQuote.miles || null, rateId: bestQuote.rateId || null,
+          });
+        }
+      }
+    }
+  }
+
+  if (!allPlans.length) {
+    return { created: 0, updated: 0, cost: 0, noQuotes: true };
+  }
 
   try {
-    const { plans } = await planAllLanes(lanes, unplannedOrders, "cost");
-
-    if (!plans.length) {
-      return { created: 0, updated: 0, cost: 0, noQuotes: true };
-    }
-
-    const execRes = await BulkPlanApi.execute(plans);
+    const execRes = await BulkPlanApi.execute(allPlans);
     const shipments = execRes?.shipments || [];
-    const created = shipments.length;
-    const updated = execRes?.ordersUpdated || 0;
-    const cost = shipments.reduce((s, sh) => s + Number(sh.total_cost || 0), 0);
-
-    return { created, updated, cost, shipments, plans, noQuotes: false };
+    return {
+      created: shipments.length,
+      updated: execRes?.ordersUpdated || 0,
+      cost: shipments.reduce((s, sh) => s + Number(sh.total_cost || 0), 0),
+      shipments, plans: allPlans, noQuotes: false,
+    };
   } catch (err) {
     throw err;
   }

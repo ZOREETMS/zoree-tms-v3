@@ -1576,6 +1576,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               quotes.push({
                 carrier: q.carrier || 'Unknown',
                 scac: q.scac || '',
+                rateId: q.rateId || null,
                 totalCharge: Math.round(q.totalCharge || 0),
                 czarBaseGross: Math.round(q.czarBaseGross || 0),
                 discountPct: Math.round(q.discountPct || 0),
@@ -1769,6 +1770,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           czarlite_rate: !!plan.czarliteRate || (plan.mode || '').toUpperCase() === 'LTL',
           service_level: plan.serviceLevel || null,
           miles: plan.miles || null,
+          rate_id: plan.rateId || null,
         };
 
         // Create shipment
