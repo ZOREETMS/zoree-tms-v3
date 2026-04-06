@@ -1,68 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
+import { DbApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
-
-const STATUS_BADGES = {
-  Unplanned: "badge badge-amber",
-  Planned: "badge badge-teal",
-  Consolidated: "badge badge-blue",
-  Tendered: "badge badge-purple",
-  "In Transit": "badge badge-blue",
-  Delivered: "badge badge-green",
-  Cancelled: "badge badge-red",
-};
-
-const STATUS_ROW_COLORS = {
-  Unplanned:    { bg: "#fffef0", border: "#ca8a04" },
-  Planned:      { bg: "#f0fdf4", border: "#16a34a" },
-  Consolidated: { bg: "#eff6ff", border: "#2563eb" },
-  Tendered:     { bg: "#fffbeb", border: "#d97706" },
-  "In Transit": { bg: "#f0f9ff", border: "#0284c7" },
-  Delivered:    { bg: "#f0fdf4", border: "#059669" },
-  Exception:    { bg: "#fef2f2", border: "#dc2626" },
-  Cancelled:    { bg: "#f9fafb", border: "#9ca3af" },
-};
-const SPOT_ROW_STYLE = { background: "#fef2f2", borderLeft: "3px solid #dc2626" };
-
-const EQUIPMENT_TYPES = {
-  "Dry Van 53'":    { maxWeight: 44000, icon: "🚛" },
-  "Flatbed":        { maxWeight: 48000, icon: "🏗️" },
-  "Reefer 53'":     { maxWeight: 43500, icon: "❄️" },
-  "Step Deck":      { maxWeight: 48000, icon: "📦" },
-  "Lowboy":         { maxWeight: 80000, icon: "⚙️" },
-  "Tanker":         { maxWeight: 46000, icon: "🛢️" },
-  "LTL Truck":      { maxWeight: 15000, icon: "📬" },
-  "Intermodal 53'": { maxWeight: 44000, icon: "🚂" },
-};
-const DEFAULT_EQUIP = "Dry Van 53'";
-const LTL_MAX_WEIGHT = 15000;
-
-
-function SdField({ icon, label, value }) {
-  const display = value === null || value === undefined || value === "" ? "\u2014" : value;
-  const isEmpty = display === "\u2014";
-  return (
-    <div className="sd-field">
-      <div className="sd-field-label">{icon} {label}</div>
-      <div className={`sd-field-value${isEmpty ? " empty" : ""}`}>{display}</div>
-    </div>
-  );
-}
-
-function fmt$(n) {
-  return "$" + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function constraintBadges(o) {
-  const badges = [];
-  if (o.noConsolidate) badges.push({ label: "🚫 Solo", bg: "rgba(220,38,38,.1)", color: "#dc2626", border: "rgba(220,38,38,.25)" });
-  if (o.dedicatedEquip) badges.push({ label: "🚛 Dedicated", bg: "rgba(217,119,6,.1)", color: "#d97706", border: "rgba(217,119,6,.25)" });
-  if (o.hazmat) badges.push({ label: "☢️ Hazmat", bg: "rgba(220,38,38,.1)", color: "#dc2626", border: "rgba(220,38,38,.25)" });
-  if (o.preferredCarrier) badges.push({ label: `📌 ${String(o.preferredCarrier).split(" ")[0]}`, bg: "rgba(59,130,246,.1)", color: "#3b82f6", border: "rgba(59,130,246,.25)" });
-  if (o.excludedCarrier) badges.push({ label: `⛔ No ${String(o.excludedCarrier).split(" ")[0]}`, bg: "rgba(107,114,128,.1)", color: "#6b7280", border: "rgba(107,114,128,.25)" });
-  return badges;
-}
+import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
+import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit } from "../services/ordersService";
+import PlanSummaryModal from "../components/orders/PlanSummaryModal";
+import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
+import NewOrderModal from "../components/orders/NewOrderModal";
+import OrderDetailModal from "../components/orders/OrderDetailModal";
 
 export default function OrdersPage() {
   const { orders, shipments, carriers, setData, refreshData, routeTemplates } = useOutletContext();
@@ -116,7 +62,6 @@ export default function OrdersPage() {
   const [editUser, setEditUser] = useState("Sridhar (Dispatcher)");
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}
-  const DEMO_USERS = ["Sridhar (Dispatcher)", "Tulasi (Admin)", "System (Auto)"];
 
   // Auto-sync weight/pieces from line items into edit form
   useEffect(() => {
@@ -153,6 +98,9 @@ export default function OrdersPage() {
     return Array.from(set).sort();
   }, [orders]);
 
+  /* ── Lane normalization: lowercase + collapse whitespace (ZIP preserved — different ZIP = different lane) ── */
+  const normalizeLane = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+
   /* ── Filter + sort ── */
   const rows = useMemo(() => {
     let filtered = orders;
@@ -184,8 +132,8 @@ export default function OrdersPage() {
       if (sortCol === "id") {
         if (a.status === "Unplanned" && b.status !== "Unplanned") return -1;
         if (b.status === "Unplanned" && a.status !== "Unplanned") return 1;
-        const ka = `${a.origin}||${a.dest}`;
-        const kb = `${b.origin}||${b.dest}`;
+        const ka = `${normalizeLane(a.origin)}||${normalizeLane(a.dest)}`;
+        const kb = `${normalizeLane(b.origin)}||${normalizeLane(b.dest)}`;
         if (a.status === "Unplanned" && ka !== kb) return ka.localeCompare(kb);
       }
       // Apply user-chosen column sort
@@ -202,7 +150,7 @@ export default function OrdersPage() {
     const map = {};
     rows.forEach((o) => {
       if (o.status !== "Unplanned") return;
-      const key = `${o.origin}||${o.dest}`;
+      const key = `${normalizeLane(o.origin)}||${normalizeLane(o.dest)}`;
       if (!map[key]) map[key] = { orders: [], totalWeight: 0, totalPieces: 0, origin: o.origin, dest: o.dest };
       map[key].orders.push(o.id);
       map[key].totalWeight += Number(o.weight || 0);
@@ -260,35 +208,8 @@ export default function OrdersPage() {
     if (!window.confirm(`Unplan order ${id}?`)) return;
     setBusyId(id);
     try {
-      const order = orders.find((o) => o.id === id);
-      const shipmentId = order?.shipment_id;
-      await DbApi.patch("orders", id, { status: "Unplanned", shipment_id: null });
-
-      // Clean up shipment if no orders remain
-      if (shipmentId) {
-        const remainingOrders = orders.filter((o) => o.shipment_id === shipmentId && o.id !== id);
-        if (remainingOrders.length === 0) {
-          // Delete the shipment (and its master if this was the last CBOL)
-          const ship = shipments.find((s) => s.id === shipmentId);
-          await DbApi.remove("shipments", shipmentId).catch(() => {});
-          // If it was a CBOL, check if the MBOL has any remaining CBOLs
-          if (ship?.master_shipment_id) {
-            const siblingCbols = shipments.filter((s) => s.master_shipment_id === ship.master_shipment_id && s.id !== shipmentId);
-            if (siblingCbols.length === 0) {
-              await DbApi.remove("shipments", ship.master_shipment_id).catch(() => {});
-              toast(`Order ${id} unplanned. Shipment ${shipmentId} and master ${ship.master_shipment_id} deleted.`, "success");
-            } else {
-              toast(`Order ${id} unplanned. Shipment ${shipmentId} deleted.`, "success");
-            }
-          } else {
-            toast(`Order ${id} unplanned. Shipment ${shipmentId} deleted.`, "success");
-          }
-        } else {
-          toast(`Order ${id} unplanned`, "success");
-        }
-      } else {
-        toast(`Order ${id} unplanned`, "success");
-      }
+      const result = await unplanOrderFromShipment(id, orders, shipments);
+      toast(result.message, "success");
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
     finally { setBusyId(""); }
@@ -453,302 +374,248 @@ export default function OrdersPage() {
     finally { setDetailBusy(false); }
   }
 
-  /* ── Date helpers ── */
-  function addBusinessDays(dateStr, days) {
-    const d = new Date(dateStr + "T12:00:00");
-    const step = days >= 0 ? 1 : -1;
-    let remaining = Math.abs(days);
-    while (remaining > 0) { d.setDate(d.getDate() + step); const dow = d.getDay(); if (dow !== 0 && dow !== 6) remaining--; }
-    return d.toISOString().slice(0, 10);
-  }
-  function calcDates(quote, dueDate, readyDate) {
-    const today = new Date().toISOString().slice(0, 10);
-    let transit = quote.transitDays || null;
-    if (!transit) {
-      return { pickup: null, delivery: null, transit: null, warning: "", error: "No transit time available — configure transit_days in rate table, add miles, or enable CarrierConnect" };
-    }
-    // Pickup = latest of (today, readyDate) — can't ship before ready
-    const minPickup = today > (readyDate || "") ? today : (readyDate || today);
-    let pickup = minPickup;
-    // If due date exists, try to back-calculate pickup to arrive on time
-    if (dueDate) {
-      const idealPickup = addBusinessDays(dueDate, -transit);
-      if (idealPickup >= minPickup) pickup = idealPickup;
-      // else constrained by ready date — ship ASAP
-    }
-    const delivery = addBusinessDays(pickup, transit);
-    const warning = dueDate && delivery > dueDate ? "Late — delivery after due date" : "";
-    return { pickup, delivery, transit, warning };
-  }
+  /* ── Date helpers & city lookups imported from utils/orderUtils ── */
 
-  /* ── City → Zip fallback (for orders missing zip codes) ── */
-  const CITY_ZIPS = {
-    "chicago": "60602", "dallas": "75202", "atlanta": "30303", "los angeles": "90012",
-    "new york": "10001", "houston": "77002", "san jose": "95112", "charlotte": "28202",
-    "memphis": "38103", "louisville": "40202", "columbus": "43215", "indianapolis": "46204",
-    "nashville": "37203", "san francisco": "94102", "seattle": "98101", "denver": "80202",
-    "phoenix": "85004", "detroit": "48226", "minneapolis": "55401", "miami": "33131",
-    "college park": "30337", "laredo": "78040", "el paso": "79901", "savannah": "31401",
-  };
-  const cityZipLookup = (str) => {
-    const city = (str || "").split(",")[0].trim().toLowerCase();
-    return CITY_ZIPS[city] || "";
-  };
-
-  /* ── Create shipments directly from a multi-stop route ── */
-  async function createShipmentsFromRoute(route, ordersList) {
-    const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
-    const stops = Array.isArray(route.stops) ? route.stops : [];
-    const pickups = stops.filter((s) => s.type === "pickup");
-    const deliveries = stops.filter((s) => s.type === "delivery");
-    const firstPickup = pickups[0] || stops[0];
-    const lastDelivery = deliveries[deliveries.length - 1] || stops[stops.length - 1];
-    const totalCost = parseFloat(route.cost_override) || 0;
-    const totalMiles = parseFloat(route.total_miles) || 0;
-
-    // Auto-assign orders to delivery stops by matching destination
-    const assignments = {};
-    for (const d of deliveries) {
-      const dCity = normalize(d.location || d.city);
-      const matched = ordersList.filter((o) => {
-        const oCity = normalize(o.dest);
-        return oCity.includes(dCity) || dCity.includes(oCity);
-      });
-      if (matched.length > 0) {
-        const key = `${(firstPickup.stop_seq || 1)}.${d.stop_seq || d.sequence}`;
-        assignments[key] = { delivery: d, orders: matched };
-      }
-    }
-
-    if (Object.keys(assignments).length === 0) {
-      toast("Could not match orders to route stops", "error");
-      return;
-    }
-
+  /* ── Create shipments from multi-stop route (via service) ── */
+  async function handleCreateShipmentsFromRoute(route, ordersList, skipSummary = false) {
     setBusyId("multi-stop");
     try {
-      const genId = () => `SHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const masterId = genId();
-      const allOrderIds = ordersList.map((o) => o.id);
-      const today = new Date().toISOString().slice(0, 10);
-      const dueDates = ordersList.map((o) => o.due).filter(Boolean).sort();
-      const routeTransitDays = parseInt(route.transit_days) || 2;
-      // Delivery = earliest due date (must arrive by then)
-      const deliveryDate = dueDates[0] || addBusinessDays(today, routeTransitDays);
-      // Pickup = delivery - transit days (work backwards)
-      let pickupDate = addBusinessDays(deliveryDate, -routeTransitDays);
-      // If pickup is in the past, use today instead
-      if (pickupDate < today) pickupDate = today;
-
-      // Create MBOL
-      const masterShipment = {
-        id: masterId, carrier: route.carrier, mode: route.mode || "TL",
-        origin: firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`,
-        dest: lastDelivery.location || `${lastDelivery.city}, ${lastDelivery.state}`,
-        weight: ordersList.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
-        pieces: ordersList.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
-        status: "Planned", total_cost: totalCost, order_ids: allOrderIds,
-        miles: totalMiles, bol_type: "MBOL", route_template_id: route.id,
-        pickup_date: pickupDate, delivery_date: deliveryDate,
-        service_level: route.service_level || "Standard",
-      };
-      await DbApi.upsert("shipments", masterShipment);
-
-      // Create CBOLs and update orders
-      // Calculate leg miles from stops, or fetch via PC*Miler
-      const cbolKeys = Object.keys(assignments);
-      let totalLegMiles = 0;
-      const cbolMilesMap = {};
-      for (const [key, { delivery }] of Object.entries(assignments)) {
-        const pIdx = stops.indexOf(firstPickup);
-        const dIdx = stops.indexOf(delivery);
-        let miles = 0;
-        for (let i = pIdx + 1; i <= dIdx; i++) miles += parseFloat(stops[i].leg_miles) || 0;
-        cbolMilesMap[key] = miles;
-        totalLegMiles += miles;
-      }
-      // If no leg miles on stops, fetch from PC*Miler
-      if (totalLegMiles === 0 && cbolKeys.length > 0) {
-        try {
-          const pairs = Object.entries(assignments).map(([, { delivery }]) => ({
-            origin: firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`,
-            dest: delivery.location || `${delivery.city}, ${delivery.state}`,
-          }));
-          const mileageRes = await MileageApi.bulk(pairs);
-          const results = Array.isArray(mileageRes?.results) ? mileageRes.results : (Array.isArray(mileageRes) ? mileageRes : []);
-          cbolKeys.forEach((key, idx) => {
-            const mi = parseFloat(results[idx]?.miles || results[idx]?.distance) || 0;
-            cbolMilesMap[key] = mi;
-            totalLegMiles += mi;
-          });
-        } catch { /* PC*Miler unavailable — fall through to equal split */ }
-      }
-      // If still 0, split cost equally
-      const equalSplit = totalLegMiles === 0;
-
-      let cbolCount = 0;
-      const createdCbols = [];
-      for (const [key, { delivery, orders: cbolOrders }] of Object.entries(assignments)) {
-        const childId = `${masterId}.${key}`;
-        const legMiles = cbolMilesMap[key] || 0;
-        const cbolCost = equalSplit
-          ? Math.round((totalCost / cbolKeys.length) * 100) / 100
-          : Math.round((legMiles / totalLegMiles) * totalCost * 100) / 100;
-
-        const cbolOrigin = firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`;
-        const cbolDest = delivery.location || `${delivery.city}, ${delivery.state}`;
-        await DbApi.upsert("shipments", {
-          id: childId, carrier: route.carrier, mode: route.mode || "TL",
-          origin: cbolOrigin, dest: cbolDest,
-          weight: cbolOrders.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
-          pieces: cbolOrders.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
-          status: "Planned", total_cost: cbolCost, order_ids: cbolOrders.map((o) => o.id),
-          miles: legMiles, bol_type: "CBOL", master_shipment_id: masterId,
-          stop_from: key.split(".")[0], stop_to: key.split(".")[1],
-          route_template_id: route.id,
-          pickup_date: pickupDate, delivery_date: deliveryDate,
-          service_level: route.service_level || "Standard",
-        });
-        createdCbols.push({ id: childId, origin: cbolOrigin, dest: cbolDest, cost: cbolCost, miles: legMiles, orders: cbolOrders });
-
-        for (const ord of cbolOrders) {
-          await DbApi.patch("orders", ord.id, { status: "Planned", shipment_id: childId });
-        }
-        cbolCount++;
-      }
-
-      // Build full route path from stops
-      const routePath = stops.map((s) => (s.city || (s.location || "").split(",")[0] || "").trim()).filter(Boolean).join(" → ");
-
-      setPlanSummary({
+      const result = await createShipmentsFromRoute(route, ordersList);
+      if (result.error) { toast(result.error, "error"); return null; }
+      const summaryData = {
         isMultiStop: true,
-        masterShipment: { ...masterShipment, routePath },
-        childShipments: createdCbols,
-        ordersUpdated: ordersList.length,
-        totalCost,
+        masterShipment: result.masterShipment,
+        childShipments: result.childShipments,
+        ordersUpdated: result.ordersUpdated,
+        totalCost: parseFloat(route.cost_override) || 0,
         carrier: route.carrier,
         mode: route.mode || "TL",
         siblings: ordersList,
-      });
+      };
+      if (!skipSummary) {
+        setPlanSummary(summaryData);
+      }
       await refreshData();
+      return summaryData;
     } catch (err) {
       toast(`Multi-stop plan failed: ${err.message}`, "error");
+      return null;
     } finally {
       setBusyId("");
     }
   }
 
-  /* ── Open Plan Confirmation Modal ── */
-  async function openPlanModal(orderId, planGroup = false, selectedIds = null) {
-    const o = orders.find((x) => x.id === orderId);
-    if (!o || o.status !== "Unplanned") return;
-    // selectedIds: explicit list from multi-select. planGroup: auto-consolidate same lane. default: single order.
-    const sibs = selectedIds
-      ? orders.filter((x) => selectedIds.has(x.id) && x.status === "Unplanned")
-      : planGroup
-        ? orders.filter((x) => x.status === "Unplanned" && x.origin === o.origin && x.dest === o.dest)
-        : [o];
+  /* ── Plan Selected: directly create shipments for all selected orders ── */
+  async function planSelected() {
+    const selected = orders.filter((o) => selectedOrders.has(o.id) && o.status === "Unplanned");
+    if (!selected.length) { toast("No unplanned orders selected", "warning"); return; }
 
-    // Multi-order planning: try multi-stop routes first, then plan remaining individually
-    if (sibs.length > 1) {
-      const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
-      const origins = new Set(sibs.map((x) => normalize(x.origin)));
-      const dests = new Set(sibs.map((x) => normalize(x.dest)));
-      if (origins.size > 1 || dests.size > 1) {
-        // Fetch route templates
-        let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
-        if (templates.length === 0) {
-          try {
-            const freshTemplates = await DbApi.routeTemplates();
-            templates = Array.isArray(freshTemplates) ? freshTemplates : [];
-          } catch { /* ignore */ }
-        }
+    const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
+    setBusyId("plan-selected");
+    try {
+      // 1. Check for multi-stop route matches
+      let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
+      if (templates.length === 0) {
+        try { templates = await DbApi.routeTemplates() || []; } catch { /* ignore */ }
+      }
+      const routeMatch = findMatchingRoute(templates, selected);
+      let routePlanned = [];
+      let multiStopSummary = null;
+      if (routeMatch) {
+        multiStopSummary = await handleCreateShipmentsFromRoute(routeMatch.route, routeMatch.matchedOrders, true);
+        if (multiStopSummary) routePlanned = routeMatch.matchedOrders;
+      }
 
-        // Try to match orders to a multi-stop route
-        let routeMatchedOrders = [];
-        for (const t of templates) {
-          if (!t.carrier) continue;
-          const tStops = Array.isArray(t.stops) ? t.stops : [];
-          const tPickups = tStops.filter((s) => s.type === "pickup").map((s) => normalize(s.location || s.city));
-          const tDeliveries = tStops.filter((s) => s.type === "delivery").map((s) => normalize(s.location || s.city));
-          // Find orders that match this route (origin matches a pickup, dest matches a delivery)
-          const matched = sibs.filter((o) => {
-            const oOrigin = normalize(o.origin);
-            const oDest = normalize(o.dest);
-            return tPickups.some((p) => oOrigin.includes(p) || p.includes(oOrigin))
-              && tDeliveries.some((td) => oDest.includes(td) || td.includes(oDest));
-          });
-          if (matched.length >= 2) {
-            // Found a route with 2+ matching orders — plan them via multi-stop
-            await createShipmentsFromRoute(t, matched);
-            routeMatchedOrders = matched;
-            break;
-          }
-        }
-
-        // Remaining orders not matched to a route — plan each individually
-        const remaining = sibs.filter((o) => !routeMatchedOrders.includes(o));
-        if (remaining.length > 0) {
-          // Group remaining by same lane, then open plan modal for first group
-          // Others will be planned as single orders
-          const firstRemaining = remaining[0];
-          // Plan remaining orders individually (open plan modal for the first one)
-          if (routeMatchedOrders.length > 0) {
-            // Some were multi-stopped, plan remaining individually
-            for (const rem of remaining) {
-              // Use single-order plan flow — open modal for first, rest queued
-              // For now, just open the plan modal for the first remaining order
-            }
-            if (remaining.length === 1) {
-              // Fall through to normal single-order plan modal below
-              // Override sibs to just this one order
-              openPlanModal(firstRemaining.id, false, null);
-              return;
-            }
-            toast(`${routeMatchedOrders.length} orders planned via multi-stop route. ${remaining.length} remaining — select and plan them individually.`, "info");
-            return;
-          }
-          // No route matched at all — plan all as individual orders
-          // Fall through to normal plan modal for the first selected order
-        } else {
-          // All orders matched to a route
-          return;
+      // 2. Remaining orders — group by lane, rate, and auto-plan
+      const remaining = selected.filter((o) => !routePlanned.includes(o));
+      let bulkResult = null;
+      if (remaining.length > 0) {
+        bulkResult = await bulkPlanOrders(remaining);
+        if (bulkResult.noQuotes && routePlanned.length === 0) {
+          toast("No carrier quotes available for selected orders.", "warning");
         }
       }
+
+      // 3. Build unified summary combining multi-stop + bulk results
+      const bulkPlannedCount = bulkResult?.updated || 0;
+      const totalPlanned = routePlanned.length + bulkPlannedCount;
+      const routeCost = routeMatch ? (parseFloat(routeMatch.route.cost_override) || 0) : 0;
+      const bulkCost = bulkResult?.cost || 0;
+
+      // Build unified summary
+      setPlanSummary({
+        isCombined: true,
+        multiStop: multiStopSummary,
+        bulkShipments: bulkResult?.shipments || [],
+        bulkPlans: bulkResult?.plans || [],
+        bulkSiblings: remaining,
+        ordersUpdated: totalPlanned,
+        totalCost: routeCost + bulkCost,
+        siblings: selected,
+      });
+      setSelectedOrders(new Set());
+      await refreshData();
+    } catch (err) {
+      toast(`Plan failed: ${err.message}`, "error");
+    } finally {
+      setBusyId("");
     }
+  }
+
+  /* ── Open Plan Confirmation Modal (single order — shows carrier options) ── */
+  async function openPlanModal(orderId, consolidate = false) {
+    const o = orders.find((x) => x.id === orderId);
+    if (!o || o.status !== "Unplanned") return;
+    // consolidate=true: group all same-lane orders (normalized). false: just this order.
+    const sibs = consolidate
+      ? orders.filter((x) => x.status === "Unplanned" && normalizeLane(x.origin) === normalizeLane(o.origin) && normalizeLane(x.dest) === normalizeLane(o.dest))
+      : [o];
 
     const totalWeight = sibs.reduce((s, x) => s + Number(x.weight || 0), 0);
     const totalPieces = sibs.reduce((s, x) => s + Number(x.pieces || 0), 0);
     const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
     const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.dest);
-    // Auto-detect equipment: LTL if weight ≤ 15,000 lbs, else Dry Van 53'
-    const autoEquip = totalWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
-    const maxWt = EQUIPMENT_TYPES[autoEquip].maxWeight;
-    const util = Math.round((totalWeight / maxWt) * 100);
-    const lane = {
+
+    const baseLane = {
       laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70", totalWeight, totalPieces,
       orderIds: sibs.map((x) => x.id),
     };
-    setPlanModal({ order: o, siblings: sibs, lane, quotes: [], selectedIdx: 0, busy: true, error: "", maxWt, util, loadDuration: 120, equipType: autoEquip });
+
+    // Split into shipment groups by equipment max weight (not LTL max).
+    // If total > LTL, use TL equipment max (44,000 lbs) so compatible orders consolidate as TL.
+    const equipMaxWeight = totalWeight <= LTL_MAX_WEIGHT
+      ? LTL_MAX_WEIGHT
+      : EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight;
+    const groups = buildShipmentGroups(sibs, baseLane, equipMaxWeight);
+    const shipmentGroups = groups.map((g) => {
+      const gWeight = g.lane.totalWeight;
+      const autoEquip = gWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
+      const maxWt = EQUIPMENT_TYPES[autoEquip].maxWeight;
+      return {
+        lane: g.lane,
+        orders: g.orders,
+        equipType: autoEquip,
+        maxWt,
+        util: Math.round((gWeight / maxWt) * 100),
+        quotes: [],
+        selectedIdx: 0,
+        bestQuote: null,
+      };
+    });
+
+    const firstEquip = shipmentGroups[0]?.equipType || DEFAULT_EQUIP;
+    const firstMaxWt = shipmentGroups[0]?.maxWt || EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight;
+    const firstUtil = shipmentGroups[0]?.util || 0;
+
+    setPlanModal({
+      order: o, siblings: sibs, lane: baseLane,
+      quotes: [], selectedIdx: 0, busy: true, error: "",
+      maxWt: firstMaxWt, util: firstUtil, loadDuration: 120, equipType: firstEquip,
+      shipmentGroups,
+    });
     setDetailOrder(null);
+
     try {
-      const rateRes = await BulkPlanApi.rate([lane], "cost");
-      const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
-      const rawQuotes = results[0]?.quotes || [];
-      // Sort: feasible (on-time) first, then by cost ascending
-      const readyD = sibs.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
-      const dueD = sibs.map((s) => s.due).filter(Boolean).sort()[0] || "";
-      const sortedQuotes = [...rawQuotes].sort((a, b) => {
-        const datesA = calcDates(a, dueD, readyD);
-        const datesB = calcDates(b, dueD, readyD);
-        const lateA = datesA.warning ? 1 : 0;
-        const lateB = datesB.warning ? 1 : 0;
-        if (lateA !== lateB) return lateA - lateB; // on-time first
-        return (a.totalCharge || 0) - (b.totalCharge || 0); // then cheapest
-      });
-      const bestQuote = results[0]?.bestQuote || null;
-      setPlanModal((prev) => prev ? { ...prev, quotes: sortedQuotes, bestQuote, busy: false } : null);
+      // Rate each shipment group independently
+      let ratedGroups = await Promise.all(
+        shipmentGroups.map(async (sg) => {
+          const readyD = sg.orders.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
+          const dueD = sg.orders.map((s) => s.due).filter(Boolean).sort()[0] || "";
+          const { quotes, bestQuote } = await fetchCarrierQuotes(sg.lane, calcDates, dueD, readyD);
+          return { ...sg, quotes, bestQuote };
+        })
+      );
+
+      // Post-rating date check: use actual transit to find the largest subset with compatible dates.
+      // Progressively remove orders whose dates conflict until the remaining group works.
+      const finalGroups = [];
+      for (const sg of ratedGroups) {
+        const transit = sg.bestQuote?.transitDays;
+        if (sg.orders.length > 1 && transit && !datesCompatibleWithTransit(sg.orders, transit)) {
+          console.log(`[PlanGroup] Group dates incompatible with ${transit}d transit — finding best subset`);
+
+          // Find which orders conflict: remove orders whose ready date is too late
+          // or whose due date is too tight for the group.
+          // Strategy: sort orders by due date, progressively build the largest compatible subset.
+          const sorted = [...sg.orders].sort((a, b) => {
+            const dueA = a.due || a.delivery_date || "9999";
+            const dueB = b.due || b.delivery_date || "9999";
+            return dueA.localeCompare(dueB);
+          });
+
+          // Try subsets from largest to smallest
+          let bestSubset = null;
+          for (let size = sorted.length - 1; size >= 2; size--) {
+            // Try removing each order one at a time, check if remainder is compatible
+            for (let skip = 0; skip < sorted.length; skip++) {
+              const subset = sorted.filter((_, idx) => idx !== skip);
+              if (subset.length === size && datesCompatibleWithTransit(subset, transit)) {
+                bestSubset = subset;
+                break;
+              }
+            }
+            if (bestSubset) break;
+          }
+
+          if (bestSubset) {
+            // Rate the compatible subset as a consolidated group
+            const subsetIds = new Set(bestSubset.map(o => o.id));
+            const remainder = sg.orders.filter(o => !subsetIds.has(o.id));
+            const subsetWeight = bestSubset.reduce((s, o) => s + Number(o.weight || 0), 0);
+            const subsetPieces = bestSubset.reduce((s, o) => s + Number(o.pieces || 0), 0);
+            const subsetLane = { ...sg.lane, totalWeight: subsetWeight, totalPieces: subsetPieces, orderIds: bestSubset.map(o => o.id) };
+            const subsetEquip = subsetWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
+            const subsetMaxWt = EQUIPMENT_TYPES[subsetEquip].maxWeight;
+
+            const readyD = bestSubset.map(o => o.ready).filter(Boolean).sort().reverse()[0] || "";
+            const dueD = bestSubset.map(o => o.due).filter(Boolean).sort()[0] || "";
+            const { quotes: subQuotes, bestQuote: subBest } = await fetchCarrierQuotes(subsetLane, calcDates, dueD, readyD);
+
+            finalGroups.push({
+              lane: subsetLane, orders: bestSubset, equipType: subsetEquip,
+              maxWt: subsetMaxWt, util: Math.round((subsetWeight / subsetMaxWt) * 100),
+              quotes: subQuotes, selectedIdx: 0, bestQuote: subBest,
+            });
+
+            // Rate remainder individually
+            for (const order of remainder) {
+              const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
+              const singleEquip = Number(order.weight || 0) <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
+              const singleMaxWt = EQUIPMENT_TYPES[singleEquip].maxWeight;
+              const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
+              finalGroups.push({
+                lane: singleLane, orders: [order], equipType: singleEquip,
+                maxWt: singleMaxWt, util: Math.round((Number(order.weight || 0) / singleMaxWt) * 100),
+                quotes, selectedIdx: 0, bestQuote,
+              });
+            }
+            console.log(`[PlanGroup] Split into ${bestSubset.length} consolidated + ${remainder.length} individual`);
+          } else {
+            // No compatible subset found — plan all individually
+            for (const order of sg.orders) {
+              const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
+              const singleEquip = Number(order.weight || 0) <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
+              const singleMaxWt = EQUIPMENT_TYPES[singleEquip].maxWeight;
+              const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
+              finalGroups.push({
+                lane: singleLane, orders: [order], equipType: singleEquip,
+                maxWt: singleMaxWt, util: Math.round((Number(order.weight || 0) / singleMaxWt) * 100),
+                quotes, selectedIdx: 0, bestQuote,
+              });
+            }
+          }
+        } else {
+          finalGroups.push(sg);
+        }
+      }
+
+      const firstQuotes = finalGroups[0]?.quotes || [];
+      const firstBest = finalGroups[0]?.bestQuote || null;
+      setPlanModal((prev) => prev ? {
+        ...prev, quotes: firstQuotes, bestQuote: firstBest, busy: false,
+        shipmentGroups: finalGroups,
+      } : null);
     } catch (err) {
       setPlanModal((prev) => prev ? { ...prev, busy: false, error: err.message } : null);
     }
@@ -756,22 +623,23 @@ export default function OrdersPage() {
 
   async function confirmPlan() {
     if (!planModal) return;
-    const { lane, quotes, selectedIdx, bestQuote, siblings } = planModal;
-    const chosen = quotes[selectedIdx] || bestQuote;
-    if (!chosen) { toast("No carrier selected", "error"); return; }
-    const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
-    const earliestDue = siblings?.map((s) => s.due).filter(Boolean).sort()[0] || "";
-    const dates = calcDates(chosen, earliestDue, readyDate);
-    if (dates.error) {
-      toast(`Planning failed: ${dates.error}`, "error");
-      return;
-    }
-    setPlanModal((prev) => prev ? { ...prev, busy: true } : null);
-    try {
-      const plans = [{
-        laneKey: lane.laneKey, origin: lane.origin, destination: lane.destination,
-        originZip: lane.originZip, destZip: lane.destZip,
-        totalWeight: lane.totalWeight, totalPieces: lane.totalPieces, orderIds: lane.orderIds,
+    const { lane, shipmentGroups, siblings } = planModal;
+    const groups = shipmentGroups || [{ lane, quotes: planModal.quotes, selectedIdx: planModal.selectedIdx, bestQuote: planModal.bestQuote, orders: siblings }];
+
+    // Build a plan for each shipment group
+    const plans = [];
+    let totalCost = 0;
+    for (const sg of groups) {
+      const chosen = sg.quotes[sg.selectedIdx] || sg.bestQuote;
+      if (!chosen) { toast(`No carrier selected for a shipment group`, "error"); return; }
+      const readyDate = sg.orders?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
+      const earliestDue = sg.orders?.map((s) => s.due).filter(Boolean).sort()[0] || "";
+      const dates = calcDates(chosen, earliestDue, readyDate);
+      if (dates.error) { toast(`Planning failed: ${dates.error}`, "error"); return; }
+      plans.push({
+        laneKey: sg.lane.laneKey, origin: sg.lane.origin, destination: sg.lane.destination,
+        originZip: sg.lane.originZip, destZip: sg.lane.destZip,
+        totalWeight: sg.lane.totalWeight, totalPieces: sg.lane.totalPieces, orderIds: sg.lane.orderIds,
         carrier: chosen.carrier || "", mode: chosen.mode || "LTL",
         totalCost: chosen.totalCharge || 0, pickupDate: dates.pickup,
         deliveryDate: dates.delivery, czarliteRate: chosen.mode === "LTL",
@@ -780,79 +648,50 @@ export default function OrdersPage() {
         rate: chosen.czarBaseGross || chosen.czarBase || 0,
         fuelSurcharge: chosen.fscCharge || 0,
         accessorials: chosen.accessorialCharge || 0,
-      }];
-      const execRes = await BulkPlanApi.execute(plans);
+        rateId: chosen.rateId || null,
+      });
+      totalCost += chosen.totalCharge || 0;
+    }
+
+    setPlanModal((prev) => prev ? { ...prev, busy: true } : null);
+    try {
+      const execRes = await executeSinglePlan(plans);
       setPlanModal(null);
+      const firstChosen = groups[0]?.quotes[groups[0]?.selectedIdx] || groups[0]?.bestQuote || {};
+      const firstDates = calcDates(firstChosen, siblings?.[0]?.due || "", siblings?.[0]?.ready || "");
       setPlanSummary({
         shipments: execRes?.shipments || [],
         ordersUpdated: execRes?.ordersUpdated || 0,
-        totalCost: chosen.totalCharge || 0,
-        carrier: chosen.carrier || "",
-        mode: chosen.mode || "TL",
-        lane, siblings, dates,
+        totalCost,
+        carrier: firstChosen.carrier || "",
+        mode: firstChosen.mode || "TL",
+        lane, siblings, dates: firstDates,
       });
-      // Refresh in background — don't await (it unmounts the page via loading state)
       refreshData();
     } catch (err) {
       setPlanModal((prev) => prev ? { ...prev, busy: false, error: err.message } : null);
     }
   }
 
-  /* ── Bulk Plan Scheduler ── */
+  /* ── Bulk Plan Scheduler (uses service) ── */
   const runBulk = useCallback(async () => {
     const unplanned = orders.filter((o) => o.status === "Unplanned");
     if (!unplanned.length) {
       setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No unplanned orders.`]);
       return;
     }
-    // Group by lane
-    const laneMap = {};
-    unplanned.forEach((o) => {
-      const key = `${o.origin || ""}||${o.dest || ""}`;
-      if (!laneMap[key]) laneMap[key] = [];
-      laneMap[key].push(o);
-    });
-    const lanes = Object.values(laneMap).map((group) => {
-      const o = group[0];
-      return {
-        laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
-        originZip: String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || "",
-        destZip: String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || "",
-        freightClass: o.freight_class || "70",
-        totalWeight: group.reduce((s, x) => s + Number(x.weight || 0), 0),
-        totalPieces: group.reduce((s, x) => s + Number(x.pieces || 0), 0),
-        orderIds: group.map((x) => x.id),
-      };
-    });
-    setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${lanes.length} lanes...`]);
+    setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${unplanned.length} orders...`]);
     try {
-      const rateRes = await BulkPlanApi.rate(lanes, "cost");
-      const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
-      const plans = results.map((r) => {
-        const lane = lanes.find((l) => l.laneKey === r.laneKey);
-        if (!lane || !r?.bestQuote) return null;
-        return {
-          laneKey: lane.laneKey, origin: lane.origin, destination: lane.destination,
-          originZip: lane.originZip, destZip: lane.destZip,
-          totalWeight: lane.totalWeight, totalPieces: lane.totalPieces, orderIds: lane.orderIds,
-          carrier: r.bestQuote.carrier || "", mode: r.bestQuote.mode || "LTL",
-          totalCost: r.bestQuote.totalCharge || 0, pickupDate: "",
-          deliveryDate: r.bestQuote.deliveryDate || "", czarliteRate: r.bestQuote.mode === "LTL",
-        };
-      }).filter(Boolean);
-      if (!plans.length) {
+      const result = await bulkPlanOrders(unplanned);
+      if (result.noQuotes) {
         setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No quotes returned.`]);
         setSchedRuns((r) => r + 1);
         return;
       }
-      const execRes = await BulkPlanApi.execute(plans);
-      const created = execRes?.shipments?.length || 0;
-      const updated = execRes?.ordersUpdated || 0;
-      const cost = (execRes?.shipments || []).reduce((s, sh) => s + Number(sh.total_cost || 0), 0);
       setSchedRuns((r) => r + 1);
-      setSchedPlanned((p) => p + updated);
-      setSchedSaved((p) => p + cost);
-      setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ✅ ${created} shipment(s), ${updated} order(s) planned. Cost: ${fmt$(cost)}`]);
+      setSchedPlanned((p) => p + result.updated);
+      setSchedSaved((p) => p + result.cost);
+      setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ✅ ${result.created} shipment(s), ${result.updated} order(s) planned. Cost: ${fmt$(result.cost)}`]);
       await refreshData();
     } catch (err) {
       setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ❌ ${err.message}`]);
@@ -918,7 +757,7 @@ export default function OrdersPage() {
     const showLaneGroups = sortCol === "id"; // only show lane grouping in default sort
     let lastLaneKey = null;
     rows.forEach((o) => {
-      const laneKey = `${o.origin}||${o.dest}`;
+      const laneKey = `${normalizeLane(o.origin)}||${normalizeLane(o.dest)}`;
       const group = laneGroups[laneKey];
       if (showLaneGroups && o.status === "Unplanned" && group && group.orders.length > 1 && laneKey !== lastLaneKey) {
         lastLaneKey = laneKey;
@@ -1028,7 +867,7 @@ export default function OrdersPage() {
       {/* ═══ FILTERS ═══ */}
       <div className="filter-bar" style={{ flexWrap: "wrap" }}>
         <div className="search-wrap">
-          <input placeholder="🔍 Search order, customer, lane, commodity..." value={q} onChange={(e) => setQ(e.target.value)} className="search-input" style={{ minWidth: 250 }} />
+          <input placeholder="🔍 Search order, customer, lane, commodity..." value={q} onChange={(e) => setQ(e.target.value)} className="search-input" style={{ minWidth: 250, flex: 1 }} />
         </div>
         <select className="fsel" value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)}>
           <option value="All">All Customers</option>
@@ -1061,7 +900,7 @@ export default function OrdersPage() {
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button onClick={() => setSelectedOrders(new Set())} style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.4)", background: "rgba(255,255,255,.15)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✕ Clear</button>
             {selectedStats.unplannedCount > 0 && (
-              <button onClick={() => { const first = orders.find((o) => selectedOrders.has(o.id) && o.status === "Unplanned"); if (first) openPlanModal(first.id, false, selectedOrders); }}
+              <button onClick={planSelected}
                 style={{ padding: "5px 14px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                 ⚡ Plan Selected
               </button>
@@ -1178,714 +1017,30 @@ export default function OrdersPage() {
 
       <div className="text-sm text-muted mt-2">{rows.length} of {orders.length} orders</div>
 
-      {/* ═══ ORDER DETAIL MODAL ═══ */}
-      {detailOrder && (() => {
-        const o = detailOrder;
-        const w = typeof o.weight === "number" ? o.weight.toLocaleString() : o.weight;
-        const sibs = orders.filter((x) => x.status === "Unplanned" && x.origin === o.origin && x.dest === o.dest && x.id !== o.id);
-        const shipModeVal = o.ship_mode || o.shipMode;
-        const histLog = orderChangeLog[o.id] || [];
-        const relShips = shipments?.filter((sh) => o.shipment_id && sh.id === o.shipment_id) || [];
+      {/* ═══ ORDER DETAIL MODAL (extracted) ═══ */}
+      <OrderDetailModal
+        order={detailOrder} orders={orders} shipments={shipments}
+        tab={detailTab} onTabChange={setDetailTab}
+        editForm={editForm} onEditFormChange={setEditForm}
+        editUser={editUser} onEditUserChange={setEditUser} editStatus={editStatus}
+        detailLines={detailLines} onLinesChange={setDetailLines}
+        onSave={saveOrderEdit} onSaveLines={saveLines}
+        onClose={() => setDetailOrder(null)}
+        onPlan={(id) => openPlanModal(id)} onUnplan={unplanOrder}
+        busy={detailBusy}
+        changeLog={orderChangeLog[detailOrder?.id] || []}
+        onClearHistory={() => setOrderChangeLog((prev) => ({ ...prev, [detailOrder?.id]: [] }))}
+        itemMaster={itemMaster} carriers={carriers} toast={toast}
+      />
 
-        return (
-        <div className="modal-overlay" onClick={() => setDetailOrder(null)}>
-          <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 16, width: 740, maxWidth: "95vw", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(30,45,107,0.20)" }} onClick={(e) => e.stopPropagation()}>
-            {/* Header with gradient + tabs */}
-            <div style={{ background: "linear-gradient(135deg,#1a237e,#6366f1)", borderRadius: "16px 16px 0 0" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px 12px" }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Order Details</div>
-                  <span style={{ color: "#fff", fontSize: 19, fontFamily: "'Syne',sans-serif", fontWeight: 700 }}>{o.id}</span>
-                </div>
-                <button onClick={() => setDetailOrder(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", fontSize: 22, cursor: "pointer", padding: "4px 8px", borderRadius: 6 }}>✕</button>
-              </div>
-              <div style={{ display: "flex", padding: "0 22px", gap: 2 }}>
-                {["view", "edit", "history"].map((tab) => {
-                  const labels = { view: "Details", edit: "Edit", history: "History" };
-                  const icons = { view: "📋", edit: "✏️", history: "🕐" };
-                  const isActive = detailTab === tab;
-                  return (
-                    <button key={tab} onClick={() => { setDetailTab(tab); setEditStatus(""); }} style={{
-                      padding: "7px 18px", borderRadius: "8px 8px 0 0", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                      background: isActive ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.25)",
-                      color: isActive ? "#1a237e" : "rgba(255,255,255,.8)",
-                    }}>{icons[tab]} {labels[tab]}{tab === "history" && histLog.length > 0 && <span style={{ background: "rgba(255,255,255,.3)", borderRadius: 10, padding: "0 6px", fontSize: 10, marginLeft: 4 }}>{histLog.length}</span>}</button>
-                  );
-                })}
-              </div>
-            </div>
+      <PlanConfirmationModal planModal={planModal} onModalChange={setPlanModal}
+        onConfirm={confirmPlan} onClose={() => setPlanModal(null)} />
 
-            {/* Body */}
-            <div style={{ padding: 0, overflowY: "auto", flex: 1 }}>
+      <PlanSummaryModal summary={planSummary} onClose={() => setPlanSummary(null)} />
 
-              {/* ── VIEW TAB ── */}
-              {detailTab === "view" && (<>
-                {/* Status bar */}
-                <div style={{ padding: "14px 24px", background: "#f8faff", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span className={STATUS_BADGES[o.status] || "badge"}>{o.status}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>{o.customer || "—"}</span>
-                    {o.no_contract_rate && <span style={{ fontSize: 9, fontWeight: 700, background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", padding: "2px 7px", borderRadius: 8 }}>⚠️ SPOT RATE</span>}
-                  </div>
-                  {o.shipment_id && <a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono" style={{ fontSize: 12, color: "var(--accent)", background: "var(--accent-glow)", padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(59,130,246,.2)", textDecoration: "none", cursor: "pointer" }}>{"\u2192"} {o.shipment_id}</a>}
-                </div>
-
-                {/* Lane visual */}
-                <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>Origin</div><div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{o.origin || "—"}</div></div>
-                    <div style={{ flex: 1, display: "flex", alignItems: "center", padding: "0 10px" }}>
-                      <div style={{ flex: 1, height: 3, background: "linear-gradient(90deg,var(--accent),var(--accent2))", borderRadius: 2 }} />
-                      <div style={{ margin: "0 8px", fontSize: 18 }}>🚛</div>
-                      <div style={{ flex: 1, height: 3, background: "linear-gradient(90deg,var(--accent2),var(--accent))", borderRadius: 2 }} />
-                    </div>
-                    <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>Destination</div><div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{o.dest || "—"}</div></div>
-                  </div>
-                </div>
-
-                {/* Details grid */}
-                <div style={{ padding: "18px 24px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, borderBottom: "1px solid var(--border)" }}>
-                  <SdField icon="⚖️" label="Weight" value={w ? `${w} lbs` : null} />
-                  <SdField icon="🔢" label="Pieces" value={o.pieces} />
-                  <SdField icon="🏷️" label="Commodity" value={o.commodity} />
-                  <SdField icon="🚛" label="Ship Mode" value={shipModeVal ? <span style={{ display: "inline-block", background: shipModeVal === "TL" ? "#dbeafe" : "#d1fae5", color: shipModeVal === "TL" ? "#1d4ed8" : "#065f46", padding: "2px 10px", borderRadius: 6, fontWeight: 700, fontSize: 12 }}>{shipModeVal}</span> : <span style={{ color: "var(--text3)", fontStyle: "italic" }}>{"\u2014"} TMS selects {"\u2014"}</span>} />
-                  <SdField icon="📅" label="Ready Date" value={o.ready} />
-                  <SdField icon="🗓️" label="Due Date" value={o.due} />
-                  <SdField icon="🔗" label="Lane Peers" value={sibs.length > 0 ? `${sibs.length} eligible order(s)` : "No consolidation peers"} />
-                  {o.shipment_id && <SdField icon="🚚" label="Shipment ID" value={<a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono" style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "none" }}>{o.shipment_id} {"\u2197"}</a>} />}
-                  {o.ref_num && <SdField icon="📋" label="Reference #" value={o.ref_num} />}
-                  {o.po_num && <SdField icon="🧾" label="PO Number" value={o.po_num} />}
-                </div>
-
-                {/* Line Items */}
-                <div style={{ padding: "14px 24px", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📦 Line Items{detailLines.length > 0 && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text3)", marginLeft: 4 }}>({detailLines.length})</span>}</div>
-                  <OrderLinesEditor orderId={o.id} lines={detailLines} onChange={setDetailLines} onSave={saveLines}
-                    onClear={() => { if (window.confirm("Clear all lines?")) { OrdersApi.clearLines(o.id).then(() => { setDetailLines([]); toast("Lines cleared", "success"); }); } }}
-                    busy={detailBusy} mode="view" items={itemMaster} />
-                </div>
-
-                {/* Planning Constraints */}
-                <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1 }}>⚙️ Planning Constraints</div>
-                    {!["Delivered", "Cancelled"].includes(o.status) && <button className="btn btn-secondary btn-sm">✏️ Edit Constraints</button>}
-                  </div>
-                  {!(o.preferred_carrier || o.excluded_carrier || o.no_consolidate || o.hazmat) ? (
-                    <div style={{ fontSize: 13, color: "var(--text3)", padding: "10px 14px", background: "#f8faff", borderRadius: 8, border: "1px solid var(--border)" }}>No constraints set {"\u2014"} order will be auto-consolidated with cheapest rate</div>
-                  ) : (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {o.preferred_carrier && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(59,130,246,.08)", border: "1px solid rgba(59,130,246,.2)", borderRadius: 10 }}><span>📌</span><div><div style={{ fontSize: 11, color: "var(--text3)" }}>Preferred Carrier</div><div style={{ fontWeight: 600, fontSize: 13, color: "var(--accent)" }}>{o.preferred_carrier}</div></div></div>}
-                      {o.excluded_carrier && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(107,114,128,.08)", border: "1px solid rgba(107,114,128,.2)", borderRadius: 10 }}><span>⛔</span><div><div style={{ fontSize: 11, color: "var(--text3)" }}>Excluded Carrier</div><div style={{ fontWeight: 600, fontSize: 13, color: "#6b7280" }}>{o.excluded_carrier}</div></div></div>}
-                      {o.no_consolidate && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.2)", borderRadius: 10 }}><span>🚫</span><div><div style={{ fontSize: 11, color: "var(--text3)" }}>Consolidation</div><div style={{ fontWeight: 600, fontSize: 13, color: "var(--red)" }}>Solo load</div></div></div>}
-                      {o.hazmat && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.2)", borderRadius: 10 }}><span>☢️</span><div><div style={{ fontSize: 11, color: "var(--text3)" }}>Commodity</div><div style={{ fontWeight: 600, fontSize: 13, color: "var(--red)" }}>Hazmat</div></div></div>}
-                    </div>
-                  )}
-                </div>
-
-                {/* Related Shipments */}
-                {relShips.length > 0 && (
-                  <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🚛 Related Shipments ({relShips.length})</div>
-                    {relShips.map((sh) => (
-                      <div key={sh.id} onClick={() => { setDetailOrder(null); window.location.href = `/shipments?id=${sh.id}`; }} style={{ background: "#f0f9ff", border: "1px solid rgba(59,130,246,.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 8, cursor: "pointer", transition: "all .15s" }} onMouseOver={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(59,130,246,.12)"; }} onMouseOut={(e) => { e.currentTarget.style.borderColor = "rgba(59,130,246,.2)"; e.currentTarget.style.boxShadow = "none"; }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <span className="mono" style={{ color: "var(--accent)", fontWeight: 700 }}>{sh.id}</span>
-                          <span className={STATUS_BADGES[sh.status] || "badge"}>{sh.status}</span>
-                          <span style={{ marginLeft: "auto", fontWeight: 800, color: "var(--green)" }}>${Number(sh.total_cost || 0).toLocaleString()}</span>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 12 }}>
-                          <div><span style={{ color: "var(--text3)" }}>Carrier: </span><strong>{sh.carrier}</strong></div>
-                          <div><span style={{ color: "var(--text3)" }}>Pickup: </span>{sh.pickup_date || "—"}</div>
-                          <div><span style={{ color: "var(--text3)" }}>Delivery: </span>{sh.delivery_date || "—"}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Notes */}
-                {o.notes && (
-                  <div style={{ padding: "14px 24px", borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📝 Notes</div>
-                    <div style={{ fontSize: 13, color: "var(--text2)", background: "#f8faff", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px" }}>{o.notes}</div>
-                  </div>
-                )}
-              </>)}
-
-              {/* ── EDIT TAB ── */}
-              {detailTab === "edit" && (
-                <div style={{ padding: "20px 24px" }}>
-                  {/* Edit-as user selector */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#f0f4ff", borderRadius: 10, border: "1px solid rgba(59,130,246,.2)", marginBottom: 20 }}>
-                    <span style={{ fontSize: 16 }}>👤</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)" }}>Editing as:</span>
-                    <select value={editUser} onChange={(e) => setEditUser(e.target.value)} style={{ padding: "5px 10px", border: "1.5px solid var(--border)", borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }}>
-                      {DEMO_USERS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                    <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 4 }}>Changes will be attributed to this user in history</span>
-                  </div>
-
-                  {/* Order Identity */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>📋 Order Identity</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Customer</label><input value={editForm.customer || ""} onChange={(e) => setEditForm((f) => ({ ...f, customer: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Status</label><select value={editForm.status || "Unplanned"} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", background: "#fff", marginTop: 5 }}><option value="Unplanned">Unplanned</option><option value="Consolidated">Consolidated</option><option value="Cancelled">Cancelled</option></select></div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Reference #</label><input value={editForm.refNum || ""} onChange={(e) => setEditForm((f) => ({ ...f, refNum: e.target.value }))} placeholder="e.g. PO-2026-001" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>PO Number</label><input value={editForm.poNum || ""} onChange={(e) => setEditForm((f) => ({ ...f, poNum: e.target.value }))} placeholder="e.g. 4500123456" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                    </div>
-                  </div>
-
-                  {/* Lane */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>🗺️ Lane</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Origin City</label><input value={editForm.originCity || ""} onChange={(e) => setEditForm((f) => ({ ...f, originCity: e.target.value }))} placeholder="e.g. Chicago" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>State</label><input value={editForm.originState || ""} onChange={(e) => setEditForm((f) => ({ ...f, originState: e.target.value }))} placeholder="IL" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>ZIP</label><input value={editForm.originZip || ""} onChange={(e) => setEditForm((f) => ({ ...f, originZip: e.target.value }))} placeholder="60601" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Dest City</label><input value={editForm.destCity || ""} onChange={(e) => setEditForm((f) => ({ ...f, destCity: e.target.value }))} placeholder="e.g. Dallas" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>State</label><input value={editForm.destState || ""} onChange={(e) => setEditForm((f) => ({ ...f, destState: e.target.value }))} placeholder="TX" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>ZIP</label><input value={editForm.destZip || ""} onChange={(e) => setEditForm((f) => ({ ...f, destZip: e.target.value }))} placeholder="75201" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                    </div>
-                  </div>
-
-                  {/* Freight Details */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>📦 Freight Details</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Weight (lbs)</label><input type="number" value={editForm.weight || ""} onChange={(e) => setEditForm((f) => ({ ...f, weight: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Pieces</label><input type="number" value={editForm.pieces || ""} onChange={(e) => setEditForm((f) => ({ ...f, pieces: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Mode</label><select value={editForm.shipMode || ""} onChange={(e) => setEditForm((f) => ({ ...f, shipMode: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", background: "#fff", marginTop: 5 }}><option value="">— TMS selects —</option>{["TL", "LTL", "Intermodal", "Flatbed", "Reefer", "Partial", "Expedite", "Air Freight"].map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Commodity</label><input value={editForm.commodity || ""} onChange={(e) => setEditForm((f) => ({ ...f, commodity: e.target.value }))} placeholder="e.g. Network Equipment" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Incoterms</label><input value={editForm.incoterms || ""} onChange={(e) => setEditForm((f) => ({ ...f, incoterms: e.target.value }))} placeholder="e.g. FOB, DAP, DDP" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                    </div>
-                  </div>
-
-                  {/* Dates */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>📅 Dates</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Ready Date</label><input type="date" value={editForm.ready || ""} onChange={(e) => setEditForm((f) => ({ ...f, ready: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Due Date</label><input type="date" value={editForm.due || ""} onChange={(e) => setEditForm((f) => ({ ...f, due: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                    </div>
-                  </div>
-
-                  {/* Notes */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>📝 Notes</div>
-                    <textarea value={editForm.notes || ""} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Special instructions, references, internal notes..." style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
-                  </div>
-
-                  {/* Line Items in edit */}
-                  <div style={{ marginBottom: 16 }}>
-                    <OrderLinesEditor orderId={o.id} lines={detailLines} onChange={setDetailLines} onSave={saveLines}
-                      onClear={() => { if (window.confirm("Clear all lines?")) { OrdersApi.clearLines(o.id).then(() => { setDetailLines([]); toast("Lines cleared", "success"); }); } }}
-                      busy={detailBusy} items={itemMaster} />
-                  </div>
-                </div>
-              )}
-
-              {/* ── HISTORY TAB ── */}
-              {detailTab === "history" && (
-                <div style={{ padding: "20px 24px" }}>
-                  {histLog.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text3)" }}>
-                      <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>No changes recorded yet</div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>Edits made via the Edit tab will appear here with full field-level detail.</div>
-                    </div>
-                  ) : (<>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{histLog.length} change set{histLog.length !== 1 ? "s" : ""} recorded</div>
-                      <button onClick={() => setOrderChangeLog((prev) => ({ ...prev, [o.id]: [] }))} style={{ padding: "4px 10px", background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.2)", borderRadius: 7, fontSize: 11, color: "var(--red)", cursor: "pointer", fontFamily: "inherit" }}>🗑 Clear History</button>
-                    </div>
-                    {histLog.map((entry, i) => {
-                      const isPlan = entry.type === "plan"; const isUnassign = entry.type === "unassign";
-                      const userColor = entry.user?.includes("System") ? "#6b7280" : "#1d4ed8";
-                      const headerBg = isPlan ? "#f0f9ff" : isUnassign ? "#fff7ed" : "#f8faff";
-                      const icon = isPlan ? "🚚" : isUnassign ? "🔓" : "👤";
-                      const typeLabel = isPlan ? "Planned → Shipment" : isUnassign ? "Unassigned from Shipment" : `${entry.changes.length} field${entry.changes.length !== 1 ? "s" : ""} changed`;
-                      const typeBg = isPlan ? "rgba(59,130,246,.12)" : isUnassign ? "rgba(245,158,11,.12)" : "rgba(59,130,246,.1)";
-                      const typeColor = isPlan ? "#1d4ed8" : isUnassign ? "#b45309" : "var(--accent)";
-                      return (
-                        <div key={i} style={{ border: `1.5px solid ${isPlan ? "rgba(59,130,246,.25)" : isUnassign ? "rgba(245,158,11,.25)" : "var(--border)"}`, borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: headerBg, borderBottom: "1px solid var(--border)" }}>
-                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#1a237e,#6366f1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>{icon}</div>
-                            <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13, color: userColor }}>{entry.user || "System"}</div><div style={{ fontSize: 11, color: "var(--text3)" }}>{entry.ts}</div></div>
-                            <div style={{ fontSize: 11, fontWeight: 600, background: typeBg, color: typeColor, padding: "3px 10px", borderRadius: 10 }}>{typeLabel}</div>
-                          </div>
-                          <div style={{ padding: "8px 0" }}>
-                            {entry.changes.map((ch, j) => (
-                              <div key={j} style={{ display: "grid", gridTemplateColumns: "120px 1fr 20px 1fr", gap: 8, alignItems: "center", padding: "7px 14px", borderBottom: "1px solid var(--border)" }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.4 }}>{ch.label}</div>
-                                <div style={{ fontSize: 12, background: "#fee2e2", color: "#7f1d1d", padding: "4px 10px", borderRadius: 7, textDecoration: "line-through", opacity: 0.8 }}>{ch.old || "—"}</div>
-                                <div style={{ textAlign: "center", color: "var(--text3)", fontSize: 12 }}>→</div>
-                                <div style={{ fontSize: 12, background: "#dcfce7", color: "#14532d", padding: "4px 10px", borderRadius: 7, fontWeight: 600 }}>{ch.new || "—"}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </>)}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            {detailTab === "view" && (
-              <div style={{ padding: "14px 24px", background: "#f8faff", display: "flex", gap: 8, borderRadius: "0 0 16px 16px", borderTop: "1.5px solid var(--border)" }}>
-                {o.status === "Unplanned" && <button className="btn btn-primary btn-sm" onClick={() => openPlanModal(o.id)} style={{ background: "linear-gradient(135deg,#059669,#10b981)", border: "none" }}>⚡ Plan This Order</button>}
-                {(o.status === "Planned" || o.status === "Consolidated") && <button className="btn btn-sm" style={{ background: "#dc2626", color: "#fff", border: "none" }} onClick={() => unplanOrder(o.id)}>🔓 Unplan</button>}
-                <button className="btn btn-secondary btn-sm" onClick={() => setDetailTab("edit")}>✏️ Edit Order</button>
-                {histLog.length > 0 && <button className="btn btn-secondary btn-sm" onClick={() => setDetailTab("history")} style={{ marginLeft: "auto" }}>🕐 History ({histLog.length})</button>}
-              </div>
-            )}
-            {detailTab === "edit" && (
-              <div style={{ padding: "14px 22px", background: "#f8faff", borderTop: "1.5px solid var(--border)", borderRadius: "0 0 16px 16px", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                <span style={{ fontSize: 12, color: editStatus ? "var(--text3)" : "transparent", flex: 1 }}>{editStatus || "."}</span>
-                <button className="btn btn-secondary" onClick={() => setDetailTab("view")}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveOrderEdit} disabled={detailBusy} style={{ background: "linear-gradient(135deg,#1a237e,#6366f1)", border: "none" }}>💾 Save Changes</button>
-              </div>
-            )}
-            {detailTab === "history" && (
-              <div style={{ padding: "14px 22px", background: "#f8faff", borderTop: "1.5px solid var(--border)", borderRadius: "0 0 16px 16px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button className="btn btn-secondary" onClick={() => setDetailTab("view")}>Back to Details</button>
-              </div>
-            )}
-          </div>
-        </div>
-        );
-      })()}
-
-      {/* ═══ PLAN CONFIRMATION MODAL (matches old HTML) ═══ */}
-      {planModal && (() => {
-        const { lane, siblings, quotes, selectedIdx, bestQuote, busy, error, maxWt, util, loadDuration, equipType } = planModal;
-        const equip = EQUIPMENT_TYPES[equipType] || EQUIPMENT_TYPES[DEFAULT_EQUIP];
-        const utilColor = util >= 90 ? "var(--green)" : util >= 70 ? "var(--yellow)" : "var(--accent)";
-        // Latest ready date = can't ship before this
-        const readyDate = siblings?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
-        const earliestDue = siblings?.map((s) => s.due).filter(Boolean).sort()[0] || "";
-        return (
-        <div className="modal-overlay" onClick={() => !busy && setPlanModal(null)}>
-          <div className="modal-card" style={{ width: 680, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>🔒 Plan {lane.orderIds.length} Order{lane.orderIds.length !== 1 ? "s" : ""} → 1 Shipment</h3>
-              <button className="modal-close" onClick={() => !busy && setPlanModal(null)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ overflowY: "auto", flex: 1 }}>
-              {/* Equipment Selector */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#f0f4ff", borderRadius: 10, marginBottom: 14, border: "1px solid rgba(59,130,246,.15)" }}>
-                <span style={{ fontSize: 14 }}>🚛</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)" }}>Equipment:</span>
-                <select
-                  value={equipType}
-                  onChange={(e) => {
-                    const newEquip = e.target.value;
-                    const newMax = EQUIPMENT_TYPES[newEquip].maxWeight;
-                    const newUtil = Math.round((lane.totalWeight / newMax) * 100);
-                    setPlanModal((p) => p ? { ...p, equipType: newEquip, maxWt: newMax, util: newUtil } : null);
-                  }}
-                  style={{ padding: "4px 9px", border: "1.5px solid var(--border)", borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }}
-                >
-                  {Object.entries(EQUIPMENT_TYPES).map(([name, eq]) => (
-                    <option key={name} value={name}>{eq.icon} {name} (Max {eq.maxWeight.toLocaleString()} lbs)</option>
-                  ))}
-                </select>
-                <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>Max: <strong style={{ color: "var(--accent)" }}>{maxWt.toLocaleString()} lbs</strong> per trailer</span>
-              </div>
-
-              {/* Dock Reservation */}
-              <div style={{ padding: "12px 14px", background: "rgba(99,102,241,.04)", border: "1px solid rgba(99,102,241,.15)", borderRadius: 10, marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input type="checkbox" defaultChecked style={{ accentColor: "#6366f1" }} />
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>Reserve Dock Door During Planning</span>
-                  </div>
-                  <span style={{ fontSize: 11, color: "var(--accent2)", fontWeight: 600 }}>Estimated Load Time: {loadDuration} min</span>
-                </div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>Ship-From Dock (Auto)</div>
-                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-                  {(lane.origin || "").split(",")[0]}, {(lane.origin || "").split(",")[1]?.trim() || ""} · Door 1 · 06:00–08:00 ({loadDuration} min)
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, color: "var(--text3)" }}>Loading Duration</span>
-                  <select value={loadDuration} onChange={(e) => setPlanModal((p) => p ? { ...p, loadDuration: Number(e.target.value) } : null)} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 11 }}>
-                    <option value={60}>60 min</option><option value={90}>90 min</option><option value={120}>120 min</option><option value={150}>150 min</option><option value={180}>180 min</option>
-                  </select>
-                </div>
-                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 6 }}>Rule of thumb: TL usually 60–120 min, LTL 45–90 min. Auto-estimate uses weight, pieces, and mode.</div>
-              </div>
-
-              {/* Shipment Card */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>1 Shipment to Create</div>
-              <div style={{ padding: "14px 16px", background: "#fff", border: "1.5px solid rgba(99,102,241,.2)", borderRadius: 12, marginBottom: 12 }}>
-                {/* Lane header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 13 }}>1</span>
-                    <span style={{ fontWeight: 700, fontSize: 13 }}>{(lane.origin || "").split(",")[0]} → {(lane.destination || "").split(",")[0]}</span>
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: utilColor }}>{util}% Full</span>
-                </div>
-                {/* Orders in shipment */}
-                {siblings?.map((s) => (
-                  <div key={s.id} style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--text2)", padding: "2px 0 2px 36px" }}>
-                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{s.id}</span>
-                    <span>{s.customer}</span>
-                    <span>{s.commodity || "General"}</span>
-                    <span style={{ marginLeft: "auto", fontWeight: 600 }}>{Number(s.weight || 0).toLocaleString()} lbs</span>
-                  </div>
-                ))}
-                {/* Weight bar */}
-                <div style={{ marginTop: 10, paddingLeft: 36 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: "var(--text3)" }}>Weight</span>
-                    <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: utilColor, fontWeight: 600 }}>{lane.totalWeight.toLocaleString()} / {maxWt.toLocaleString()} lbs</span>
-                  </div>
-                  <div style={{ background: "#f1f5f9", borderRadius: 5, height: 6 }}>
-                    <div style={{ width: `${Math.min(100, util)}%`, background: utilColor, borderRadius: 5, height: 6 }} />
-                  </div>
-                  {lane.totalWeight > maxWt && <div style={{ fontSize: 10, color: "var(--red)", marginTop: 3, fontWeight: 600 }}>⚠️ Exceeds weight limit by {(lane.totalWeight - maxWt).toLocaleString()} lbs</div>}
-                </div>
-
-                {/* Rate options as compact radio rows */}
-                <div style={{ marginTop: 14, paddingLeft: 0 }}>
-                  {busy && !quotes.length && (
-                    <div style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>
-                      <div className="spinner" style={{ margin: "0 auto 8px" }} /><div style={{ fontSize: 12 }}>Fetching carrier rates...</div>
-                    </div>
-                  )}
-                  {error && <div style={{ padding: "10px 14px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, color: "#991b1b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
-                  {quotes.map((quote, i) => {
-                    if (!(quote.transitDays > 0)) return null;
-                    const isSelected = selectedIdx === i;
-                    const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
-                    const svcTag = isExp ? "EXP" : "STD";
-                    const rMode = quote.mode || "TL";
-                    const dates = calcDates(quote, earliestDue, readyDate);
-                    const isPref = quote.preferred;
-                    const isCzarlite = quote.czarlite || rMode === "LTL";
-                    return (
-                      <div key={i}
-                        onClick={() => setPlanModal((prev) => prev ? { ...prev, selectedIdx: i } : null)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", marginBottom: 4,
-                          borderRadius: 8, cursor: "pointer",
-                          border: isSelected ? "1px solid rgba(16,185,129,.2)" : "1px solid var(--border)",
-                          background: isSelected ? "rgba(16,185,129,.06)" : "var(--bg4)",
-                        }}
-                      >
-                        <input type="radio" name="plan-rate" checked={isSelected} readOnly style={{ margin: 0, accentColor: "var(--accent)" }} />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: 12 }}>{quote.carrier}</span>
-                            <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: rMode === "LTL" ? "rgba(99,102,241,.12)" : "rgba(16,185,129,.12)", color: rMode === "LTL" ? "#4f46e5" : "#059669" }}>{rMode}</span>
-                            <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: isExp ? "rgba(124,58,237,.12)" : "rgba(107,114,128,.1)", color: isExp ? "#7c3aed" : "#6b7280" }}>{svcTag}{isExp ? " 🚛🚛" : ""}</span>
-                            {isPref && <span style={{ fontSize: 9, background: "rgba(59,130,246,.1)", color: "var(--accent)", border: "1px solid rgba(59,130,246,.2)", padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>⭐ PREF</span>}
-                            {isSelected && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "rgba(16,185,129,.12)", color: "#059669" }}>✓ SELECTED</span>}
-                            {isCzarlite && <span style={{ fontSize: 9, background: "rgba(99,102,241,.1)", color: "#4f46e5", padding: "1px 6px", borderRadius: 8, fontWeight: 600 }}>CZARLITE</span>}
-                          </div>
-                          <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 10, color: "var(--text3)", whiteSpace: "nowrap", flexWrap: "nowrap", overflow: "hidden" }}>
-                            <span>🚚 {dates.transit}D</span>
-                            {quote.miles && <span>📏 {quote.miles.toLocaleString()} mi{quote.pcmilerMiles ? " (PC*MILER)" : ""}</span>}
-                            <span>📦 {dates.pickup}</span>
-                            <span>🏁 {dates.delivery}</span>
-                          </div>
-                          <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 9, color: "var(--text3)" }}>
-                            <span>Base: {fmt$(quote.czarBaseGross || quote.czarBase || 0)}</span>
-                            <span>Fuel: {fmt$(quote.fscCharge || 0)}</span>
-                            {(quote.accessorialCharge || 0) > 0 && <span>Acc: {fmt$(quote.accessorialCharge)}</span>}
-                          </div>
-                          {dates.warning && <div style={{ marginTop: 3, fontSize: 9, color: "#dc2626", fontWeight: 600 }}>⚠️ {dates.warning}</div>}
-                        </div>
-                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: isSelected ? 800 : 600, fontSize: 13, color: isSelected ? "var(--green)" : "var(--text2)" }}>{fmt$(quote.totalCharge)}</span>
-                      </div>
-                    );
-                  })}
-                  {!busy && quotes.filter((q) => q.transitDays > 0).length === 0 && !error && <div style={{ textAlign: "center", padding: 20, color: "var(--text3)", fontSize: 12 }}>No carrier quotes with valid transit data. Configure transit_days in rate table or enable CarrierConnect.</div>}
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setPlanModal(null)} disabled={busy}>Cancel</button>
-              <button className="btn btn-secondary">✏️ Manual Plan</button>
-              <button className="btn btn-secondary" style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }}>🔄 Cross-Dock</button>
-              <button className="btn btn-primary" disabled={busy || quotes.length === 0} onClick={confirmPlan} style={{ background: "linear-gradient(135deg,#059669,#10b981)", border: "none" }}>
-                {busy ? "Creating..." : "✅ Confirm & Create Shipment"}
-              </button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-
-      {/* ═══ PLAN SUMMARY MODAL (after shipment creation) ═══ */}
-      {planSummary && (() => {
-        // Multi-stop summary
-        if (planSummary.isMultiStop) {
-          const { masterShipment, childShipments, ordersUpdated, totalCost, carrier, mode, siblings } = planSummary;
-          const totalShipments = 1 + childShipments.length;
-          return (
-          <div className="modal-overlay" onClick={() => setPlanSummary(null)}>
-            <div className="modal-card" style={{ width: 640, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ background: "linear-gradient(135deg,#1e40af,#6366f1)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete</div>
-                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>Multi-Stop Shipment Created</div>
-              </div>
-              <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
-                {/* KPI cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-                  <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(99,102,241,.2)", borderRadius: 12 }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "#6366f1" }}>{totalShipments}</div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
-                  </div>
-                  <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid var(--border)", borderRadius: 12 }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26 }}>{ordersUpdated}</div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Orders Planned</div>
-                  </div>
-                  <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12 }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)" }}>{fmt$(totalCost)}</div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Total Est. Cost</div>
-                  </div>
-                </div>
-
-                {/* MBOL Card */}
-                <div style={{ border: "2px solid rgba(99,102,241,.25)", borderRadius: 12, padding: "16px 18px", marginBottom: 16, background: "rgba(99,102,241,.03)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span className="badge badge-blue" style={{ fontSize: 10 }}>MBOL</span>
-                    <a href={`/shipments?id=${masterShipment.id}`} onClick={(e) => { e.preventDefault(); setPlanSummary(null); window.location.href = `/shipments?id=${masterShipment.id}`; }} style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)", textDecoration: "none", cursor: "pointer" }}>{masterShipment.id}</a>
-                    <span className="badge badge-green" style={{ fontSize: 10 }}>Planned</span>
-                    <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "var(--green)" }}>{fmt$(totalCost)}</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>📍 {masterShipment.routePath}</div>
-                  <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)" }}>
-                    <span>{carrier} · {mode}</span>
-                    <span>{(masterShipment.miles || 0).toLocaleString()} mi</span>
-                    <span>{(masterShipment.weight || 0).toLocaleString()} lbs</span>
-                  </div>
-                </div>
-
-                {/* CBOL Cards */}
-                {childShipments.map((cbol, idx) => (
-                  <div key={cbol.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 18px", marginBottom: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      <span className="badge badge-teal" style={{ fontSize: 10 }}>CBOL</span>
-                      <a href={`/shipments?id=${cbol.id}`} onClick={(e) => { e.preventDefault(); setPlanSummary(null); window.location.href = `/shipments?id=${cbol.id}`; }} style={{ fontWeight: 600, fontSize: 13, color: "var(--accent)", textDecoration: "none", cursor: "pointer" }}>{cbol.id}</a>
-                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "var(--green)" }}>{fmt$(cbol.cost)}</span>
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>📍 {(cbol.origin || "").split(",")[0]} → {(cbol.dest || "").split(",")[0]}</div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>{(cbol.miles || 0).toLocaleString()} mi</div>
-                    {/* Assigned orders */}
-                    {cbol.orders.map((o) => (
-                      <div key={o.id} style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--text2)", padding: "2px 0" }}>
-                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--accent)" }}>{o.id}</span>
-                        <span>{o.customer}</span>
-                        <span>{o.commodity || "General"}</span>
-                        <span style={{ marginLeft: "auto", fontWeight: 600 }}>{Number(o.weight || 0).toLocaleString()} lbs</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setPlanSummary(null)}>Close</button>
-                <button className="btn btn-primary" onClick={() => { setPlanSummary(null); window.location.href = "/shipments"; }}>📦 View All Shipments</button>
-              </div>
-            </div>
-          </div>
-          );
-        }
-
-        // Single shipment summary (existing)
-        const { shipments, ordersUpdated, totalCost, carrier, mode, lane, siblings, dates } = planSummary;
-        const shp = shipments[0];
-        return (
-        <div className="modal-overlay" onClick={() => setPlanSummary(null)}>
-          <div className="modal-card" style={{ width: 580 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ background: "linear-gradient(135deg,#059669,#10b981)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete</div>
-              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>{shipments.length} Shipment Created Successfully</div>
-            </div>
-            <div className="modal-body">
-              {/* KPI cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-                <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12 }}>
-                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)" }}>{shipments.length}</div>
-                  <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Shipments</div>
-                </div>
-                <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid var(--border)", borderRadius: 12 }}>
-                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26 }}>{ordersUpdated}</div>
-                  <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Orders Planned</div>
-                </div>
-                <div style={{ textAlign: "center", padding: "14px 10px", border: "2px solid rgba(5,150,105,.2)", borderRadius: 12 }}>
-                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 26, color: "var(--green)" }}>{fmt$(totalCost)}</div>
-                  <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", fontWeight: 600 }}>Total Est. Cost</div>
-                </div>
-              </div>
-
-              {/* Shipment detail */}
-              {shp && (
-                <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px", marginBottom: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 18 }}>🚛</span>
-                    <div>
-                      <a href={`/shipments?id=${shp.id}`} onClick={(e) => { e.preventDefault(); setPlanSummary(null); window.location.href = `/shipments?id=${shp.id}`; }} style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)", textDecoration: "none", cursor: "pointer" }}>{shp.id}</a>
-                      <div style={{ fontSize: 11, color: "var(--text3)" }}>{carrier} · {mode}</div>
-                      <span className="badge badge-green" style={{ fontSize: 10, marginTop: 2 }}>✓ Planned</span>
-                    </div>
-                  </div>
-
-                  {/* Lane */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid var(--border)", marginTop: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>📍 {(lane?.origin || "").split(",")[0]} → {(lane?.destination || "").split(",")[0]}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--green)" }}>{fmt$(totalCost)}</span>
-                  </div>
-
-                  {/* Orders */}
-                  <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600, marginBottom: 4 }}>{ordersUpdated} Order{ordersUpdated !== 1 ? "s" : ""} Consolidated</div>
-                  {siblings?.map((s) => (
-                    <div key={s.id} style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--text2)", padding: "2px 0" }}>
-                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--accent)" }}>{s.id}</span>
-                      <span>{s.customer}</span>
-                      <span>{s.commodity || "General"}</span>
-                      <span style={{ marginLeft: "auto", fontWeight: 600 }}>{Number(s.weight || 0).toLocaleString()} lbs</span>
-                    </div>
-                  ))}
-
-                  {/* Dates */}
-                  {dates && (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
-                      <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                        <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase" }}>Weight</div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{(lane?.totalWeight || 0).toLocaleString()} lbs</div>
-                      </div>
-                      <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                        <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase" }}>Pickup</div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{dates.pickup}</div>
-                      </div>
-                      <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                        <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase" }}>Delivery</div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{dates.delivery}</div>
-                      </div>
-                    </div>
-                  )}
-                  <a href={`/shipments?id=${shp.id}`} onClick={(e) => { e.preventDefault(); setPlanSummary(null); window.location.href = `/shipments?id=${shp.id}`; }} style={{ display: "block", textAlign: "right", marginTop: 8, fontSize: 11, color: "var(--accent)", cursor: "pointer", textDecoration: "none" }}>Click to view full details →</a>
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setPlanSummary(null)}>Close</button>
-              <button className="btn btn-primary" onClick={() => { setPlanSummary(null); window.location.href = "/shipments"; }}>📦 View All Shipments</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-
-      {/* ═══ NEW ORDER MODAL ═══ */}
-      {showNewOrder && (() => {
-        const nf = newOrderForm;
-        const upd = (k, v) => setNewOrderForm((f) => ({ ...f, [k]: v }));
-        const carrierNames = carriers.map((c) => c.name).filter(Boolean).sort();
-        const inputSt = { width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" };
-        const labelSt = { fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 };
-        return (
-        <div className="modal-overlay" onClick={() => setShowNewOrder(false)}>
-          <div className="modal-card" style={{ width: 620, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>New Order</h3>
-              <button className="modal-close" onClick={() => setShowNewOrder(false)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ overflowY: "auto", flex: 1 }}>
-              {/* Customer */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={labelSt}>Customer</label>
-                <input value={nf.customer} onChange={(e) => upd("customer", e.target.value)} placeholder="Cisco Systems" style={inputSt} />
-              </div>
-              {/* Origin */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={labelSt}>Origin</label>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
-                  <input value={nf.originCity} onChange={(e) => upd("originCity", e.target.value)} placeholder="City (e.g. Chicago)" style={inputSt} />
-                  <input value={nf.originState} onChange={(e) => upd("originState", e.target.value)} placeholder="ST" maxLength={2} style={{ ...inputSt, textTransform: "uppercase" }} />
-                  <input value={nf.originZip} onChange={(e) => upd("originZip", e.target.value)} placeholder="ZIP" maxLength={5} style={inputSt} />
-                </div>
-              </div>
-              {/* Destination */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={labelSt}>Destination</label>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
-                  <input value={nf.destCity} onChange={(e) => upd("destCity", e.target.value)} placeholder="City (e.g. Dallas)" style={inputSt} />
-                  <input value={nf.destState} onChange={(e) => upd("destState", e.target.value)} placeholder="ST" maxLength={2} style={{ ...inputSt, textTransform: "uppercase" }} />
-                  <input value={nf.destZip} onChange={(e) => upd("destZip", e.target.value)} placeholder="ZIP" maxLength={5} style={inputSt} />
-                </div>
-              </div>
-              {/* Commodity + Incoterms */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                <div><label style={labelSt}>Commodity</label><input value={nf.commodity} onChange={(e) => upd("commodity", e.target.value)} placeholder="Network Equipment" style={inputSt} /></div>
-                <div><label style={labelSt}>Incoterms <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400 }}>(optional)</span></label>
-                  <select value={nf.incoterms} onChange={(e) => upd("incoterms", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
-                    <option value="">— Select —</option>
-                    {["EXW","FCA","CPT","CIP","DAP","DPU","DDP","FAS","FOB","CFR","CIF"].map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              {/* Dates */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-                <div><label style={labelSt}>Ready Date</label><input type="date" value={nf.ready} onChange={(e) => upd("ready", e.target.value)} style={inputSt} /></div>
-                <div><label style={labelSt}>Due Date</label><input type="date" value={nf.due} onChange={(e) => upd("due", e.target.value)} style={inputSt} /></div>
-              </div>
-              {/* Line Items */}
-              <OrderLinesEditor orderId="new" lines={newOrderLines} onChange={setNewOrderLines} onSave={() => {}} onClear={() => setNewOrderLines([])} busy={false} items={itemMaster} showSaveButtons={false} />
-              {/* Planning Constraints */}
-              <div style={{ marginTop: 14, padding: "14px 16px", background: "#f8faff", borderRadius: 10, border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>⚙️ Planning Constraints <span style={{ fontWeight: 400, fontSize: 10, letterSpacing: 0 }}>(optional)</span></div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-                  <div><label style={labelSt}>Preferred Carrier</label>
-                    <select value={nf.preferredCarrier} onChange={(e) => upd("preferredCarrier", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
-                      <option value="">No preference (auto-select cheapest)</option>
-                      {carrierNames.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div><label style={labelSt}>Excluded Carrier</label>
-                    <select value={nf.excludedCarrier} onChange={(e) => upd("excludedCarrier", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
-                      <option value="">None</option>
-                      {carrierNames.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 13, fontWeight: 400, color: "var(--text)" }}>
-                    <input type="checkbox" checked={nf.noConsolidate} onChange={(e) => upd("noConsolidate", e.target.checked)} style={{ width: 16, height: 16, marginTop: 2, accentColor: "var(--accent)" }} />
-                    <div><div style={{ fontWeight: 600 }}>Do not consolidate</div><div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>This order must ship as a standalone load — it will not be grouped with other orders on the same lane</div></div>
-                  </label>
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 13, fontWeight: 400, color: "var(--text)" }}>
-                    <input type="checkbox" checked={nf.dedicatedEquip} onChange={(e) => upd("dedicatedEquip", e.target.checked)} style={{ width: 16, height: 16, marginTop: 2, accentColor: "var(--accent)" }} />
-                    <div><div style={{ fontWeight: 600 }}>Dedicated equipment required</div><div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>Requires a dedicated trailer — cannot share equipment with other shipments</div></div>
-                  </label>
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 13, fontWeight: 400, color: "var(--text)" }}>
-                    <input type="checkbox" checked={nf.hazmat} onChange={(e) => upd("hazmat", e.target.checked)} style={{ width: 16, height: 16, marginTop: 2, accentColor: "var(--accent)" }} />
-                    <div><div style={{ fontWeight: 600 }}>Hazmat / Restricted commodity</div><div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>Requires hazmat-certified carrier and cannot be consolidated with non-hazmat freight</div></div>
-                  </label>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowNewOrder(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={createOrder} disabled={detailBusy}>Create Order</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      <NewOrderModal show={showNewOrder} form={newOrderForm} onFormChange={setNewOrderForm}
+        lines={newOrderLines} onLinesChange={setNewOrderLines} onSubmit={createOrder}
+        onClose={() => setShowNewOrder(false)} carriers={carriers} busy={detailBusy} itemMaster={itemMaster} />
 
       </div>
     </div>

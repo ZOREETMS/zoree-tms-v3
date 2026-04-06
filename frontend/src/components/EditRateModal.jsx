@@ -33,13 +33,31 @@ function getField(r, ...keys) {
   return "";
 }
 
+function parseLocation(str) {
+  if (!str) return { city: "", state: "", zip: "" };
+  let s = str;
+  let zip = "";
+  const m = s.match(/(\d{5})/);
+  if (m) { zip = m[1]; s = s.replace(m[1], "").trim(); }
+  const parts = s.split(",");
+  return { city: (parts[0] || "").trim(), state: (parts[1] || "").trim().replace(/\s+/g, ""), zip };
+}
+
 function buildInitialForm(rate) {
   if (!rate) return {};
+  const oLoc = parseLocation(rate.origin);
+  const dLoc = parseLocation(rate.dest);
   return {
     lane: rate.lane || "",
     mode: rate.mode || "TL",
     origin: rate.origin || "",
+    originCity: rate.originCity || oLoc.city,
+    originState: rate.originState || oLoc.state,
+    originZip: rate.originZip || oLoc.zip,
     dest: rate.dest || "",
+    destCity: rate.destCity || dLoc.city,
+    destState: rate.destState || dLoc.state,
+    destZip: rate.destZip || dLoc.zip,
     carrier: rate.carrier || "",
     status: rate.status || "Active",
     rate: String(getField(rate, "rate", "rate_per_mile")).replace(/[$]/g, ""),
@@ -60,14 +78,17 @@ function buildInitialForm(rate) {
 }
 
 function buildPayload(form) {
+  // Combine city/state/zip into origin/dest strings
+  const origin = [form.originCity, form.originState?.toUpperCase()].filter(Boolean).join(", ") + (form.originZip ? " " + form.originZip : "");
+  const dest = [form.destCity, form.destState?.toUpperCase()].filter(Boolean).join(", ") + (form.destZip ? " " + form.destZip : "");
   // Format rate as "$X.XX" and FSC as "X.X%" to match DB convention
   const rateNum = parseFloat(String(form.rate).replace(/[^0-9.]/g, ""));
   const fscNum = parseFloat(String(form.fsc).replace(/[^0-9.]/g, ""));
   return {
     lane: form.lane,
     mode: form.mode,
-    origin: form.origin,
-    dest: form.dest,
+    origin: origin || form.origin,
+    dest: dest || form.dest,
     carrier: form.carrier,
     status: form.status,
     rate: isNaN(rateNum) ? form.rate : `$${rateNum.toFixed(2)}`,
@@ -81,13 +102,13 @@ function buildPayload(form) {
     transit_days: form.transitDays ? Number(form.transitDays) : null,
     service_level: form.serviceLevel || null,
     czarlite: form.czarlite,
-    czarlite_class: form.czarlite ? Number(form.czarliteClass) : null,
-    czarlite_min_wt: form.czarlite ? Number(form.czarliteMinWt) : null,
-    czarlite_max_wt: form.czarlite ? Number(form.czarliteMaxWt) : null,
+    czarlite_class: form.czarliteClass ? Number(form.czarliteClass) : null,
+    czarlite_min_wt: form.czarliteMinWt ? Number(form.czarliteMinWt) : null,
+    czarlite_max_wt: form.czarliteMaxWt ? Number(form.czarliteMaxWt) : null,
   };
 }
 
-export default function EditRateModal({ rate, onClose, onSave, isNew }) {
+export default function EditRateModal({ rate, onClose, onSave, isNew, carriers = [], existingLanes = [] }) {
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
 
@@ -103,13 +124,33 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
   }
 
   async function handleSave() {
-    if (!form.lane || !form.origin || !form.dest || !form.carrier) {
-      alert("Lane, Origin, Destination, and Carrier are required.");
+    // Auto-generate lane ID if empty
+    if (!form.lane && form.carrier && form.originCity && form.destCity) {
+      const carrierCode = (form.carrier || "").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 4);
+      const oCode = (form.originCity || "").slice(0, 3).toUpperCase();
+      const dCode = (form.destCity || "").slice(0, 3).toUpperCase();
+      const modeCode = (form.mode || "TL").toUpperCase();
+      const svcCode = (form.serviceLevel || "STD").slice(0, 3).toUpperCase();
+      const dateCode = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      setField("lane", `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`);
+      form.lane = `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`;
+    }
+    if (!form.lane) {
+      alert("Lane ID is required.");
+      return;
+    }
+    if (isNew && existingLanes.includes(form.lane)) {
+      alert(`Duplicate Lane ID: "${form.lane}" already exists. Please use a unique Lane ID.`);
+      return;
+    }
+    if (!(form.originCity || form.origin) || !(form.destCity || form.dest) || !form.carrier) {
+      alert("Origin, Destination, and Carrier are required.");
       return;
     }
     setBusy(true);
     try {
-      await onSave(rate.id, buildPayload(form), isNew);
+      const payload = buildPayload(form);
+      await onSave(rate.id, payload, isNew);
     } finally {
       setBusy(false);
     }
@@ -130,25 +171,35 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">LANE ID *</label>
-              <input value={form.lane || ""} onChange={(e) => setField("lane", e.target.value)} />
+              <input value={form.lane || ""} onChange={(e) => setField("lane", e.target.value)} placeholder="Auto-generated if empty" />
             </div>
             <div className="form-group">
               <label className="form-label">MODE *</label>
-              <select value={form.mode || "TL"} onChange={(e) => setField("mode", e.target.value)}>
+              <select value={form.mode || "TL"} onChange={(e) => {
+                setField("mode", e.target.value);
+                if (e.target.value === "LTL") setField("czarlite", true);
+              }}>
                 {MODE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           </div>
 
-          {/* Origin + Destination */}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">ORIGIN (CITY, ST) *</label>
-              <input value={form.origin || ""} onChange={(e) => setField("origin", e.target.value)} />
+          {/* Origin */}
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label">ORIGIN *</label>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+              <input value={form.originCity || ""} onChange={(e) => setField("originCity", e.target.value)} placeholder="City (e.g. Chicago)" />
+              <input value={form.originState || ""} onChange={(e) => setField("originState", e.target.value)} placeholder="ST" maxLength={2} style={{ textTransform: "uppercase" }} />
+              <input value={form.originZip || ""} onChange={(e) => setField("originZip", e.target.value)} placeholder="ZIP (opt)" maxLength={5} />
             </div>
-            <div className="form-group">
-              <label className="form-label">DESTINATION (CITY, ST) *</label>
-              <input value={form.dest || ""} onChange={(e) => setField("dest", e.target.value)} />
+          </div>
+          {/* Destination */}
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label">DESTINATION *</label>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+              <input value={form.destCity || ""} onChange={(e) => setField("destCity", e.target.value)} placeholder="City (e.g. Dallas)" />
+              <input value={form.destState || ""} onChange={(e) => setField("destState", e.target.value)} placeholder="ST" maxLength={2} style={{ textTransform: "uppercase" }} />
+              <input value={form.destZip || ""} onChange={(e) => setField("destZip", e.target.value)} placeholder="ZIP (opt)" maxLength={5} />
             </div>
           </div>
 
@@ -156,7 +207,21 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">CARRIER *</label>
-              <input value={form.carrier || ""} onChange={(e) => setField("carrier", e.target.value)} />
+              {carriers.length > 0 ? (<>
+                <select value={form.carrier || ""} onChange={(e) => setField("carrier", e.target.value)}>
+                  <option value="">— Select Carrier —</option>
+                  {carriers.map((c) => {
+                    const name = c.name || c;
+                    return <option key={name} value={name}>{name}</option>;
+                  })}
+                  {/* If current carrier not in list, show it as an option */}
+                  {form.carrier && !carriers.some((c) => (c.name || c) === form.carrier) && (
+                    <option value={form.carrier}>{form.carrier}</option>
+                  )}
+                </select>
+              </>) : (
+                <input value={form.carrier || ""} onChange={(e) => setField("carrier", e.target.value)} placeholder="e.g. Werner Enterprises" />
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">STATUS</label>
@@ -225,74 +290,41 @@ export default function EditRateModal({ rate, onClose, onSave, isNew }) {
             </div>
           </div>
 
-          {/* CzarLite Toggle */}
+          {/* CzarLite / LTL Rate Fields — always visible */}
           <div style={{
             marginTop: 16, padding: "14px 16px", borderRadius: 12,
-            background: form.czarlite ? "rgba(245,158,11,.06)" : "var(--bg2)",
-            border: `1.5px solid ${form.czarlite ? "rgba(245,158,11,.3)" : "var(--border)"}`,
+            background: "rgba(99,102,241,.04)",
+            border: "1.5px solid rgba(99,102,241,.15)",
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 12 }}>⚠️ CZARLITE RATE</div>
-                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
-                  MARK THIS RATE AS CZARLITE-BASED — PLANNING ENGINE WILL FETCH LIVE TARIFF RATES AT BOOKING TIME
-                </div>
+            <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 10 }}>📊 LTL / CZARLITE RATE CONFIGURATION</div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" style={{ color: "#059669" }}>💲 DISCOUNT % OFF CZARLITE BASE</label>
+                <input type="number" min="0" max="50" step="0.5" value={form.discount || ""} onChange={(e) => setField("discount", e.target.value)} placeholder="e.g. 10" />
+                <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>% REDUCTION OFF CZARLITE BASE RATE BEFORE FSC</span>
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: form.czarlite ? "#059669" : "var(--text3)" }}>
-                  {form.czarlite ? "ON" : "OFF"}
-                </span>
-                <div
-                  onClick={() => setField("czarlite", !form.czarlite)}
-                  style={{
-                    width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-                    background: form.czarlite ? "#059669" : "#d1d5db",
-                    position: "relative", transition: "background .2s",
-                  }}
-                >
-                  <div style={{
-                    width: 18, height: 18, borderRadius: "50%", background: "#fff",
-                    position: "absolute", top: 3,
-                    left: form.czarlite ? 23 : 3,
-                    transition: "left .2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)",
-                  }} />
-                </div>
-              </label>
+              <div className="form-group">
+                <label className="form-label" style={{ color: "#059669" }}>💲 DISCOUNT $ FLAT OFF BASE</label>
+                <input type="number" min="0" value={form.discountFlat || ""} onChange={(e) => setField("discountFlat", e.target.value)} placeholder="e.g. 50" />
+                <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>FIXED $ DEDUCTION OFF BASE (APPLIED BEFORE FSC)</span>
+              </div>
             </div>
-
-            {/* CzarLite sub-fields */}
-            {form.czarlite && (
-              <>
-              <div className="form-row" style={{ marginTop: 14 }}>
-                <div className="form-group">
-                  <label className="form-label" style={{ color: "#059669" }}>💲 DISCOUNT % OFF CZARLITE BASE</label>
-                  <input type="number" min="0" max="50" step="0.5" value={form.discount || ""} onChange={(e) => setField("discount", e.target.value)} placeholder="e.g. 10" />
-                  <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>APPLIED AS % REDUCTION OFF CZARLITE BASE RATE BEFORE FSC</span>
-                </div>
-                <div className="form-group">
-                  <label className="form-label" style={{ color: "#059669" }}>💲 DISCOUNT $ FLAT OFF CZARLITE BASE</label>
-                  <input type="number" min="0" value={form.discountFlat || ""} onChange={(e) => setField("discountFlat", e.target.value)} placeholder="e.g. 50" />
-                  <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>FIXED $ DEDUCTION OFF CZARLITE BASE (APPLIED BEFORE FSC)</span>
-                </div>
+            <div className="form-row-3" style={{ marginTop: 10 }}>
+              <div className="form-group">
+                <label className="form-label">NMFC FREIGHT CLASS</label>
+                <select value={form.czarliteClass || "70"} onChange={(e) => setField("czarliteClass", e.target.value)}>
+                  {FREIGHT_CLASSES.map((c) => <option key={c} value={c}>CLASS {c}</option>)}
+                </select>
               </div>
-              <div className="form-row-3" style={{ marginTop: 10 }}>
-                <div className="form-group">
-                  <label className="form-label">NMFC FREIGHT CLASS</label>
-                  <select value={form.czarliteClass || "70"} onChange={(e) => setField("czarliteClass", e.target.value)}>
-                    {FREIGHT_CLASSES.map((c) => <option key={c} value={c}>CLASS {c}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">MIN WEIGHT (LBS)</label>
-                  <input type="number" value={form.czarliteMinWt || 500} onChange={(e) => setField("czarliteMinWt", e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">MAX WEIGHT (LBS)</label>
-                  <input type="number" value={form.czarliteMaxWt || 9999} onChange={(e) => setField("czarliteMaxWt", e.target.value)} />
-                </div>
+              <div className="form-group">
+                <label className="form-label">MIN WEIGHT (LBS)</label>
+                <input type="number" value={form.czarliteMinWt || 500} onChange={(e) => setField("czarliteMinWt", e.target.value)} />
               </div>
-              </>
-            )}
+              <div className="form-group">
+                <label className="form-label">MAX WEIGHT (LBS)</label>
+                <input type="number" value={form.czarliteMaxWt || 9999} onChange={(e) => setField("czarliteMaxWt", e.target.value)} />
+              </div>
+            </div>
           </div>
         </div>
 

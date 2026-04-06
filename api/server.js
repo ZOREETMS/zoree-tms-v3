@@ -568,7 +568,7 @@ app.post('/api/db/:table', async (req, res) => {
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
   try {
     // Use service role for tables that have RLS restrictions
-    const useServiceRole = ['route_templates', 'shipments', 'order_lines'].includes(req.params.table);
+    const useServiceRole = ['route_templates', 'shipments', 'order_lines', 'rates'].includes(req.params.table);
     const row = await dbUpsert(req.params.table, req.body, useServiceRole ? null : user._token);
     res.status(201).json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -595,12 +595,11 @@ app.patch('/api/db/rates', async (req, res) => {
 });
 
 app.patch('/api/db/:table/:id', async (req, res) => {
-  const user = await verifyToken(req, res);
-  if (!user) return;
+  const user = await verifyTokenSoft(req);
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
   try {
-    const useServiceRole = ['route_templates', 'shipments', 'order_lines'].includes(req.params.table);
+    const useServiceRole = ['route_templates', 'shipments', 'order_lines', 'rates'].includes(req.params.table);
     const row = await dbUpdate(req.params.table, req.params.id, req.body, useServiceRole ? null : user._token);
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1171,16 +1170,19 @@ app.post('/api/ltl/quote', async (req, res) => {
   const originCityName = cleanOriginCity || ZIP_CITY[effectiveOriginZip] || originZip;
   const destCityName   = cleanDestCity   || ZIP_CITY[effectiveDestZip]   || destZip;
 
-  // Step 3: Load LTL czarlite rates — filter by origin+dest using city name ilike
+  // Step 3: Load LTL rates — filter by origin+dest city; czarlite check is at carrier level (czCarriers)
   const oCity = originCityName.toLowerCase().split(',')[0].trim();
   const dCity = destCityName.toLowerCase().split(',')[0].trim();
   let adderRates = [];
   try {
     const rr = await fetch(
-      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&czarlite=eq.true&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane,service_level`,
+      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane,service_level`,
       { headers: sbHeaders(null) }
     );
     if (rr.ok) adderRates = await rr.json();
+    // Only keep rates for carriers with czarlite_enabled
+    const czCarrierNames = new Set(czCarriers.map(c => c.name));
+    adderRates = adderRates.filter(r => czCarrierNames.has(r.carrier));
     console.log('[LTL/quote] Lane rates found:', adderRates.length, adderRates.map(r=>r.carrier+'|disc='+r.discount));
   } catch(e) { console.error('[LTL/quote] rates error:', e.message); }
 
@@ -1326,6 +1328,13 @@ app.post('/api/ltl/quote', async (req, res) => {
       console.log('[LTL/quote] CarrierConnect enriched', Object.keys(transitMap).length, 'of', scacsToFetch.length, 'carriers');
     } catch (ccErr) {
       console.warn('[LTL/quote] CarrierConnect failed (non-fatal):', ccErr.message, ccErr.stack||'');
+      // Flag all CC-enabled quotes so downstream knows CC API errored (not carrier-specific rejection)
+      quotes.forEach(q => {
+        const carrier = czCarriers.find(c => c.scac === q.scac);
+        if (carrier && carrier.carrierconnect_enabled) {
+          q._ccApiError = true;
+        }
+      });
     }
   }
 
@@ -1601,6 +1610,9 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         }
       }
 
+      // Haversine fallback — approximate road miles from zip codes
+      const haversineMiles = estimateMilesByZip(lane.originZip, lane.destZip);
+
       // Always fetch TL rates from DB (for all weight classes)
       {
         try {
@@ -1633,12 +1645,13 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               // Use PC*MILER miles if carrier has pcmiler_enabled, else rate.miles from DB, else fallback
               const carrierKey = (rate.carrier || '').toUpperCase();
               const cFlags = carrierFlags[carrierKey] || {};
-              const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || 500);
+              const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || haversineMiles || 500);
               const baseCost = Math.round(rpm * miles);
               const fscCharge = Math.round(baseCost * (fscPct / 100));
               quotes.push({
                 carrier: rate.carrier || 'Unknown',
                 scac: '',
+                rateId: rate.id || rate.lane || null,
                 totalCharge: baseCost + fscCharge,
                 czarBaseGross: baseCost,
                 discountPct: 0,
@@ -1663,10 +1676,18 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       // Tag each quote with carrier flags (carrierconnect_enabled, pcmiler, feasibility)
       quotes.forEach(q => {
         const key = (q.carrier || '').toUpperCase();
-        const flags = carrierFlags[key] || carrierFlags[(q.scac || '').toUpperCase()] || {};
+        // Exact match by name or SCAC, then partial match (carrier name contains or is contained by flag key)
+        let flags = carrierFlags[key] || carrierFlags[(q.scac || '').toUpperCase()] || null;
+        if (!flags) {
+          const match = Object.keys(carrierFlags).find(k => k.includes(key) || key.includes(k));
+          flags = match ? carrierFlags[match] : {};
+        }
         q.ccxlEnabled = !!flags.ccxl;
         q.pcmilerEnabled = !!flags.pcmiler;
-        if (!q.miles) q.miles = (flags.pcmiler && pcmilerMiles) ? pcmilerMiles : (lane.miles || null);
+        if (q.carrier && q.carrier.toUpperCase().includes('DOMINION')) {
+          console.log(`[BulkPlan/rate] ODFL debug: carrier="${q.carrier}" scac="${q.scac}" key="${key}" flagsFound=${!!flags.ccxl} ccxlEnabled=${q.ccxlEnabled} transitDays=${q.transitDays}`);
+        }
+        if (!q.miles) q.miles = (flags.pcmiler && pcmilerMiles) ? pcmilerMiles : (lane.miles || haversineMiles || null);
         if (!q.pcmilerMiles && flags.pcmiler && pcmilerMiles) q.pcmilerMiles = pcmilerMiles;
         // Infeasible: only for TL carriers where CCXL is enabled but no transit data returned
         // LTL carriers are never infeasible just because transit data is missing (CzarLite doesn't always return transit)
@@ -1675,8 +1696,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         if (q.mode === 'LTL' && wt > LTL_MAX) q.infeasible = true;
       });
 
-      // Log all quotes before sorting
-      console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d ${q.infeasible?'INFEASIBLE':''}`).join(', '));
+      // Log all quotes before sorting (include CC flag for debugging)
+      console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d cc=${q.ccxlEnabled} ${q.infeasible?'INFEASIBLE':''}`).join(', '));
 
       // Sort: feasible first, then by cost/transit
       const sortBy = optimizeBy === 'transit' ? 'transitDays' : 'totalCharge';
@@ -1686,7 +1707,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         if (!a.infeasible && b.infeasible) return -1;
         return (a[sortBy] || 99999) - (b[sortBy] || 99999);
       });
-      // Only consider quotes with valid transit data for bestQuote
+      // Only use transit from real sources: CarrierConnect or rates table transit_days.
+      // No estimation — if transit is missing, the quote has no transit.
       const validQuotes = quotes.filter(q => q.transitDays > 0);
       if (validQuotes.length > 0) validQuotes[0].recommended = true;
 
@@ -1897,6 +1919,70 @@ app.post('/api/deploy-index', async (req, res) => {
   } catch(e) { res.status(500).json({error:e.message}); }
 });
 
+// ── Haversine approximate mileage (fallback when PC*MILER & rate.miles unavailable) ──
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 3959;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Zip-prefix (3-digit) → approximate centroid lat/lng for haversine fallback.
+// Covers major US zip prefixes; unknown zips return null.
+const ZIP3_COORDS = {
+  '006':{ lat:18.40, lng:-66.06 },'100':{ lat:40.75, lng:-73.99 },'101':{ lat:40.75, lng:-73.99 },
+  '021':{ lat:42.36, lng:-71.06 },'191':{ lat:39.95, lng:-75.16 },'200':{ lat:38.90, lng:-77.04 },
+  '206':{ lat:38.90, lng:-77.04 },'212':{ lat:39.29, lng:-76.61 },'232':{ lat:37.54, lng:-77.43 },
+  '282':{ lat:35.23, lng:-80.84 },'290':{ lat:34.00, lng:-81.03 },'303':{ lat:33.75, lng:-84.39 },
+  '305':{ lat:33.75, lng:-84.39 },'320':{ lat:30.33, lng:-81.66 },'331':{ lat:25.76, lng:-80.19 },
+  '332':{ lat:25.76, lng:-80.19 },'333':{ lat:26.12, lng:-80.14 },'334':{ lat:26.72, lng:-80.05 },
+  '336':{ lat:27.95, lng:-82.46 },'337':{ lat:28.54, lng:-81.38 },'381':{ lat:35.15, lng:-90.05 },
+  '372':{ lat:36.17, lng:-86.78 },'402':{ lat:38.25, lng:-85.76 },'432':{ lat:39.96, lng:-82.99 },
+  '433':{ lat:39.96, lng:-82.99 },'441':{ lat:41.50, lng:-81.69 },'461':{ lat:39.77, lng:-86.16 },
+  '462':{ lat:39.77, lng:-86.16 },'480':{ lat:42.33, lng:-83.05 },'481':{ lat:42.33, lng:-83.05 },
+  '530':{ lat:43.04, lng:-87.91 },'532':{ lat:43.04, lng:-87.91 },'550':{ lat:44.98, lng:-93.27 },
+  '551':{ lat:44.98, lng:-93.27 },'601':{ lat:41.88, lng:-87.63 },'604':{ lat:41.88, lng:-87.63 },
+  '606':{ lat:41.88, lng:-87.63 },'630':{ lat:38.63, lng:-90.20 },'631':{ lat:38.63, lng:-90.20 },
+  '640':{ lat:39.10, lng:-94.58 },'641':{ lat:39.10, lng:-94.58 },'680':{ lat:41.26, lng:-95.94 },
+  '700':{ lat:29.95, lng:-90.07 },'701':{ lat:29.95, lng:-90.07 },'730':{ lat:35.47, lng:-97.52 },
+  '731':{ lat:35.47, lng:-97.52 },'750':{ lat:32.78, lng:-96.80 },'751':{ lat:32.78, lng:-96.80 },
+  '752':{ lat:32.78, lng:-96.80 },'770':{ lat:29.76, lng:-95.37 },'771':{ lat:29.76, lng:-95.37 },
+  '773':{ lat:29.76, lng:-95.37 },'782':{ lat:29.42, lng:-98.49 },'786':{ lat:30.27, lng:-97.74 },
+  '790':{ lat:31.76, lng:-106.44},'793':{ lat:33.45, lng:-101.85},
+  '800':{ lat:39.74, lng:-104.99},'801':{ lat:39.74, lng:-104.99},'802':{ lat:39.74, lng:-104.99 },
+  '840':{ lat:40.76, lng:-111.89},'850':{ lat:33.45, lng:-112.07},'851':{ lat:33.45, lng:-112.07 },
+  '852':{ lat:33.45, lng:-112.07},'870':{ lat:35.08, lng:-106.65},'871':{ lat:35.08, lng:-106.65 },
+  '890':{ lat:36.17, lng:-115.14},'891':{ lat:36.17, lng:-115.14},
+  '900':{ lat:34.05, lng:-118.24},'901':{ lat:34.05, lng:-118.24},'902':{ lat:33.77, lng:-118.19 },
+  '906':{ lat:34.14, lng:-118.26},'910':{ lat:34.18, lng:-118.31},'917':{ lat:34.01, lng:-118.49 },
+  '920':{ lat:32.72, lng:-117.16},'921':{ lat:32.72, lng:-117.16},
+  '940':{ lat:37.78, lng:-122.42},'941':{ lat:37.78, lng:-122.42},'943':{ lat:37.34, lng:-121.89 },
+  '945':{ lat:37.80, lng:-122.27},'950':{ lat:37.34, lng:-121.89},'951':{ lat:37.34, lng:-121.89 },
+  '958':{ lat:38.58, lng:-121.49},'970':{ lat:45.52, lng:-122.68},'971':{ lat:45.52, lng:-122.68 },
+  '980':{ lat:47.61, lng:-122.33},'981':{ lat:47.61, lng:-122.33},'984':{ lat:47.25, lng:-122.44 },
+};
+
+function zipToCoords(zip) {
+  if (!zip || zip.length < 3) return null;
+  const z3 = zip.substring(0, 3);
+  return ZIP3_COORDS[z3] || null;
+}
+
+/**
+ * Estimate road miles between two zip codes using haversine × 1.3 road factor.
+ * Returns null if either zip can't be resolved.
+ */
+function estimateMilesByZip(originZip, destZip) {
+  const o = zipToCoords(originZip);
+  const d = zipToCoords(destZip);
+  if (!o || !d) return null;
+  const straightLine = haversine(o.lat, o.lng, d.lat, d.lng);
+  return Math.round(straightLine * 1.3);
+}
+
 // ── PC*MILER Mileage ─────────────────────────────────────────────────────────
 const PC_MILER_API_KEY = process.env.PC_MILER_API_KEY || '';
 const mileageCache = {};                                    // "ORIGIN|DEST" → { miles, ts }
@@ -1968,6 +2054,15 @@ app.get('/api/mileage', async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: e.message });
   }
+});
+
+// Haversine-estimated mileage (no PC*MILER key needed)
+app.get('/api/mileage/estimate', (req, res) => {
+  const { originZip, destZip } = req.query;
+  if (!originZip || !destZip) return res.status(400).json({ error: 'originZip and destZip required' });
+  const miles = estimateMilesByZip(originZip, destZip);
+  if (!miles) return res.status(422).json({ error: 'Could not resolve zip coordinates', originZip, destZip });
+  res.json({ originZip, destZip, miles, method: 'haversine' });
 });
 
 // Bulk mileage — accepts array of { origin, dest } pairs

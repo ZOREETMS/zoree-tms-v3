@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
-import { DbApi, TenderApi, OrdersApi, OmsApi } from "../lib/api";
+import { DbApi, TenderApi, OrdersApi, OmsApi, BulkPlanApi } from "../lib/api";
 import { sendTenderEmailIfAvailable } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
@@ -71,7 +71,7 @@ function InfoBox({ icon, label, value }) {
 }
 
 /* ── Shipment Detail Modal ── */
-function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments }) {
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier }) {
   const linked = ds._linkedOrders || [];
   const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
@@ -79,6 +79,10 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   const [events, setEvents] = useState([]);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
+  const [showChangeCarrier, setShowChangeCarrier] = useState(false);
+  const [carrierQuotes, setCarrierQuotes] = useState([]);
+  const [carrierLoading, setCarrierLoading] = useState(false);
+  const [selectedCarrierIdx, setSelectedCarrierIdx] = useState(0);
 
   // Load line items for all linked orders
   useEffect(() => {
@@ -100,6 +104,51 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   const isPickedUp = ["In Transit", "Delivered", "Exception"].includes(ds.status);
   const isInTransit = ["In Transit", "Delivered"].includes(ds.status);
   const isDelivered = ds.status === "Delivered";
+
+  async function fetchChangeCarrierQuotes() {
+    setShowChangeCarrier(true);
+    setCarrierLoading(true);
+    try {
+      const originZip = String(ds.origin_zip || ds.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
+      const destZip = String(ds.dest_zip || ds.dest || "").match(/\b(\d{5})\b/)?.[1] || "";
+      const lane = {
+        laneKey: `${ds.origin || ""} -> ${ds.dest || ""}`,
+        origin: ds.origin || "", destination: ds.dest || "",
+        originZip, destZip, freightClass: "70",
+        totalWeight: ds.weight || 0, totalPieces: ds.pieces || 0,
+        orderIds: Array.isArray(ds.order_ids) ? ds.order_ids : [],
+      };
+      const rateRes = await BulkPlanApi.rate([lane], "cost");
+      const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
+      const quotes = results[0]?.quotes || [];
+      setCarrierQuotes(quotes.filter((q) => q.transitDays > 0).sort((a, b) => (a.totalCharge || 0) - (b.totalCharge || 0)));
+    } catch (err) {
+      setCarrierQuotes([]);
+    } finally {
+      setCarrierLoading(false);
+    }
+  }
+
+  async function confirmChangeCarrier() {
+    const chosen = carrierQuotes[selectedCarrierIdx];
+    if (!chosen) return;
+    try {
+      await DbApi.patch("shipments", ds.id, {
+        carrier: chosen.carrier,
+        mode: chosen.mode || ds.mode,
+        total_cost: chosen.totalCharge || 0,
+        rate: chosen.czarBaseGross || chosen.czarBase || 0,
+        fuel_surcharge: chosen.fscCharge || 0,
+        miles: chosen.miles || ds.miles,
+        service_level: chosen.serviceLevel || ds.service_level,
+      });
+      setShowChangeCarrier(false);
+      onClose();
+      if (onChangeCarrier) onChangeCarrier();
+    } catch (err) {
+      alert("Failed: " + err.message);
+    }
+  }
   const transitDays = (() => {
     const pu = ds.pickup_date, du = ds.delivery_date;
     if (!pu || !du) return "—";
@@ -188,6 +237,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
             <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
             <InfoBox icon="💰" label="Est. Cost" value={`$${(ds.total_cost || 0).toLocaleString()}`} />
+            {ds.rate_id && (
+              <div className="sd-field">
+                <div className="sd-field-label">📄 Rate ID</div>
+                <div className="sd-field-value">
+                  <a href={`/rates?q=${encodeURIComponent(ds.rate_id)}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/rates?q=${encodeURIComponent(ds.rate_id)}`; }} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer" }}>{ds.rate_id}</a>
+                </div>
+              </div>
+            )}
             {(ds.rate > 0 || ds.fuel_surcharge > 0) && (<>
             <InfoBox icon="📊" label="Base / Linehaul" value={`$${(ds.rate || 0).toLocaleString()}`} />
             <InfoBox icon="⛽" label="Fuel Surcharge" value={`$${(ds.fuel_surcharge || 0).toLocaleString()}`} />
@@ -339,7 +396,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <button style={{ background: "#ea580c", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => onWithdraw(ds)}>📤 Withdraw Tender</button>
           )}
           {["Planned", "Tendered", "Tender Rejected", "In Transit"].includes(displayStatus) && (
-            <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/carriers"); }}>🔄 Change Carrier</button>
+            <button className="btn btn-secondary btn-sm" onClick={fetchChangeCarrierQuotes}>🔄 Change Carrier</button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/dock-scheduling"); }}>🚪 Dock schedule</button>
           <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onNavigate(`/documents?shipmentId=${encodeURIComponent(ds.id)}`); onClose(); }}>📄 Documents</button>
@@ -347,6 +404,72 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/messaging"); }}>📨 Send to WMS</button>
         </div>
       </div>
+
+      {/* Change Carrier Modal */}
+      {showChangeCarrier && (
+        <div className="modal-overlay" onClick={() => setShowChangeCarrier(false)} style={{ zIndex: 1001 }}>
+          <div className="modal-card" style={{ width: 580, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🔄 Change Carrier — {ds.id}</h3>
+              <button className="modal-close" onClick={() => setShowChangeCarrier(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
+              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 12 }}>
+                📍 {(ds.origin || "").split(",")[0]} → {(ds.dest || "").split(",")[0]} · {(ds.weight || 0).toLocaleString()} lbs
+                <br />Current: <strong>{ds.carrier || "None"}</strong> · ${(ds.total_cost || 0).toLocaleString()}
+              </div>
+              {carrierLoading && (
+                <div style={{ textAlign: "center", padding: 30, color: "var(--text3)" }}>
+                  <div className="spinner" style={{ margin: "0 auto 8px" }} />
+                  <div style={{ fontSize: 12 }}>Fetching carrier rates...</div>
+                </div>
+              )}
+              {!carrierLoading && carrierQuotes.length === 0 && (
+                <div style={{ textAlign: "center", padding: 20, color: "var(--text3)", fontSize: 12 }}>No carrier quotes available for this lane.</div>
+              )}
+              {carrierQuotes.map((q, i) => {
+                const isSelected = selectedCarrierIdx === i;
+                const isCurrent = q.carrier === ds.carrier;
+                return (
+                  <div key={i} onClick={() => setSelectedCarrierIdx(i)} style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", marginBottom: 4,
+                    borderRadius: 8, cursor: "pointer",
+                    border: isSelected ? "2px solid rgba(16,185,129,.4)" : "1px solid var(--border)",
+                    background: isSelected ? "rgba(16,185,129,.06)" : isCurrent ? "rgba(59,130,246,.04)" : "var(--bg4)",
+                  }}>
+                    <input type="radio" checked={isSelected} readOnly style={{ accentColor: "var(--accent)" }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: 13 }}>{q.carrier}</span>
+                        <span className={`badge ${q.mode === "LTL" ? "badge-blue" : "badge-green"}`} style={{ fontSize: 9 }}>{q.mode || "TL"}</span>
+                        {q.serviceLevel && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 8, background: "rgba(107,114,128,.1)", color: "#6b7280", fontWeight: 700 }}>{(q.serviceLevel || "").toUpperCase()}</span>}
+                        {isCurrent && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 8, background: "rgba(59,130,246,.1)", color: "#3b82f6", fontWeight: 700 }}>CURRENT</span>}
+                        {q.czarlite && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 8, background: "rgba(99,102,241,.1)", color: "#4f46e5", fontWeight: 600 }}>CZARLITE</span>}
+                      </div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 3, fontSize: 10, color: "var(--text3)" }}>
+                        <span>🚚 {q.transitDays}D</span>
+                        {q.miles && <span>📏 {q.miles.toLocaleString()} mi</span>}
+                        <span>Base: ${(q.czarBaseGross || q.czarBase || 0).toLocaleString()}</span>
+                        <span>Fuel: ${(q.fscCharge || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: isSelected ? 800 : 600, fontSize: 14, color: isSelected ? "var(--green)" : "var(--text2)" }}>
+                      ${(q.totalCharge || 0).toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowChangeCarrier(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={carrierQuotes.length === 0} onClick={confirmChangeCarrier}
+                style={{ background: "linear-gradient(135deg,#059669,#10b981)", border: "none" }}>
+                ✅ Confirm Carrier Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -600,19 +723,18 @@ export default function ShipmentsPage() {
       await DbApi.patch("shipments", row.id, {
         status: "Confirmed",
         pro_number: pro || null,
-        pickup: pickup,
-        delivery: delivery || null,
+        pickup_date: pickup || null,
+        delivery_date: delivery || null,
         service_level: service || null,
         bol_number: bol || null,
         dock_assigned: dock || null,
-        dock_load_start: dockLoadStart || null,
-        dock_load_end: dockLoadEnd || null,
+        dock_time: dockLoadStart || null,
         notes: notes || null,
       });
       // 2. Update linked orders
       const linkedOrders = orders.filter((o) => String(o.shipment_id || "") === String(row.id));
       await Promise.all(linkedOrders.map((o) =>
-        DbApi.patch("orders", o.id, { status: "Confirmed", pickup: pickup })
+        DbApi.patch("orders", o.id, { status: "Confirmed" })
       ));
       // 3. Push to OMS
       try {
@@ -1002,7 +1124,7 @@ export default function ShipmentsPage() {
       )}
 
       {/* Shipment Detail Modal */}
-      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} />}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} />}
 
       {/* Tender Result Modal */}
       <TenderResultModal

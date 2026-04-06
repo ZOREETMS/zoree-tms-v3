@@ -35,11 +35,25 @@ export function executeQuery(sql, data) {
 
   let result = [...rows];
 
-  // Handle WHERE clause (simple single condition)
-  const whereMatch = lower.match(/where\s+(\w+)\s*=\s*'([^']+)'/);
-  if (whereMatch) {
-    const [, col, val] = whereMatch;
-    result = result.filter((r) => String(r[col]).toLowerCase() === val.toLowerCase());
+  // Handle WHERE clause (simple single condition: =, !=, <>, LIKE, ILIKE, NOT LIKE)
+  const whereLikeMatch = lower.match(/where\s+(\w+)\s+(not\s+like|like|ilike)\s+'([^']+)'/);
+  const whereEqMatch = lower.match(/where\s+(\w+)\s*(!=|<>|=)\s*'([^']+)'/);
+  if (whereLikeMatch) {
+    const [, col, op, pattern] = whereLikeMatch;
+    // Convert SQL LIKE pattern to regex: % -> .*, _ -> .
+    const regexStr = "^" + pattern.replace(/%/g, ".*").replace(/_/g, ".") + "$";
+    const regex = new RegExp(regexStr, "i");
+    const negate = op.includes("not");
+    result = result.filter((r) => {
+      const matches = regex.test(String(r[col] ?? ""));
+      return negate ? !matches : matches;
+    });
+  } else if (whereEqMatch) {
+    const [, col, op, val] = whereEqMatch;
+    result = result.filter((r) => {
+      const eq = String(r[col]).toLowerCase() === val.toLowerCase();
+      return op === "=" ? eq : !eq;
+    });
   }
 
   // Handle ORDER BY

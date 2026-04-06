@@ -1,46 +1,14 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { BulkPlanApi } from "../lib/api";
+import { buildLaneGroups } from "../utils/laneUtils";
+import { planAllLanes } from "../services/bulkPlanService";
 import PlanSummaryModal from "../components/bulk-plan/PlanSummaryModal";
 import OrderEditModal from "../components/bulk-plan/OrderEditModal";
 
 /* ── helpers ── */
-function normalizeZip(value) {
-  const m = String(value || "").match(/\b(\d{5})\b/);
-  return m ? m[1] : "";
-}
-
-function laneKey(order) {
-  return `${order.origin || ""} -> ${order.dest || ""}`;
-}
-
 function fmt$(n) {
   return "$" + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function addBusinessDays(dateStr, days) {
-  const d = new Date(dateStr + "T12:00:00");
-  const step = days >= 0 ? 1 : -1;
-  let remaining = Math.abs(days);
-  while (remaining > 0) { d.setDate(d.getDate() + step); const dow = d.getDay(); if (dow !== 0 && dow !== 6) remaining--; }
-  return d.toISOString().slice(0, 10);
-}
-
-function calcDates(quote, dueDate, readyDate) {
-  const today = new Date().toISOString().slice(0, 10);
-  let transit = quote.transitDays || null;
-  if (!transit) {
-    // No transit data available — cannot calculate dates
-    return { pickup: null, delivery: null, transit: null, error: "No transit time available from carrier or rate table" };
-  }
-  const minPickup = today > (readyDate || "") ? today : (readyDate || today);
-  let pickup = minPickup;
-  if (dueDate) {
-    const idealPickup = addBusinessDays(dueDate, -transit);
-    if (idealPickup >= minPickup) pickup = idealPickup;
-  }
-  const delivery = addBusinessDays(pickup, transit);
-  return { pickup, delivery, transit, error: null };
 }
 
 export default function BulkPlanPage() {
@@ -101,31 +69,10 @@ export default function BulkPlanPage() {
     };
   }, [unplanned, selectedIds]);
 
-  /* ── build lane groups from selected orders ── */
+  /* ── build lane groups from selected orders (via service) ── */
   const lanes = useMemo(() => {
-    const groups = new Map();
     const selected = unplanned.filter((o) => selectedIds.has(o.id));
-    selected.forEach((o) => {
-      const key = laneKey(o);
-      if (!groups.has(key)) {
-        groups.set(key, {
-          laneKey: key,
-          origin: o.origin || "",
-          destination: o.dest || "",
-          originZip: normalizeZip(o.origin_zip || o.origin),
-          destZip: normalizeZip(o.dest_zip || o.dest),
-          freightClass: o.freight_class || "70",
-          totalWeight: 0,
-          totalPieces: 0,
-          orderIds: [],
-        });
-      }
-      const g = groups.get(key);
-      g.totalWeight += Number(o.weight || 0);
-      g.totalPieces += Number(o.pieces || 0);
-      g.orderIds.push(o.id);
-    });
-    return Array.from(groups.values());
+    return buildLaneGroups(selected);
   }, [unplanned, selectedIds]);
 
   /* ── selection helpers ── */
@@ -151,7 +98,7 @@ export default function BulkPlanPage() {
     setSelectedIds(new Set());
   }
 
-  /* ── Plan & Create Shipments (rate + execute in one click) ── */
+  /* ── Plan & Create Shipments (with progressive consolidation + splitting) ── */
   async function onPlan() {
     if (!lanes.length) {
       toast("No orders selected.", "warning");
@@ -160,85 +107,30 @@ export default function BulkPlanPage() {
     setBusy(true);
     setMessage({ text: "", type: "" });
     setResults(null);
+
     try {
-      // Step 1: Rate all lanes — backend picks bestQuote per lane
-      toast("Rating lanes...", "info");
-      const rateRes = await BulkPlanApi.rate(lanes, "cost");
-      const rateResults = Array.isArray(rateRes?.results) ? rateRes.results : [];
+      // Progressive consolidation: rate individually, try consolidation, compare costs
+      const { plans, totalConsolidated, totalIndividual, totalFailed, failedOrderIds } =
+        await planAllLanes(lanes, orders, "cost", (msg) => toast(msg, "info"));
 
-      if (!rateResults.length) {
-        toast("No rate results returned. Check lane ZIP codes.", "error");
+      if (!plans.length) {
+        const failMsg = failedOrderIds.length
+          ? `Failed orders: ${failedOrderIds.join(", ")}`
+          : "Check rate table for transit_days, miles, or enable CarrierConnect.";
+        toast(`No executable plans — no carriers returned valid quotes. ${failMsg}`, "error");
         setBusy(false);
         return;
       }
 
-      // Step 2: Build execution plans using bestQuote
-      const plans = rateResults
-        .map((r) => {
-          const lane = lanes.find((l) => l.laneKey === r.laneKey);
-          if (!lane || !r?.bestQuote) return null;
-          // Get order dates for this lane
-          const laneOrders = lane.orderIds
-            .map((id) => orders.find((o) => o.id === id))
-            .filter(Boolean);
-          const readyDate = laneOrders
-            .map((o) => o.ready || o.pickup_date)
-            .filter(Boolean)
-            .sort()[0] || "";
-          const dueDate = laneOrders
-            .map((o) => o.due || o.delivery_date)
-            .filter(Boolean)
-            .sort()
-            .reverse()[0] || "";
+      // Build summary message
+      const parts = [];
+      if (totalConsolidated > 0) parts.push(`${totalConsolidated} consolidated`);
+      if (totalIndividual > 0) parts.push(`${totalIndividual} individual`);
+      if (totalFailed > 0) parts.push(`${totalFailed} failed`);
+      toast(`Creating ${plans.length} shipment(s): ${parts.join(", ")}...`, "info");
 
-          // Use same date logic as regular planning
-          const dates = calcDates(r.bestQuote, dueDate, readyDate);
-
-          if (dates.error) {
-            // No transit data — reject this plan
-            return { _error: true, laneKey: lane.laneKey, carrier: r.bestQuote.carrier, reason: dates.error };
-          }
-
-          return {
-            laneKey: lane.laneKey,
-            origin: lane.origin,
-            destination: lane.destination,
-            originZip: lane.originZip,
-            destZip: lane.destZip,
-            totalWeight: lane.totalWeight,
-            totalPieces: lane.totalPieces,
-            orderIds: lane.orderIds,
-            carrier: r.bestQuote.carrier || "",
-            mode: r.bestQuote.mode || "LTL",
-            totalCost: r.bestQuote.totalCharge || 0,
-            pickupDate: dates.pickup,
-            deliveryDate: dates.delivery,
-            transitDays: dates.transit,
-            serviceLevel: r.bestQuote.serviceLevel || "Standard",
-            miles: r.bestQuote.pcmilerMiles || r.bestQuote.miles || null,
-            czarliteRate: r.bestQuote.mode === "LTL",
-          };
-        })
-        .filter(Boolean);
-
-      // Separate valid plans from errors
-      const failedPlans = plans.filter((p) => p._error);
-      const validPlans = plans.filter((p) => !p._error);
-
-      if (failedPlans.length > 0) {
-        const failMsgs = failedPlans.map((f) => `${f.laneKey} (${f.carrier}): ${f.reason}`).join("\n");
-        toast(`Planning failed for ${failedPlans.length} lane(s):\n${failMsgs}`, "error");
-      }
-
-      if (!validPlans.length) {
-        toast("No executable plans — no carriers returned quotes or transit data is missing. Check rate table for transit_days, miles, or enable CarrierConnect.", "error");
-        setBusy(false);
-        return;
-      }
-
-      // Step 3: Execute — create shipments + update orders
-      toast("Creating shipments...", "info");
-      const execRes = await BulkPlanApi.execute(validPlans);
+      // Execute — create shipments + update orders
+      const execRes = await BulkPlanApi.execute(plans);
       setResults(execRes);
       setSelectedIds(new Set());
       await refreshData();
@@ -247,7 +139,12 @@ export default function BulkPlanPage() {
         setSummaryOpen(true);
         setMessage({ text: "", type: "" });
       } else {
-        toast(`Planning completed but no shipments were created. ${execRes?.errors?.length ? execRes.errors.map((e) => e.error).join("; ") : "Check API logs."}`, "error");
+        toast(
+          `Planning completed but no shipments were created. ${
+            execRes?.errors?.length ? execRes.errors.map((e) => e.error).join("; ") : "Check API logs."
+          }`,
+          "error"
+        );
       }
     } catch (err) {
       toast(`Planning failed: ${err.message || "Unknown error"}`, "error");

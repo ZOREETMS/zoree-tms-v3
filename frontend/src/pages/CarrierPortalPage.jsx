@@ -25,6 +25,12 @@ export default function CarrierPortalPage() {
   const [localTenderResponses, setLocalTenderResponses] = useState({});
   const [message, setMessage] = useState({ text: "", type: "" });
 
+  // Filter state
+  const [modeFilter, setModeFilter] = useState("All");
+  const [originFilter, setOriginFilter] = useState("All");
+  const [destFilter, setDestFilter] = useState("All");
+  const [dateFilter, setDateFilter] = useState("All");
+
   // Modal state
   const [respondModal, setRespondModal] = useState({ open: false, shipId: null, preselect: null });
   const [detailModal, setDetailModal] = useState({ open: false, shipId: null });
@@ -68,6 +74,14 @@ export default function CarrierPortalPage() {
     return { total, pending, accepted, rejected, rate };
   }, [portalShipments, tenderResponses]);
 
+  // Derive unique filter options from portal shipments
+  const filterOptions = useMemo(() => {
+    const origins = [...new Set(portalShipments.map((s) => (s.origin || "").split(",")[0].trim()).filter(Boolean))].sort();
+    const dests = [...new Set(portalShipments.map((s) => (s.dest || "").split(",")[0].trim()).filter(Boolean))].sort();
+    const modes = [...new Set(portalShipments.map((s) => (s.mode || "").toUpperCase()).filter(Boolean))].sort();
+    return { origins, dests, modes };
+  }, [portalShipments]);
+
   // Filtered and sorted list
   const filteredShipments = useMemo(() => {
     let list = [...portalShipments];
@@ -76,6 +90,42 @@ export default function CarrierPortalPage() {
     if (tab === "pending") list = list.filter((s) => !tenderResponses[s.id]);
     else if (tab === "accepted") list = list.filter((s) => tenderResponses[s.id]?.action === "accept");
     else if (tab === "rejected") list = list.filter((s) => tenderResponses[s.id]?.action === "reject");
+
+    // Mode filter
+    if (modeFilter !== "All") list = list.filter((s) => (s.mode || "").toUpperCase() === modeFilter);
+
+    // Origin filter
+    if (originFilter !== "All") list = list.filter((s) => (s.origin || "").split(",")[0].trim() === originFilter);
+
+    // Destination filter
+    if (destFilter !== "All") list = list.filter((s) => (s.dest || "").split(",")[0].trim() === destFilter);
+
+    // Date filter (pickup date)
+    if (dateFilter !== "All") {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      list = list.filter((s) => {
+        const pickup = plannedPickupDate(s);
+        if (!pickup || pickup === "—") return false;
+        const d = new Date(pickup);
+        if (isNaN(d.getTime())) return false;
+        if (dateFilter === "Today") return d.toDateString() === today.toDateString();
+        if (dateFilter === "This Week") {
+          const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + (7 - today.getDay()));
+          return d >= today && d <= weekEnd;
+        }
+        if (dateFilter === "Next 7 Days") {
+          const end = new Date(today); end.setDate(today.getDate() + 7);
+          return d >= today && d <= end;
+        }
+        if (dateFilter === "Next 30 Days") {
+          const end = new Date(today); end.setDate(today.getDate() + 30);
+          return d >= today && d <= end;
+        }
+        if (dateFilter === "Overdue") return d < today;
+        return true;
+      });
+    }
 
     // Search filter
     if (search.trim()) {
@@ -97,7 +147,7 @@ export default function CarrierPortalPage() {
     });
 
     return list;
-  }, [portalShipments, tab, search, tenderResponses]);
+  }, [portalShipments, tab, search, tenderResponses, modeFilter, originFilter, destFilter, dateFilter]);
 
   // Get related orders for a shipment
   const getRelatedOrders = useCallback((shipment) => {
@@ -168,6 +218,17 @@ export default function CarrierPortalPage() {
         onTabChange={setTab}
         search={search}
         onSearchChange={setSearch}
+        modeFilter={modeFilter}
+        onModeChange={setModeFilter}
+        originFilter={originFilter}
+        onOriginChange={setOriginFilter}
+        destFilter={destFilter}
+        onDestChange={setDestFilter}
+        dateFilter={dateFilter}
+        onDateChange={setDateFilter}
+        filterOptions={filterOptions}
+        activeFilterCount={[modeFilter, originFilter, destFilter, dateFilter].filter((f) => f !== "All").length}
+        onClearFilters={() => { setModeFilter("All"); setOriginFilter("All"); setDestFilter("All"); setDateFilter("All"); }}
       />
 
       <div style={{ padding: "24px 28px" }}>
@@ -263,7 +324,12 @@ export default function CarrierPortalPage() {
 
 /* ── Sub-components ── */
 
-function PageHeader({ tab, onTabChange, search, onSearchChange }) {
+function PageHeader({
+  tab, onTabChange, search, onSearchChange,
+  modeFilter, onModeChange, originFilter, onOriginChange,
+  destFilter, onDestChange, dateFilter, onDateChange,
+  filterOptions, activeFilterCount, onClearFilters,
+}) {
   return (
     <div style={{
       padding: "16px 28px", borderBottom: "1px solid var(--border)",
@@ -327,6 +393,53 @@ function PageHeader({ tab, onTabChange, search, onSearchChange }) {
             }}
           />
         </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="filter-bar" style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <select className="fsel" value={modeFilter} onChange={(e) => onModeChange(e.target.value)}>
+          <option value="All">All Modes</option>
+          {filterOptions.modes.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+
+        <select className="fsel" value={originFilter} onChange={(e) => onOriginChange(e.target.value)}>
+          <option value="All">All Origins</option>
+          {filterOptions.origins.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+
+        <select className="fsel" value={destFilter} onChange={(e) => onDestChange(e.target.value)}>
+          <option value="All">All Destinations</option>
+          {filterOptions.dests.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+
+        <select className="fsel" value={dateFilter} onChange={(e) => onDateChange(e.target.value)}>
+          <option value="All">All Dates</option>
+          <option value="Overdue">Overdue</option>
+          <option value="Today">Today</option>
+          <option value="This Week">This Week</option>
+          <option value="Next 7 Days">Next 7 Days</option>
+          <option value="Next 30 Days">Next 30 Days</option>
+        </select>
+
+        {activeFilterCount > 0 && (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            style={{
+              padding: "5px 12px", borderRadius: 6, border: "1px solid var(--border)",
+              background: "var(--bg2)", color: "var(--text2)", fontSize: 12,
+              fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Clear Filters ({activeFilterCount})
+          </button>
+        )}
       </div>
     </div>
   );

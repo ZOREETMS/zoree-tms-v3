@@ -70,8 +70,10 @@ function formatTransitDays(r) {
 }
 
 /* ---------- Render CzarLite badge ---------- */
-function CzarLiteBadge({ r }) {
-  if (!r.czarlite) return <span className="text-muted text-sm">{"\u2014"}</span>;
+function CzarLiteBadge({ r, carriers }) {
+  // Show CzarLite badge if rate-level OR carrier-level czarlite is enabled
+  const carrierCzarlite = (carriers || []).some((c) => c.name === r.carrier && c.czarlite_enabled);
+  if (!r.czarlite && !carrierCzarlite) return <span className="text-muted text-sm">{"\u2014"}</span>;
   const cls = r.czarliteClass || r.czarlite_class || r.freight_class || "";
   const minWt = r.czarliteMinWt || r.czar_min_wt || r.czarlite_min_wt || 0;
   const maxWt = r.czarliteMaxWt || r.czar_max_wt || r.czarlite_max_wt || 0;
@@ -161,7 +163,7 @@ export default function RateManagementPage() {
       active: rates.filter((r) => r.status === "Active").length,
       expiringSoon: rates.filter((r) => r.status === "Expiring Soon" || (r.status === "Active" && getExp(r) >= now && getExp(r) <= thirtyDays)).length,
       expired: rates.filter((r) => r.status === "Expired" || (getExp(r) && getExp(r) < now)).length,
-      czarlite: rates.filter((r) => r.czarlite).length,
+      czarlite: rates.filter((r) => r.czarlite || carriers.some((c) => c.name === r.carrier && c.czarlite_enabled)).length,
     };
   }, [rates]);
 
@@ -322,7 +324,13 @@ export default function RateManagementPage() {
             >
               Reload DB
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => toast("Add Rate modal coming soon", "info")}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditRate({
+              lane: "", mode: "TL", origin: "", dest: "", carrier: "",
+              status: "Active", rate: "", unit: "per mile", fsc: "",
+              eff: new Date().toISOString().slice(0, 10), exp: "",
+              miles: "", transitDays: "", serviceLevel: "Standard",
+              czarlite: false,
+            })}>
               + Add Rate
             </button>
           </div>
@@ -483,9 +491,9 @@ export default function RateManagementPage() {
         )}
 
         {/* Rates Table */}
-        <div className="card" style={{ padding: 0 }}>
-          <div className="table-wrap">
-            <table className="grid" style={{ border: "none", boxShadow: "none" }}>
+        <div style={{ position: "relative", border: "1px solid var(--border)", borderRadius: 16, background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,0.04)" }}>
+          <div style={{ overflowX: "scroll", overflowY: "visible", WebkitOverflowScrolling: "touch" }}>
+            <table className="grid" style={{ border: "none", boxShadow: "none", width: 1800 }}>
               <thead>
                 <tr>
                   <th onClick={() => toggleSort("lane")} style={{ cursor: "pointer" }}>LANE <SortIcon col="lane" /></th>
@@ -517,9 +525,9 @@ export default function RateManagementPage() {
                     style={r.czarlite ? { borderLeft: "3px solid #6366f1", background: "rgba(99,102,241,.03)" } : undefined}
                   >
                     <td style={{ whiteSpace: "nowrap", minWidth: 220 }}>
-                      <span className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 12 }}>
+                      <a href="#" onClick={(e) => { e.preventDefault(); setEditRate(r); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 12, textDecoration: "none", cursor: "pointer" }}>
                         {buildLaneId(r)}
-                      </span>
+                      </a>
                     </td>
                     <td className="text-sm">{getOrigin(r).toUpperCase() || "\u2014"}</td>
                     <td className="text-sm">{getDest(r).toUpperCase() || "\u2014"}</td>
@@ -557,7 +565,7 @@ export default function RateManagementPage() {
                       </span>
                     </td>
                     <td>
-                      <CzarLiteBadge r={r} />
+                      <CzarLiteBadge r={r} carriers={carriers} />
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <button
@@ -586,6 +594,8 @@ export default function RateManagementPage() {
         onClose={() => setEditRate(null)}
         onSave={handleSaveRate}
         isNew={editRate && !editRate.id}
+        carriers={carriers}
+        existingLanes={rates.map((r) => r.lane).filter(Boolean)}
       />
     </div>
   );

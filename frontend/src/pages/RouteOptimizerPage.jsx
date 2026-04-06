@@ -69,8 +69,20 @@ const CZARLITE_WEIGHT_BREAKS = [
 ];
 
 /* ─────────── Helper Functions ─────────── */
-function getDist(o, d) {
-  return 750; // Placeholder — real mileage comes from PC*MILER during rating
+async function getDist(o, d, oZip, dZip) {
+  // Try haversine estimate from zip codes via backend
+  const oz = oZip || CITY_ZIP_MAP[o] || "";
+  const dz = dZip || CITY_ZIP_MAP[d] || "";
+  if (oz && dz) {
+    try {
+      const res = await fetch(`/api/mileage/estimate?originZip=${encodeURIComponent(oz)}&destZip=${encodeURIComponent(dz)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.miles) return data.miles;
+      }
+    } catch (e) { /* fall through */ }
+  }
+  return 750; // Last-resort fallback
 }
 
 function normLaneCity(addr) {
@@ -183,7 +195,7 @@ export default function RouteOptimizerPage() {
 
   /* ── Build rate comparison rows (pure function — all values passed in) ── */
   async function fetchRateRows({ o, d, modeFilter, wt, oZip, dZip }) {
-    const dist = getDist(o, d);
+    const dist = await getDist(o, d, oZip, dZip);
     const showTL = modeFilter === "ALL" || modeFilter === "TL";
     const showLTL = modeFilter === "ALL" || modeFilter === "LTL";
     const w = parseInt(wt) || 5000;
@@ -330,8 +342,8 @@ export default function RouteOptimizerPage() {
       });
       const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
 
-      // Use best carrier's miles, fallback to 750
-      const dist = best.miles || getDist(origin, dest);
+      // Use best carrier's miles, fallback to haversine estimate
+      const dist = best.miles || await getDist(origin, dest, czarOriginZip || originZip, czarDestZip || destZip);
       const hrs = (dist / 55).toFixed(1);
       const hosOk = parseFloat(hrs) <= 11;
 
@@ -365,7 +377,7 @@ export default function RouteOptimizerPage() {
           oZip: czarOriginZip || originZip, dZip: czarDestZip || destZip,
         });
         const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
-        const dist = best.miles || getDist(origin, dest);
+        const dist = best.miles || await getDist(origin, dest, czarOriginZip || originZip, czarDestZip || destZip);
         const hrs = (dist / 55).toFixed(1);
         const hosOk = parseFloat(hrs) <= 11;
         setRateCompareRows(rows);
