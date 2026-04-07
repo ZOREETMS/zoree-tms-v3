@@ -11,11 +11,13 @@ const navStructure = [
   { section: "Planning", items: [
     { to: "/item-master", label: "Item Master", icon: "📦" },
     { to: "/location-master", label: "Location Master", icon: "📍" },
+    { to: "/equipment-master", label: "Equipment Master", icon: "🚛" },
     { to: "/shipments", label: "Shipments", icon: "📦", badgeKey: "shipments" },
     { to: "/orders", label: "Orders", icon: "🧾", badgeKey: "orders", badgeColor: "yellow" },
     { to: "/route-optimizer", label: "Route Optimizer", icon: "🗺️" },
     { to: "/bulk-plan", label: "Bulk Plan", icon: "⚡" },
     { to: "/multi-stop-routes", label: "Multi-Stop Routes", icon: "🛣️" },
+    { to: "/planning-parameters", label: "Planning Params", icon: "🎛️" },
   ]},
   { section: "Execution", items: [
     { to: "/live-tracking", label: "Live Tracking", icon: "📡", badgeVal: "3", badgeColor: "red" },

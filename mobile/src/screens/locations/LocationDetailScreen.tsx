@@ -1,14 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
+import { deleteLocation, toggleLocationStatus } from '../../shared/services/locationService';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import {
@@ -40,7 +42,8 @@ const CAPABILITIES: Capability[] = [
 export default function LocationDetailScreen() {
   const route = useRoute<RouteProp<ParamList, 'LocationDetail'>>();
   const navigation = useNavigation<any>();
-  const { data } = useData();
+  const { data, refreshData } = useData();
+  const [busy, setBusy] = useState(false);
 
   const locationId = route.params?.locationId;
 
@@ -172,6 +175,47 @@ export default function LocationDetailScreen() {
             )}
           </View>
         </Card>
+
+        {/* Actions */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: colors.accent }]}
+            onPress={() => navigation.navigate('LocationForm', { locationId: location.id })}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.accent} />
+            <Text style={[styles.actionBtnText, { color: colors.accent }]}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: colors.red }]}
+            disabled={busy}
+            onPress={() => {
+              Alert.alert('Delete Location', `Delete "${location.name}"?`, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setBusy(true);
+                    try {
+                      await deleteLocation(location.id);
+                      await refreshData();
+                      navigation.goBack();
+                    } catch (e: any) {
+                      Alert.alert('Error', e.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  },
+                },
+              ]);
+            }}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.red} />
+            <Text style={[styles.actionBtnText, { color: colors.red }]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: spacing['5xl'] }} />
       </ScrollView>
     </View>
   );
@@ -309,5 +353,25 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.regular,
     color: colors.text2,
     marginTop: spacing.sm,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    backgroundColor: colors.bg2,
+  },
+  actionBtnText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
 });

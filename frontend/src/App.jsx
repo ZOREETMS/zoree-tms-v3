@@ -31,6 +31,8 @@ import MessagingHubPage from "./pages/MessagingHubPage";
 import NetworkModelingPage from "./pages/NetworkModelingPage";
 import DbExplorerPage from "./pages/DbExplorerPage";
 import MultiStopRoutesPage from "./pages/MultiStopRoutesPage";
+import EquipmentMasterPage from "./pages/EquipmentMasterPage";
+import PlanningParametersPage from "./pages/PlanningParametersPage";
 import HomePage from "./pages/HomePage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
@@ -69,6 +71,8 @@ function PrivateRoutes({ data }) {
         <Route path="network-modeling" element={<NetworkModelingPage />} />
         <Route path="db-explorer" element={<DbExplorerPage />} />
         <Route path="multi-stop-routes" element={<MultiStopRoutesPage />} />
+        <Route path="equipment-master" element={<EquipmentMasterPage />} />
+        <Route path="planning-parameters" element={<PlanningParametersPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -77,7 +81,7 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [] });
+  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -95,8 +99,10 @@ export default function App() {
       DbApi.drivers().catch(() => []),
       DbApi.invoices().catch(() => []),
       DbApi.routeTemplates().catch(() => []),
+      DbApi.equipmentTypes().catch(() => []),
+      DbApi.planningParameters().catch(() => []),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters]) => {
         setData({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -109,6 +115,8 @@ export default function App() {
           drivers: Array.isArray(drivers) ? drivers : [],
           invoices: Array.isArray(invoices) ? invoices : [],
           routeTemplates: Array.isArray(routeTemplates) ? routeTemplates : [],
+          equipmentTypes: Array.isArray(equipmentTypes) ? equipmentTypes : [],
+          planningParameters: Array.isArray(planningParameters) ? planningParameters : [],
         });
       })
       .catch((e) => setError(e.message || "Failed loading data"))

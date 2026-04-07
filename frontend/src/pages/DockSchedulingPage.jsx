@@ -1,11 +1,6 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-
-const DOORS = ["Door 1", "Door 2", "Door 3", "Door 4", "Door 5", "Door 6"];
-const HOURS = Array.from({ length: 15 }, (_, i) => {
-  const h = i + 6;
-  return `${String(h).padStart(2, "0")}:00`;
-});
+import { DOCK_DOORS as DOORS, DOCK_HOURS as HOURS } from "../constants/docks";
 
 function todayStr() {
   const d = new Date();
@@ -18,21 +13,40 @@ export default function DockSchedulingPage() {
   const [appointments, setAppointments] = useState([]);
   const [editAppt, setEditAppt] = useState(null);
 
-  // Mock appointments from shipments that have dock data
+  // Build appointments from shipments that have dock data persisted during planning
   const dayAppts = useMemo(() => {
-    // For now, generate appointments from shipments with pickup on this date
     const appts = shipments
       .filter((s) => s.pickup_date === dockDate && s.status !== "Cancelled")
-      .map((s, i) => ({
-        id: "DA-" + s.id,
-        door: DOORS[i % DOORS.length],
-        start: `${String(8 + i).padStart(2, "0")}:00`,
-        duration: 90,
-        type: "Outbound",
-        carrier: s.carrier || "TBD",
-        shipmentId: s.id,
-        status: "Scheduled",
-      }));
+      .map((s, i) => {
+        const door = s.dock_door || DOORS[i % DOORS.length];
+        // Parse start time from loading_start (e.g. "2026-04-07 06:00") or dock_time (e.g. "06:00–08:00")
+        let start = `${String(8 + i).padStart(2, "0")}:00`;
+        let duration = 90;
+        if (s.loading_start) {
+          const timePart = s.loading_start.includes(" ") ? s.loading_start.split(" ")[1] : s.loading_start;
+          start = timePart || start;
+        } else if (s.dock_time) {
+          start = s.dock_time.split("–")[0] || s.dock_time.split("-")[0] || start;
+        }
+        if (s.loading_start && s.loading_end) {
+          const sTime = s.loading_start.includes(" ") ? s.loading_start.split(" ")[1] : s.loading_start;
+          const eTime = s.loading_end.includes(" ") ? s.loading_end.split(" ")[1] : s.loading_end;
+          const [sh, sm] = (sTime || "0:0").split(":").map(Number);
+          const [eh, em] = (eTime || "0:0").split(":").map(Number);
+          duration = (eh * 60 + em) - (sh * 60 + sm);
+          if (duration <= 0) duration = 90;
+        }
+        return {
+          id: "DA-" + s.id,
+          door,
+          start,
+          duration,
+          type: "Outbound",
+          carrier: s.carrier || "TBD",
+          shipmentId: s.id,
+          status: s.dock_door ? "Confirmed" : "Scheduled",
+        };
+      });
     return [...appointments.filter((a) => a.date === dockDate), ...appts];
   }, [shipments, dockDate, appointments]);
 

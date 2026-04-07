@@ -11,8 +11,10 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import SearchBar from '../../components/ui/SearchBar';
+import StatusFilter from '../../components/common/StatusFilter';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
+import { LOCATION_TYPES } from '../../shared/constants/locationConstants';
 import {
   colors,
   fontSize,
@@ -25,11 +27,25 @@ export default function LocationsScreen() {
   const { data, loading, refreshData } = useData();
   const navigation = useNavigation<any>();
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: data.locations.length };
+    data.locations.forEach((l: any) => {
+      const t = l.type || 'Other';
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return counts;
+  }, [data.locations]);
 
   const filtered = useMemo(() => {
+    let locs = data.locations;
+    if (typeFilter !== 'All') {
+      locs = locs.filter((loc: any) => loc.type === typeFilter);
+    }
     const q = search.toLowerCase().trim();
-    if (!q) return data.locations;
-    return data.locations.filter((loc: any) => {
+    if (!q) return locs;
+    return locs.filter((loc: any) => {
       const name = (loc.name ?? '').toLowerCase();
       const address = (loc.address ?? '').toLowerCase();
       const city = (loc.city ?? '').toLowerCase();
@@ -41,7 +57,7 @@ export default function LocationsScreen() {
         customer.includes(q)
       );
     });
-  }, [data.locations, search]);
+  }, [data.locations, search, typeFilter]);
 
   const handleRefresh = useCallback(() => {
     refreshData();
@@ -74,6 +90,15 @@ export default function LocationsScreen() {
         />
       </View>
 
+      {/* Type Filter */}
+      <StatusFilter
+        label="Filter by Type"
+        statuses={['All', ...LOCATION_TYPES]}
+        active={typeFilter}
+        onSelect={setTypeFilter}
+        counts={typeCounts}
+      />
+
       {/* List */}
       <FlatList
         data={filtered}
@@ -95,6 +120,15 @@ export default function LocationsScreen() {
           </View>
         }
       />
+
+      {/* FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate('LocationForm')}
+      >
+        <Ionicons name="add" size={28} color={colors.white} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -257,5 +291,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.text3,
     marginTop: spacing.md,
+  },
+  fab: {
+    position: 'absolute',
+    right: spacing.xl,
+    bottom: spacing['3xl'],
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

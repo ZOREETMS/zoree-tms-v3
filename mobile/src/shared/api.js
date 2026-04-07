@@ -69,7 +69,7 @@ export const AuthApi = {
 
 export const DbApi = {
   orders() {
-    return api("/db/orders?q=select=*%26order=created_at.desc%26limit=500");
+    return api("/orders").then((res) => res.orders || []);
   },
   shipments() {
     return api("/db/shipments?q=select=*%26order=created_at.desc%26limit=500");

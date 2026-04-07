@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
@@ -33,6 +34,16 @@ export default function OrdersScreen() {
   const [search, setSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState('All');
 
+  /** Count orders per status for filter badges */
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: data.orders.length };
+    data.orders.forEach((o) => {
+      const s = o.status || 'Unplanned';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return counts;
+  }, [data.orders]);
+
   const filteredOrders = useMemo(() => {
     let orders = data.orders;
 
@@ -45,9 +56,9 @@ export default function OrdersScreen() {
       orders = orders.filter(
         (o) =>
           (o.order_id || o.id || '').toString().toLowerCase().includes(q) ||
-          (o.customer_name || '').toLowerCase().includes(q) ||
-          (o.origin_city || o.origin || '').toLowerCase().includes(q) ||
-          (o.destination_city || o.destination || '').toLowerCase().includes(q),
+          (o.customer || o.customer_name || '').toLowerCase().includes(q) ||
+          (o.origin || o.origin_city || '').toLowerCase().includes(q) ||
+          (o.destination || o.destination_city || '').toLowerCase().includes(q),
       );
     }
 
@@ -80,6 +91,30 @@ export default function OrdersScreen() {
         </View>
       </View>
 
+      {/* Quick Nav */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.quickNav}
+      >
+        {[
+          { label: 'Shipments', icon: 'airplane-outline' as const, screen: 'Shipments' },
+          { label: 'Bulk Plan', icon: 'rocket-outline' as const, screen: 'BulkPlan' },
+          { label: 'Items', icon: 'cube-outline' as const, screen: 'ItemMaster' },
+          { label: 'Locations', icon: 'location-outline' as const, screen: 'LocationMaster' },
+        ].map((nav) => (
+          <TouchableOpacity
+            key={nav.screen}
+            style={styles.quickNavBtn}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate(nav.screen)}
+          >
+            <Ionicons name={nav.icon} size={18} color={colors.accent} />
+            <Text style={styles.quickNavText}>{nav.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       {/* Search */}
       <View style={styles.searchContainer}>
         <SearchBar
@@ -91,9 +126,11 @@ export default function OrdersScreen() {
 
       {/* Status Filter */}
       <StatusFilter
+        label="Filter by Status"
         statuses={ORDER_STATUSES}
         active={activeStatus}
         onSelect={setActiveStatus}
+        counts={statusCounts}
       />
 
       {/* Order List */}
@@ -164,6 +201,33 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  quickNav: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  quickNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.bg2,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    marginRight: spacing.sm,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  quickNavText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
   },
   listContent: {
     paddingTop: spacing.sm,

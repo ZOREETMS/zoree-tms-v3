@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import { DbApi, TenderApi, OrdersApi, OmsApi, BulkPlanApi } from "../lib/api";
-import { sendTenderEmailIfAvailable } from "../services/tenderService";
+import { sendTenderEmailIfAvailable, gatherOrderDetails } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
 import "leaflet/dist/leaflet.css";
@@ -655,6 +655,10 @@ export default function ShipmentsPage() {
       const dest = row.dest || "";
       const refNum =
         "TND-" + String(row.id || "").replace(/^SHP-/i, "") + "-" + String(Math.floor(Math.random() * 9000 + 1000));
+
+      // Gather linked order & line-item details via service layer
+      const orderDetails = await gatherOrderDetails(row._linkedOrders || []);
+
       const tenderPayload = {
         shipmentId: row.id,
         refNum,
@@ -662,7 +666,7 @@ export default function ShipmentsPage() {
         origin,
         dest,
         pickup: row.pickup_date || "",
-        delivery: row.delivery_date || "",
+        delivery: row.delivery_date || row.shipment_end_date || "",
         mode: row.mode || "",
         cost: row.total_cost ?? row.cost ?? "",
         weight: row.weight ?? "",
@@ -671,6 +675,7 @@ export default function ShipmentsPage() {
         specialInstructions: row.special_instructions || row.specialInstructions || row.notes || "",
         dockDoor: row.dock_door || "Door 1",
         dockTime: row.dock_time || "06:00–08:00",
+        ...orderDetails,
       };
       let emailSent = false;
       let emailTo = "";

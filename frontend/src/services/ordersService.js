@@ -5,6 +5,7 @@
 
 import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 import { addBusinessDays } from "../utils/orderUtils.jsx";
+import { assignDocksToPlans } from "./dockService";
 
 /* ── Internal helper: generate a shipment ID ── */
 function genShipId() {
@@ -482,6 +483,9 @@ export async function bulkPlanOrders(unplannedOrders) {
   if (!allPlans.length) {
     return { created: 0, updated: 0, cost: 0, noQuotes: true };
   }
+
+  // Auto-assign dock doors to all plans via dock service
+  assignDocksToPlans(allPlans);
 
   try {
     const execRes = await BulkPlanApi.execute(allPlans);

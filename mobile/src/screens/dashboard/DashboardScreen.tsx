@@ -114,7 +114,7 @@ export default function DashboardScreen() {
           <TouchableOpacity
             style={styles.actionButton}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('Planning', { screen: 'Orders', params: { screen: 'OrderDetail', params: { orderId: 'new' } } })}
+            onPress={() => navigation.navigate('PlanningTab', { screen: 'OrderDetail', params: { orderId: 'new' } })}
           >
             <View style={[styles.actionIcon, { backgroundColor: `${colors.accent}14` }]}>
               <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
@@ -125,7 +125,7 @@ export default function DashboardScreen() {
           <TouchableOpacity
             style={styles.actionButton}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('Execution', { screen: 'Shipments' })}
+            onPress={() => navigation.navigate('ExecutionTab', { screen: 'LiveTracking' })}
           >
             <View style={[styles.actionIcon, { backgroundColor: `${colors.cyan}14` }]}>
               <Ionicons name="locate-outline" size={22} color={colors.cyan} />
@@ -136,7 +136,7 @@ export default function DashboardScreen() {
           <TouchableOpacity
             style={styles.actionButton}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('Insights', { screen: 'Alerts' })}
+            onPress={() => navigation.navigate('InsightsTab', { screen: 'Alerts' })}
           >
             <View style={[styles.actionIcon, { backgroundColor: `${colors.red}14` }]}>
               <Ionicons name="notifications-outline" size={22} color={colors.red} />
@@ -153,21 +153,42 @@ export default function DashboardScreen() {
           </Card>
         ) : (
           recentOrders.map((order) => (
-            <Card key={order.id || order.order_id} style={styles.itemCard}>
-              <View style={styles.itemRow}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemId}>
-                    {order.order_id || order.id}
-                  </Text>
-                  <Text style={styles.itemSub} numberOfLines={1}>
-                    {order.customer_name || order.origin_city || 'N/A'}
-                    {order.destination_city ? ` \u2192 ${order.destination_city}` : ''}
-                  </Text>
+            <TouchableOpacity
+              key={order.id || order.order_id}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('PlanningTab', {
+                screen: 'OrderDetail',
+                params: { orderId: (order.id || order.order_id || '').toString() },
+              })}
+            >
+              <Card style={styles.itemCard}>
+                <View style={styles.itemRow}>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemId}>
+                      {order.order_id || order.id}
+                    </Text>
+                    <Text style={styles.itemSub} numberOfLines={1}>
+                      {order.customer || order.customer_name || order.origin || 'N/A'}
+                      {(order.destination || order.destination_city) ? ` \u2192 ${order.destination || order.destination_city}` : ''}
+                    </Text>
+                  </View>
+                  <StatusBadge status={order.status || 'Unplanned'} />
                 </View>
-                <StatusBadge status={order.status || 'Unplanned'} />
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
           ))
+        )}
+        {data.orders.length > 5 && (
+          <TouchableOpacity
+            style={styles.viewAllBtn}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('PlanningTab', { screen: 'Orders' })}
+          >
+            <Text style={styles.viewAllText}>
+              View All {data.orders.length} Orders
+            </Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.accent} />
+          </TouchableOpacity>
         )}
 
         {/* Active Shipments */}
@@ -304,5 +325,23 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: spacing['3xl'],
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.accent}10`,
+    borderWidth: 1,
+    borderColor: `${colors.accent}30`,
+  },
+  viewAllText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.accent,
   },
 });

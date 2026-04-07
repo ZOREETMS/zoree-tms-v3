@@ -1,1 +1,1 @@
-{"version":"0.0.1","configurations":[{"name":"api","runtimeExecutable":"npm","runtimeArgs":["start"],"port":3001,"cwd":"api"},{"name":"frontend","runtimeExecutable":"npm","runtimeArgs":["run","dev"],"port":5173,"cwd":"frontend"}]}
+{"version":"0.0.1","configurations":[{"name":"api","runtimeExecutable":"npm","runtimeArgs":["start"],"port":3001,"autoPort":true,"cwd":"api"},{"name":"frontend","runtimeExecutable":"npm","runtimeArgs":["run","dev"],"port":5173,"autoPort":true,"cwd":"frontend"}]}

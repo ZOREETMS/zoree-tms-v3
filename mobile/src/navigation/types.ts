@@ -26,15 +26,19 @@ export type OverviewTabParamList = {
 
 export type PlanningTabParamList = {
   Orders: undefined;
-  OrderDetail: { orderId: string };
+  OrderDetail: { orderId: string; edit?: boolean };
   Shipments: undefined;
   ShipmentDetail: { shipmentId: string };
   ShipmentMap: { shipmentId: string };
   ItemMaster: undefined;
+  ItemDetail: { itemId: string };
+  ItemForm: { itemId?: string };
   LocationMaster: undefined;
   LocationDetail: { locationId: string };
+  LocationForm: { locationId?: string };
   RouteOptimizer: undefined;
   BulkPlan: undefined;
+  BulkPlanResults: { results: any };
   MultiStopRoutes: undefined;
 };
 

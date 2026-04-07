@@ -129,7 +129,7 @@ async function verifyToken(req, res) {
 }
 
 // Allowed tables — security whitelist
-const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','route_templates'];
+const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','route_templates','equipment_types','planning_parameters'];
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -280,9 +280,12 @@ app.post('/api/tender/email', async (req, res) => {
   const companyName = String(b.companyName || 'ZOREE LLC');
   const mcNumber = String(b.mcNumber || '');
   const webUrl = String(b.webUrl || 'www.zoree.io');
+  const orderNumbers = Array.isArray(b.orderNumbers) ? b.orderNumbers : [];
+  const customerName = String(b.customerName || '');
+  const lineItems = Array.isArray(b.lineItems) ? b.lineItems : [];
 
   // Plain text fallback
-  const text = [
+  const textLines = [
     'BROKER - CARRIER LOAD TENDER & RATE CONFIRMATION',
     '================================================',
     '',
@@ -291,11 +294,24 @@ app.post('/api/tender/email', async (req, res) => {
     'Fax/Email: ' + contactEmail,
     'Date: ' + today,
     'Pickup Date: ' + pickup,
+    'Delivery Date: ' + (delivery || '—'),
+  ];
+  if (customerName) textLines.push('Customer: ' + customerName);
+  if (orderNumbers.length) textLines.push('Order Number(s): ' + orderNumbers.join(', '));
+  textLines.push(
     'Origin: ' + origin,
     'Destination: ' + dest,
     'Commodity & Weight: ' + commodity + ' / ' + weight + ' lbs',
     'Mode: ' + mode,
     'Agreed Rate: ' + cost,
+  );
+  if (lineItems.length) {
+    textLines.push('', 'Line Items:', '---');
+    lineItems.forEach((li, i) => {
+      textLines.push((i + 1) + '. ' + (li.itemId || '—') + ' | ' + (li.description || '—') + ' | Qty: ' + (li.qty || 0) + ' | ' + (li.unitWeight || 0) + ' lbs' + (li.orderId ? ' (Order: ' + li.orderId + ')' : ''));
+    });
+  }
+  textLines.push(
     '',
     'THIS LOAD IS TENDERED TO THE NAMED CARRIER BY',
     companyName + ', A LICENSED PROPERTY BROKER, PURSUANT TO WRITTEN SIGNED CONTRACTS,',
@@ -309,7 +325,8 @@ app.post('/api/tender/email', async (req, res) => {
     '',
     'Please respond via the Carrier Portal or contact your shipper rep.',
     '— ' + companyName,
-  ].join('\n');
+  );
+  const text = textLines.join('\n');
 
   // Professional HTML tender form
   const html = `<!DOCTYPE html>
@@ -333,6 +350,16 @@ app.post('/api/tender/email', async (req, res) => {
       <td style="border:1px solid #ccc;padding:8px 12px;width:50%">
         <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Load Number</div>
         <div style="font-size:15px;font-weight:bold;color:#1a237e">${shipmentId}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Customer</div>
+        <div style="font-size:14px;font-weight:bold;color:#1a237e">${customerName || '—'}</div>
+      </td>
+      <td style="border:1px solid #ccc;padding:8px 12px">
+        <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:bold;margin-bottom:3px">Order Number(s)</div>
+        <div style="font-size:13px;font-weight:bold;color:#1a237e">${orderNumbers.length ? orderNumbers.join(', ') : '—'}</div>
       </td>
     </tr>
     <tr>
@@ -391,6 +418,23 @@ app.post('/api/tender/email', async (req, res) => {
   <div style="background:#fff3e0;border:1px solid #ccc;border-top:none;padding:12px 16px;font-size:11px;line-height:1.5;color:#333">
     THIS LOAD IS TENDERED TO THE NAMED CARRIER BY <strong>${companyName}</strong>${mcNumber ? ' (MC-' + mcNumber + ')' : ''}, A LICENSED PROPERTY BROKER, PURSUANT TO WRITTEN SIGNED CONTRACTS, IF ANY, AND THE BROKER/CARRIER TERMS AND CONDITIONS FOUND AT <strong>${webUrl}</strong> TO WHICH CARRIER EXPRESSLY AGREES.
   </div>
+
+  <!-- Line Items -->
+  ${lineItems.length ? `
+  <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #ccc;border-top:none" cellpadding="0" cellspacing="0">
+    <tr>
+      <td colspan="5" style="padding:10px 12px;background:#e8eaf6;font-size:10px;color:#1a237e;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;border-bottom:1px solid #ccc">Item Details</td>
+    </tr>
+    <tr style="background:#f5f5f5">
+      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Order #</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Item ID</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Description</th>
+      <th style="padding:6px 10px;text-align:right;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Qty</th>
+      <th style="padding:6px 10px;text-align:right;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Unit Wt</th>
+    </tr>
+    ${lineItems.map((li, i) => '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#fafafa') + '"><td style="padding:5px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#666">' + (li.orderId || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#1a237e;font-weight:bold">' + (li.itemId || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee">' + (li.description || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600">' + (li.qty || 0) + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">' + (li.unitWeight || 0) + ' lbs</td></tr>').join('')}
+  </table>
+  ` : ''}
 
   <!-- Shipment Details -->
   <table style="width:100%;border-collapse:collapse;font-size:13px" cellpadding="0" cellspacing="0">
@@ -732,7 +776,31 @@ app.get('/api/orders/full', async (req, res) => {
 });
 
 // ── Convenience named routes (used by dashboard etc.) ──────────────
-app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('orders','select=*&order=created_at.desc&limit=500',u._token); res.json({ orders: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+// Transform raw DB rows to consistent API field names
+function dbToOrderApi(r) {
+  return {
+    id:              r.id,
+    order_id:        r.id,
+    customer:        r.customer,
+    origin:          r.origin,
+    destination:     r.dest,
+    weight:          r.weight,
+    pieces:          r.pieces,
+    commodity:       r.commodity,
+    incoterms:       r.incoterms   || null,
+    readyDate:       r.ready       || null,
+    dueDate:         r.due         || null,
+    status:          r.status      || 'Unplanned',
+    shipmentId:      r.shipment_id || null,
+    hazmat:          r.hazmat      || false,
+    preferredCarrier:r.preferred_carrier || null,
+    excludedCarrier: r.excluded_carrier  || null,
+    notes:           r.notes       || null,
+    createdAt:       r.created_at,
+    updatedAt:       r.updated_at,
+  };
+}
+app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('orders','select=*&order=created_at.desc&limit=500',u._token); const orders = rows.map(dbToOrderApi); res.json({ orders, total: orders.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/shipments', async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('shipments','select=*&order=created_at.desc&limit=500',u._token); res.json({ shipments: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/carriers',  async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('carriers','select=*&order=name&limit=200',u._token); res.json({ carriers: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/rates',     async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('rates','select=*&order=lane&limit=500',u._token); res.json({ rates: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
@@ -1773,9 +1841,15 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           rate_id: plan.rateId || null,
         };
 
+        // Add dock fields if available
+        if (plan.dockDoor) shipRow.dock_door = plan.dockDoor;
+        if (plan.dockTime) shipRow.dock_time = plan.dockTime;
+        if (plan.loadingStart) shipRow.loading_start = plan.loadingStart;
+        if (plan.loadingEnd) shipRow.loading_end = plan.loadingEnd;
+
         // Create shipment
         console.log(`[BulkPlan/execute] INSERT payload:`, JSON.stringify(shipRow));
-        const shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
+        let shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
           method: 'POST',
           headers: {
             'apikey': ANON_KEY,
@@ -1784,7 +1858,27 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           },
           body: JSON.stringify(shipRow),
         });
-        const shipData = await shipRes.json();
+        let shipData = await shipRes.json();
+
+        // If dock columns don't exist yet, retry without them
+        if (!shipRes.ok && shipData?.message?.includes('dock_door')) {
+          console.warn(`[BulkPlan/execute] Dock columns not in DB — retrying without dock fields`);
+          delete shipRow.dock_door;
+          delete shipRow.dock_time;
+          delete shipRow.loading_start;
+          delete shipRow.loading_end;
+          shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
+            method: 'POST',
+            headers: {
+              'apikey': ANON_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates,return=representation',
+            },
+            body: JSON.stringify(shipRow),
+          });
+          shipData = await shipRes.json();
+        }
+
         if (!shipRes.ok) {
           console.error(`[BulkPlan/execute] Supabase INSERT FAILED:`, shipRes.status, JSON.stringify(shipData));
           errors.push({ shipId, error: shipData.message || 'DB insert failed' });

@@ -5,6 +5,7 @@ import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
 import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit } from "../services/ordersService";
+import { assignDockToPlan } from "../services/dockService";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
@@ -627,20 +628,23 @@ export default function OrdersPage() {
 
   async function confirmPlan() {
     if (!planModal) return;
-    const { lane, shipmentGroups, siblings } = planModal;
+    const { lane, shipmentGroups, siblings, reserveDock, dockDoor, dockStartTime, loadDuration } = planModal;
     const groups = shipmentGroups || [{ lane, quotes: planModal.quotes, selectedIdx: planModal.selectedIdx, bestQuote: planModal.bestQuote, orders: siblings }];
+    const dockEnabled = reserveDock !== false; // default true
 
     // Build a plan for each shipment group
     const plans = [];
     let totalCost = 0;
-    for (const sg of groups) {
+    for (let gi = 0; gi < groups.length; gi++) {
+      const sg = groups[gi];
       const chosen = sg.quotes[sg.selectedIdx] || sg.bestQuote;
       if (!chosen) { toast(`No carrier selected for a shipment group`, "error"); return; }
       const readyDate = sg.orders?.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
       const earliestDue = sg.orders?.map((s) => s.due).filter(Boolean).sort()[0] || "";
       const dates = calcDates(chosen, earliestDue, readyDate);
       if (dates.error) { toast(`Planning failed: ${dates.error}`, "error"); return; }
-      plans.push({
+
+      const plan = {
         laneKey: sg.lane.laneKey, origin: sg.lane.origin, destination: sg.lane.destination,
         originZip: sg.lane.originZip, destZip: sg.lane.destZip,
         totalWeight: sg.lane.totalWeight, totalPieces: sg.lane.totalPieces, orderIds: sg.lane.orderIds,
@@ -653,7 +657,17 @@ export default function OrdersPage() {
         fuelSurcharge: chosen.fscCharge || 0,
         accessorials: chosen.accessorialCharge || 0,
         rateId: chosen.rateId || null,
-      });
+      };
+
+      // Assign dock via service when reservation is enabled
+      if (dockEnabled) {
+        assignDockToPlan(plan, {
+          dockDoor, startTime: dockStartTime, loadDuration,
+          groupIndex: gi, groupCount: groups.length,
+        });
+      }
+
+      plans.push(plan);
       totalCost += chosen.totalCharge || 0;
     }
 

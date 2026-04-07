@@ -116,6 +116,17 @@ function ShipmentCard({ shipment: sh }) {
           <div style={{ fontWeight: 800, fontSize: 14, color: "var(--accent)" }}>{sh.id}</div>
           <div style={{ fontSize: 11, color: "var(--text3)" }}>{sh.carrier} · {sh.mode || sh.transport_mode || "TL"}</div>
         </div>
+        {sh.bol_type === "MBOL" && (
+          <span
+            style={{
+              background: "rgba(124,58,237,.1)", color: "#7c3aed",
+              border: "1px solid rgba(124,58,237,.25)", fontSize: 10,
+              fontWeight: 700, padding: "2px 8px", borderRadius: 20, marginRight: 4,
+            }}
+          >
+            Multi-Stop
+          </span>
+        )}
         <span
           style={{
             background: "rgba(16,185,129,.1)", color: "var(--green)",

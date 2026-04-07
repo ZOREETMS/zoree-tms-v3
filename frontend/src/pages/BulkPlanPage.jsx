@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { BulkPlanApi } from "../lib/api";
+import { BulkPlanApi, DbApi } from "../lib/api";
 import { buildLaneGroups } from "../utils/laneUtils";
 import { planAllLanes } from "../services/bulkPlanService";
-import PlanSummaryModal from "../components/bulk-plan/PlanSummaryModal";
+import { createShipmentsFromRoute, findMatchingRoute } from "../services/ordersService";
+import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import OrderEditModal from "../components/bulk-plan/OrderEditModal";
 
 /* ── helpers ── */
@@ -12,23 +13,24 @@ function fmt$(n) {
 }
 
 export default function BulkPlanPage() {
-  const { orders, items = [], refreshData } = useOutletContext();
+  const { orders, items = [], rates = [], routeTemplates, refreshData } = useOutletContext();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [results, setResults] = useState(null);
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [planSummary, setPlanSummary] = useState(null);
   const [editOrder, setEditOrder] = useState(null);
 
   /* ── filters ── */
   const [q, setQ] = useState("");
   const [customerFilter, setCustomerFilter] = useState("All");
 
-  function toast(text, type = "info") {
+  function toast(text, type = "info", autoClose = false) {
     setMessage({ text, type });
-    setTimeout(() => setMessage({ text: "", type: "" }), 8000);
+    if (autoClose) setTimeout(() => setMessage({ text: "", type: "" }), 8000);
   }
+  function dismissMessage() { setMessage({ text: "", type: "" }); }
 
   /* ── unplanned orders ── */
   const unplanned = useMemo(() => {
@@ -50,11 +52,16 @@ export default function BulkPlanPage() {
     let rows = unplanned;
     if (customerFilter !== "All") rows = rows.filter((o) => o.customer === customerFilter);
     if (q.trim()) {
-      const t = q.toLowerCase().trim();
-      rows = rows.filter((o) =>
-        [o.id, o.customer, o.origin, o.dest, o.commodity]
-          .some((v) => String(v || "").toLowerCase().includes(t))
-      );
+      // Support comma-separated search: "ORD-2024-004, ORD-2024-007" matches either
+      const terms = q.split(",").map((s) => s.toLowerCase().trim()).filter(Boolean);
+      if (terms.length > 0) {
+        rows = rows.filter((o) =>
+          terms.some((t) =>
+            [o.id, o.customer, o.origin, o.dest, o.commodity]
+              .some((v) => String(v || "").toLowerCase().includes(t))
+          )
+        );
+      }
     }
     return rows;
   }, [unplanned, q, customerFilter]);
@@ -98,55 +105,104 @@ export default function BulkPlanPage() {
     setSelectedIds(new Set());
   }
 
-  /* ── Plan & Create Shipments (with progressive consolidation + splitting) ── */
+  /* ── Plan & Create Shipments (multi-stop check + progressive consolidation) ── */
   async function onPlan() {
-    if (!lanes.length) {
-      toast("No orders selected.", "warning");
-      return;
-    }
+    const selected = unplanned.filter((o) => selectedIds.has(o.id));
+    if (!selected.length) { toast("No orders selected.", "warning"); return; }
+
     setBusy(true);
     setMessage({ text: "", type: "" });
     setResults(null);
     const planStartTime = Date.now();
 
     try {
-      // Progressive consolidation: rate individually, try consolidation, compare costs
-      const { plans, totalConsolidated, totalIndividual, totalFailed, failedOrderIds } =
-        await planAllLanes(lanes, orders, "cost", (msg) => toast(msg, "info"));
+      // ── Step 1: Check for multi-stop route matches ──
+      let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
+      if (templates.length === 0) {
+        try { templates = await DbApi.routeTemplates() || []; } catch { /* ignore */ }
+      }
+      const routeMatch = findMatchingRoute(templates, selected);
+      let routePlanned = [];
+      let multiStopShipments = [];
 
-      if (!plans.length) {
-        const failMsg = failedOrderIds.length
-          ? `Failed orders: ${failedOrderIds.join(", ")}`
-          : "Check rate table for transit_days, miles, or enable CarrierConnect.";
-        toast(`No executable plans — no carriers returned valid quotes. ${failMsg}`, "error");
-        setBusy(false);
-        return;
+      let multiStopSummary = null;
+      if (routeMatch) {
+        toast("Multi-stop route matched — creating shipments...", "info", true);
+        try {
+          const msResult = await createShipmentsFromRoute(routeMatch.route, routeMatch.matchedOrders, rates);
+          if (msResult && !msResult.error) {
+            routePlanned = routeMatch.matchedOrders;
+            multiStopSummary = {
+              isMultiStop: true,
+              masterShipment: msResult.masterShipment,
+              childShipments: msResult.childShipments,
+              ordersUpdated: msResult.ordersUpdated,
+              totalCost: parseFloat(routeMatch.route.cost_override) || 0,
+              carrier: routeMatch.route.carrier,
+              mode: routeMatch.route.mode || "TL",
+              siblings: routeMatch.matchedOrders,
+            };
+          }
+        } catch (err) {
+          toast(`Multi-stop failed: ${err.message}`, "error");
+        }
       }
 
-      // Build summary message
-      const parts = [];
-      if (totalConsolidated > 0) parts.push(`${totalConsolidated} consolidated`);
-      if (totalIndividual > 0) parts.push(`${totalIndividual} individual`);
-      if (totalFailed > 0) parts.push(`${totalFailed} failed`);
-      toast(`Creating ${plans.length} shipment(s): ${parts.join(", ")}...`, "info");
+      // ── Step 2: Remaining orders — progressive consolidation + splitting ──
+      const remaining = selected.filter((o) => !routePlanned.includes(o));
+      let bulkExecRes = null;
+      let bulkPlans = [];
 
-      // Execute — create shipments + update orders
-      const execRes = await BulkPlanApi.execute(plans);
-      execRes._elapsedMs = Date.now() - planStartTime;
-      setResults(execRes);
+      if (remaining.length > 0) {
+        const remainingLanes = buildLaneGroups(remaining);
+        toast(`Rating ${remainingLanes.length} lane(s)...`, "info", true);
+
+        const { plans, totalConsolidated, totalIndividual, totalFailed, failedOrderIds } =
+          await planAllLanes(remainingLanes, orders, "cost", (msg) => toast(msg, "info", true));
+
+        if (plans.length > 0) {
+          toast(`Creating ${plans.length} shipment(s)...`, "info", true);
+          bulkExecRes = await BulkPlanApi.execute(plans);
+          bulkPlans = plans;
+        } else if (routePlanned.length === 0) {
+          const failMsg = failedOrderIds.length
+            ? `Failed orders: ${failedOrderIds.join(", ")}`
+            : "Check rate table for transit_days, miles, or enable CarrierConnect.";
+          toast(`No executable plans — no carriers returned valid quotes. ${failMsg}`, "error");
+          setBusy(false);
+          return;
+        }
+      }
+
+      // ── Step 3: Build unified summary (same format as OrdersPage) ──
+      const bulkShipments = bulkExecRes?.shipments || [];
+      const routeCost = multiStopSummary ? multiStopSummary.totalCost : 0;
+      const bulkCost = bulkShipments.reduce((s, sh) => s + Number(sh.total_cost || 0), 0);
+      const totalUpdated = routePlanned.length + (bulkExecRes?.ordersUpdated || 0);
+      const allShipments = [
+        ...(multiStopSummary?.masterShipment ? [multiStopSummary.masterShipment] : []),
+        ...bulkShipments,
+      ];
+
+      setResults({ shipments: allShipments, ordersUpdated: totalUpdated, _elapsedMs: Date.now() - planStartTime });
       setSelectedIds(new Set());
       await refreshData();
 
-      if (execRes?.shipments?.length > 0) {
-        setSummaryOpen(true);
+      if (allShipments.length > 0) {
+        setPlanSummary({
+          isCombined: true,
+          multiStop: multiStopSummary,
+          bulkShipments,
+          bulkPlans,
+          bulkSiblings: remaining,
+          ordersUpdated: totalUpdated,
+          totalCost: routeCost + bulkCost,
+          siblings: selected,
+          elapsedMs: Date.now() - planStartTime,
+        });
         setMessage({ text: "", type: "" });
       } else {
-        toast(
-          `Planning completed but no shipments were created. ${
-            execRes?.errors?.length ? execRes.errors.map((e) => e.error).join("; ") : "Check API logs."
-          }`,
-          "error"
-        );
+        toast("Planning completed but no shipments were created. Check API logs.", "error");
       }
     } catch (err) {
       toast(`Planning failed: ${err.message || "Unknown error"}`, "error");
@@ -183,13 +239,14 @@ export default function BulkPlanPage() {
         {message.text && (
           <div
             style={{
-              padding: "10px 16px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 600,
+              padding: "10px 16px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8,
               background: message.type === "error" ? "#fee2e2" : message.type === "success" ? "#dcfce7" : message.type === "warning" ? "#fef9c3" : "#dbeafe",
               color: message.type === "error" ? "#991b1b" : message.type === "success" ? "#14532d" : message.type === "warning" ? "#854d0e" : "#1e3a8a",
               border: `1px solid ${message.type === "error" ? "#fca5a5" : message.type === "success" ? "#86efac" : message.type === "warning" ? "#fde047" : "#93c5fd"}`,
             }}
           >
-            {message.text}
+            <span style={{ flex: 1 }}>{message.text}</span>
+            <button onClick={dismissMessage} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "inherit", opacity: 0.6, padding: "0 4px", lineHeight: 1 }} title="Dismiss">✕</button>
           </div>
         )}
 
@@ -364,13 +421,7 @@ export default function BulkPlanPage() {
       />
 
       {/* Plan Summary Modal */}
-      <PlanSummaryModal
-        isOpen={summaryOpen}
-        shipments={results?.shipments || []}
-        ordersUpdated={results?.ordersUpdated || 0}
-        elapsedMs={results?._elapsedMs || 0}
-        onClose={() => setSummaryOpen(false)}
-      />
+      <PlanSummaryModal summary={planSummary} onClose={() => setPlanSummary(null)} />
     </div>
   );
 }

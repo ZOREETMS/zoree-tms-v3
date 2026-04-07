@@ -110,6 +110,12 @@ export const DbApi = {
   routeTemplates() {
     return api("/db/route_templates?q=select=*%26order=created_at.desc%26limit=200");
   },
+  equipmentTypes() {
+    return api("/db/equipment_types?q=select=*%26order=name.asc%26limit=500");
+  },
+  planningParameters() {
+    return api("/db/planning_parameters?q=select=*%26order=category.asc%26limit=100");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

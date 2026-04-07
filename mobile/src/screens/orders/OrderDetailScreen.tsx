@@ -86,11 +86,11 @@ export default function OrderDetailScreen() {
   }
 
   const status = order.status || 'Unplanned';
-  const readyDate = order.ready_date
-    ? new Date(order.ready_date).toLocaleDateString()
+  const readyDate = (order.readyDate || order.ready_date || order.ready)
+    ? new Date(order.readyDate || order.ready_date || order.ready).toLocaleDateString()
     : '--';
-  const dueDate = order.due_date
-    ? new Date(order.due_date).toLocaleDateString()
+  const dueDate = (order.dueDate || order.due_date || order.due)
+    ? new Date(order.dueDate || order.due_date || order.due).toLocaleDateString()
     : '--';
 
   return (
@@ -113,33 +113,44 @@ export default function OrderDetailScreen() {
         <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Order Information</Text>
 
-          <InfoRow label="Customer" value={order.customer_name || '--'} />
+          <InfoRow label="Customer" value={order.customer || order.customer_name || '--'} />
           <InfoRow
             label="Origin"
-            value={order.origin_city || order.origin || '--'}
+            value={order.origin || order.origin_city || '--'}
           />
           <InfoRow
             label="Destination"
-            value={order.destination_city || order.destination || '--'}
+            value={order.destination || order.destination_city || '--'}
           />
           <InfoRow label="Ready Date" value={readyDate} />
           <InfoRow label="Due Date" value={dueDate} />
           <InfoRow
             label="Weight"
             value={
-              order.total_weight != null
-                ? `${Number(order.total_weight).toLocaleString()} lbs`
+              (order.weight ?? order.total_weight) != null
+                ? `${Number(order.weight ?? order.total_weight).toLocaleString()} lbs`
                 : '--'
             }
           />
           <InfoRow
             label="Pieces"
             value={
-              order.total_pieces != null
-                ? `${Number(order.total_pieces).toLocaleString()}`
+              (order.pieces ?? order.total_pieces) != null
+                ? `${Number(order.pieces ?? order.total_pieces).toLocaleString()}`
                 : '--'
             }
           />
+          <InfoRow label="Commodity" value={order.commodity || '--'} />
+          <InfoRow
+            label="Shipment ID"
+            value={order.shipmentId || order.shipment_id || '--'}
+          />
+          {(order.preferredCarrier || order.preferred_carrier) ? (
+            <InfoRow label="Preferred Carrier" value={order.preferredCarrier || order.preferred_carrier} />
+          ) : null}
+          {order.notes ? (
+            <InfoRow label="Notes" value={order.notes} />
+          ) : null}
         </Card>
 
         {/* Order Lines */}
