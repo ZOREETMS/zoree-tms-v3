@@ -24,26 +24,14 @@ export const DEFAULT_DOCK_START = "06:00";
 /** Available loading duration options (minutes) */
 export const LOAD_DURATION_OPTIONS = [60, 90, 120, 150, 180];
 
-/**
- * Per-warehouse dock configuration.
- * Key = uppercase origin string.
- * Value = { doors: string[], maxPerDoor: number, maxHoursPerDoor: number }.
- * Warehouses not listed here fall back to the global DOCK_DOORS with no limits.
- */
-export const WAREHOUSE_DOCK_CONFIG = {
-  "ATLANTA, GA 30350": { doors: ["Door 1", "Door 2"], maxPerDoor: 2, maxHoursPerDoor: 4, startHour: 6, endHour: 10 },
+/** Default dock config for warehouses without a custom configuration */
+export const DEFAULT_DOCK_CONFIG = {
+  doors: DOCK_DOORS,
+  maxPerDoor: Infinity,
+  maxHoursPerDoor: Infinity,
+  startHour: 6,
+  endHour: 20,
 };
-
-/**
- * Get dock configuration for a specific warehouse origin.
- * @param {string} origin - Warehouse origin (e.g. "ATLANTA, GA 30350")
- * @returns {{ doors: string[], maxPerDoor: number, maxHoursPerDoor: number }}
- */
-export function getWarehouseDockConfig(origin) {
-  const key = (origin || "").toUpperCase();
-  const config = WAREHOUSE_DOCK_CONFIG[key];
-  return config || { doors: DOCK_DOORS, maxPerDoor: Infinity, maxHoursPerDoor: Infinity, startHour: 6, endHour: 20 };
-}
 
 /** Appointment type → background color mapping */
 export const APPT_TYPE_COLORS = {

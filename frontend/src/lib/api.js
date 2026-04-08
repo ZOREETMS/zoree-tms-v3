@@ -119,6 +119,9 @@ export const DbApi = {
   documents() {
     return api("/db/documents?q=select=*%26order=created_at.desc%26limit=500");
   },
+  warehouseDockConfigs() {
+    return api("/db/warehouse_dock_config?q=select=*%26order=warehouse.asc%26limit=200");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

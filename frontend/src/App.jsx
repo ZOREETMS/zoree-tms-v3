@@ -81,7 +81,7 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [] });
+  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [], warehouseDockConfigs: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -101,8 +101,9 @@ export default function App() {
       DbApi.routeTemplates().catch(() => []),
       DbApi.equipmentTypes().catch(() => []),
       DbApi.planningParameters().catch(() => []),
+      DbApi.warehouseDockConfigs().catch(() => []),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters, warehouseDockConfigs]) => {
         setData({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -117,6 +118,7 @@ export default function App() {
           routeTemplates: Array.isArray(routeTemplates) ? routeTemplates : [],
           equipmentTypes: Array.isArray(equipmentTypes) ? equipmentTypes : [],
           planningParameters: Array.isArray(planningParameters) ? planningParameters : [],
+          warehouseDockConfigs: Array.isArray(warehouseDockConfigs) ? warehouseDockConfigs : [],
         });
       })
       .catch((e) => setError(e.message || "Failed loading data"))

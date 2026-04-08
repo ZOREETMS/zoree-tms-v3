@@ -481,7 +481,16 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Created: id={d.get\\(\"\"id\"\"\\)} key={d.get\\(\"\"key\"\"\\)} enabled={d.get\\(\"\"enabled\"\"\\)}''''\\)\")",
       "Bash(curl -s \"http://localhost:3001/api/db/planning_parameters?q=select=*%26key=eq.dock_scheduling\")",
       "Bash(curl -s \"http://localhost:3001/api/db/planning_parameters?q=select=*%26limit=5\")",
-      "Bash(curl -s -X POST \"http://localhost:3001/api/db/planning_parameters\" -H \"Content-Type: application/json\" -d '{\"\"id\"\":\"\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\",\"\"key\"\":\"\"dock_scheduling\"\",\"\"label\"\":\"\"Dock Scheduling\"\",\"\"description\"\":\"\"Auto-assign dock doors and loading windows during planning\"\",\"\"enabled\"\":true,\"\"category\"\":\"\"planning\"\"}')"
+      "Bash(curl -s -X POST \"http://localhost:3001/api/db/planning_parameters\" -H \"Content-Type: application/json\" -d '{\"\"id\"\":\"\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\",\"\"key\"\":\"\"dock_scheduling\"\",\"\"label\"\":\"\"Dock Scheduling\"\",\"\"description\"\":\"\"Auto-assign dock doors and loading windows during planning\"\",\"\"enabled\"\":true,\"\"category\"\":\"\"planning\"\"}')",
+      "Bash(curl -s \"http://localhost:3001/api/db/dock_schedules?q=select=*%26limit=5\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/warehouse_dock_config?q=select=*%26limit=5\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/warehouse_dock_config?q=select=*%26warehouse=eq.ATLANTA,%20GA%2030350\")",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/warehouse_dock_config/a7bfe426-36b4-4cad-be29-8bfef7e5aa1a -H 'Content-Type: application/json' -d {\"\"max_hours_per_door\"\":4})",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Updated: max_hours_per_door={d.get\\(\"\"max_hours_per_door\"\"\\)}''''\\)\")",
+      "Bash(python -c \"import nltk; nltk.download\\(''punkt_tab'', quiet=True\\); nltk.download\\(''averaged_perceptron_tagger'', quiet=True\\)\")",
+      "Bash(set OPENBLAS_NUM_THREADS=1)",
+      "Bash(OPENBLAS_NUM_THREADS=1 python main.py --tickers \"AAPL,MSFT,NVDA,GOOGL,AMZN\" --top 5 --export)",
+      "Bash(OPENBLAS_NUM_THREADS=1 python main.py --top 20 --export)"
     ]
   }
 }

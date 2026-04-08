@@ -139,7 +139,7 @@ const ALLOWED = [
   'order_lines','lane_preferences','order_history','route_templates',
   'equipment_types','planning_parameters','documents','vehicles',
   // Dock & scheduling
-  'dock_appointments','dock_schedules','crossdock_hubs',
+  'dock_appointments','dock_schedules','crossdock_hubs','warehouse_dock_config',
   // Events & messaging
   'shipment_events','tms_messages','system_config','tenant_config',
   // OMS

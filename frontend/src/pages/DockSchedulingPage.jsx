@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DOCK_DOORS, getWarehouseDockConfig } from "../constants/docks";
+import { DOCK_DOORS, DEFAULT_DOCK_CONFIG } from "../constants/docks";
+import { DbApi } from "../lib/api";
 import { parseLoadingWindow } from "../services/dockService";
+import { getDockConfigForWarehouse, saveDockConfig } from "../services/dockScheduleService";
 import DockLegend from "../components/dock-scheduling/DockLegend";
 import DockGrid from "../components/dock-scheduling/DockGrid";
 import AppointmentCard from "../components/dock-scheduling/AppointmentCard";
@@ -9,7 +11,7 @@ import AppointmentEditModal from "../components/dock-scheduling/AppointmentEditM
 import { formatDateDisplay, todayStr } from "../utils/dateUtils";
 
 export default function DockSchedulingPage() {
-  const { shipments } = useOutletContext();
+  const { orders, shipments, warehouseDockConfigs = [], refreshData } = useOutletContext();
   const [dockDate, setDockDate] = useState(todayStr());
   const [appointments, setAppointments] = useState([]);
   const [editAppt, setEditAppt] = useState(null);
@@ -17,22 +19,62 @@ export default function DockSchedulingPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [searchQ, setSearchQ] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
 
-  // Build warehouse options from unique shipment origins (normalized to uppercase)
+  // Build warehouse options from ORDER origins (not just shipments)
   const warehouseOptions = useMemo(() => {
-    const origins = new Set(shipments.map((s) => (s.origin || "").trim().toUpperCase()).filter(Boolean));
+    const origins = new Set();
+    (orders || []).forEach((o) => { const v = (o.origin || "").trim().toUpperCase(); if (v) origins.add(v); });
+    (shipments || []).forEach((s) => { const v = (s.origin || "").trim().toUpperCase(); if (v) origins.add(v); });
     return [...origins].sort().map((o) => ({ value: o, label: o }));
-  }, [shipments]);
+  }, [orders, shipments]);
 
-  // Get dock config for selected warehouse (doors + max per door)
+  // Get dock config for selected warehouse
   const dockConfig = useMemo(() => {
-    if (!warehouseFilter) return { doors: DOCK_DOORS, maxPerDoor: Infinity };
-    return getWarehouseDockConfig(warehouseFilter);
-  }, [warehouseFilter]);
+    if (!warehouseFilter) return DEFAULT_DOCK_CONFIG;
+    return getDockConfigForWarehouse(warehouseDockConfigs, warehouseFilter);
+  }, [warehouseFilter, warehouseDockConfigs]);
 
-  // Build appointments from shipments that have dock data persisted during planning
+  // Editable config state for the config panel
+  const currentDbRow = useMemo(() => {
+    return (warehouseDockConfigs || []).find((c) => c.warehouse === warehouseFilter) || null;
+  }, [warehouseDockConfigs, warehouseFilter]);
+
+  const [editConfig, setEditConfig] = useState(null);
+
+  function openConfig() {
+    setEditConfig({
+      num_doors: currentDbRow?.num_doors ?? 6,
+      max_per_door: currentDbRow?.max_per_door ?? 4,
+      max_hours_per_door: currentDbRow?.max_hours_per_door ?? 14,
+      start_hour: currentDbRow?.start_hour ?? 6,
+      end_hour: currentDbRow?.end_hour ?? 20,
+    });
+    setShowConfig(true);
+  }
+
+  async function handleSaveConfig() {
+    if (!warehouseFilter || !editConfig) return;
+    setConfigSaving(true);
+    try {
+      await saveDockConfig({
+        id: currentDbRow?.id || null,
+        warehouse: warehouseFilter,
+        ...editConfig,
+      });
+      await refreshData();
+      setShowConfig(false);
+    } catch (err) {
+      alert(`Save failed: ${err.message}`);
+    } finally {
+      setConfigSaving(false);
+    }
+  }
+
+  // Build appointments from shipments
   const dayAppts = useMemo(() => {
-    const appts = shipments
+    const appts = (shipments || [])
       .filter((s) => s.pickup_date === dockDate && s.status !== "Cancelled")
       .map((s, i) => {
         const door = s.dock_door || dockConfig.doors[i % dockConfig.doors.length];
@@ -50,7 +92,6 @@ export default function DockSchedulingPage() {
       });
     const all = [...appointments.filter((a) => a.date === dockDate), ...appts];
 
-    // Apply filters
     const filtered = all.filter((a) => {
       if (warehouseFilter && a.shipmentId) {
         const ship = shipments.find((s) => s.id === a.shipmentId);
@@ -65,7 +106,6 @@ export default function DockSchedulingPage() {
       return true;
     });
 
-    // Enforce per-door limits (max appointments and max hours)
     if (dockConfig.maxPerDoor < Infinity || dockConfig.maxHoursPerDoor < Infinity) {
       const doorCounts = {};
       const doorMinutes = {};
@@ -83,6 +123,7 @@ export default function DockSchedulingPage() {
   const scheduled = dayAppts.length;
   const inbound = dayAppts.filter((a) => a.type === "Inbound").length;
   const freeDoors = dockConfig.doors.length - new Set(dayAppts.map((a) => a.door)).size;
+  const totalHrs = dockConfig.doors.length * (dockConfig.maxHoursPerDoor < Infinity ? dockConfig.maxHoursPerDoor : (dockConfig.endHour - dockConfig.startHour));
 
   function navDay(delta) {
     const d = new Date(dockDate + "T12:00:00");
@@ -114,6 +155,9 @@ export default function DockSchedulingPage() {
     setEditAppt(null);
   }
 
+  const inputSt = { padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12, width: 80 };
+  const labelSt = { fontSize: 11, fontWeight: 600, color: "var(--text3)", marginBottom: 4 };
+
   return (
     <div>
       <div className="page-header">
@@ -139,7 +183,7 @@ export default function DockSchedulingPage() {
         <div className="stat-grid">
           <div className="stat-card blue">
             <div className="stat-label">Total Slots</div>
-            <div className="stat-value">{dockConfig.doors.length * (dockConfig.maxHoursPerDoor < Infinity ? dockConfig.maxHoursPerDoor : 14)} hrs</div>
+            <div className="stat-value">{totalHrs} hrs</div>
           </div>
           <div className="stat-card green">
             <div className="stat-label">Scheduled</div>
@@ -157,10 +201,16 @@ export default function DockSchedulingPage() {
 
         {/* Filters */}
         <div className="filter-bar">
-          <select className="fsel" style={{ minWidth: 180 }} value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)}>
+          <select className="fsel" style={{ minWidth: 180 }} value={warehouseFilter} onChange={(e) => { setWarehouseFilter(e.target.value); setShowConfig(false); }}>
             <option value="">All Warehouses</option>
             {warehouseOptions.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
           </select>
+          {warehouseFilter && (
+            <button className="btn btn-secondary btn-sm" onClick={showConfig ? () => setShowConfig(false) : openConfig}
+              style={{ fontSize: 11 }}>
+              {showConfig ? "Hide Config" : "Configure"}
+            </button>
+          )}
           <select className="fsel" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">All Types</option>
             <option>Inbound</option>
@@ -178,6 +228,49 @@ export default function DockSchedulingPage() {
             <input className="search-input" placeholder="Search carrier, shipment..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} />
           </div>
         </div>
+
+        {/* Warehouse Dock Config Panel */}
+        {showConfig && editConfig && warehouseFilter && (
+          <div className="card" style={{ padding: 16, marginBottom: 12, border: "1px solid rgba(99,102,241,.2)", background: "rgba(99,102,241,.03)" }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: "var(--accent)" }}>
+              Dock Configuration — {warehouseFilter}
+              {currentDbRow && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text3)", marginLeft: 8 }}>Saved</span>}
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div>
+                <div style={labelSt}>Doors</div>
+                <input type="number" min={1} max={20} value={editConfig.num_doors}
+                  onChange={(e) => setEditConfig({ ...editConfig, num_doors: parseInt(e.target.value) || 1 })} style={inputSt} />
+              </div>
+              <div>
+                <div style={labelSt}>Max Appts / Door</div>
+                <input type="number" min={1} max={20} value={editConfig.max_per_door}
+                  onChange={(e) => setEditConfig({ ...editConfig, max_per_door: parseInt(e.target.value) || 1 })} style={inputSt} />
+              </div>
+              <div>
+                <div style={labelSt}>Max Hrs / Door</div>
+                <input type="number" min={1} max={24} value={editConfig.max_hours_per_door}
+                  onChange={(e) => setEditConfig({ ...editConfig, max_hours_per_door: parseInt(e.target.value) || 1 })} style={inputSt} />
+              </div>
+              <div>
+                <div style={labelSt}>Start Hour</div>
+                <select value={editConfig.start_hour} onChange={(e) => setEditConfig({ ...editConfig, start_hour: parseInt(e.target.value) })} style={inputSt}>
+                  {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={labelSt}>End Hour</div>
+                <select value={editConfig.end_hour} onChange={(e) => setEditConfig({ ...editConfig, end_hour: parseInt(e.target.value) })} style={inputSt}>
+                  {Array.from({ length: 24 }, (_, i) => <option key={i + 1} value={i + 1}>{String(i + 1).padStart(2, "0")}:00</option>)}
+                </select>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={handleSaveConfig} disabled={configSaving}
+                style={{ background: "linear-gradient(135deg,#1a237e,#6366f1)", border: "none", height: 32 }}>
+                {configSaving ? "Saving..." : "Save Config"}
+              </button>
+            </div>
+          </div>
+        )}
 
         <DockLegend />
         <DockGrid doors={dockConfig.doors} startHour={dockConfig.startHour} endHour={dockConfig.endHour} appointments={dayAppts} onSlotClick={openNewAppt} onAppointmentClick={setEditAppt} />

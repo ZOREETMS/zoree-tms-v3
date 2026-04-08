@@ -13,7 +13,7 @@ function fmt$(n) {
 }
 
 export default function BulkPlanPage() {
-  const { orders, shipments = [], items = [], rates = [], routeTemplates, refreshData, planningParameters } = useOutletContext();
+  const { orders, shipments = [], items = [], rates = [], routeTemplates, refreshData, planningParameters, warehouseDockConfigs = [] } = useOutletContext();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [busy, setBusy] = useState(false);
@@ -155,7 +155,7 @@ export default function BulkPlanPage() {
       if (remaining.length > 0) {
         toast(`Planning ${remaining.length} order(s)...`, "info", true);
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
-        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn);
+        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs);
         if (bulkResult.noQuotes && routePlanned.length === 0) {
           toast("No carrier quotes available for selected orders.", "error");
           setBusy(false);

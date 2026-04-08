@@ -7,7 +7,8 @@
  *   - Round-robin door allocation grouped by pickup date + origin
  */
 
-import { DOCK_DOORS, LOAD_DURATION_BY_MODE, DEFAULT_DOCK_START, getWarehouseDockConfig } from "../constants/docks";
+import { DOCK_DOORS, LOAD_DURATION_BY_MODE, DEFAULT_DOCK_START } from "../constants/docks";
+import { getDockConfigForWarehouse } from "./dockScheduleService";
 
 /**
  * Extract just the "HH:mm" time portion from a value that may be:
@@ -101,9 +102,9 @@ export function buildDockFields({ door, startTime, duration, pickupDate }) {
  * @param {number} [opts.groupIndex]   - Index within multi-group (for round-robin)
  * @param {number} [opts.groupCount]   - Total groups (1 = single, >1 = multi)
  */
-export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, groupIndex = 0, groupCount = 1, existingShipments = [] } = {}) {
+export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, groupIndex = 0, groupCount = 1, existingShipments = [], dockConfigs = [] } = {}) {
   const mode = (plan.mode || "TL").toUpperCase();
-  const warehouseDoors = getWarehouseDockConfig(plan.origin).doors;
+  const warehouseDoors = getDockConfigForWarehouse(dockConfigs, plan.origin).doors;
   const dur = loadDuration || LOAD_DURATION_BY_MODE[mode] || 120;
 
   // If user explicitly chose a door, use it; otherwise auto-assign
@@ -175,7 +176,7 @@ function buildDoorOccupancy(shipments) {
  * @param {object[]} plans - Array of plan objects (mutated in place)
  * @param {object[]} [existingShipments=[]] - Already-persisted shipments to avoid overlaps
  */
-export function assignDocksToPlans(plans, existingShipments = []) {
+export function assignDocksToPlans(plans, existingShipments = [], dockConfigs = []) {
   const counters = {};    // key: "pickupDate|origin" → next door index
   const doorMinutes = buildDoorOccupancy(existingShipments);
 
@@ -183,7 +184,7 @@ export function assignDocksToPlans(plans, existingShipments = []) {
     const key = `${plan.pickupDate || ""}|${(plan.origin || "").toLowerCase().trim()}`;
     if (!counters[key]) counters[key] = 0;
 
-    const warehouseDoors = getWarehouseDockConfig(plan.origin).doors;
+    const warehouseDoors = getDockConfigForWarehouse(dockConfigs, plan.origin).doors;
     const mode = (plan.mode || "TL").toUpperCase();
     const dur = LOAD_DURATION_BY_MODE[mode] || 120;
 

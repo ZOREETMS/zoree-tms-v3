@@ -7,14 +7,14 @@ import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdFi
 import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder } from "../services/ordersService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
-import { getWarehouseDockConfig } from "../constants/docks";
+import { getDockConfigForWarehouse } from "../services/dockScheduleService";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 
 export default function OrdersPage() {
-  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters } = useOutletContext();
+  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [] } = useOutletContext();
   const [itemMaster, setItemMaster] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -448,7 +448,7 @@ export default function OrdersPage() {
       let bulkResult = null;
       if (remaining.length > 0) {
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
-        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn);
+        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs);
         if (bulkResult.noQuotes && routePlanned.length === 0) {
           toast("No carrier quotes available for selected orders.", "warning");
         }
@@ -684,10 +684,11 @@ export default function OrdersPage() {
           dockDoor, startTime: dockStartTime, loadDuration,
           groupIndex: gi, groupCount: groups.length,
           existingShipments: shipments,
+          dockConfigs: warehouseDockConfigs,
         });
       } else {
         // No dock assignment — just set pickup time to warehouse start hour
-        const wh = getWarehouseDockConfig(plan.origin);
+        const wh = getDockConfigForWarehouse(warehouseDockConfigs, plan.origin);
         plan.pickupTime = `${String(wh.startHour || 6).padStart(2, "0")}:00`;
       }
 
@@ -727,7 +728,7 @@ export default function OrdersPage() {
     setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${unplanned.length} orders...`]);
     try {
       const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
-      const result = await bulkPlanOrders(unplanned, shipments, dockOn);
+      const result = await bulkPlanOrders(unplanned, shipments, dockOn, warehouseDockConfigs);
       if (result.noQuotes) {
         setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No quotes returned.`]);
         setSchedRuns((r) => r + 1);

@@ -6,7 +6,8 @@
 import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 import { addBusinessDays } from "../utils/orderUtils.jsx";
 import { assignDocksToPlans, buildDockFields } from "./dockService";
-import { DOCK_DOORS, LOAD_DURATION_BY_MODE, getWarehouseDockConfig } from "../constants/docks";
+import { DOCK_DOORS, LOAD_DURATION_BY_MODE } from "../constants/docks";
+import { getDockConfigForWarehouse } from "./dockScheduleService";
 import { saveDocument } from "./documentService";
 
 /**
@@ -433,7 +434,7 @@ export function buildShipmentGroups(orders, baseLane, maxWeight = 15000) {
  * 6. Execute plans
  * Returns { created, updated, cost, noQuotes, shipments, plans }.
  */
-export async function bulkPlanOrders(unplannedOrders, existingShipments = [], dockEnabled = true) {
+export async function bulkPlanOrders(unplannedOrders, existingShipments = [], dockEnabled = true, dockConfigs = []) {
   if (!unplannedOrders.length) {
     return { created: 0, updated: 0, cost: 0, noQuotes: true };
   }
@@ -585,11 +586,11 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
   // Auto-assign dock doors to all plans via dock service
   // Auto-assign dock doors when dock scheduling is enabled
   if (dockEnabled) {
-    assignDocksToPlans(allPlans, existingShipments);
+    assignDocksToPlans(allPlans, existingShipments, dockConfigs);
   } else {
     // No dock assignment — just set pickup time to warehouse start hour
     for (const plan of allPlans) {
-      const wh = getWarehouseDockConfig(plan.origin);
+      const wh = getDockConfigForWarehouse(dockConfigs, plan.origin);
       plan.pickupTime = `${String(wh.startHour || 6).padStart(2, "0")}:00`;
     }
   }
