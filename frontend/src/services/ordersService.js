@@ -6,8 +6,58 @@
 import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 import { addBusinessDays } from "../utils/orderUtils.jsx";
 import { assignDocksToPlans, buildDockFields } from "./dockService";
-import { DOCK_DOORS, LOAD_DURATION_BY_MODE } from "../constants/docks";
+import { DOCK_DOORS, LOAD_DURATION_BY_MODE, getWarehouseDockConfig } from "../constants/docks";
 import { saveDocument } from "./documentService";
+
+/**
+ * Normalize an origin/destination string from city, state, zip parts.
+ * Uppercases city and state to ensure consistent data storage.
+ * @param {string} city
+ * @param {string} state
+ * @param {string} zip
+ * @returns {string} e.g. "ATLANTA, GA 30350"
+ */
+export function buildLocationString(city, state, zip) {
+  const parts = [city?.toUpperCase(), state?.toUpperCase()].filter(Boolean).join(", ");
+  return zip ? `${parts} ${zip}` : parts;
+}
+
+/**
+ * Copy an existing order with a new ID and "Unplanned" status.
+ * @param {object} source - The order to copy
+ * @returns {Promise<object>} The newly created order
+ */
+export async function copyOrder(source) {
+  const ts = Date.now().toString().slice(-6);
+  const newId = `ORD-${new Date().getFullYear()}-${ts}`;
+  const copy = {
+    id: newId,
+    customer: source.customer || null,
+    origin: source.origin || null,
+    dest: source.dest || null,
+    origin_zip: source.origin_zip || null,
+    dest_zip: source.dest_zip || null,
+    weight: source.weight || 0,
+    pieces: source.pieces || 0,
+    commodity: source.commodity || null,
+    ready: source.ready || null,
+    due: source.due || null,
+    status: "Unplanned",
+    shipment_id: null,
+    ship_mode: source.ship_mode || null,
+    incoterms: source.incoterms || null,
+    preferred_carrier: source.preferred_carrier || null,
+    excluded_carrier: source.excluded_carrier || null,
+    no_consolidate: source.no_consolidate || false,
+    hazmat: source.hazmat || false,
+    no_contract_rate: source.no_contract_rate || false,
+    dedicated_equip: source.dedicated_equip || false,
+    notes: source.notes || null,
+    po_number: source.po_number || null,
+  };
+  await DbApi.upsert("orders", copy);
+  return copy;
+}
 
 /* ── Internal helper: generate a shipment ID ── */
 function genShipId() {
@@ -383,7 +433,7 @@ export function buildShipmentGroups(orders, baseLane, maxWeight = 15000) {
  * 6. Execute plans
  * Returns { created, updated, cost, noQuotes, shipments, plans }.
  */
-export async function bulkPlanOrders(unplannedOrders) {
+export async function bulkPlanOrders(unplannedOrders, existingShipments = [], dockEnabled = true) {
   if (!unplannedOrders.length) {
     return { created: 0, updated: 0, cost: 0, noQuotes: true };
   }
@@ -533,7 +583,16 @@ export async function bulkPlanOrders(unplannedOrders) {
   }
 
   // Auto-assign dock doors to all plans via dock service
-  assignDocksToPlans(allPlans);
+  // Auto-assign dock doors when dock scheduling is enabled
+  if (dockEnabled) {
+    assignDocksToPlans(allPlans, existingShipments);
+  } else {
+    // No dock assignment — just set pickup time to warehouse start hour
+    for (const plan of allPlans) {
+      const wh = getWarehouseDockConfig(plan.origin);
+      plan.pickupTime = `${String(wh.startHour || 6).padStart(2, "0")}:00`;
+    }
+  }
 
   try {
     const execRes = await BulkPlanApi.execute(allPlans);

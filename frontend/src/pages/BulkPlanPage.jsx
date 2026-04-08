@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import { buildLaneGroups } from "../utils/laneUtils";
 import { createShipmentsFromRoute, findMatchingRoute, bulkPlanOrders } from "../services/ordersService";
+import { isFeatureEnabled } from "../services/planningParametersService";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import OrderEditModal from "../components/bulk-plan/OrderEditModal";
 
@@ -12,7 +13,7 @@ function fmt$(n) {
 }
 
 export default function BulkPlanPage() {
-  const { orders, items = [], rates = [], routeTemplates, refreshData } = useOutletContext();
+  const { orders, shipments = [], items = [], rates = [], routeTemplates, refreshData, planningParameters } = useOutletContext();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [busy, setBusy] = useState(false);
@@ -153,7 +154,8 @@ export default function BulkPlanPage() {
 
       if (remaining.length > 0) {
         toast(`Planning ${remaining.length} order(s)...`, "info", true);
-        bulkResult = await bulkPlanOrders(remaining);
+        const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
+        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn);
         if (bulkResult.noQuotes && routePlanned.length === 0) {
           toast("No carrier quotes available for selected orders.", "error");
           setBusy(false);

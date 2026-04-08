@@ -1,6 +1,6 @@
 import { DOCK_DOORS, DOCK_HOURS, APPT_TYPES, APPT_STATUSES, DURATION_OPTIONS } from "../../constants/docks";
 
-export default function AppointmentEditModal({ appointment, dockDate, onChange, onSave, onDelete, onClose }) {
+export default function AppointmentEditModal({ appointment, doors = DOCK_DOORS, dockDate, onChange, onSave, onDelete, onClose }) {
   if (!appointment) return null;
 
   return (
@@ -21,7 +21,7 @@ export default function AppointmentEditModal({ appointment, dockDate, onChange, 
             <div className="form-group">
               <label>Door</label>
               <select value={appointment.door} onChange={(e) => onChange({ ...appointment, door: e.target.value })}>
-                {DOCK_DOORS.map((d) => <option key={d}>{d}</option>)}
+                {doors.map((d) => <option key={d}>{d}</option>)}
               </select>
             </div>
             <div className="form-group">

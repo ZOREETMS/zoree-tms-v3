@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DOCK_DOORS as DOORS } from "../constants/docks";
+import { DOCK_DOORS, getWarehouseDockConfig } from "../constants/docks";
 import { parseLoadingWindow } from "../services/dockService";
 import DockLegend from "../components/dock-scheduling/DockLegend";
 import DockGrid from "../components/dock-scheduling/DockGrid";
@@ -24,12 +24,18 @@ export default function DockSchedulingPage() {
     return [...origins].sort().map((o) => ({ value: o, label: o }));
   }, [shipments]);
 
+  // Get dock config for selected warehouse (doors + max per door)
+  const dockConfig = useMemo(() => {
+    if (!warehouseFilter) return { doors: DOCK_DOORS, maxPerDoor: Infinity };
+    return getWarehouseDockConfig(warehouseFilter);
+  }, [warehouseFilter]);
+
   // Build appointments from shipments that have dock data persisted during planning
   const dayAppts = useMemo(() => {
     const appts = shipments
       .filter((s) => s.pickup_date === dockDate && s.status !== "Cancelled")
       .map((s, i) => {
-        const door = s.dock_door || DOORS[i % DOORS.length];
+        const door = s.dock_door || dockConfig.doors[i % dockConfig.doors.length];
         const { start, duration } = parseLoadingWindow(s, i);
         return {
           id: "DA-" + s.id,
@@ -43,7 +49,9 @@ export default function DockSchedulingPage() {
         };
       });
     const all = [...appointments.filter((a) => a.date === dockDate), ...appts];
-    return all.filter((a) => {
+
+    // Apply filters
+    const filtered = all.filter((a) => {
       if (warehouseFilter && a.shipmentId) {
         const ship = shipments.find((s) => s.id === a.shipmentId);
         if ((ship?.origin || "").trim().toUpperCase() !== warehouseFilter) return false;
@@ -56,11 +64,25 @@ export default function DockSchedulingPage() {
       }
       return true;
     });
-  }, [shipments, dockDate, appointments, warehouseFilter, typeFilter, statusFilter, searchQ]);
+
+    // Enforce per-door limits (max appointments and max hours)
+    if (dockConfig.maxPerDoor < Infinity || dockConfig.maxHoursPerDoor < Infinity) {
+      const doorCounts = {};
+      const doorMinutes = {};
+      return filtered.filter((a) => {
+        doorCounts[a.door] = (doorCounts[a.door] || 0) + 1;
+        doorMinutes[a.door] = (doorMinutes[a.door] || 0) + (a.duration || 60);
+        if (dockConfig.maxPerDoor < Infinity && doorCounts[a.door] > dockConfig.maxPerDoor) return false;
+        if (dockConfig.maxHoursPerDoor < Infinity && doorMinutes[a.door] > dockConfig.maxHoursPerDoor * 60) return false;
+        return true;
+      });
+    }
+    return filtered;
+  }, [shipments, dockDate, appointments, warehouseFilter, typeFilter, statusFilter, searchQ, dockConfig]);
 
   const scheduled = dayAppts.length;
   const inbound = dayAppts.filter((a) => a.type === "Inbound").length;
-  const freeDoors = DOORS.length - new Set(dayAppts.map((a) => a.door)).size;
+  const freeDoors = dockConfig.doors.length - new Set(dayAppts.map((a) => a.door)).size;
 
   function navDay(delta) {
     const d = new Date(dockDate + "T12:00:00");
@@ -110,14 +132,14 @@ export default function DockSchedulingPage() {
 
       <div className="page-content">
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, fontFamily: "'Syne',sans-serif" }}>
-          📅 {formatDateDisplay(dockDate)}
+          {"\ud83d\udcc5"} {formatDateDisplay(dockDate)}
         </div>
 
         {/* Stats */}
         <div className="stat-grid">
           <div className="stat-card blue">
             <div className="stat-label">Total Slots</div>
-            <div className="stat-value">{DOORS.length * 14} hrs</div>
+            <div className="stat-value">{dockConfig.doors.length * (dockConfig.maxHoursPerDoor < Infinity ? dockConfig.maxHoursPerDoor : 14)} hrs</div>
           </div>
           <div className="stat-card green">
             <div className="stat-label">Scheduled</div>
@@ -158,7 +180,7 @@ export default function DockSchedulingPage() {
         </div>
 
         <DockLegend />
-        <DockGrid appointments={dayAppts} onSlotClick={openNewAppt} onAppointmentClick={setEditAppt} />
+        <DockGrid doors={dockConfig.doors} startHour={dockConfig.startHour} endHour={dockConfig.endHour} appointments={dayAppts} onSlotClick={openNewAppt} onAppointmentClick={setEditAppt} />
 
         {/* Today's Appointments */}
         <div style={{ marginTop: 20 }}>
@@ -179,6 +201,7 @@ export default function DockSchedulingPage() {
 
       <AppointmentEditModal
         appointment={editAppt}
+        doors={dockConfig.doors}
         dockDate={dockDate}
         onChange={setEditAppt}
         onSave={saveAppt}

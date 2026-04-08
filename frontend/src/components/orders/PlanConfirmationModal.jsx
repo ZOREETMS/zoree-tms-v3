@@ -5,7 +5,7 @@ import DockReservationSection from "./DockReservationSection";
 export default function PlanConfirmationModal({ planModal, onModalChange, onConfirm, onClose }) {
   if (!planModal) return null;
 
-  const { lane, siblings, busy, error, maxWt, util, loadDuration, equipType, shipmentGroups, reserveDock } = planModal;
+  const { lane, siblings, busy, error, maxWt, util, loadDuration, equipType, shipmentGroups, reserveDock, dockSchedulingEnabled } = planModal;
   const dockEnabled = reserveDock !== false;
   const groups = shipmentGroups && shipmentGroups.length > 0
     ? shipmentGroups
@@ -61,13 +61,15 @@ export default function PlanConfirmationModal({ planModal, onModalChange, onConf
             <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>Max: <strong style={{ color: "var(--accent)" }}>{(groups[0]?.maxWt || maxWt).toLocaleString()} lbs</strong> per trailer</span>
           </div>
 
-          <DockReservationSection
-            dockEnabled={dockEnabled}
-            dockDoor={planModal.dockDoor}
-            dockStartTime={planModal.dockStartTime}
-            loadDuration={loadDuration}
-            onModalChange={onModalChange}
-          />
+          {dockSchedulingEnabled !== false && (
+            <DockReservationSection
+              dockEnabled={dockEnabled}
+              dockDoor={planModal.dockDoor}
+              dockStartTime={planModal.dockStartTime}
+              loadDuration={loadDuration}
+              onModalChange={onModalChange}
+            />
+          )}
 
           {/* Shipment Groups */}
           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>

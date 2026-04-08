@@ -22,6 +22,7 @@ export default function OrderDetailModal({
   onClose,
   onPlan,
   onUnplan,
+  onCopy,
   busy,
   changeLog,
   itemMaster,
@@ -296,6 +297,7 @@ export default function OrderDetailModal({
             {o.status === "Unplanned" && <button className="btn btn-primary btn-sm" onClick={() => onPlan(o.id)} style={{ background: "linear-gradient(135deg,#059669,#10b981)", border: "none" }}>{"\u26a1"} Plan This Order</button>}
             {(o.status === "Planned" || o.status === "Consolidated") && <button className="btn btn-sm" style={{ background: "#dc2626", color: "#fff", border: "none" }} onClick={() => onUnplan(o.id)}>{"\ud83d\udd13"} Unplan</button>}
             <button className="btn btn-secondary btn-sm" onClick={() => onTabChange("edit")}>{"\u270f\ufe0f"} Edit Order</button>
+            {onCopy && <button className="btn btn-secondary btn-sm" onClick={() => onCopy(o.id)}>{"\ud83d\udccb"} Copy Order</button>}
             {histLog.length > 0 && <button className="btn btn-secondary btn-sm" onClick={() => onTabChange("history")} style={{ marginLeft: "auto" }}>{"\ud83d\udd50"} History ({histLog.length})</button>}
           </div>
         )}

@@ -4,15 +4,17 @@ import { DbApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
-import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit } from "../services/ordersService";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder } from "../services/ordersService";
 import { assignDockToPlan } from "../services/dockService";
+import { isFeatureEnabled } from "../services/planningParametersService";
+import { getWarehouseDockConfig } from "../constants/docks";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 
 export default function OrdersPage() {
-  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates } = useOutletContext();
+  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters } = useOutletContext();
   const [itemMaster, setItemMaster] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -205,6 +207,19 @@ export default function OrdersPage() {
     finally { setBusyId(""); }
   }
 
+  async function handleCopyOrder(id) {
+    const source = orders.find((o) => o.id === id);
+    if (!source) return;
+    setBusyId(id);
+    try {
+      const newOrder = await copyOrder(source);
+      toast(`Copied ${id} → ${newOrder.id}`, "success");
+      await refreshData();
+      openDetail(newOrder.id);
+    } catch (err) { toast(`Copy failed: ${err.message}`, "error"); }
+    finally { setBusyId(""); }
+  }
+
   async function unplanOrder(id) {
     if (!window.confirm(`Unplan order ${id}?`)) return;
     setBusyId(id);
@@ -275,8 +290,8 @@ export default function OrdersPage() {
       if (ov !== nv) changes.push({ field, label, old: ov, new: nv });
     }
     const f = editForm;
-    const newOrigin = [f.originCity?.toUpperCase(), f.originState?.toUpperCase()].filter(Boolean).join(", ") + (f.originZip ? " " + f.originZip : "");
-    const newDest = [f.destCity?.toUpperCase(), f.destState?.toUpperCase()].filter(Boolean).join(", ") + (f.destZip ? " " + f.destZip : "");
+    const newOrigin = buildLocationString(f.originCity, f.originState, f.originZip);
+    const newDest = buildLocationString(f.destCity, f.destState, f.destZip);
     chk("customer", o.customer, f.customer, "Customer");
     chk("status", o.status, f.status, "Status");
     chk("origin", o.origin, newOrigin, "Origin");
@@ -328,8 +343,8 @@ export default function OrdersPage() {
     const f = newOrderForm;
     const ts = Date.now().toString().slice(-6);
     const newId = `ORD-${new Date().getFullYear()}-${ts}`;
-    const origin = [f.originCity?.toUpperCase(), f.originState?.toUpperCase()].filter(Boolean).join(", ") + (f.originZip ? " " + f.originZip : "");
-    const dest = [f.destCity?.toUpperCase(), f.destState?.toUpperCase()].filter(Boolean).join(", ") + (f.destZip ? " " + f.destZip : "");
+    const origin = buildLocationString(f.originCity, f.originState, f.originZip);
+    const dest = buildLocationString(f.destCity, f.destState, f.destZip);
     // Auto-compute weight/pieces from lines
     const autoWeight = newOrderLines.reduce((s, l) => s + (l.total_weight || 0), 0);
     const autoPieces = newOrderLines.reduce((s, l) => s + (l.qty_ordered || l.qty || 0), 0);
@@ -432,7 +447,8 @@ export default function OrdersPage() {
       const remaining = selected.filter((o) => !routePlanned.includes(o));
       let bulkResult = null;
       if (remaining.length > 0) {
-        bulkResult = await bulkPlanOrders(remaining);
+        const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
+        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn);
         if (bulkResult.noQuotes && routePlanned.length === 0) {
           toast("No carrier quotes available for selected orders.", "warning");
         }
@@ -511,11 +527,14 @@ export default function OrdersPage() {
     const firstMaxWt = shipmentGroups[0]?.maxWt || EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight;
     const firstUtil = shipmentGroups[0]?.util || 0;
 
+    const dockSchedulingOn = isFeatureEnabled(planningParameters, "dock_scheduling");
     setPlanModal({
       order: o, siblings: sibs, lane: baseLane,
       quotes: [], selectedIdx: 0, busy: true, error: "",
       maxWt: firstMaxWt, util: firstUtil, loadDuration: 120, equipType: firstEquip,
       shipmentGroups,
+      reserveDock: dockSchedulingOn,
+      dockSchedulingEnabled: dockSchedulingOn,
     });
     setDetailOrder(null);
     const ratingStart = Date.now();
@@ -664,7 +683,12 @@ export default function OrdersPage() {
         assignDockToPlan(plan, {
           dockDoor, startTime: dockStartTime, loadDuration,
           groupIndex: gi, groupCount: groups.length,
+          existingShipments: shipments,
         });
+      } else {
+        // No dock assignment — just set pickup time to warehouse start hour
+        const wh = getWarehouseDockConfig(plan.origin);
+        plan.pickupTime = `${String(wh.startHour || 6).padStart(2, "0")}:00`;
       }
 
       plans.push(plan);
@@ -702,7 +726,8 @@ export default function OrdersPage() {
     }
     setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${unplanned.length} orders...`]);
     try {
-      const result = await bulkPlanOrders(unplanned);
+      const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
+      const result = await bulkPlanOrders(unplanned, shipments, dockOn);
       if (result.noQuotes) {
         setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No quotes returned.`]);
         setSchedRuns((r) => r + 1);
@@ -1027,6 +1052,7 @@ export default function OrdersPage() {
                   {o.status === "Consolidated" && (
                     <button className="btn btn-secondary btn-sm" style={{ background: "rgba(245,158,11,.08)", color: "#b45309", borderColor: "rgba(245,158,11,.35)", fontSize: 11 }} onClick={() => unplanOrder(o.id)}>🔓 Unplan</button>
                   )}
+                  <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, fontSize: 11 }} disabled={busyId === o.id} onClick={() => handleCopyOrder(o.id)} title="Copy order">📋</button>
                 </td>
               </tr>
             );
@@ -1046,7 +1072,7 @@ export default function OrdersPage() {
         detailLines={detailLines} onLinesChange={setDetailLines}
         onSave={saveOrderEdit} onSaveLines={saveLines}
         onClose={() => setDetailOrder(null)}
-        onPlan={(id) => openPlanModal(id)} onUnplan={unplanOrder}
+        onPlan={(id) => openPlanModal(id)} onUnplan={unplanOrder} onCopy={handleCopyOrder}
         busy={detailBusy}
         changeLog={orderChangeLog[detailOrder?.id] || []}
         onClearHistory={() => setOrderChangeLog((prev) => ({ ...prev, [detailOrder?.id]: [] }))}

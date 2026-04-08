@@ -465,7 +465,23 @@
       "Bash(curl -s -X PATCH http://localhost:3001/api/db/shipments/SHP-2026-9122 -H 'Content-Type: application/json' -d '{\"\"\"\"origin\"\"\"\":\"\"\"\"ATLANTA, GA 30350\"\"\"\"}')",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''id''''\\), d.get\\(''''origin''''\\)\\)\")",
       "Bash(curl -s http://localhost:3001/api/db/orders?q=select=id,origin%26limit=500)",
-      "Bash(curl -s -X PATCH http://localhost:3001/api/db/orders/ORD-897277 -H 'Content-Type: application/json' -d '{\"\"\"\"origin\"\"\"\":\"\"\"\"ATLANTA, GA 30350\"\"\"\"}')"
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/orders/ORD-897277 -H 'Content-Type: application/json' -d '{\"\"\"\"origin\"\"\"\":\"\"\"\"ATLANTA, GA 30350\"\"\"\"}')",
+      "Bash(curl -s \"http://localhost:3001/api/db/shipments?q=select=id,dock_door,loading_start,loading_end,dock_time%26pickup_date=eq.2026-04-13%26origin=eq.ATLANTA,%20GA%2030350\")",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/shipments/SHP-2026-1128 -H 'Content-Type: application/json' -d '{\"\"\"\"dock_door\"\"\"\":\"\"\"\"Door 2\"\"\"\",\"\"\"\"loading_start\"\"\"\":\"\"\"\"2026-04-13 06:00\"\"\"\",\"\"\"\"loading_end\"\"\"\":\"\"\"\"2026-04-13 08:00\"\"\"\",\"\"\"\"dock_time\"\"\"\":\"\"\"\"06:00\\\\u201308:00\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''id''''\\), d.get\\(''''dock_door''''\\), d.get\\(''''loading_start''''\\), d.get\\(''''loading_end''''\\)\\)\")",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,dock_door,loading_start,loading_end,dock_time,origin,status%26pickup_date=eq.2026-04-13)",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/shipments/SHP-2026-9105 -H 'Content-Type: application/json' -d '{\"\"\"\"dock_door\"\"\"\":\"\"\"\"Door 1\"\"\"\",\"\"\"\"loading_start\"\"\"\":\"\"\"\"2026-04-13 08:00\"\"\"\",\"\"\"\"loading_end\"\"\"\":\"\"\"\"2026-04-13 10:00\"\"\"\",\"\"\"\"dock_time\"\"\"\":\"\"\"\"08:00\\\\u201310:00\"\"\"\"}')",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,dock_door,loading_start,loading_end,origin,status%26pickup_date=eq.2026-04-13)",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/shipments/SHP-2026-6730 -H 'Content-Type: application/json' -d '{\"\"\"\"dock_door\"\"\"\":\"\"\"\"Door 2\"\"\"\",\"\"\"\"loading_start\"\"\"\":\"\"\"\"2026-04-13 06:00\"\"\"\",\"\"\"\"loading_end\"\"\"\":\"\"\"\"2026-04-13 08:00\"\"\"\",\"\"\"\"dock_time\"\"\"\":\"\"\"\"06:00\\\\u201308:00\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''id''''\\), d.get\\(''''dock_door''''\\)\\)\")",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,dock_door,loading_start,loading_end,origin,status,pickup_date%26pickup_date=eq.2026-04-13)",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/shipments/SHP-2026-3803 -H 'Content-Type: application/json' -d '{\"\"\"\"dock_door\"\"\"\":\"\"\"\"Door 2\"\"\"\",\"\"\"\"loading_start\"\"\"\":\"\"\"\"2026-04-13 06:00\"\"\"\",\"\"\"\"loading_end\"\"\"\":\"\"\"\"2026-04-13 08:00\"\"\"\",\"\"\"\"dock_time\"\"\"\":\"\"\"\"06:00\\\\u201308:00\"\"\"\"}')",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,origin,pickup_date,dock_door,status%26limit=500%26order=created_at.desc)",
+      "Bash(curl -s -X POST http://localhost:3001/api/db/planning_parameters -H 'Content-Type: application/json' -d '{\"\"\"\"key\"\"\"\":\"\"\"\"dock_scheduling\"\"\"\",\"\"\"\"label\"\"\"\":\"\"\"\"Dock Scheduling\"\"\"\",\"\"\"\"description\"\"\"\":\"\"\"\"Auto-assign dock doors and loading windows during planning\"\"\"\",\"\"\"\"enabled\"\"\"\":true,\"\"\"\"category\"\"\"\":\"\"\"\"planning\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Created: id={d.get\\(\"\"id\"\"\\)} key={d.get\\(\"\"key\"\"\\)} enabled={d.get\\(\"\"enabled\"\"\\)}''''\\)\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/planning_parameters?q=select=*%26key=eq.dock_scheduling\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/planning_parameters?q=select=*%26limit=5\")",
+      "Bash(curl -s -X POST \"http://localhost:3001/api/db/planning_parameters\" -H \"Content-Type: application/json\" -d '{\"\"id\"\":\"\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\",\"\"key\"\":\"\"dock_scheduling\"\",\"\"label\"\":\"\"Dock Scheduling\"\",\"\"description\"\":\"\"Auto-assign dock doors and loading windows during planning\"\",\"\"enabled\"\":true,\"\"category\"\":\"\"planning\"\"}')"
     ]
   }
 }

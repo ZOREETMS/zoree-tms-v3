@@ -7,7 +7,7 @@
  *   - Round-robin door allocation grouped by pickup date + origin
  */
 
-import { DOCK_DOORS, LOAD_DURATION_BY_MODE, DEFAULT_DOCK_START } from "../constants/docks";
+import { DOCK_DOORS, LOAD_DURATION_BY_MODE, DEFAULT_DOCK_START, getWarehouseDockConfig } from "../constants/docks";
 
 /**
  * Extract just the "HH:mm" time portion from a value that may be:
@@ -101,46 +101,117 @@ export function buildDockFields({ door, startTime, duration, pickupDate }) {
  * @param {number} [opts.groupIndex]   - Index within multi-group (for round-robin)
  * @param {number} [opts.groupCount]   - Total groups (1 = single, >1 = multi)
  */
-export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, groupIndex = 0, groupCount = 1 } = {}) {
+export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, groupIndex = 0, groupCount = 1, existingShipments = [] } = {}) {
   const mode = (plan.mode || "TL").toUpperCase();
-  const door = groupCount === 1
-    ? (dockDoor || DOCK_DOORS[0])
-    : DOCK_DOORS[groupIndex % DOCK_DOORS.length];
-  const start = startTime || DEFAULT_DOCK_START;
+  const warehouseDoors = getWarehouseDockConfig(plan.origin).doors;
   const dur = loadDuration || LOAD_DURATION_BY_MODE[mode] || 120;
+
+  // If user explicitly chose a door, use it; otherwise auto-assign
+  let door;
+  let start;
+  if (dockDoor) {
+    door = dockDoor;
+    // Check if the chosen start time conflicts with existing appointments
+    const occupancy = buildDoorOccupancy(existingShipments);
+    const doorKey = `${plan.pickupDate || ""}|${(plan.origin || "").toLowerCase().trim()}|${door}`;
+    const occupiedMins = occupancy[doorKey] || 0;
+    const requestedStart = startTime || DEFAULT_DOCK_START;
+    const [rh, rm] = requestedStart.split(":").map(Number);
+    const requestedOffset = (rh - 6) * 60 + (rm || 0);
+    // If requested slot overlaps, push to next available
+    if (requestedOffset < occupiedMins) {
+      const h = 6 + Math.floor(occupiedMins / 60);
+      const m = occupiedMins % 60;
+      start = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    } else {
+      start = requestedStart;
+    }
+  } else {
+    // Auto-assign: find the door with the least occupied time
+    const occupancy = buildDoorOccupancy(existingShipments);
+    const keyPrefix = `${plan.pickupDate || ""}|${(plan.origin || "").toLowerCase().trim()}`;
+    let bestDoor = groupCount === 1 ? warehouseDoors[0] : warehouseDoors[groupIndex % warehouseDoors.length];
+    let bestMins = Infinity;
+    for (const d of warehouseDoors) {
+      const dk = `${keyPrefix}|${d}`;
+      const occupied = occupancy[dk] || 0;
+      if (occupied < bestMins) { bestMins = occupied; bestDoor = d; }
+    }
+    door = bestDoor;
+    const doorKey = `${keyPrefix}|${door}`;
+    const occupiedMins = occupancy[doorKey] || 0;
+    const h = 6 + Math.floor(occupiedMins / 60);
+    const m = occupiedMins % 60;
+    start = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
 
   const fields = buildDockFields({ door, startTime: start, duration: dur, pickupDate: plan.pickupDate });
   Object.assign(plan, fields);
 }
 
 /**
+ * Build a map of occupied minutes per door from existing shipments.
+ * Used to avoid double-booking when assigning new dock slots.
+ *
+ * @param {object[]} shipments - Existing shipments with dock fields
+ * @returns {object} Map of "pickupDate|origin|door" → total occupied minutes from 06:00
+ */
+function buildDoorOccupancy(shipments) {
+  const doorMinutes = {};
+  for (const s of shipments) {
+    if (!s.pickup_date || !s.dock_door || s.status === "Cancelled") continue;
+    const key = `${s.pickup_date}|${(s.origin || "").toLowerCase().trim()}|${s.dock_door}`;
+    const { duration } = parseLoadingWindow(s);
+    doorMinutes[key] = (doorMinutes[key] || 0) + (duration || 90);
+  }
+  return doorMinutes;
+}
+
+/**
  * Auto-assign dock doors to an array of plans for bulk planning.
  * Groups plans by pickup date + origin and assigns doors round-robin.
- * Start times are staggered per door to avoid conflicts.
+ * Start times are staggered per door to avoid conflicts with existing shipments.
  *
  * @param {object[]} plans - Array of plan objects (mutated in place)
+ * @param {object[]} [existingShipments=[]] - Already-persisted shipments to avoid overlaps
  */
-export function assignDocksToPlans(plans) {
-  const counters = {}; // key: "pickupDate|origin" → next door index
+export function assignDocksToPlans(plans, existingShipments = []) {
+  const counters = {};    // key: "pickupDate|origin" → next door index
+  const doorMinutes = buildDoorOccupancy(existingShipments);
 
   for (const plan of plans) {
     const key = `${plan.pickupDate || ""}|${(plan.origin || "").toLowerCase().trim()}`;
     if (!counters[key]) counters[key] = 0;
 
-    const doorIdx = counters[key] % DOCK_DOORS.length;
+    const warehouseDoors = getWarehouseDockConfig(plan.origin).doors;
     const mode = (plan.mode || "TL").toUpperCase();
     const dur = LOAD_DURATION_BY_MODE[mode] || 120;
-    const startH = 6 + doorIdx; // stagger: 06:00, 07:00, 08:00, ...
-    const startTime = `${String(startH).padStart(2, "0")}:00`;
+
+    // Find the door with the least occupied time (best-fit instead of blind round-robin)
+    let bestDoor = warehouseDoors[0];
+    let bestMins = Infinity;
+    for (const d of warehouseDoors) {
+      const dk = `${key}|${d}`;
+      const occupied = doorMinutes[dk] || 0;
+      if (occupied < bestMins) { bestMins = occupied; bestDoor = d; }
+    }
+
+    const doorKey = `${key}|${bestDoor}`;
+    if (!doorMinutes[doorKey]) doorMinutes[doorKey] = 0;
+    const offsetMins = doorMinutes[doorKey];
+    const startH = 6 + Math.floor(offsetMins / 60);
+    const startM = offsetMins % 60;
+    const startTime = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`;
 
     const fields = buildDockFields({
-      door: DOCK_DOORS[doorIdx],
+      door: bestDoor,
       startTime,
       duration: dur,
       pickupDate: plan.pickupDate,
     });
     Object.assign(plan, fields);
 
+    doorMinutes[doorKey] += dur;
     counters[key]++;
   }
 }

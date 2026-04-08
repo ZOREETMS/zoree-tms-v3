@@ -1,18 +1,17 @@
-import { DOCK_DOORS, DOCK_HOURS, APPT_TYPE_COLORS } from "../../constants/docks";
+import { APPT_TYPE_COLORS } from "../../constants/docks";
 
 const HOUR_PX = 80;          // pixels per hour column
 const DOOR_COL_PX = 80;      // width of the door label column
-const GRID_START_HOUR = 6;   // first hour on the timeline
-const TOTAL_HOURS = DOCK_HOURS.length;
 
-/** Convert "HH:MM" to fractional hours offset from grid start */
-function timeToOffset(timeStr) {
-  const [h, m] = (timeStr || "06:00").split(":").map(Number);
-  return (h - GRID_START_HOUR) + (m / 60);
-}
+export default function DockGrid({ doors, startHour = 6, endHour = 20, appointments, onSlotClick, onAppointmentClick }) {
+  const totalHours = endHour - startHour;
+  const hours = Array.from({ length: totalHours }, (_, i) => `${String(startHour + i).padStart(2, "0")}:00`);
+  const timelineWidth = totalHours * HOUR_PX;
 
-export default function DockGrid({ appointments, onSlotClick, onAppointmentClick }) {
-  const timelineWidth = TOTAL_HOURS * HOUR_PX;
+  function timeToOffset(timeStr) {
+    const [h, m] = (timeStr || "06:00").split(":").map(Number);
+    return (h - startHour) + (m / 60);
+  }
 
   return (
     <div className="card" style={{ padding: 0 }}>
@@ -29,7 +28,7 @@ export default function DockGrid({ appointments, onSlotClick, onAppointmentClick
               Door
             </div>
             <div style={{ display: "flex", flex: 1, position: "relative" }}>
-              {DOCK_HOURS.map((h) => (
+              {hours.map((h) => (
                 <div key={h} style={{
                   width: HOUR_PX, minWidth: HOUR_PX, textAlign: "center",
                   fontSize: 10, fontWeight: 600, padding: "8px 0", color: "#64748b",
@@ -42,7 +41,7 @@ export default function DockGrid({ appointments, onSlotClick, onAppointmentClick
           </div>
 
           {/* Door rows */}
-          {DOCK_DOORS.map((door) => {
+          {doors.map((door) => {
             const doorAppts = appointments.filter((a) => a.door === door);
             return (
               <div key={door} style={{
@@ -69,7 +68,7 @@ export default function DockGrid({ appointments, onSlotClick, onAppointmentClick
                 {/* Timeline area */}
                 <div style={{ flex: 1, position: "relative", minHeight: 40 }}>
                   {/* Hour gridlines */}
-                  {DOCK_HOURS.map((h, i) => (
+                  {hours.map((h, i) => (
                     <div key={h} style={{
                       position: "absolute", left: i * HOUR_PX, top: 0, bottom: 0,
                       width: 1, background: "#f0f0f0",
