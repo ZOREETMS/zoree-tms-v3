@@ -3,7 +3,7 @@ import {
   View,
   Text,
   FlatList,
-  ScrollView,
+
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
@@ -92,28 +92,24 @@ export default function OrdersScreen() {
       </View>
 
       {/* Quick Nav */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.quickNav}
-      >
-        {[
-          { label: 'Shipments', icon: 'airplane-outline' as const, screen: 'Shipments' },
-          { label: 'Bulk Plan', icon: 'rocket-outline' as const, screen: 'BulkPlan' },
-          { label: 'Items', icon: 'cube-outline' as const, screen: 'ItemMaster' },
-          { label: 'Locations', icon: 'location-outline' as const, screen: 'LocationMaster' },
-        ].map((nav) => (
-          <TouchableOpacity
-            key={nav.screen}
-            style={styles.quickNavBtn}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate(nav.screen)}
-          >
-            <Ionicons name={nav.icon} size={18} color={colors.accent} />
-            <Text style={styles.quickNavText}>{nav.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.quickNav}>
+        <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('Shipments')}>
+          <Ionicons name="airplane-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.quickNavText}>Shipments</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('BulkPlan')}>
+          <Ionicons name="rocket-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.quickNavText}>Bulk Plan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('ItemMaster')}>
+          <Ionicons name="cube-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.quickNavText}>Items</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('LocationMaster')}>
+          <Ionicons name="location-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.quickNavText}>Locations</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Search */}
       <View style={styles.searchContainer}>
@@ -203,31 +199,26 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   quickNav: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
+    gap: 8,
   },
   quickNavBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.bg2,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    marginRight: spacing.sm,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#2563EB',
   },
   quickNavText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   listContent: {
     paddingTop: spacing.sm,

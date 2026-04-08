@@ -408,7 +408,22 @@
       "Bash(curl -s -X POST http://localhost:3001/api/bulk-plan/rate -H 'Content-Type: application/json' -d '{\"\"\"\"lanes\"\"\"\":[{\"\"\"\"laneKey\"\"\"\":\"\"\"\"Dallas, TX 75202 -> New York, NY 10001\"\"\"\",\"\"\"\"origin\"\"\"\":\"\"\"\"Dallas, TX 75202\"\"\"\",\"\"\"\"destination\"\"\"\":\"\"\"\"New York, NY 10001\"\"\"\",\"\"\"\"originZip\"\"\"\":\"\"\"\"75202\"\"\"\",\"\"\"\"destZip\"\"\"\":\"\"\"\"10001\"\"\"\",\"\"\"\"freightClass\"\"\"\":\"\"\"\"70\"\"\"\",\"\"\"\"totalWeight\"\"\"\":8200,\"\"\"\"totalPieces\"\"\"\":24,\"\"\"\"orderIds\"\"\"\":[\"\"\"\"ORD-2024-007\"\"\"\"]}],\"\"\"\"optimizeBy\"\"\"\":\"\"\"\"cost\"\"\"\"}')",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); r=d.get\\(''''results'''',[]\\); print\\(json.dumps\\({''''lanes'''':len\\(r\\),''''quotes'''':len\\(r[0].get\\(''''quotes'''',[]\\)\\) if r else 0,''''bestQuote'''':bool\\(r[0].get\\(''''bestQuote''''\\)\\) if r else False},indent=2\\)\\)\")",
       "Bash(curl -s -X POST http://localhost:3001/api/bulk-plan/rate -H \"Content-Type: application/json\" -d '{\"\"lanes\"\":[{\"\"laneKey\"\":\"\"test\"\",\"\"origin\"\":\"\"Dallas\"\",\"\"destination\"\":\"\"New York\"\",\"\"originZip\"\":\"\"75202\"\",\"\"destZip\"\":\"\"10001\"\",\"\"freightClass\"\":\"\"70\"\",\"\"totalWeight\"\":8200,\"\"totalPieces\"\":24,\"\"orderIds\"\":[\"\"ORD-2024-007\"\"]}],\"\"optimizeBy\"\":\"\"cost\"\"}')",
-      "Bash(curl -s http://localhost:3001/api/db/orders?select=id,status,shipment_id)"
+      "Bash(curl -s http://localhost:3001/api/db/orders?select=id,status,shipment_id)",
+      "Bash(curl -s http://localhost:3001/api/db/orders?select=id,status,ready,due,origin,dest)",
+      "Bash(grep -rn \"lane_preference\\\\|lanePreference\" C:/Zoree/zoree-tms-v3/zoree-tms-v3 --include=*.js --include=*.jsx)",
+      "Bash(where supabase:*)",
+      "Bash(taskkill //F //FI 'WINDOWTITLE eq *node*')",
+      "Bash(fuser -k 3001/tcp)",
+      "Bash(taskkill //F //PID 47540)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -name *dock* -type f)",
+      "Bash(curl -s http://localhost:56148/api/shipments -H 'Content-Type: application/json' -H 'Authorization: Bearer test')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:59870/)",
+      "Bash(curl -s http://localhost:5180/dock-scheduling)",
+      "Bash(taskkill //PID 67772 //F)",
+      "Bash(wc -l /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/routes/*.js /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/services/*.js)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -name *.sql -o -name *schema* -o -name *migration*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5180/)",
+      "Bash(taskkill //F //IM node.exe)"
     ]
   }
 }

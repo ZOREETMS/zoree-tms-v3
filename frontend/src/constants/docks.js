@@ -23,3 +23,28 @@ export const DEFAULT_DOCK_START = "06:00";
 
 /** Available loading duration options (minutes) */
 export const LOAD_DURATION_OPTIONS = [60, 90, 120, 150, 180];
+
+/** Appointment type → background color mapping */
+export const APPT_TYPE_COLORS = {
+  Inbound:     "#3b82f6",
+  Outbound:    "#16a34a",
+  "Cross-Dock": "#7c3aed",
+  Conflict:    "#dc2626",
+  Blocked:     "#94a3b8",
+};
+
+/** Appointment type options */
+export const APPT_TYPES = ["Outbound", "Inbound", "Cross-Dock"];
+
+/** Appointment status options */
+export const APPT_STATUSES = ["Scheduled", "Confirmed", "In Progress", "Completed", "Cancelled"];
+
+/** Duration options for appointment editor (value → label) */
+export const DURATION_OPTIONS = [
+  { value: 30,  label: "30 MIN" },
+  { value: 60,  label: "1 HOUR" },
+  { value: 90,  label: "90 MIN" },
+  { value: 120, label: "2 HOURS" },
+  { value: 150, label: "150 MIN" },
+  { value: 180, label: "3 HOURS" },
+];

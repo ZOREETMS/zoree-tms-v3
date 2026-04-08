@@ -6,14 +6,23 @@ const labelStyle = { fontSize: 10, color: "#666", textTransform: "uppercase" };
 export default function BOLDocument({ doc, shipment, order, carrier }) {
   const s = shipment || {};
   const scac = carrier ? carrier.scac : "\u2014";
-  const proNum = "PRO-" + doc.id.replace("BOL-", "");
+  const proNum = s.pro_number || "\u2014";
   const bolNum = doc.id;
   const today = doc.generated;
+
+  // Gather order IDs from doc or shipment
+  const orderIds = doc.orderIds || s.order_ids || [];
+  // Gather line items from doc
+  const lineItems = doc.lineItems || [];
+  // Gather orders from doc
+  const linkedOrders = doc.orders || (order ? [order] : []);
+  // Incoterms from dedicated column, fallback to orders snapshot
+  const incoterms = doc.incoterms || linkedOrders[0]?.incoterms || null;
 
   return (
     <div style={{ border: "2px solid #000", fontSize: 12, color: "#000", background: "#fff" }}>
       {/* Header */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", borderBottom: "2px solid #000" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", borderBottom: "2px solid #000" }}>
         <div style={{ padding: "12px 16px", borderRight: "2px solid #000" }}>
           <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2, marginBottom: 2 }}>ZOREE TMS</div>
           <div style={{ fontSize: 10, color: "#444" }}>1309 Coffeen Ave, Ste 3336, Sheridan, WY 82801</div>
@@ -25,7 +34,7 @@ export default function BOLDocument({ doc, shipment, order, carrier }) {
         </div>
         <div style={{ padding: "12px 16px" }}>
           <div style={labelStyle}>BOL Number</div>
-          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "#1e2d6b" }}>{bolNum}</div>
+          <div style={{ fontSize: 13, fontWeight: 900, fontFamily: "monospace", color: "#1e2d6b", whiteSpace: "nowrap" }}>{bolNum}</div>
           <div style={{ ...labelStyle, marginTop: 10 }}>Pro Number</div>
           <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>{proNum}</div>
           <div style={{ ...labelStyle, marginTop: 10 }}>Date</div>
@@ -55,29 +64,51 @@ export default function BOLDocument({ doc, shipment, order, carrier }) {
         </div>
       </div>
 
-      {/* Commodity Table */}
+      {/* Order Numbers */}
+      {orderIds.length > 0 && (
+        <div style={{ borderBottom: "2px solid #000", padding: "10px 16px" }}>
+          <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 6 }}>
+            Order Numbers
+          </div>
+          <div style={{ fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>
+            {orderIds.join(", ")}
+          </div>
+        </div>
+      )}
+
+      {/* Line Items Table */}
       <div style={{ borderBottom: "2px solid #000" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f0f0f0" }}>
-              <th style={headerCellStyle}>Pieces</th>
-              <th style={headerCellStyle}>Description of Articles</th>
-              <th style={headerCellStyle}>Class</th>
+              <th style={headerCellStyle}>Item ID</th>
+              <th style={headerCellStyle}>Description</th>
+              <th style={headerCellStyle}>Qty</th>
               <th style={headerCellStyle}>Weight (lbs)</th>
               <th style={{ ...headerCellStyle, borderRight: "none" }}>Hazmat</th>
             </tr>
           </thead>
           <tbody>
-            <tr style={{ borderTop: "1px solid #e0e0e0" }}>
-              <td style={cellStyle}>{s.pieces}</td>
-              <td style={{ ...cellStyle, fontWeight: 600 }}>{s.commodity}</td>
-              <td style={cellStyle}>FAK 70</td>
-              <td style={{ ...cellStyle, fontFamily: "monospace" }}>{s.weight}</td>
-              <td style={{ ...cellStyle, borderRight: "none" }}>{order && order.hazmat ? "YES — Class 3" : "No"}</td>
-            </tr>
+            {lineItems.length > 0 ? lineItems.map((item, idx) => (
+              <tr key={item.id || idx} style={{ borderTop: "1px solid #e0e0e0" }}>
+                <td style={{ ...cellStyle, fontFamily: "monospace", fontWeight: 600 }}>{item.item_id || `ITEM-${idx + 1}`}</td>
+                <td style={{ ...cellStyle, fontWeight: 600 }}>{item.description || item.commodity || "\u2014"}</td>
+                <td style={{ ...cellStyle, fontFamily: "monospace", textAlign: "right" }}>{item.qty_ordered || item.qty || item.quantity || 1}</td>
+                <td style={{ ...cellStyle, fontFamily: "monospace", textAlign: "right" }}>{item.total_weight || item.weight || "\u2014"}</td>
+                <td style={{ ...cellStyle, borderRight: "none" }}>{item.hazmat ? "YES" : "No"}</td>
+              </tr>
+            )) : (
+              <tr style={{ borderTop: "1px solid #e0e0e0" }}>
+                <td style={cellStyle}>\u2014</td>
+                <td style={{ ...cellStyle, fontWeight: 600 }}>{s.commodity || "General"}</td>
+                <td style={{ ...cellStyle, textAlign: "right" }}>{s.pieces || "\u2014"}</td>
+                <td style={{ ...cellStyle, fontFamily: "monospace", textAlign: "right" }}>{s.weight}</td>
+                <td style={{ ...cellStyle, borderRight: "none" }}>{order && order.hazmat ? "YES" : "No"}</td>
+              </tr>
+            )}
             <tr style={{ background: "#f8f8f8", borderTop: "2px solid #000", fontWeight: 800 }}>
               <td style={cellStyle} colSpan={3}>TOTAL</td>
-              <td style={{ ...cellStyle, fontFamily: "monospace" }}>{s.weight} lbs</td>
+              <td style={{ ...cellStyle, fontFamily: "monospace", textAlign: "right" }}>{s.weight} lbs</td>
               <td style={{ ...cellStyle, borderRight: "none" }}></td>
             </tr>
           </tbody>
@@ -107,14 +138,20 @@ export default function BOLDocument({ doc, shipment, order, carrier }) {
             <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{bolNum}</span>
             <span style={{ color: "#666" }}>Pro #:</span>
             <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{proNum}</span>
-            {order && (
+            {orderIds.length > 0 && (
               <>
-                <span style={{ color: "#666" }}>Order #:</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{order.id}</span>
+                <span style={{ color: "#666" }}>{orderIds.length > 1 ? "Orders:" : "Order #:"}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{orderIds.join(", ")}</span>
               </>
             )}
             <span style={{ color: "#666" }}>Rate Type:</span>
             <span>{s.mode} — Contract</span>
+            {incoterms && (
+              <>
+                <span style={{ color: "#666" }}>Incoterms:</span>
+                <span style={{ fontWeight: 700 }}>{incoterms}</span>
+              </>
+            )}
           </div>
         </div>
       </div>

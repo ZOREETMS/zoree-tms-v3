@@ -10,6 +10,55 @@
 import { DOCK_DOORS, LOAD_DURATION_BY_MODE, DEFAULT_DOCK_START } from "../constants/docks";
 
 /**
+ * Extract just the "HH:mm" time portion from a value that may be:
+ *   - "2026-04-07 06:00"  (datetime string)
+ *   - "06:00"             (time-only)
+ *   - null / undefined
+ * @param {string|null} value
+ * @returns {string|null} "HH:mm" or null
+ */
+export function extractTime(value) {
+  if (!value) return null;
+  return value.includes(" ") ? value.split(" ")[1] : value;
+}
+
+/**
+ * Parse a shipment's dock fields into a normalized { start, duration } object.
+ * Handles all persisted formats: loading_start/end datetimes, dock_time ranges.
+ *
+ * @param {object} shipment   - row with loading_start, loading_end, dock_time
+ * @param {number} [fallbackIndex=0] - index for staggered fallback start
+ * @returns {{ start: string, duration: number }}
+ */
+export function parseLoadingWindow(shipment, fallbackIndex = 0) {
+  const DEFAULT_DURATION = 90;
+  const fallbackStart = `${String(8 + fallbackIndex).padStart(2, "0")}:00`;
+
+  let start = fallbackStart;
+  let duration = DEFAULT_DURATION;
+
+  // Prefer loading_start/end (precise)
+  if (shipment.loading_start) {
+    start = extractTime(shipment.loading_start) || start;
+  } else if (shipment.dock_time) {
+    // dock_time uses en-dash (–) or hyphen (-)
+    start = shipment.dock_time.split("–")[0] || shipment.dock_time.split("-")[0] || start;
+  }
+
+  // Compute duration from start/end if both available
+  if (shipment.loading_start && shipment.loading_end) {
+    const sTime = extractTime(shipment.loading_start) || "0:0";
+    const eTime = extractTime(shipment.loading_end) || "0:0";
+    const [sh, sm] = sTime.split(":").map(Number);
+    const [eh, em] = eTime.split(":").map(Number);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins > 0) duration = mins;
+  }
+
+  return { start, duration };
+}
+
+/**
  * Calculate the end time given a start time and duration in minutes.
  * @param {string} startTime - "HH:mm" format
  * @param {number} durationMin - duration in minutes

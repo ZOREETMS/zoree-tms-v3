@@ -141,10 +141,28 @@ export default function OrderDetailScreen() {
             }
           />
           <InfoRow label="Commodity" value={order.commodity || '--'} />
-          <InfoRow
-            label="Shipment ID"
-            value={order.shipmentId || order.shipment_id || '--'}
-          />
+          <TouchableOpacity
+            disabled={!(order.shipmentId || order.shipment_id)}
+            activeOpacity={0.6}
+            onPress={() => {
+              const sid = order.shipmentId || order.shipment_id;
+              if (sid) navigation.navigate('ShipmentDetail', { shipmentId: sid });
+            }}
+          >
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Shipment ID</Text>
+              {(order.shipmentId || order.shipment_id) ? (
+                <View style={styles.shipmentLink}>
+                  <Text style={styles.shipmentLinkText} numberOfLines={1}>
+                    {order.shipmentId || order.shipment_id}
+                  </Text>
+                  <Ionicons name="open-outline" size={14} color={colors.accent} />
+                </View>
+              ) : (
+                <Text style={styles.infoValue}>--</Text>
+              )}
+            </View>
+          </TouchableOpacity>
           {(order.preferredCarrier || order.preferred_carrier) ? (
             <InfoRow label="Preferred Carrier" value={order.preferredCarrier || order.preferred_carrier} />
           ) : null}
@@ -346,6 +364,20 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     marginLeft: spacing.md,
+  },
+  shipmentLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+    marginLeft: spacing.md,
+  },
+  shipmentLinkText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.accent,
+    textDecorationLine: 'underline',
+    flexShrink: 1,
   },
   linesLoader: {
     marginVertical: spacing.lg,

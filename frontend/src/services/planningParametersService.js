@@ -4,7 +4,7 @@ export async function fetchParameters() {
   return DbApi.planningParameters();
 }
 
-export async function toggleParameter(id, enabled) {
+export async function updateParameter(id, enabled) {
   return DbApi.patch("planning_parameters", id, {
     enabled,
     updated_at: new Date().toISOString(),
@@ -12,6 +12,6 @@ export async function toggleParameter(id, enabled) {
 }
 
 export function isFeatureEnabled(parameters, key) {
-  const param = parameters.find((p) => p.key === key);
+  const param = (parameters || []).find((p) => p.key === key);
   return param ? param.enabled : false;
 }

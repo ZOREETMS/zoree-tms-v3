@@ -1,3 +1,73 @@
+import { DbApi } from "../lib/api";
+
+// ── Field mapping: camelCase (frontend) ↔ snake_case (DB) ─────────
+function docToDb(doc) {
+  return {
+    id: doc.id,
+    type: doc.type,
+    status: doc.status || "Pending",
+    ship: doc.ship,
+    carrier: doc.carrier,
+    generated: doc.generated,
+    origin: doc.origin || null,
+    dest: doc.dest || null,
+    weight: doc.weight || null,
+    pieces: doc.pieces || null,
+    mode: doc.mode || null,
+    bol_type: doc.bolType || null,
+    pickup_date: doc.pickupDate || null,
+    delivery_date: doc.deliveryDate || null,
+    order_ids: doc.orderIds || [],
+    orders: doc.orders || [],
+    line_items: doc.lineItems || [],
+    incoterms: doc.incoterms || null,
+  };
+}
+
+function dbToDoc(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    status: row.status,
+    ship: row.ship,
+    carrier: row.carrier,
+    generated: row.generated,
+    origin: row.origin,
+    dest: row.dest,
+    weight: row.weight,
+    pieces: row.pieces,
+    mode: row.mode,
+    bolType: row.bol_type,
+    pickupDate: row.pickup_date,
+    deliveryDate: row.delivery_date,
+    orderIds: row.order_ids || [],
+    orders: row.orders || [],
+    lineItems: row.line_items || [],
+    incoterms: row.incoterms || null,
+  };
+}
+
+// ── API persistence functions ─────────────────────────────────────
+export async function fetchDocuments() {
+  try {
+    const rows = await DbApi.documents();
+    if (Array.isArray(rows)) return rows.map(dbToDoc);
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDocument(doc) {
+  const payload = docToDb(doc);
+  return DbApi.upsert("documents", payload).catch(() => doc);
+}
+
+export async function removeDocument(docId) {
+  return DbApi.remove("documents", docId).catch(() => {});
+}
+
+// ── Seed data (fallback when DB is empty) ─────────────────────────
 export const SEED_DOCUMENTS = [
   { id: "BOL-2024-1840", type: "BOL", ship: "SHP-2024-1840", carrier: "Swift Transport", generated: "2026-02-28", status: "Signed" },
   { id: "POD-2024-1840", type: "POD", ship: "SHP-2024-1840", carrier: "Swift Transport", generated: "2026-03-03", status: "Received" },
@@ -14,8 +84,10 @@ export const SEED_DOCUMENTS = [
 ];
 
 export function generateBOLForShipment(shipment, orders, lineItems) {
+  const bolType = shipment.bol_type || "BOL";
+  const prefix = bolType === "MBOL" ? "MBOL" : bolType === "CBOL" ? "CBOL" : "BOL";
   return {
-    id: "BOL-" + Date.now(),
+    id: `${prefix}-${shipment.id}`,
     type: "BOL",
     ship: shipment.id,
     carrier: shipment.carrier || "",
@@ -33,6 +105,7 @@ export function generateBOLForShipment(shipment, orders, lineItems) {
     orderIds: shipment.order_ids || [],
     orders: orders || [],
     lineItems: lineItems || [],
+    incoterms: (orders || []).map((o) => o.incoterms).find(Boolean) || null,
   };
 }
 
@@ -65,17 +138,16 @@ export function buildBOLPrintHtml(title, contentHtml) {
   );
 }
 
-export function downloadDocument(docId, title, contentHtml) {
-  const html = buildBOLPrintHtml(title, contentHtml);
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = docId + ".html";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+export async function downloadDocument(docId, title, contentElement) {
+  const html2pdf = (await import("html2pdf.js")).default;
+  const opt = {
+    margin: [10, 10, 10, 10],
+    filename: docId + ".pdf",
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+  };
+  html2pdf().set(opt).from(contentElement).save();
 }
 
 export function printDocument(title, contentHtml) {

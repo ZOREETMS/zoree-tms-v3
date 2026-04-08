@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { BulkPlanApi, DbApi } from "../lib/api";
+import { DbApi } from "../lib/api";
 import { buildLaneGroups } from "../utils/laneUtils";
-import { planAllLanes } from "../services/bulkPlanService";
-import { createShipmentsFromRoute, findMatchingRoute } from "../services/ordersService";
+import { createShipmentsFromRoute, findMatchingRoute, bulkPlanOrders } from "../services/ordersService";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import OrderEditModal from "../components/bulk-plan/OrderEditModal";
 
@@ -148,37 +147,26 @@ export default function BulkPlanPage() {
         }
       }
 
-      // ── Step 2: Remaining orders — progressive consolidation + splitting ──
+      // ── Step 2: Remaining orders — same bulkPlanOrders as OrdersPage ──
       const remaining = selected.filter((o) => !routePlanned.includes(o));
-      let bulkExecRes = null;
-      let bulkPlans = [];
+      let bulkResult = null;
 
       if (remaining.length > 0) {
-        const remainingLanes = buildLaneGroups(remaining);
-        toast(`Rating ${remainingLanes.length} lane(s)...`, "info", true);
-
-        const { plans, totalConsolidated, totalIndividual, totalFailed, failedOrderIds } =
-          await planAllLanes(remainingLanes, orders, "cost", (msg) => toast(msg, "info", true));
-
-        if (plans.length > 0) {
-          toast(`Creating ${plans.length} shipment(s)...`, "info", true);
-          bulkExecRes = await BulkPlanApi.execute(plans);
-          bulkPlans = plans;
-        } else if (routePlanned.length === 0) {
-          const failMsg = failedOrderIds.length
-            ? `Failed orders: ${failedOrderIds.join(", ")}`
-            : "Check rate table for transit_days, miles, or enable CarrierConnect.";
-          toast(`No executable plans — no carriers returned valid quotes. ${failMsg}`, "error");
+        toast(`Planning ${remaining.length} order(s)...`, "info", true);
+        bulkResult = await bulkPlanOrders(remaining);
+        if (bulkResult.noQuotes && routePlanned.length === 0) {
+          toast("No carrier quotes available for selected orders.", "error");
           setBusy(false);
           return;
         }
       }
 
       // ── Step 3: Build unified summary (same format as OrdersPage) ──
-      const bulkShipments = bulkExecRes?.shipments || [];
+      const bulkShipments = bulkResult?.shipments || [];
+      const bulkPlans = bulkResult?.plans || [];
       const routeCost = multiStopSummary ? multiStopSummary.totalCost : 0;
-      const bulkCost = bulkShipments.reduce((s, sh) => s + Number(sh.total_cost || 0), 0);
-      const totalUpdated = routePlanned.length + (bulkExecRes?.ordersUpdated || 0);
+      const bulkCost = bulkResult?.cost || 0;
+      const totalUpdated = routePlanned.length + (bulkResult?.updated || 0);
       const allShipments = [
         ...(multiStopSummary?.masterShipment ? [multiStopSummary.masterShipment] : []),
         ...bulkShipments,

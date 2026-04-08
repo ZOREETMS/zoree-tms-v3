@@ -20,7 +20,7 @@ export default function DocumentViewerModal({ isOpen, doc, shipment, order, carr
 
   function handleDownload() {
     if (!contentRef.current) return;
-    downloadDocument(doc.id, title, contentRef.current.innerHTML);
+    downloadDocument(doc.id, title, contentRef.current);
   }
 
   function renderDocument() {

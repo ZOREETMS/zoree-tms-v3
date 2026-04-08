@@ -4,18 +4,9 @@ import KpiCard from "../components/home/KpiCard";
 import InsightsCard from "../components/home/InsightsCard";
 import ActivityCard from "../components/home/ActivityCard";
 import SectionHeader from "../components/home/SectionHeader";
-import QuickActionCard from "../components/home/QuickActionCard";
+
 import ModuleCard from "../components/home/ModuleCard";
 
-/* ── Quick Actions (top 6 most-used) ──────────────────────────── */
-const quickActions = [
-  { to: "/orders", icon: "🧾", label: "Order Management", description: "Create and manage orders" },
-  { to: "/shipments", icon: "📦", label: "Shipment Management", description: "Plan and track shipments" },
-  { to: "/bulk-plan", icon: "⚡", label: "Bulk Planning", description: "Rate and execute in bulk" },
-  { to: "/rate-management", icon: "📋", label: "Rate Management", description: "Manage carrier rates" },
-  { to: "/carriers", icon: "🚛", label: "Carrier Management", description: "Carrier profiles and contacts" },
-  { to: "/live-tracking", icon: "📡", label: "Live Tracking", description: "Real-time shipment map" },
-];
 
 /* ── All Modules Directory ────────────────────────────────────── */
 const moduleSections = [
@@ -159,17 +150,7 @@ export default function HomePage() {
           <ActivityCard />
         </div>
 
-        {/* ── Section 3: Quick Actions ────────────────────────── */}
-        <div>
-          <SectionHeader title="Quick Actions" subtitle="Most-used operational workflows" />
-          <div className="quick-action-grid">
-            {quickActions.map((item) => (
-              <QuickActionCard key={item.to} {...item} />
-            ))}
-          </div>
-        </div>
-
-        {/* ── Section 4: All Modules Directory ────────────────── */}
+        {/* ── Section 3: All Modules Directory ────────────────── */}
         <div>
           <SectionHeader title="All Modules" subtitle="Browse all product capabilities by function" />
           {filteredSections.map((section) => (

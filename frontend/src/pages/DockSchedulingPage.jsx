@@ -1,17 +1,29 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DOCK_DOORS as DOORS, DOCK_HOURS as HOURS } from "../constants/docks";
-
-function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-}
+import { DOCK_DOORS as DOORS } from "../constants/docks";
+import { parseLoadingWindow } from "../services/dockService";
+import DockLegend from "../components/dock-scheduling/DockLegend";
+import DockGrid from "../components/dock-scheduling/DockGrid";
+import AppointmentCard from "../components/dock-scheduling/AppointmentCard";
+import AppointmentEditModal from "../components/dock-scheduling/AppointmentEditModal";
+import { formatDateDisplay, todayStr } from "../utils/dateUtils";
 
 export default function DockSchedulingPage() {
-  const { shipments } = useOutletContext();
+  const { shipments, locations = [] } = useOutletContext();
   const [dockDate, setDockDate] = useState(todayStr());
   const [appointments, setAppointments] = useState([]);
   const [editAppt, setEditAppt] = useState(null);
+  const [warehouseFilter, setWarehouseFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+
+  // Build warehouse options from locations data (Shipper type = origin docks)
+  const warehouseOptions = useMemo(() => {
+    return locations
+      .filter((l) => l.type === "Shipper" || l.type === "Warehouse")
+      .map((l) => ({ id: l.id, label: `${l.city}, ${l.state} — ${l.name}` }));
+  }, [locations]);
 
   // Build appointments from shipments that have dock data persisted during planning
   const dayAppts = useMemo(() => {
@@ -19,23 +31,7 @@ export default function DockSchedulingPage() {
       .filter((s) => s.pickup_date === dockDate && s.status !== "Cancelled")
       .map((s, i) => {
         const door = s.dock_door || DOORS[i % DOORS.length];
-        // Parse start time from loading_start (e.g. "2026-04-07 06:00") or dock_time (e.g. "06:00–08:00")
-        let start = `${String(8 + i).padStart(2, "0")}:00`;
-        let duration = 90;
-        if (s.loading_start) {
-          const timePart = s.loading_start.includes(" ") ? s.loading_start.split(" ")[1] : s.loading_start;
-          start = timePart || start;
-        } else if (s.dock_time) {
-          start = s.dock_time.split("–")[0] || s.dock_time.split("-")[0] || start;
-        }
-        if (s.loading_start && s.loading_end) {
-          const sTime = s.loading_start.includes(" ") ? s.loading_start.split(" ")[1] : s.loading_start;
-          const eTime = s.loading_end.includes(" ") ? s.loading_end.split(" ")[1] : s.loading_end;
-          const [sh, sm] = (sTime || "0:0").split(":").map(Number);
-          const [eh, em] = (eTime || "0:0").split(":").map(Number);
-          duration = (eh * 60 + em) - (sh * 60 + sm);
-          if (duration <= 0) duration = 90;
-        }
+        const { start, duration } = parseLoadingWindow(s, i);
         return {
           id: "DA-" + s.id,
           door,
@@ -47,12 +43,27 @@ export default function DockSchedulingPage() {
           status: s.dock_door ? "Confirmed" : "Scheduled",
         };
       });
-    return [...appointments.filter((a) => a.date === dockDate), ...appts];
-  }, [shipments, dockDate, appointments]);
+    const all = [...appointments.filter((a) => a.date === dockDate), ...appts];
+    return all.filter((a) => {
+      if (warehouseFilter && !a.shipmentId) return true; // manual appts pass through
+      if (warehouseFilter) {
+        const ship = shipments.find((s) => s.id === a.shipmentId);
+        const originCity = (ship?.origin || "").split(",")[0].trim().toUpperCase();
+        const loc = locations.find((l) => l.id === warehouseFilter);
+        if (loc && originCity !== (loc.city || "").toUpperCase()) return false;
+      }
+      if (typeFilter && a.type !== typeFilter) return false;
+      if (statusFilter && a.status !== statusFilter) return false;
+      if (searchQ) {
+        const q = searchQ.toLowerCase();
+        if (!(a.carrier || "").toLowerCase().includes(q) && !(a.shipmentId || "").toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [shipments, locations, dockDate, appointments, warehouseFilter, typeFilter, statusFilter, searchQ]);
 
   const scheduled = dayAppts.length;
   const inbound = dayAppts.filter((a) => a.type === "Inbound").length;
-  const outbound = dayAppts.filter((a) => a.type === "Outbound").length;
   const freeDoors = DOORS.length - new Set(dayAppts.map((a) => a.door)).size;
 
   function navDay(delta) {
@@ -79,11 +90,11 @@ export default function DockSchedulingPage() {
     setEditAppt(null);
   }
 
-  // Format date for display
-  const dateObj = new Date(dockDate + "T12:00:00");
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const dateDisplay = `${dayNames[dateObj.getDay()]}, ${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
+  function deleteAppt() {
+    if (!editAppt) return;
+    setAppointments((prev) => prev.filter((a) => a.id !== editAppt.id));
+    setEditAppt(null);
+  }
 
   return (
     <div>
@@ -103,7 +114,7 @@ export default function DockSchedulingPage() {
 
       <div className="page-content">
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, fontFamily: "'Syne',sans-serif" }}>
-          📅 {dateDisplay}
+          📅 {formatDateDisplay(dockDate)}
         </div>
 
         {/* Stats */}
@@ -128,18 +139,17 @@ export default function DockSchedulingPage() {
 
         {/* Filters */}
         <div className="filter-bar">
-          <select className="fsel" style={{ minWidth: 180 }}>
-            <option>ATLANTA, GA — ATLANTA DC</option>
-            <option>CHICAGO, IL — CHICAGO WH</option>
-            <option>DALLAS, TX — DALLAS DC</option>
+          <select className="fsel" style={{ minWidth: 180 }} value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)}>
+            <option value="">All Warehouses</option>
+            {warehouseOptions.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
           </select>
-          <select className="fsel">
+          <select className="fsel" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">All Types</option>
             <option>Inbound</option>
             <option>Outbound</option>
             <option>Cross-Dock</option>
           </select>
-          <select className="fsel">
+          <select className="fsel" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
             <option>Scheduled</option>
             <option>Confirmed</option>
@@ -147,73 +157,12 @@ export default function DockSchedulingPage() {
             <option>Completed</option>
           </select>
           <div className="search-wrap">
-            <input className="search-input" placeholder="Search carrier, shipment..." />
+            <input className="search-input" placeholder="Search carrier, shipment..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} />
           </div>
         </div>
 
-        {/* Legend */}
-        <div style={{ display: "flex", gap: 16, marginBottom: 16, fontSize: 12, padding: "8px 12px", background: "var(--bg3)", borderRadius: 8 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#3b82f6", display: "inline-block" }} /> Inbound</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#16a34a", display: "inline-block" }} /> Outbound</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#7c3aed", display: "inline-block" }} /> Cross-Dock</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#dc2626", display: "inline-block" }} /> Conflict</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#94a3b8", display: "inline-block" }} /> Blocked</span>
-        </div>
-
-        {/* Dock Grid */}
-        <div className="card" style={{ padding: 0 }}>
-          <div className="table-wrap">
-            <table className="grid" style={{ border: "none", boxShadow: "none", minWidth: 1200 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 80, position: "sticky", left: 0, background: "#f8faff", zIndex: 2 }}>DOOR</th>
-                  {HOURS.map((h) => (
-                    <th key={h} style={{ textAlign: "center", minWidth: 70, fontSize: 10 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {DOORS.map((door) => {
-                  const doorAppts = dayAppts.filter((a) => a.door === door);
-                  return (
-                    <tr key={door}>
-                      <td style={{ fontWeight: 700, fontSize: 12, position: "sticky", left: 0, background: "#fff", zIndex: 1 }}>
-                        🚪 {door}
-                        <button
-                          onClick={() => openNewAppt(door, "08:00")}
-                          style={{ marginLeft: 4, fontSize: 10, background: "var(--accent-glow)", border: "1px solid rgba(59,130,246,.2)", borderRadius: 4, cursor: "pointer", padding: "1px 4px", color: "var(--accent)" }}
-                        >+</button>
-                      </td>
-                      {HOURS.map((h) => {
-                        const appt = doorAppts.find((a) => a.start === h);
-                        if (appt) {
-                          const bg = appt.type === "Inbound" ? "#3b82f6" : appt.type === "Cross-Dock" ? "#7c3aed" : "#16a34a";
-                          return (
-                            <td key={h} style={{ padding: 2 }}>
-                              <div
-                                style={{
-                                  background: bg, color: "#fff", borderRadius: 6,
-                                  padding: "4px 6px", fontSize: 10, fontWeight: 700,
-                                  cursor: "pointer", whiteSpace: "nowrap",
-                                  minWidth: 80, textAlign: "center",
-                                }}
-                                title={`${appt.carrier} - ${appt.shipmentId}`}
-                                onClick={() => setEditAppt(appt)}
-                              >
-                                {appt.carrier?.split(" ")[0] || "TBD"}
-                              </div>
-                            </td>
-                          );
-                        }
-                        return <td key={h} style={{ padding: 2 }}></td>;
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DockLegend />
+        <DockGrid appointments={dayAppts} onSlotClick={openNewAppt} onAppointmentClick={setEditAppt} />
 
         {/* Today's Appointments */}
         <div style={{ marginTop: 20 }}>
@@ -226,108 +175,20 @@ export default function DockSchedulingPage() {
                 No appointments scheduled for this date
               </div>
             ) : dayAppts.map((a) => (
-              <div key={a.id} className="card" style={{ padding: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <span className={`badge ${a.type === "Inbound" ? "badge-blue" : "badge-green"}`} style={{ fontSize: 10 }}>
-                    {a.type.toUpperCase()}
-                  </span>
-                  <strong>{a.door}</strong>
-                  <span className="badge badge-planned" style={{ fontSize: 10, marginLeft: "auto" }}>• {a.status}</span>
-                </div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>{a.carrier || "TBD"}</div>
-                <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                  🕐 {a.start} – {a.duration}min
-                  {a.shipmentId && <> · 📦 <span style={{ color: "var(--accent)" }}>{a.shipmentId}</span></>}
-                </div>
-              </div>
+              <AppointmentCard key={a.id} appointment={a} />
             ))}
           </div>
         </div>
       </div>
 
-      {/* Edit Appointment Modal */}
-      {editAppt && (
-        <div className="modal-overlay" onClick={() => setEditAppt(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>DOCK SCHEDULING — {editAppt.id ? "EDIT" : "NEW"} APPOINTMENT</h3>
-              <button className="modal-close" onClick={() => setEditAppt(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Type</label>
-                  <select value={editAppt.type} onChange={(e) => setEditAppt({ ...editAppt, type: e.target.value })}>
-                    <option>Outbound</option>
-                    <option>Inbound</option>
-                    <option>Cross-Dock</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Door</label>
-                  <select value={editAppt.door} onChange={(e) => setEditAppt({ ...editAppt, door: e.target.value })}>
-                    {DOORS.map((d) => <option key={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Date</label>
-                  <input type="date" value={editAppt.date || dockDate} onChange={(e) => setEditAppt({ ...editAppt, date: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Start Time</label>
-                  <select value={editAppt.start} onChange={(e) => setEditAppt({ ...editAppt, start: e.target.value })}>
-                    {HOURS.map((h) => <option key={h}>{h}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Duration</label>
-                  <select value={editAppt.duration} onChange={(e) => setEditAppt({ ...editAppt, duration: parseInt(e.target.value) })}>
-                    <option value="30">30 MIN</option>
-                    <option value="60">1 HOUR</option>
-                    <option value="90">90 MIN</option>
-                    <option value="120">2 HOURS</option>
-                    <option value="150">150 MIN</option>
-                    <option value="180">3 HOURS</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Carrier</label>
-                  <input value={editAppt.carrier || ""} onChange={(e) => setEditAppt({ ...editAppt, carrier: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Shipment Ref</label>
-                  <input value={editAppt.shipmentId || ""} onChange={(e) => setEditAppt({ ...editAppt, shipmentId: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Status</label>
-                  <select value={editAppt.status} onChange={(e) => setEditAppt({ ...editAppt, status: e.target.value })}>
-                    <option>Scheduled</option>
-                    <option>Confirmed</option>
-                    <option>In Progress</option>
-                    <option>Completed</option>
-                    <option>Cancelled</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-group" style={{ marginTop: 10 }}>
-                <label>Notes</label>
-                <textarea value={editAppt.notes || ""} onChange={(e) => setEditAppt({ ...editAppt, notes: e.target.value })}
-                          rows={2} style={{ width: "100%" }} />
-              </div>
-            </div>
-            <div className="modal-footer">
-              {editAppt.id && (
-                <button className="btn btn-danger btn-sm" onClick={() => {
-                  setAppointments((prev) => prev.filter((a) => a.id !== editAppt.id));
-                  setEditAppt(null);
-                }}>🗑️ Delete</button>
-              )}
-              <button className="btn btn-secondary" onClick={() => setEditAppt(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveAppt}>💾 Save Appointment</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AppointmentEditModal
+        appointment={editAppt}
+        dockDate={dockDate}
+        onChange={setEditAppt}
+        onSave={saveAppt}
+        onDelete={deleteAppt}
+        onClose={() => setEditAppt(null)}
+      />
     </div>
   );
 }

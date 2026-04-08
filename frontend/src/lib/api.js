@@ -116,6 +116,9 @@ export const DbApi = {
   planningParameters() {
     return api("/db/planning_parameters?q=select=*%26order=category.asc%26limit=100");
   },
+  documents() {
+    return api("/db/documents?q=select=*%26order=created_at.desc%26limit=500");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

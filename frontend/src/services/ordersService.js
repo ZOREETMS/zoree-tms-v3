@@ -5,7 +5,9 @@
 
 import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 import { addBusinessDays } from "../utils/orderUtils.jsx";
-import { assignDocksToPlans } from "./dockService";
+import { assignDocksToPlans, buildDockFields } from "./dockService";
+import { DOCK_DOORS, LOAD_DURATION_BY_MODE } from "../constants/docks";
+import { saveDocument } from "./documentService";
 
 /* ── Internal helper: generate a shipment ID ── */
 function genShipId() {
@@ -56,7 +58,14 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
   // If pickup is in the past, use today instead
   if (pickupDate < today) pickupDate = today;
 
-  // Create MBOL
+  // Create MBOL — assign dock door 1 for the master pickup
+  const mode = (route.mode || "TL").toUpperCase();
+  const masterDock = buildDockFields({
+    door: DOCK_DOORS[0],
+    startTime: "06:00",
+    duration: LOAD_DURATION_BY_MODE[mode] || 120,
+    pickupDate,
+  });
   const masterShipment = {
     id: masterId, carrier: route.carrier, mode: route.mode || "TL",
     origin: firstPickup.location || `${firstPickup.city}, ${firstPickup.state}`,
@@ -64,11 +73,25 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
     weight: ordersList.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
     pieces: ordersList.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
     status: "Planned", total_cost: totalCost, order_ids: allOrderIds,
-    miles: totalMiles, bol_type: "MBOL", route_template_id: route.id,
+    miles: totalMiles, bol_type: "MBOL", bol_number: `MBOL-${masterId}`, route_template_id: route.id,
     pickup_date: pickupDate, delivery_date: deliveryDate,
     service_level: route.service_level || "Standard",
+    dock_door: masterDock.dockDoor,
+    dock_time: masterDock.dockTime,
+    loading_start: masterDock.loadingStart,
+    loading_end: masterDock.loadingEnd,
   };
   await DbApi.upsert("shipments", masterShipment);
+
+  // Auto-generate BOL for master shipment (best-effort)
+  saveDocument({
+    id: `MBOL-${masterId}`, type: "BOL", status: "Pending", ship: masterId,
+    carrier: masterShipment.carrier, generated: today,
+    origin: masterShipment.origin, dest: masterShipment.dest,
+    weight: masterShipment.weight, pieces: masterShipment.pieces,
+    mode: masterShipment.mode, pickupDate, deliveryDate,
+    orderIds: allOrderIds, bolType: "MBOL",
+  }).catch(() => {});
 
   // Create CBOLs and update orders
   // Calculate leg miles from stops, or fetch via PC*Miler
@@ -103,6 +126,7 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
   const equalSplit = totalLegMiles === 0;
 
   const createdCbols = [];
+  let cbolIdx = 0;
   for (const [key, { delivery, orders: cbolOrders }] of Object.entries(assignments)) {
     const childId = `${masterId}.${key}`;
     const legMiles = cbolMilesMap[key] || 0;
@@ -125,20 +149,44 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
              (rd.includes(dNorm) || dNorm.includes(rd));
     });
 
+    // Assign dock door round-robin across CBOLs
+    const cbolDock = buildDockFields({
+      door: DOCK_DOORS[cbolIdx % DOCK_DOORS.length],
+      startTime: `${String(6 + cbolIdx % DOCK_DOORS.length).padStart(2, "0")}:00`,
+      duration: LOAD_DURATION_BY_MODE[mode] || 120,
+      pickupDate,
+    });
+
     await DbApi.upsert("shipments", {
       id: childId, carrier: route.carrier, mode: route.mode || "TL",
       origin: cbolOrigin, dest: cbolDest,
       weight: cbolOrders.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
       pieces: cbolOrders.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
       status: "Planned", total_cost: cbolCost, order_ids: cbolOrders.map((o) => o.id),
-      miles: legMiles, bol_type: "CBOL", master_shipment_id: masterId,
+      miles: legMiles, bol_type: "CBOL", bol_number: `CBOL-${childId}`, master_shipment_id: masterId,
       stop_from: key.split(".")[0], stop_to: key.split(".")[1],
       route_template_id: route.id,
       pickup_date: pickupDate, delivery_date: deliveryDate,
       service_level: route.service_level || "Standard",
       rate_id: matchedRate ? (matchedRate.lane || matchedRate.id) : null,
+      dock_door: cbolDock.dockDoor,
+      dock_time: cbolDock.dockTime,
+      loading_start: cbolDock.loadingStart,
+      loading_end: cbolDock.loadingEnd,
     });
+    cbolIdx++;
     createdCbols.push({ id: childId, origin: cbolOrigin, dest: cbolDest, cost: cbolCost, miles: legMiles, orders: cbolOrders });
+
+    // Auto-generate BOL for child shipment (best-effort)
+    saveDocument({
+      id: `CBOL-${childId}`, type: "BOL", status: "Pending", ship: childId,
+      carrier: route.carrier, generated: today,
+      origin: cbolOrigin, dest: cbolDest,
+      weight: cbolOrders.reduce((s, o) => s + (parseFloat(o.weight) || 0), 0),
+      pieces: cbolOrders.reduce((s, o) => s + (parseInt(o.pieces) || 0), 0),
+      mode: route.mode || "TL", pickupDate, deliveryDate,
+      orderIds: cbolOrders.map((o) => o.id), bolType: "CBOL",
+    }).catch(() => {});
 
     for (const ord of cbolOrders) {
       await DbApi.patch("orders", ord.id, { status: "Planned", shipment_id: childId });

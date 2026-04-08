@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import useDocuments from "../hooks/useDocuments";
+import { computeDocStats } from "../services/documentService";
 import DocumentStats from "../components/documents/DocumentStats";
 import DocumentTable from "../components/documents/DocumentTable";
 import DocumentViewerModal from "../components/documents/DocumentViewerModal";
@@ -9,11 +10,12 @@ export default function DocumentsPage() {
   const { shipments = [], orders = [], carriers = [] } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const shipmentIdFilter = searchParams.get("shipmentId") || "";
-  const { documents, stats, typeFilter, setTypeFilter, generateBOL, findDocById } = useDocuments(shipments, orders);
+  const { documents, typeFilter, setTypeFilter, loading, generateBOL, findDocById } = useDocuments(shipments, orders);
   const filteredDocs = useMemo(() => {
     if (!shipmentIdFilter) return documents;
     return documents.filter((d) => d.ship === shipmentIdFilter);
   }, [documents, shipmentIdFilter]);
+  const stats = useMemo(() => computeDocStats(filteredDocs), [filteredDocs]);
   const [viewerDoc, setViewerDoc] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -64,6 +66,11 @@ export default function DocumentsPage() {
       </div>
 
       <div className="page-content">
+        {loading && (
+          <div style={{ textAlign: "center", padding: "40px 0", color: "#888", fontSize: 14 }}>
+            Loading documents...
+          </div>
+        )}
         <DocumentStats stats={stats} />
         <DocumentTable
           documents={filteredDocs}

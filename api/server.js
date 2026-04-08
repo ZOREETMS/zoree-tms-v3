@@ -129,7 +129,7 @@ async function verifyToken(req, res) {
 }
 
 // Allowed tables — security whitelist
-const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','route_templates','equipment_types','planning_parameters'];
+const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','route_templates','equipment_types','planning_parameters','documents'];
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -308,7 +308,7 @@ app.post('/api/tender/email', async (req, res) => {
   if (lineItems.length) {
     textLines.push('', 'Line Items:', '---');
     lineItems.forEach((li, i) => {
-      textLines.push((i + 1) + '. ' + (li.itemId || '—') + ' | ' + (li.description || '—') + ' | Qty: ' + (li.qty || 0) + ' | ' + (li.unitWeight || 0) + ' lbs' + (li.orderId ? ' (Order: ' + li.orderId + ')' : ''));
+      textLines.push((i + 1) + '. ' + (li.itemId || '—') + ' | ' + (li.description || '—') + ' | Qty: ' + (li.qty || 0) + ' | ' + (li.unitWeight || 0) + ' lbs');
     });
   }
   textLines.push(
@@ -423,16 +423,15 @@ app.post('/api/tender/email', async (req, res) => {
   ${lineItems.length ? `
   <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #ccc;border-top:none" cellpadding="0" cellspacing="0">
     <tr>
-      <td colspan="5" style="padding:10px 12px;background:#e8eaf6;font-size:10px;color:#1a237e;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;border-bottom:1px solid #ccc">Item Details</td>
+      <td colspan="4" style="padding:10px 12px;background:#e8eaf6;font-size:10px;color:#1a237e;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;border-bottom:1px solid #ccc">Item Details</td>
     </tr>
     <tr style="background:#f5f5f5">
-      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Order #</th>
       <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Item ID</th>
       <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Description</th>
       <th style="padding:6px 10px;text-align:right;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Qty</th>
       <th style="padding:6px 10px;text-align:right;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Unit Wt</th>
     </tr>
-    ${lineItems.map((li, i) => '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#fafafa') + '"><td style="padding:5px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#666">' + (li.orderId || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#1a237e;font-weight:bold">' + (li.itemId || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee">' + (li.description || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600">' + (li.qty || 0) + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">' + (li.unitWeight || 0) + ' lbs</td></tr>').join('')}
+    ${lineItems.map((li, i) => '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#fafafa') + '"><td style="padding:5px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#1a237e;font-weight:bold">' + (li.itemId || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee">' + (li.description || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600">' + (li.qty || 0) + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">' + (li.unitWeight || 0) + ' lbs</td></tr>').join('')}
   </table>
   ` : ''}
 
@@ -1601,6 +1600,29 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     const { lanes, optimizeBy } = req.body;
     if (!lanes || !lanes.length) return res.status(400).json({ error: 'lanes[] required' });
 
+    // Check if lane_preferences parameter is enabled
+    let useLanePreferences = false;
+    let lanePrefs = [];
+    try {
+      const ppRes = await fetch(`${SUPABASE_URL}/rest/v1/planning_parameters?key=eq.lane_preferences&select=enabled`, {
+        headers: { 'apikey': ANON_KEY },
+      });
+      const ppData = await ppRes.json();
+      if (Array.isArray(ppData) && ppData.length > 0) {
+        useLanePreferences = !!ppData[0].enabled;
+      }
+      if (useLanePreferences) {
+        const lpRes = await fetch(`${SUPABASE_URL}/rest/v1/lane_preferences?status=eq.Active&select=*`, {
+          headers: { 'apikey': ANON_KEY },
+        });
+        const lpData = await lpRes.json();
+        if (Array.isArray(lpData)) lanePrefs = lpData;
+        console.log(`[BulkPlan/rate] Lane preferences enabled — ${lanePrefs.length} active rules loaded`);
+      } else {
+        console.log('[BulkPlan/rate] Lane preferences disabled — skipping');
+      }
+    } catch (e) { console.warn('[BulkPlan/rate] planning_parameters load error:', e.message); }
+
     // Load carriers table once for carrierconnect_enabled flag
     let carrierFlags = {};
     try {
@@ -1765,15 +1787,58 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         if (q.mode === 'LTL' && wt > LTL_MAX) q.infeasible = true;
       });
 
+      // Apply lane preference rules if enabled
+      if (useLanePreferences && lanePrefs.length > 0) {
+        // Find matching lane preference for this origin→dest
+        const oCity = extractCity(lane.origin);
+        const dCity = extractCity(lane.destination);
+        const matchingPrefs = lanePrefs.filter(lp => {
+          const lpO = (lp.origin || '').toLowerCase().trim();
+          const lpD = (lp.dest || '').toLowerCase().trim();
+          return (lpO.includes(oCity) || oCity.includes(lpO)) &&
+                 (lpD.includes(dCity) || dCity.includes(lpD));
+        });
+
+        if (matchingPrefs.length > 0) {
+          // Collect all excluded and preferred carriers across matching prefs
+          const excluded = new Set();
+          const preferred = new Set();
+          matchingPrefs.forEach(pref => {
+            (pref.excluded || []).forEach(c => excluded.add(c.toUpperCase()));
+            (pref.preferred || []).forEach(c => preferred.add(c.toUpperCase()));
+          });
+
+          // Remove excluded carriers
+          const beforeCount = quotes.length;
+          const filtered = quotes.filter(q => {
+            const name = (q.carrier || '').toUpperCase();
+            return !excluded.has(name);
+          });
+          quotes.length = 0;
+          filtered.forEach(q => quotes.push(q));
+
+          // Mark preferred carriers
+          quotes.forEach(q => {
+            const name = (q.carrier || '').toUpperCase();
+            q.preferred = preferred.has(name);
+          });
+
+          console.log(`[BulkPlan/rate] Lane prefs applied for ${oCity}→${dCity}: ${beforeCount - quotes.length} excluded, ${quotes.filter(q=>q.preferred).length} preferred`);
+        }
+      }
+
       // Log all quotes before sorting (include CC flag for debugging)
       console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d cc=${q.ccxlEnabled} ${q.infeasible?'INFEASIBLE':''}`).join(', '));
 
-      // Sort: feasible first, then by cost/transit
+      // Sort: feasible first, preferred carriers boosted, then by cost/transit
       const sortBy = optimizeBy === 'transit' ? 'transitDays' : 'totalCharge';
       quotes.sort((a, b) => {
         // Infeasible always last
         if (a.infeasible && !b.infeasible) return 1;
         if (!a.infeasible && b.infeasible) return -1;
+        // Preferred carriers first (when lane prefs enabled)
+        if (a.preferred && !b.preferred) return -1;
+        if (!a.preferred && b.preferred) return 1;
         return (a[sortBy] || 99999) - (b[sortBy] || 99999);
       });
       // Only use transit from real sources: CarrierConnect or rates table transit_days.
@@ -1860,23 +1925,11 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
         });
         let shipData = await shipRes.json();
 
-        // If dock columns don't exist yet, retry without them
+        // Fail loudly if dock columns are missing — run migrations before deploying
         if (!shipRes.ok && shipData?.message?.includes('dock_door')) {
-          console.warn(`[BulkPlan/execute] Dock columns not in DB — retrying without dock fields`);
-          delete shipRow.dock_door;
-          delete shipRow.dock_time;
-          delete shipRow.loading_start;
-          delete shipRow.loading_end;
-          shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
-            method: 'POST',
-            headers: {
-              'apikey': ANON_KEY,
-              'Content-Type': 'application/json',
-              'Prefer': 'resolution=merge-duplicates,return=representation',
-            },
-            body: JSON.stringify(shipRow),
-          });
-          shipData = await shipRes.json();
+          console.error(`[BulkPlan/execute] MIGRATION REQUIRED: dock columns (dock_door, dock_time, loading_start, loading_end) not found in shipments table. Run migrations 20260324120000_shipments_loading_times.sql and 20260406_shipments_dock_fields.sql.`);
+          errors.push({ shipId, error: 'Dock columns missing in DB — run pending migrations' });
+          continue;
         }
 
         if (!shipRes.ok) {
@@ -1886,6 +1939,66 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
         }
         const created = Array.isArray(shipData) ? shipData[0] : shipData;
         shipments.push(created);
+
+        // Auto-generate BOL document for the new shipment (with line items + incoterms)
+        try {
+          const bolId = `BOL-${shipId}`;
+          const today = new Date().toISOString().split('T')[0];
+          const oIds = shipRow.order_ids || [];
+
+          // Fetch line items for all linked orders
+          let allLines = [];
+          let linkedOrders = [];
+          for (const oid of oIds) {
+            try {
+              const lines = await dbSelect('order_lines', `select=*&order_id=eq.${encodeURIComponent(oid)}&order=line_num.asc`, null);
+              if (Array.isArray(lines)) allLines.push(...lines);
+            } catch { /* skip */ }
+            try {
+              const ords = await dbSelect('orders', `select=*&id=eq.${encodeURIComponent(oid)}`, null);
+              if (Array.isArray(ords) && ords.length) linkedOrders.push(ords[0]);
+            } catch { /* skip */ }
+          }
+          const incoterms = linkedOrders.map((o) => o.incoterms).find(Boolean) || null;
+
+          const bolRow = {
+            id: bolId,
+            type: 'BOL',
+            status: 'Pending',
+            ship: shipId,
+            carrier: shipRow.carrier,
+            generated: today,
+            origin: shipRow.origin,
+            dest: shipRow.dest,
+            weight: shipRow.weight,
+            pieces: shipRow.pieces,
+            mode: shipRow.mode,
+            pickup_date: shipRow.pickup_date,
+            delivery_date: shipRow.delivery_date,
+            order_ids: oIds,
+            orders: linkedOrders,
+            line_items: allLines,
+            incoterms,
+          };
+          await fetch(`${SUPABASE_URL}/rest/v1/documents?on_conflict=id`, {
+            method: 'POST',
+            headers: {
+              'apikey': ANON_KEY,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates,return=minimal',
+            },
+            body: JSON.stringify(bolRow),
+          });
+          // Update shipment with bol_number so it shows in shipment details
+          await fetch(`${SUPABASE_URL}/rest/v1/shipments?id=eq.${encodeURIComponent(shipId)}`, {
+            method: 'PATCH',
+            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ bol_number: bolId }),
+          });
+          console.log(`[BulkPlan/execute] Auto-generated BOL ${bolId} for ${shipId} (${allLines.length} lines, incoterms: ${incoterms})`);
+        } catch (bolErr) {
+          console.error(`[BulkPlan/execute] BOL auto-gen failed for ${shipId}:`, bolErr.message);
+        }
 
         // Update each order
         for (const orderId of (plan.orderIds || [])) {
