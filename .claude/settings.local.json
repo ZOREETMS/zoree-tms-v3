@@ -440,7 +440,32 @@
       "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase -type f -name \"*.sql\" -exec grep -E \"^\\(CREATE|ALTER\\) TABLE\" {})",
       "Bash(grep -h \"CREATE TABLE\\\\|ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase/migrations/*.sql)",
       "Bash(grep -h \"^CREATE TABLE\\\\|^alter table\\\\|^ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase/migrations/*.sql)",
-      "Bash(grep -h \"^CREATE TABLE\\\\|^ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/migrations/*.sql)"
+      "Bash(grep -h \"^CREATE TABLE\\\\|^ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/migrations/*.sql)",
+      "Bash(curl -s http://localhost:3001/api/db/orders)",
+      "Bash(node -e \"require\\(''dotenv''\\).config\\(\\); console.log\\(''KEY starts with:'', process.env.SUPABASE_SERVICE_KEY?.substring\\(0, 15\\)\\); console.log\\(''KEY length:'', process.env.SUPABASE_SERVICE_KEY?.length\\);\")",
+      "Bash(curl -sv http://localhost:3001/api/db/orders)",
+      "Bash(curl -s http://localhost:3001/api/db/equipment_types)",
+      "Bash(curl -s http://localhost:3001/api/db/vehicles)",
+      "Bash(grep -r \"MATCHED NO ROWS\\\\|DB UPDATE\\\\|UPDATE.*order\\\\|unplan\\\\|unassign\" /c/Zoree/zoree-tms-v3/zoree-tms-v3 --include=*.js --include=*.jsx --include=*.ts --include=*.tsx)",
+      "Bash(grep -n \"unplan\\\\|unassign\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src/pages/*.jsx)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -name \"*.sql\" -exec grep -l \"CREATE TABLE\" {})",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase -name \"*.sql\" -type f -exec wc -l {})",
+      "Bash(curl -s \"http://localhost:3001/api/db/shipments?q=select=id,status,dock_door,pickup_date%26id=eq.SHP-2026-6417\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/dock_appointments?q=select=*%26limit=5\")",
+      "Bash(curl -s -X DELETE \"http://localhost:3001/api/db/shipments/SHP-2026-6417\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/shipments?q=select=id,pickup_date,dock_door,loading_start,loading_end,origin,status%26id=eq.SHP-2026-1796\")",
+      "Bash(curl -s \"http://localhost:3001/api/db/shipments?q=select=id,pickup_date,dock_door,origin,status%26pickup_date=eq.2026-04-14\")",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,pickup_date,dock_door%26limit=10%26order=created_at.desc)",
+      "Bash(python3 -c \"import sys,json; [print\\(r[''''id''''],repr\\(r[''''pickup_date'''']\\),r.get\\(''''dock_door''''\\)\\) for r in json.load\\(sys.stdin\\)]\")",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,origin%26id=eq.SHP-2026-1796)",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,pickup_date,dock_door,loading_start,loading_end,origin,status%26order=created_at.desc%26limit=500)",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,pickup_date%26limit=500%26order=created_at.desc)",
+      "Bash(curl -s \"http://localhost:3001/api/db/shipments?q=select=id,pickup_date,dock_door,origin,status%26pickup_date=eq.2026-04-24\")",
+      "Bash(curl -s http://localhost:3001/api/db/shipments?q=select=id,origin%26limit=500)",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/shipments/SHP-2026-9122 -H 'Content-Type: application/json' -d '{\"\"\"\"origin\"\"\"\":\"\"\"\"ATLANTA, GA 30350\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''id''''\\), d.get\\(''''origin''''\\)\\)\")",
+      "Bash(curl -s http://localhost:3001/api/db/orders?q=select=id,origin%26limit=500)",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/db/orders/ORD-897277 -H 'Content-Type: application/json' -d '{\"\"\"\"origin\"\"\"\":\"\"\"\"ATLANTA, GA 30350\"\"\"\"}')"
     ]
   }
 }

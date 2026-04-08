@@ -18,9 +18,9 @@ export default function DockSchedulingPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [searchQ, setSearchQ] = useState("");
 
-  // Build warehouse options from unique shipment origins
+  // Build warehouse options from unique shipment origins (normalized to uppercase)
   const warehouseOptions = useMemo(() => {
-    const origins = new Set(shipments.map((s) => (s.origin || "").trim()).filter(Boolean));
+    const origins = new Set(shipments.map((s) => (s.origin || "").trim().toUpperCase()).filter(Boolean));
     return [...origins].sort().map((o) => ({ value: o, label: o }));
   }, [shipments]);
 
@@ -46,7 +46,7 @@ export default function DockSchedulingPage() {
     return all.filter((a) => {
       if (warehouseFilter && a.shipmentId) {
         const ship = shipments.find((s) => s.id === a.shipmentId);
-        if ((ship?.origin || "").trim() !== warehouseFilter) return false;
+        if ((ship?.origin || "").trim().toUpperCase() !== warehouseFilter) return false;
       }
       if (typeFilter && a.type !== typeFilter) return false;
       if (statusFilter && a.status !== statusFilter) return false;

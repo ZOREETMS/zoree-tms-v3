@@ -28,6 +28,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL
   || 'https://ljbeihotrmyqthxptcgp.supabase.co';
 const ANON_KEY = process.env.SUPABASE_ANON_KEY
   || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE';
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ANON_KEY;
 
 // ── Middleware ──────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -36,10 +37,13 @@ app.use(express.json({ limit: '10mb' }));
 
 // ── Supabase REST helpers (server-side only) ────────────────────────
 function sbHeaders(token) {
+  // Use service_role key for server-side requests (no user token),
+  // user's own token for authenticated requests.
+  const key = token || SERVICE_KEY;
   return {
     'Content-Type':  'application/json',
-    'apikey':        ANON_KEY,
-    'Authorization': 'Bearer ' + (token || ANON_KEY),
+    'apikey':        SERVICE_KEY,
+    'Authorization': 'Bearer ' + key,
     'Prefer':        'return=representation',
   };
 }
@@ -98,7 +102,7 @@ async function verifyTokenSoft(req) {
     if (token && token.length > 20) {
       try {
         const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-          headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+          headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + token }
         });
         if (r.ok) { const u = await r.json(); u._token = token; return u; }
       } catch(e) {}
@@ -116,7 +120,7 @@ async function verifyToken(req, res) {
   const token = auth.slice(7);
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + token }
     });
     if (!r.ok) { res.status(401).json({ error: 'Invalid or expired token' }); return null; }
     const user = await r.json();
@@ -129,7 +133,21 @@ async function verifyToken(req, res) {
 }
 
 // Allowed tables — security whitelist
-const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','route_templates','equipment_types','planning_parameters','documents'];
+const ALLOWED = [
+  // Core TMS
+  'orders','shipments','carriers','rates','items','drivers','locations',
+  'order_lines','lane_preferences','order_history','route_templates',
+  'equipment_types','planning_parameters','documents','vehicles',
+  // Dock & scheduling
+  'dock_appointments','dock_schedules','crossdock_hubs',
+  // Events & messaging
+  'shipment_events','tms_messages','system_config','tenant_config',
+  // OMS
+  'oms_orders','oms_order_lines','oms_customers','oms_locations',
+  'oms_inventory','oms_inv_transactions','oms_dock_schedule','oms_stage_log',
+  // Middleware
+  'mw_requests','mw_event_log',
+];
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -175,7 +193,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+      headers: { 'Content-Type': 'application/json', 'apikey': SERVICE_KEY },
       body:    JSON.stringify({ email, password }),
     });
     const data = await r.json();
@@ -633,9 +651,8 @@ app.post('/api/db/:table', async (req, res) => {
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
   try {
-    // Use service role for tables that have RLS restrictions
-    const useServiceRole = ['route_templates', 'shipments', 'order_lines', 'rates'].includes(req.params.table);
-    const row = await dbUpsert(req.params.table, req.body, useServiceRole ? null : user._token);
+    // Use service role for all allowed tables (RLS blocks writes with user JWT)
+    const row = await dbUpsert(req.params.table, req.body, null);
     res.status(201).json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -665,8 +682,8 @@ app.patch('/api/db/:table/:id', async (req, res) => {
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
   try {
-    const useServiceRole = ['route_templates', 'shipments', 'order_lines', 'rates'].includes(req.params.table);
-    const row = await dbUpdate(req.params.table, req.params.id, req.body, useServiceRole ? null : user._token);
+    // Use service role for all allowed tables (RLS blocks writes with user JWT)
+    const row = await dbUpdate(req.params.table, req.params.id, req.body, null);
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1628,7 +1645,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     let lanePrefs = [];
     try {
       const ppRes = await fetch(`${SUPABASE_URL}/rest/v1/planning_parameters?key=eq.lane_preferences&select=enabled`, {
-        headers: { 'apikey': ANON_KEY },
+        headers: { 'apikey': SERVICE_KEY },
       });
       const ppData = await ppRes.json();
       if (Array.isArray(ppData) && ppData.length > 0) {
@@ -1636,7 +1653,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       }
       if (useLanePreferences) {
         const lpRes = await fetch(`${SUPABASE_URL}/rest/v1/lane_preferences?status=eq.Active&select=*`, {
-          headers: { 'apikey': ANON_KEY },
+          headers: { 'apikey': SERVICE_KEY },
         });
         const lpData = await lpRes.json();
         if (Array.isArray(lpData)) lanePrefs = lpData;
@@ -1650,7 +1667,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     let carrierFlags = {};
     try {
       const cfRes = await fetch(`${SUPABASE_URL}/rest/v1/carriers?select=name,scac,czarlite_enabled,carrierconnect_enabled,pcmiler_enabled&limit=200`, {
-        headers: { 'apikey': ANON_KEY },
+        headers: { 'apikey': SERVICE_KEY },
       });
       const cfData = await cfRes.json();
       if (Array.isArray(cfData)) {
@@ -1732,7 +1749,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         try {
           const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles`;
           const tlRes = await fetch(tlUrl, {
-            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+            headers: { 'apikey': SERVICE_KEY, 'Content-Type': 'application/json' },
           });
           const tlRates = await tlRes.json();
 
@@ -1940,7 +1957,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
         let shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
           method: 'POST',
           headers: {
-            'apikey': ANON_KEY,
+            'apikey': SERVICE_KEY,
             'Content-Type': 'application/json',
             'Prefer': 'resolution=merge-duplicates,return=representation',
           },
@@ -2006,7 +2023,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           await fetch(`${SUPABASE_URL}/rest/v1/documents?on_conflict=id`, {
             method: 'POST',
             headers: {
-              'apikey': ANON_KEY,
+              'apikey': SERVICE_KEY,
               'Content-Type': 'application/json',
               'Prefer': 'resolution=merge-duplicates,return=minimal',
             },
@@ -2015,7 +2032,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           // Update shipment with bol_number so it shows in shipment details
           await fetch(`${SUPABASE_URL}/rest/v1/shipments?id=eq.${encodeURIComponent(shipId)}`, {
             method: 'PATCH',
-            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            headers: { 'apikey': SERVICE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
             body: JSON.stringify({ bol_number: bolId }),
           });
           console.log(`[BulkPlan/execute] Auto-generated BOL ${bolId} for ${shipId} (${allLines.length} lines, incoterms: ${incoterms})`);
@@ -2028,7 +2045,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
           const ordPatchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
             method: 'PATCH',
             headers: {
-              'apikey': ANON_KEY,
+              'apikey': SERVICE_KEY,
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal',
             },
@@ -2093,7 +2110,7 @@ app.post('/api/bulk-plan/import', async (req, res) => {
         const r = await fetch(`${SUPABASE_URL}/rest/v1/orders?on_conflict=id`, {
           method: 'POST',
           headers: {
-            'apikey': ANON_KEY,
+            'apikey': SERVICE_KEY,
             'Content-Type': 'application/json',
             'Prefer': 'resolution=merge-duplicates,return=representation',
           },
@@ -2122,7 +2139,7 @@ app.post('/api/auth/refresh', async (req, res) => {
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
-      headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+      headers: { 'apikey': SERVICE_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     const data = await r.json();

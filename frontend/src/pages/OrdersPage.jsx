@@ -275,8 +275,8 @@ export default function OrdersPage() {
       if (ov !== nv) changes.push({ field, label, old: ov, new: nv });
     }
     const f = editForm;
-    const newOrigin = [f.originCity, f.originState?.toUpperCase()].filter(Boolean).join(", ") + (f.originZip ? " " + f.originZip : "");
-    const newDest = [f.destCity, f.destState?.toUpperCase()].filter(Boolean).join(", ") + (f.destZip ? " " + f.destZip : "");
+    const newOrigin = [f.originCity?.toUpperCase(), f.originState?.toUpperCase()].filter(Boolean).join(", ") + (f.originZip ? " " + f.originZip : "");
+    const newDest = [f.destCity?.toUpperCase(), f.destState?.toUpperCase()].filter(Boolean).join(", ") + (f.destZip ? " " + f.destZip : "");
     chk("customer", o.customer, f.customer, "Customer");
     chk("status", o.status, f.status, "Status");
     chk("origin", o.origin, newOrigin, "Origin");
@@ -328,8 +328,8 @@ export default function OrdersPage() {
     const f = newOrderForm;
     const ts = Date.now().toString().slice(-6);
     const newId = `ORD-${new Date().getFullYear()}-${ts}`;
-    const origin = [f.originCity, f.originState?.toUpperCase()].filter(Boolean).join(", ") + (f.originZip ? " " + f.originZip : "");
-    const dest = [f.destCity, f.destState?.toUpperCase()].filter(Boolean).join(", ") + (f.destZip ? " " + f.destZip : "");
+    const origin = [f.originCity?.toUpperCase(), f.originState?.toUpperCase()].filter(Boolean).join(", ") + (f.originZip ? " " + f.originZip : "");
+    const dest = [f.destCity?.toUpperCase(), f.destState?.toUpperCase()].filter(Boolean).join(", ") + (f.destZip ? " " + f.destZip : "");
     // Auto-compute weight/pieces from lines
     const autoWeight = newOrderLines.reduce((s, l) => s + (l.total_weight || 0), 0);
     const autoPieces = newOrderLines.reduce((s, l) => s + (l.qty_ordered || l.qty || 0), 0);
