@@ -283,6 +283,7 @@ app.post('/api/tender/email', async (req, res) => {
   const orderNumbers = Array.isArray(b.orderNumbers) ? b.orderNumbers : [];
   const customerName = String(b.customerName || '');
   const lineItems = Array.isArray(b.lineItems) ? b.lineItems : [];
+  const childShipments = Array.isArray(b.childShipments) ? b.childShipments : [];
 
   // Plain text fallback
   const textLines = [
@@ -305,6 +306,12 @@ app.post('/api/tender/email', async (req, res) => {
     'Mode: ' + mode,
     'Agreed Rate: ' + cost,
   );
+  if (childShipments.length) {
+    textLines.push('', 'Multi-Stop Route:', '---');
+    childShipments.forEach((cs) => {
+      textLines.push('Stop ' + cs.stop + ': ' + (cs.origin || '—') + ' → ' + (cs.dest || '—') + (cs.delivery ? ' | Delivery: ' + cs.delivery : ''));
+    });
+  }
   if (lineItems.length) {
     textLines.push('', 'Line Items:', '---');
     lineItems.forEach((li, i) => {
@@ -413,6 +420,22 @@ app.post('/api/tender/email', async (req, res) => {
       </td>
     </tr>
   </table>
+
+  <!-- Multi-Stop Route -->
+  ${childShipments.length ? `
+  <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #ccc;border-top:none" cellpadding="0" cellspacing="0">
+    <tr>
+      <td colspan="4" style="padding:10px 12px;background:#e3f2fd;font-size:10px;color:#1a237e;text-transform:uppercase;font-weight:bold;letter-spacing:0.5px;border-bottom:1px solid #ccc">&#128652; Multi-Stop Route</td>
+    </tr>
+    <tr style="background:#f5f5f5">
+      <th style="padding:6px 10px;text-align:center;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Stop</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Origin</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Destination</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #ccc">Delivery Date</th>
+    </tr>
+    ${childShipments.map((cs, i) => '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#fafafa') + '"><td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:center;font-weight:bold;color:#1a237e">' + (cs.stop || i + 1) + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee">' + (cs.origin || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;font-weight:bold">' + (cs.dest || '—') + '</td><td style="padding:5px 10px;border-bottom:1px solid #eee;color:#2e7d32;font-weight:bold">' + (cs.delivery || '—') + '</td></tr>').join('')}
+  </table>
+  ` : ''}
 
   <!-- Legal Notice -->
   <div style="background:#fff3e0;border:1px solid #ccc;border-top:none;padding:12px 16px;font-size:11px;line-height:1.5;color:#333">

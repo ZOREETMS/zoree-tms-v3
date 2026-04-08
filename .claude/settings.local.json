@@ -423,7 +423,24 @@
       "Bash(wc -l /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/routes/*.js /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/services/*.js)",
       "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -name *.sql -o -name *schema* -o -name *migration*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5180/)",
-      "Bash(taskkill //F //IM node.exe)"
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(taskkill //PID 29476 //F)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3 -type f -name *.sql)",
+      "Bash(grep -E \"\\(config|package\\\\.json\\)$\")",
+      "Bash(cat /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase/migrations/*.sql)",
+      "Bash(grep -r auth /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/routes/ --include=*.js)",
+      "Bash(grep -r \"CREATE TABLE.*user\\\\|CREATE TABLE.*auth\\\\|password\\\\|secret\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api --include=*.js)",
+      "Bash(grep -r .from\\\\\\(/c/Zoree/zoree-tms-v3/zoree-tms-v3/api/services --include=*.js)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -rho \"dbSelect\\\\|dbUpdate\\\\|dbUpsert\\\\|dbDelete\\\\|\\\\.from\\(''''[^'''']*''''\\\\|\\\\.from\\([^]*\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api --include=*.js)",
+      "Bash(grep -r \"from\\(''''shipments''''\\\\|from\\(''''users''''\\\\|from\\(''''orders''''\\\\|from\\(''''routes''''\\\\|from\\(''''locations''''\\\\|from\\(''''carriers''''\\\\|from\\(''''documents\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api --include=*.js)",
+      "Bash(grep -r \"dbSelect\\\\|dbUpdate\\\\|dbDelete\\\\|dbUpsert\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/services --include=*.js)",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/api -type f -name \"*.js\" ! -path \"*/node_modules/*\" -exec grep -h \"db\\\\.\\\\\\(Select\\\\|Upsert\\\\|Update\\\\|Delete\\\\\\)\\\\|dbSelect\\\\|dbUpsert\\\\|dbUpdate\\\\|dbDelete\" {})",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase -type f -name \"*.sql\" -exec grep -h \"CREATE TABLE\\\\|ALTER TABLE\" {})",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase -type f -name \"*.sql\" -exec grep -E \"^\\(CREATE|ALTER\\) TABLE\" {})",
+      "Bash(grep -h \"CREATE TABLE\\\\|ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase/migrations/*.sql)",
+      "Bash(grep -h \"^CREATE TABLE\\\\|^alter table\\\\|^ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/supabase/migrations/*.sql)",
+      "Bash(grep -h \"^CREATE TABLE\\\\|^ALTER TABLE\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/api/migrations/*.sql)"
     ]
   }
 }

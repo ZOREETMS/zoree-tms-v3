@@ -651,18 +651,43 @@ export default function ShipmentsPage() {
     setBusyId(row.id);
     try {
       await DbApi.patch("shipments", row.id, { status: "Tendered", carrier: carrierName });
+
+      // If MBOL, cascade status to child CBOLs
+      const isMbol = row.bol_type === "MBOL";
+      let children = [];
+      if (isMbol) {
+        children = shipments
+          .filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL")
+          .sort((a, b) => (a.stop_to || 0) - (b.stop_to || 0));
+        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Tendered", carrier: carrierName })));
+      }
+
       const origin = row.origin || "";
       const dest = row.dest || "";
       const refNum =
         "TND-" + String(row.id || "").replace(/^SHP-/i, "") + "-" + String(Math.floor(Math.random() * 9000 + 1000));
 
-      // Gather linked order & line-item details via service layer
-      const orderDetails = await gatherOrderDetails(row._linkedOrders || []);
+      // Build full route for subject (Origin → Stop1 → Stop2 → FinalDest)
+      let routeDisplay = `${origin} → ${dest}`;
+      if (isMbol && children.length) {
+        const stops = [origin, ...children.map((c) => (c.dest || "").split(",")[0].trim()).filter(Boolean)];
+        routeDisplay = stops.join(" → ");
+      }
+
+      // Gather order details from master + all children
+      const allLinkedOrders = [
+        ...(row._linkedOrders || []),
+        ...children.flatMap((c) => {
+          const childLinked = orders.filter((o) => String(o.shipment_id || "") === String(c.id));
+          return childLinked;
+        }),
+      ];
+      const orderDetails = await gatherOrderDetails(allLinkedOrders);
 
       const tenderPayload = {
         shipmentId: row.id,
         refNum,
-        subject: `Load Tender: ${row.id} — ${origin} → ${dest}`,
+        subject: `Load Tender: ${row.id} — ${routeDisplay}`,
         origin,
         dest,
         pickup: row.pickup_date || "",
@@ -676,6 +701,15 @@ export default function ShipmentsPage() {
         dockDoor: row.dock_door || "Door 1",
         dockTime: row.dock_time || "06:00–08:00",
         ...orderDetails,
+        childShipments: isMbol ? children.map((c, i) => ({
+          id: c.id,
+          stop: i + 1,
+          origin: c.origin || "",
+          dest: c.dest || "",
+          delivery: c.delivery_date || c.shipment_end_date || "",
+          weight: c.weight || "",
+          pieces: c.pieces || "",
+        })) : [],
       };
       let emailSent = false;
       let emailTo = "";
@@ -736,8 +770,14 @@ export default function ShipmentsPage() {
         dock_time: dockLoadStart || null,
         notes: notes || null,
       });
-      // 2. Update linked orders
-      const linkedOrders = orders.filter((o) => String(o.shipment_id || "") === String(row.id));
+      // 1b. If MBOL, cascade Confirmed to child CBOLs
+      if (row.bol_type === "MBOL") {
+        const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
+        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Confirmed" })));
+      }
+      // 2. Update linked orders (master + children)
+      const allShipmentIds = [row.id, ...(row.bol_type === "MBOL" ? shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL").map((s) => s.id) : [])];
+      const linkedOrders = orders.filter((o) => allShipmentIds.includes(String(o.shipment_id || "")));
       await Promise.all(linkedOrders.map((o) =>
         DbApi.patch("orders", o.id, { status: "Confirmed" })
       ));
@@ -787,6 +827,11 @@ export default function ShipmentsPage() {
     setBusyId(row.id);
     try {
       await DbApi.patch("shipments", row.id, { status: "Planned" });
+      // If MBOL, cascade reject to child CBOLs
+      if (row.bol_type === "MBOL") {
+        const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
+        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Planned" })));
+      }
       toast(`Tender rejected for ${row.id}`, "success");
       await refreshData();
     } catch (err) {
@@ -801,6 +846,11 @@ export default function ShipmentsPage() {
     setBusyId(row.id);
     try {
       await DbApi.patch("shipments", row.id, { status: "Planned" });
+      // If MBOL, cascade withdraw to child CBOLs
+      if (row.bol_type === "MBOL") {
+        const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
+        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Planned" })));
+      }
       toast(`Tender withdrawn for ${row.id}`, "success");
       await refreshData();
     } catch (err) {

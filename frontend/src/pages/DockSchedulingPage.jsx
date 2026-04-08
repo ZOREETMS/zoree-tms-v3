@@ -9,7 +9,7 @@ import AppointmentEditModal from "../components/dock-scheduling/AppointmentEditM
 import { formatDateDisplay, todayStr } from "../utils/dateUtils";
 
 export default function DockSchedulingPage() {
-  const { shipments, locations = [] } = useOutletContext();
+  const { shipments } = useOutletContext();
   const [dockDate, setDockDate] = useState(todayStr());
   const [appointments, setAppointments] = useState([]);
   const [editAppt, setEditAppt] = useState(null);
@@ -18,12 +18,11 @@ export default function DockSchedulingPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [searchQ, setSearchQ] = useState("");
 
-  // Build warehouse options from locations data (Shipper type = origin docks)
+  // Build warehouse options from unique shipment origins
   const warehouseOptions = useMemo(() => {
-    return locations
-      .filter((l) => l.type === "Shipper" || l.type === "Warehouse")
-      .map((l) => ({ id: l.id, label: `${l.city}, ${l.state} — ${l.name}` }));
-  }, [locations]);
+    const origins = new Set(shipments.map((s) => (s.origin || "").trim()).filter(Boolean));
+    return [...origins].sort().map((o) => ({ value: o, label: o }));
+  }, [shipments]);
 
   // Build appointments from shipments that have dock data persisted during planning
   const dayAppts = useMemo(() => {
@@ -45,12 +44,9 @@ export default function DockSchedulingPage() {
       });
     const all = [...appointments.filter((a) => a.date === dockDate), ...appts];
     return all.filter((a) => {
-      if (warehouseFilter && !a.shipmentId) return true; // manual appts pass through
-      if (warehouseFilter) {
+      if (warehouseFilter && a.shipmentId) {
         const ship = shipments.find((s) => s.id === a.shipmentId);
-        const originCity = (ship?.origin || "").split(",")[0].trim().toUpperCase();
-        const loc = locations.find((l) => l.id === warehouseFilter);
-        if (loc && originCity !== (loc.city || "").toUpperCase()) return false;
+        if ((ship?.origin || "").trim() !== warehouseFilter) return false;
       }
       if (typeFilter && a.type !== typeFilter) return false;
       if (statusFilter && a.status !== statusFilter) return false;
@@ -60,7 +56,7 @@ export default function DockSchedulingPage() {
       }
       return true;
     });
-  }, [shipments, locations, dockDate, appointments, warehouseFilter, typeFilter, statusFilter, searchQ]);
+  }, [shipments, dockDate, appointments, warehouseFilter, typeFilter, statusFilter, searchQ]);
 
   const scheduled = dayAppts.length;
   const inbound = dayAppts.filter((a) => a.type === "Inbound").length;
@@ -141,7 +137,7 @@ export default function DockSchedulingPage() {
         <div className="filter-bar">
           <select className="fsel" style={{ minWidth: 180 }} value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)}>
             <option value="">All Warehouses</option>
-            {warehouseOptions.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
+            {warehouseOptions.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
           </select>
           <select className="fsel" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">All Types</option>
