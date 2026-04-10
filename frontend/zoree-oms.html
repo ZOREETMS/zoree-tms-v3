@@ -1395,7 +1395,7 @@ async function saveOrder(o){
     origin_zip:(function(){ var l=locs.find(x=>x.id===o.orig); return l&&l.zip?l.zip:null; })(),
     dest_zip:(o.dest||('')).match(/(\d{5})/)?((o.dest||'').match(/(\d{5})/))[1]:null,
     required_date:o.due||null,
-    ready_date:   o.ready||null, ship_mode:o.mode||'TL',  // NOT NULL sentinel
+    ready_date:   o.ready||null, ship_mode:o.mode||null,
     incoterms:o.inco||'FOB Origin', priority:o.priority||'Standard',
     commodity:o.comm||null, special_instructions:o.notes||null,
     stage:o.stage, on_hold:o.hold||false, hold_reason:o.holdReason||null,
@@ -2134,8 +2134,10 @@ function openTMSSend(id){
   _pt=id;
   var wt=(o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
   var pcs=(o.lines||[]).reduce((s,l)=>s+l.qty,0);
+  var loc=locs.find(x=>x.id===o.orig);
+  var origDisplay=loc?(loc.name+' ('+loc.city+', '+loc.state+(loc.zip?', '+loc.zip:'')+')'):(o.orig||'—');
   document.getElementById('tms-prev').innerHTML=
-    `<div class="ifg ifg3">${ifc('Order #',o.id)}${ifc('Customer',o.cust)}${ifc('PO #',o.po||'—')}${ifc('Origin',locName(o.orig))}${ifc('Destination',o.dest)}${ifc('Mode',o.mode||'— TMS selects —')}${ifc('Weight',wt.toLocaleString()+' lbs')}${ifc('Pieces',pcs)}${ifc('Required',o.due||'—')}</div>` +
+    `<div class="ifg ifg3">${ifc('Order #',o.id)}${ifc('Customer',custName(o.cust))}${ifc('PO #',o.po||'—')}${ifc('Origin',origDisplay)}${ifc('Destination',o.dest)}${ifc('Mode',o.mode||'— TMS selects —')}${ifc('Weight',wt.toLocaleString()+' lbs')}${ifc('Pieces',pcs)}${ifc('Required',o.due||'—')}${ifc('Ready to Ship',o.ready||'—')}${ifc('Incoterms',o.inco||'—')}</div>` +
     /* Line Items */
     (o.lines&&o.lines.length ? `<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">📦 Line Items</div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f8fafc"><th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">#</th><th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Item ID</th><th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Description</th><th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Qty</th><th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Unit Wt</th><th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase">Total Wt</th></tr></thead><tbody>${(o.lines||[]).map(l=>`<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#94a3b8">${l.lineNum||'-'}</td><td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#3b82f6">${l.itemId||'—'}</td><td style="padding:6px 10px">${l.desc||'—'}</td><td style="padding:6px 10px;text-align:right;font-weight:600">${l.qty||0}</td><td style="padding:6px 10px;text-align:right;font-family:monospace">${l.wt||0} lbs</td><td style="padding:6px 10px;text-align:right;font-family:monospace;font-weight:600">${((l.qty||0)*(l.wt||0)).toLocaleString()} lbs</td></tr>`).join('')}</tbody></table></div>` : '');
   openM('m-tms');

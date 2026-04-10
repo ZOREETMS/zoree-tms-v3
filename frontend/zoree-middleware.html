@@ -1170,8 +1170,8 @@ async function runPushOrderFlow(){
   var pushed = 0;
   for(var o of data){
     var lines = o.oms_order_lines || [];
-    var wt  = lines.reduce((s,l)=>s+(l.qty_ordered*(parseFloat(l.unit_weight)||0)),0);
-    var pcs = lines.reduce((s,l)=>s+l.qty_ordered,0);
+    var wt  = lines.reduce((s,l)=>s+((l.qty_ordered||0)*(parseFloat(l.unit_weight)||0)),0);
+    var pcs = Math.round(lines.reduce((s,l)=>s+(l.qty_ordered||0),0));
 
     // ── Resolve origin location ────────────────────────────────────
     var originLoc    = locMap[o.origin_location] || null;
@@ -1233,6 +1233,8 @@ async function runPushOrderFlow(){
       po_number:          o.po_number        || null,
       hazmat:             false,
       line_count:         lines.length,
+      origin_zip:         originLoc ? originLoc.zip : (o.origin_zip || null),
+      dest_zip:           o.dest_zip || (o.destination || '').match(/(\d{5})/)?.[1] || null,
     };
 
     // ── Push order header to TMS ───────────────────────────────────

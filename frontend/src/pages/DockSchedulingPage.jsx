@@ -75,7 +75,7 @@ export default function DockSchedulingPage() {
   // Build appointments from shipments
   const dayAppts = useMemo(() => {
     const appts = (shipments || [])
-      .filter((s) => s.pickup_date === dockDate && s.status !== "Cancelled")
+      .filter((s) => s.pickup_date === dockDate && s.status !== "Cancelled" && !s.dock_issue)
       .map((s, i) => {
         const door = s.dock_door || dockConfig.doors[i % dockConfig.doors.length];
         const { start, duration } = parseLoadingWindow(s, i);
@@ -274,6 +274,32 @@ export default function DockSchedulingPage() {
 
         <DockLegend />
         <DockGrid doors={dockConfig.doors} startHour={dockConfig.startHour} endHour={dockConfig.endHour} appointments={dayAppts} onSlotClick={openNewAppt} onAppointmentClick={setEditAppt} />
+
+        {/* Dock Issues */}
+        {(() => {
+          const issues = (shipments || []).filter((s) => s.dock_issue && s.pickup_date === dockDate && s.status !== "Cancelled"
+            && (!warehouseFilter || (s.origin || "").trim().toUpperCase() === warehouseFilter));
+          if (issues.length === 0) return null;
+          return (
+            <div style={{ marginTop: 12, marginBottom: 12 }}>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, marginBottom: 8, color: "#dc2626" }}>
+                DOCK ISSUES ({issues.length})
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 10 }}>
+                {issues.map((s) => (
+                  <div key={s.id} className="card" style={{ padding: 14, border: "1.5px solid rgba(220,38,38,.3)", background: "rgba(220,38,38,.04)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>NO DOCK</span>
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>{s.carrier || "TBD"}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text3)" }}>{s.dock_issue}</div>
+                    <div style={{ fontSize: 11, marginTop: 4 }}>{s.id} — {s.origin}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Today's Appointments */}
         <div style={{ marginTop: 20 }}>

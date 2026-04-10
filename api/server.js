@@ -1283,7 +1283,7 @@ app.post('/api/ltl/quote', async (req, res) => {
   let adderRates = [];
   try {
     const rr = await fetch(
-      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane,service_level`,
+      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,czarlite_min_wt,czarlite_max_wt,transit_days`,
       { headers: sbHeaders(null) }
     );
     if (rr.ok) adderRates = await rr.json();
@@ -1310,6 +1310,16 @@ app.post('/api/ltl/quote', async (req, res) => {
     // 2. Carrier-level fallback (blank origin+dest = all lanes)
     if (!r) r = carrierRates.find(rt => !rt.origin && !rt.dest) || null;
 
+    // Enforce weight limits from rate record
+    if (r) {
+      const minWt = r.czarlite_min_wt || 0;
+      const maxWt = r.czarlite_max_wt || Infinity;
+      if (wt < minWt || wt > maxWt) {
+        console.log(`[LTL/quote] ${carrier.name}: SKIPPED — weight ${wt}lbs outside range ${minWt}–${maxWt}lbs`);
+        return; // skip this carrier
+      }
+    }
+
     const discountPct  = r ? (parseFloat(r.discount)      || 0) : 0;
     const discountFlat = r ? (parseFloat(r.discount_flat) || 0) : 0;
     const discountAmt  = Math.round(baseTotal * discountPct / 100) + discountFlat;
@@ -1328,7 +1338,7 @@ app.post('/api/ltl/quote', async (req, res) => {
       scac:         carrier.scac,
       mode:         'LTL',
       serviceLevel: (r && r.service_level) || 'Standard',
-      transitDays:  null,
+      transitDays:  (r && r.transit_days) || null,
       deliveryDate: null,
       czarBase:     Math.round(discountedBase),
       czarBaseGross:Math.round(baseTotal),
@@ -1951,6 +1961,7 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
         if (plan.dockTime) shipRow.dock_time = plan.dockTime;
         if (plan.loadingStart) shipRow.loading_start = plan.loadingStart;
         if (plan.loadingEnd) shipRow.loading_end = plan.loadingEnd;
+        if (plan.dockIssue) shipRow.dock_issue = plan.dockIssue;
 
         // Create shipment
         console.log(`[BulkPlan/execute] INSERT payload:`, JSON.stringify(shipRow));

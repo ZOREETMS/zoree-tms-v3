@@ -197,10 +197,10 @@ export default function OrdersPage() {
   }
 
   async function deleteOrder(id) {
-    if (!window.confirm(`Permanently delete order ${id}?`)) return;
+    if (!window.confirm(`Permanently delete order ${id}? This cannot be undone.`)) return;
     setBusyId(id);
     try {
-      await DbApi.patch("orders", id, { status: "Cancelled" });
+      await DbApi.remove("orders", id);
       toast(`Order ${id} deleted`, "success");
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
@@ -1052,6 +1052,9 @@ export default function OrdersPage() {
                   </>)}
                   {o.status === "Consolidated" && (
                     <button className="btn btn-secondary btn-sm" style={{ background: "rgba(245,158,11,.08)", color: "#b45309", borderColor: "rgba(245,158,11,.35)", fontSize: 11 }} onClick={() => unplanOrder(o.id)}>🔓 Unplan</button>
+                  )}
+                  {o.status === "Cancelled" && (
+                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.2)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer" }} disabled={busyId === o.id} onClick={() => deleteOrder(o.id)} title="Delete permanently">🗑️</button>
                   )}
                   <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, fontSize: 11 }} disabled={busyId === o.id} onClick={() => handleCopyOrder(o.id)} title="Copy order">📋</button>
                 </td>

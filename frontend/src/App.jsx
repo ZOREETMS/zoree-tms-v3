@@ -128,6 +128,9 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshData();
+    // Auto-refresh every 5 seconds to pick up OMS/Middleware changes instantly
+    const poll = setInterval(refreshData, 5000);
+    return () => clearInterval(poll);
   }, [isAuthenticated]);
 
   if (booting) {

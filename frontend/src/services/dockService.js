@@ -146,6 +146,16 @@ export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, grou
     start = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
 
+  // Check if assignment exceeds warehouse operating window
+  const whConfig = getDockConfigForWarehouse(dockConfigs, plan.origin);
+  const [sh, sm] = start.split(":").map(Number);
+  const endMinFromStart = (sh * 60 + sm) + dur;
+  const maxMin = whConfig.endHour * 60;
+  if (endMinFromStart > maxMin) {
+    plan.dockIssue = `No dock capacity on ${plan.pickupDate} at ${plan.origin} (all doors full)`;
+    return;
+  }
+
   const fields = buildDockFields({ door, startTime: start, duration: dur, pickupDate: plan.pickupDate });
   Object.assign(plan, fields);
 }
@@ -197,10 +207,21 @@ export function assignDocksToPlans(plans, existingShipments = [], dockConfigs = 
       if (occupied < bestMins) { bestMins = occupied; bestDoor = d; }
     }
 
+    const whConfig = getDockConfigForWarehouse(dockConfigs, plan.origin);
     const doorKey = `${key}|${bestDoor}`;
     if (!doorMinutes[doorKey]) doorMinutes[doorKey] = 0;
     const offsetMins = doorMinutes[doorKey];
-    const startH = 6 + Math.floor(offsetMins / 60);
+    const maxMins = (whConfig.endHour - whConfig.startHour) * 60;
+
+    // Check if this appointment would exceed the warehouse operating window
+    if (offsetMins + dur > maxMins) {
+      // Dock capacity exceeded — flag as issue, skip dock assignment
+      plan.dockIssue = `No dock capacity on ${plan.pickupDate} at ${plan.origin} (all doors full)`;
+      counters[key]++;
+      continue;
+    }
+
+    const startH = whConfig.startHour + Math.floor(offsetMins / 60);
     const startM = offsetMins % 60;
     const startTime = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`;
 
