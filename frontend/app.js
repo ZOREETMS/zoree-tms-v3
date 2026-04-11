@@ -95,7 +95,7 @@ function navigate(page) {
   if (pageEl) pageEl.classList.add('active');
   var navEl = document.querySelector('.nav-item[data-page="' + page + '"]');
   if (navEl) navEl.classList.add('active');
-  var renders = { dashboard: renderDashboard, orders: renderOrders, shipments: renderShipments, carriers: renderCarriers, settings: renderSettings };
+  var renders = { dashboard: renderDashboard, orders: renderOrders, shipments: renderShipments, carriers: renderCarriers, settings: renderSettings, users: renderUsers };
   if (renders[page]) renders[page]();
 }
 
@@ -117,6 +117,71 @@ function updateUserUI() {
   var n = document.getElementById('user-name'); if (n) n.textContent = name;
   var r = document.getElementById('user-role'); if (r) r.textContent = (user.role || 'Admin') + ' · Zoree';
   var a = document.getElementById('user-avatar'); if (a) a.textContent = initials || 'SR';
+  // Also update sidebar footer role display
+  var authName = document.getElementById('auth-name'); if (authName) authName.textContent = name;
+  var authRole = document.getElementById('auth-role'); if (authRole) {
+    var roleLabel = { admin: 'Admin', planner: 'Planner', carrier: 'Carrier', finance: 'Finance' };
+    authRole.textContent = (roleLabel[user.role] || 'Admin') + ' · Zoree';
+  }
+  applyRoleGating();
+}
+
+// ── Role-Based UI Gating ──────────────────────────────────────────
+var ROLE_PAGE_ACCESS = {
+  admin:   ['*'],
+  planner: ['dashboard','orders','shipments','carriers','bulk-plan','tracking','items','locations','routes','settings'],
+  carrier: ['dashboard','shipments','carriers','carrier-portal','tracking','settings'],
+  finance: ['dashboard','shipments','carriers','invoices','rates','audit','analytics','reports','settings'],
+};
+
+function applyRoleGating() {
+  var user = JSON.parse(sessionStorage.getItem('zoree_user') || '{}');
+  var role = user.role || 'planner';
+  var allowedPages = ROLE_PAGE_ACCESS[role] || ROLE_PAGE_ACCESS.planner;
+  var isAll = allowedPages.includes('*');
+
+  // Show/hide nav items based on role
+  document.querySelectorAll('.nav-item[data-page]').forEach(function(navItem) {
+    var page = navItem.getAttribute('data-page');
+    if (page === 'users') {
+      // Users page is admin-only
+      navItem.style.display = (role === 'admin') ? '' : 'none';
+    } else if (isAll) {
+      navItem.style.display = '';
+    } else {
+      navItem.style.display = allowedPages.includes(page) ? '' : 'none';
+    }
+  });
+
+  // Show/hide nav sections that have no visible items
+  document.querySelectorAll('.nav-section').forEach(function(section) {
+    var visibleItems = section.querySelectorAll('.nav-item[data-page]');
+    var hasVisible = false;
+    visibleItems.forEach(function(item) {
+      if (item.style.display !== 'none') hasVisible = true;
+    });
+    // Keep section visible if it has at least one visible nav item or no nav items (label only)
+    if (visibleItems.length === 0) return;
+    section.style.display = hasVisible ? '' : 'none';
+  });
+
+  // Hide action buttons based on role
+  document.querySelectorAll('[data-role-action]').forEach(function(el) {
+    var action = el.getAttribute('data-role-action');
+    var hasAccess = isAll || (ROLE_PAGE_ACCESS[role] || []).includes('*');
+    if (!hasAccess) {
+      // Check specific action permissions
+      var actionPerms = {
+        admin:   ['*'],
+        planner: ['orders.write','shipments.write','shipments.status','bulk-plan'],
+        carrier: ['shipments.status'],
+        finance: ['invoices.write'],
+      };
+      var perms = actionPerms[role] || [];
+      hasAccess = perms.includes('*') || perms.includes(action);
+    }
+    el.style.display = hasAccess ? '' : 'none';
+  });
 }
 
 async function handleLogin() {
@@ -147,7 +212,20 @@ async function handleLogin() {
 
     var user = data.user;
     sessionStorage.setItem('zoree_token', data.access_token);
-    sessionStorage.setItem('zoree_user', JSON.stringify({ id: user.id, email: user.email, name: (user.user_metadata && user.user_metadata.full_name) || 'Sridhar R.', role: 'admin', tenantId: 'zoree-default' }));
+    // Fetch role from user_roles table via API
+    var userRole = 'planner';
+    try {
+      var meRes = await fetch((window.ZOREE_API_URL || 'http://localhost:3001/api') + '/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + data.access_token }
+      });
+      if (meRes.ok) {
+        var meData = await meRes.json();
+        if (meData.user && meData.user.role) userRole = meData.user.role;
+        if (meData.permissions) sessionStorage.setItem('zoree_permissions', JSON.stringify(meData.permissions));
+      }
+    } catch(roleErr) { console.warn('[Login] Could not fetch role:', roleErr.message); }
+
+    sessionStorage.setItem('zoree_user', JSON.stringify({ id: user.id, email: user.email, name: (user.user_metadata && user.user_metadata.full_name) || 'Sridhar R.', role: userRole, tenantId: 'zoree-default' }));
     sessionStorage.setItem('zoree_tenant', JSON.stringify({ id: 'zoree-default', brandName: 'ZoreeTMS', primaryColor: '#3b82f6', tier: 'enterprise', features: ['*'] }));
 
     updateUserUI();

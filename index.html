@@ -374,6 +374,10 @@ function onRouteWeightChange(val) {
     <div class="nav-item" data-page="alerts" onclick="navigate('alerts')"><span class="nav-icon">🔔</span> Alerts <span class="nav-badge red">2</span></div>
     <div class="nav-item" data-page="dbexplorer" onclick="navigate('dbexplorer')"><span class="nav-icon">🗄️</span> DB Explorer</div>
   </div>
+  <div class="nav-section">
+    <div class="nav-label">Administration</div>
+    <div class="nav-item" data-page="users" onclick="navigate('users')"><span class="nav-icon">👥</span> User Management</div>
+  </div>
   <div class="sidebar-footer">
     <div class="user-chip" style="cursor:default">
       <div class="user-avatar" id="auth-avatar">SR</div>
@@ -2261,6 +2265,16 @@ function onRouteWeightChange(val) {
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">No tenders found</div>
       <div style="font-size:13px">Tender shipments from the Shipments page to see them here</div>
     </div>
+  </div>
+</div>
+
+<!-- USER MANAGEMENT PAGE -->
+<div class="page" id="page-users">
+  <div class="page-header">
+    <div><div class="page-title">User Management</div><div class="page-sub">Manage user roles and permissions — Admin, Planner, Carrier, Finance</div></div>
+  </div>
+  <div class="page-content" id="users-content">
+    <div style="color:var(--text3);padding:20px">Loading...</div>
   </div>
 </div>
 
@@ -4348,12 +4362,14 @@ function authUpdateUI() {
   if (!CURRENT_USER) return;
   var meta = CURRENT_USER.user_metadata || {};
   var name = meta.full_name || meta.first_name || CURRENT_USER.email || 'User';
-  var role = (meta.role || 'admin');
+  var role = CURRENT_USER.role || meta.role || 'admin';
   var initials = name.split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
   var el;
   el = document.getElementById('auth-name');   if(el) el.textContent = name;
   el = document.getElementById('auth-avatar'); if(el) el.textContent = initials;
   el = document.getElementById('auth-role');   if(el) el.textContent = role.charAt(0).toUpperCase()+role.slice(1)+' · Zoree';
+  window._currentUser = { id: CURRENT_USER.id, email: CURRENT_USER.email, name: name, role: role };
+  if (typeof applyRoleGating === 'function') applyRoleGating();
 }
 
 var SUPA = {
@@ -6250,6 +6266,7 @@ function navigate(page){
   if(page==='carrier-portal') _r(renderCarrierPortal);
   if(page==='dock')           _r(renderDockSchedule);
   if(page==='messaging')      _r(renderMessaging);
+  if(page==='users')          _r(renderUsers);
   if(page==='dbexplorer') {
     _r(function(){
       if(!_dbeInited) { _dbeInited=true; dbeUpdateLines(); dbeLoadCounts(); }
@@ -17049,6 +17066,214 @@ document.addEventListener('DOMContentLoaded', function() {
 // DB Explorer nav init is handled inside the main navigate() function above
 
 
+
+// ══════════════════════════════════════════════════════════════════
+// USER MANAGEMENT & ROLE-BASED ACCESS CONTROL
+// ══════════════════════════════════════════════════════════════════
+
+var _usersList = [];
+
+var ROLE_BADGES = {
+  admin:   { color: '#7c3aed', bg: 'rgba(124,58,237,.12)', label: 'Admin' },
+  planner: { color: '#0d9488', bg: 'rgba(13,148,136,.12)', label: 'Planner' },
+  carrier: { color: '#2563eb', bg: 'rgba(37,99,235,.12)',  label: 'Carrier' },
+  finance: { color: '#d97706', bg: 'rgba(217,119,6,.12)',  label: 'Finance' },
+};
+
+function roleBadge(role) {
+  var r = ROLE_BADGES[role] || ROLE_BADGES.planner;
+  return '<span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;color:' + r.color + ';background:' + r.bg + '">' + r.label + '</span>';
+}
+
+async function loadUserRoles() {
+  try {
+    var token = window._authToken || sessionStorage.getItem('zoree_token');
+    if (!token) return { forbidden: true };
+    var res = await fetch('http://localhost:3001/api/users', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    if (res.status === 403) { _usersList = []; return { forbidden: true }; }
+    if (!res.ok) throw new Error('Failed to load users');
+    var data = await res.json();
+    _usersList = data.users || [];
+    return { forbidden: false };
+  } catch (e) {
+    console.warn('[Users] Load failed:', e.message);
+    _usersList = [];
+    return { forbidden: false, error: e.message };
+  }
+}
+
+async function renderUsers() {
+  var el = document.getElementById('users-content');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text3);padding:20px">Loading users...</div>';
+
+  var result = await loadUserRoles();
+  var currentUser = window._currentUser || {};
+
+  if (result.forbidden || (currentUser.role && currentUser.role !== 'admin')) {
+    el.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text3)">' +
+      '<div style="font-size:48px;margin-bottom:16px">&#x1F512;</div>' +
+      '<div style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Admin Access Required</div>' +
+      '<div style="font-size:13px;margin-bottom:20px">User management is only available to administrators.</div>' +
+      '<button class="btn btn-primary" onclick="navigate(\'dashboard\')">Back to Dashboard</button></div>';
+    return;
+  }
+
+  var roleStats = { admin: 0, planner: 0, carrier: 0, finance: 0 };
+  _usersList.forEach(function(u) { if (roleStats[u.role] !== undefined) roleStats[u.role]++; });
+
+  el.innerHTML = '' +
+    '<div class="kpi-row">' +
+      '<div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-val">' + _usersList.length + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Admins</div><div class="stat-val" style="color:#7c3aed">' + roleStats.admin + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Planners</div><div class="stat-val" style="color:#0d9488">' + roleStats.planner + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Finance</div><div class="stat-val" style="color:#d97706">' + roleStats.finance + '</div></div>' +
+    '</div>' +
+    '<div class="section-title">Role Permission Matrix</div>' +
+    '<div class="card" style="overflow:hidden;margin-bottom:24px"><table>' +
+      '<thead><tr><th>Feature</th><th style="text-align:center">Admin</th><th style="text-align:center">Planner</th><th style="text-align:center">Carrier</th><th style="text-align:center">Finance</th></tr></thead>' +
+      '<tbody>' +
+        '<tr><td style="font-weight:500">Dashboard</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--teal)">Limited</td><td style="text-align:center;color:var(--teal)">Limited</td></tr>' +
+        '<tr><td style="font-weight:500">Orders</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--green)">Read/Write</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--text3)">No Access</td></tr>' +
+        '<tr><td style="font-weight:500">Shipments</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--green)">Read/Write</td><td style="text-align:center;color:var(--teal)">View + Status</td><td style="text-align:center;color:var(--amber)">View Only</td></tr>' +
+        '<tr><td style="font-weight:500">Bulk Planning</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--text3)">No Access</td></tr>' +
+        '<tr><td style="font-weight:500">Carriers</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--amber)">View Only</td><td style="text-align:center;color:var(--amber)">View Only</td><td style="text-align:center;color:var(--amber)">View Only</td></tr>' +
+        '<tr><td style="font-weight:500">Rates</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--amber)">View Only</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--amber)">View Only</td></tr>' +
+        '<tr><td style="font-weight:500">Invoices & Audit</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--green)">Full</td></tr>' +
+        '<tr><td style="font-weight:500">Analytics & Reports</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--green)">Full</td></tr>' +
+        '<tr><td style="font-weight:500">User Management</td><td style="text-align:center;color:var(--green)">Full</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--text3)">No Access</td><td style="text-align:center;color:var(--text3)">No Access</td></tr>' +
+      '</tbody></table></div>' +
+    '<div class="section-title">Assigned Users</div>' +
+    '<div class="card" style="overflow:hidden"><table>' +
+      '<thead><tr><th>User</th><th>Email</th><th>Role</th><th>Assigned</th><th>Actions</th></tr></thead>' +
+      '<tbody>' +
+        (_usersList.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">No users configured yet. Add your first user below.</td></tr>' :
+          _usersList.map(function(u) {
+            var isSelf = u.user_id === (currentUser.id || '');
+            return '<tr>' +
+              '<td style="font-weight:500">' + (u.name || 'Unknown') + (isSelf ? ' <span style="font-size:10px;color:var(--accent)">(you)</span>' : '') + '</td>' +
+              '<td style="font-size:12px;color:var(--text2)">' + (u.email || u.user_id) + '</td>' +
+              '<td>' + roleBadge(u.role) + '</td>' +
+              '<td style="font-size:12px;color:var(--text3)">' + (u.updated_at ? new Date(u.updated_at).toLocaleDateString() : '\u2014') + '</td>' +
+              '<td><div style="display:flex;gap:4px">' +
+                '<select onchange="changeUserRole(\'' + u.user_id + '\',\'' + (u.email||'') + '\',\'' + (u.name||'') + '\',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:12px;background:var(--bg2);color:var(--text)">' +
+                  '<option value="admin"' + (u.role==='admin'?' selected':'') + '>Admin</option>' +
+                  '<option value="planner"' + (u.role==='planner'?' selected':'') + '>Planner</option>' +
+                  '<option value="carrier"' + (u.role==='carrier'?' selected':'') + '>Carrier</option>' +
+                  '<option value="finance"' + (u.role==='finance'?' selected':'') + '>Finance</option>' +
+                '</select>' +
+                (isSelf ? '' : '<button class="btn btn-sm btn-danger" onclick="removeUserRole(\'' + u.user_id + '\')">Remove</button>') +
+              '</div></td></tr>';
+          }).join('')) +
+      '</tbody></table></div>' +
+    '<div class="section-title" style="margin-top:24px">Add User</div>' +
+    '<div class="card" style="padding:20px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">' +
+        '<div><label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px">USER ID (from Supabase)</label>' +
+          '<input type="text" id="add-user-id" placeholder="e.g. uuid from auth.users" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;background:var(--bg2);color:var(--text)" /></div>' +
+        '<div><label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px">EMAIL</label>' +
+          '<input type="email" id="add-user-email" placeholder="user@example.com" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;background:var(--bg2);color:var(--text)" /></div>' +
+        '<div><label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px">ROLE</label>' +
+          '<select id="add-user-role" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;background:var(--bg2);color:var(--text)">' +
+            '<option value="planner">Planner</option><option value="carrier">Carrier</option><option value="finance">Finance</option><option value="admin">Admin</option></select></div>' +
+        '<button class="btn btn-primary" onclick="addUserRole()" style="height:38px">Add User</button>' +
+      '</div>' +
+      '<div style="margin-top:12px;font-size:11px;color:var(--text3)">Tip: The User ID is the Supabase auth UUID. Find it in the Supabase dashboard under Authentication &gt; Users.</div>' +
+    '</div>';
+}
+
+async function addUserRole() {
+  var userId = document.getElementById('add-user-id').value.trim();
+  var email  = document.getElementById('add-user-email').value.trim();
+  var role   = document.getElementById('add-user-role').value;
+  if (!userId) { showToast('User ID is required','error'); return; }
+  try {
+    var token = window._authToken || sessionStorage.getItem('zoree_token');
+    var res = await fetch('http://localhost:3001/api/users/role', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, email: email, name: email ? email.split('@')[0] : '', role: role }),
+    });
+    var data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Failed to add user','error'); return; }
+    showToast('User role assigned: ' + (email || userId) + ' -> ' + role, 'success');
+    renderUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function changeUserRole(userId, email, name, newRole) {
+  try {
+    var token = window._authToken || sessionStorage.getItem('zoree_token');
+    var res = await fetch('http://localhost:3001/api/users/role', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, email: email, name: name, role: newRole }),
+    });
+    var data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Failed to update role','error'); return; }
+    showToast('Role updated: ' + (email || userId) + ' -> ' + newRole, 'success');
+    if (window._currentUser && userId === window._currentUser.id) {
+      window._currentUser.role = newRole;
+      applyRoleGating();
+    }
+    renderUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function removeUserRole(userId) {
+  if (!confirm('Remove this user role assignment? They will default to Planner.')) return;
+  try {
+    var token = window._authToken || sessionStorage.getItem('zoree_token');
+    var res = await fetch('http://localhost:3001/api/users/role/' + encodeURIComponent(userId), {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) { var data = await res.json(); showToast(data.error || 'Failed to remove user','error'); return; }
+    showToast('User role removed', 'success');
+    renderUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// Role-Based UI Gating
+var ROLE_PAGE_ACCESS = {
+  admin:   ['*'],
+  planner: ['dashboard','orders','shipments','carriers','bulk-plan','tracking','items','locations','routes','settings'],
+  carrier: ['dashboard','shipments','carriers','carrier-portal','tracking','settings'],
+  finance: ['dashboard','shipments','carriers','invoices','rates','audit','analytics','reports','settings'],
+};
+
+function applyRoleGating() {
+  var user = window._currentUser || {};
+  var role = user.role || 'admin';
+  var allowedPages = ROLE_PAGE_ACCESS[role] || ROLE_PAGE_ACCESS.planner;
+  var isAll = allowedPages.indexOf('*') >= 0;
+
+  document.querySelectorAll('.nav-item[data-page]').forEach(function(navItem) {
+    var page = navItem.getAttribute('data-page');
+    if (page === 'users') {
+      navItem.style.display = (role === 'admin') ? '' : 'none';
+    } else if (isAll) {
+      navItem.style.display = '';
+    } else {
+      navItem.style.display = (allowedPages.indexOf(page) >= 0) ? '' : 'none';
+    }
+  });
+
+  document.querySelectorAll('.nav-section').forEach(function(section) {
+    var items = section.querySelectorAll('.nav-item[data-page]');
+    if (items.length === 0) return;
+    var hasVisible = false;
+    items.forEach(function(item) { if (item.style.display !== 'none') hasVisible = true; });
+    section.style.display = hasVisible ? '' : 'none';
+  });
+}
+
+// Apply role gating on page load
+setTimeout(function() {
+  if (window._currentUser) applyRoleGating();
+}, 500);
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════

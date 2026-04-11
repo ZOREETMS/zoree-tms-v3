@@ -120,7 +120,42 @@ async function verifyToken(req, res) {
 }
 
 // Allowed tables — security whitelist
-const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history'];
+const ALLOWED = ['orders','shipments','carriers','rates','items','drivers','locations','order_lines','lane_preferences','order_history','user_roles'];
+
+// ── Role-Based Access Control (RBAC) ────────────────────────────────
+// Permission matrix: defines what each role can do
+const ROLE_PERMISSIONS = {
+  admin:   { label: 'Admin',   pages: ['*'], actions: ['*'] },
+  planner: { label: 'Planner', pages: ['dashboard','orders','shipments','carriers','bulk-plan','tracking','items','locations','routes','settings'], actions: ['orders.read','orders.write','shipments.read','shipments.write','shipments.status','carriers.read','rates.read','bulk-plan','tracking'] },
+  carrier: { label: 'Carrier', pages: ['dashboard','shipments','carriers','carrier-portal','tracking','settings'], actions: ['shipments.read','shipments.status','carriers.read','tracking'] },
+  finance: { label: 'Finance', pages: ['dashboard','shipments','carriers','invoices','rates','audit','analytics','reports','settings'], actions: ['shipments.read','carriers.read','rates.read','invoices.read','invoices.write','audit','analytics','reports'] },
+};
+
+function hasPermission(role, action) {
+  const perms = ROLE_PERMISSIONS[role];
+  if (!perms) return false;
+  if (perms.actions.includes('*')) return true;
+  return perms.actions.includes(action);
+}
+
+function hasPageAccess(role, page) {
+  const perms = ROLE_PERMISSIONS[role];
+  if (!perms) return false;
+  if (perms.pages.includes('*')) return true;
+  return perms.pages.includes(page);
+}
+
+// Role guard middleware for inline use
+function requireAction(action) {
+  return async function(req, res, next) {
+    // role is set by verifyToken or looked up from user_roles
+    const role = req._userRole || 'carrier';
+    if (!hasPermission(role, action)) {
+      return res.status(403).json({ error: 'Permission denied. Your role (' + role + ') cannot perform: ' + action });
+    }
+    next();
+  };
+}
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -163,6 +198,24 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: data.error_description || data.msg || 'Invalid email or password' });
 
     const user = data.user;
+
+    // Look up role from user_roles table (falls back to user_metadata then 'planner')
+    let userRole = 'planner';
+    try {
+      const roleRows = await dbSelect('user_roles',
+        `select=*&user_id=eq.${encodeURIComponent(user.id)}&limit=1`, null);
+      if (Array.isArray(roleRows) && roleRows.length > 0) {
+        userRole = roleRows[0].role || 'planner';
+      } else if (user.user_metadata && user.user_metadata.role) {
+        userRole = user.user_metadata.role;
+      }
+    } catch (roleErr) {
+      console.warn('[Auth] Could not fetch user role:', roleErr.message);
+      userRole = (user.user_metadata && user.user_metadata.role) || 'planner';
+    }
+
+    const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.planner;
+
     res.json({
       token:         data.access_token,
       refresh_token: data.refresh_token,
@@ -172,8 +225,13 @@ app.post('/api/auth/login', async (req, res) => {
         id:       user.id,
         email:    user.email,
         name:     (user.user_metadata && user.user_metadata.full_name) || email.split('@')[0],
-        role:     (user.user_metadata && user.user_metadata.role) || 'admin',
+        role:     userRole,
         tenantId: 'zoree-default',
+      },
+      permissions: {
+        pages:   permissions.pages,
+        actions: permissions.actions,
+        label:   permissions.label,
       },
       tenant: {
         id: 'zoree-default', brandName: 'ZoreeTMS',
@@ -190,7 +248,26 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
-  res.json({ user: { id: user.id, email: user.email, role: 'admin' } });
+
+  // Look up role from user_roles table
+  let userRole = 'planner';
+  try {
+    const roleRows = await dbSelect('user_roles',
+      `select=*&user_id=eq.${encodeURIComponent(user.id)}&limit=1`, null);
+    if (Array.isArray(roleRows) && roleRows.length > 0) {
+      userRole = roleRows[0].role || 'planner';
+    } else if (user.user_metadata && user.user_metadata.role) {
+      userRole = user.user_metadata.role;
+    }
+  } catch (e) {
+    console.warn('[Auth/me] Could not fetch user role:', e.message);
+  }
+
+  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.planner;
+  res.json({
+    user: { id: user.id, email: user.email, role: userRole },
+    permissions: { pages: permissions.pages, actions: permissions.actions, label: permissions.label },
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════
@@ -383,6 +460,115 @@ app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,
 app.get('/api/shipments', async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('shipments','select=*&order=created_at.desc&limit=500',u._token); res.json({ shipments: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/carriers',  async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('carriers','select=*&order=name&limit=200',u._token); res.json({ carriers: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/rates',     async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('rates','select=*&order=lane&limit=500',u._token); res.json({ rates: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+
+// ══════════════════════════════════════════════════════════════════
+// USER MANAGEMENT & ROLES API
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/users — List all users with their roles (admin only)
+app.get('/api/users', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+
+  // Check admin role
+  let callerRole = 'planner';
+  try {
+    const roleRows = await dbSelect('user_roles',
+      `select=*&user_id=eq.${encodeURIComponent(user.id)}&limit=1`, null);
+    if (Array.isArray(roleRows) && roleRows.length > 0) callerRole = roleRows[0].role;
+  } catch(e) {}
+
+  if (callerRole !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can manage users' });
+  }
+
+  try {
+    // Get all user_roles
+    const roles = await dbSelect('user_roles', 'select=*&order=created_at.desc&limit=500', null);
+    res.json({ users: Array.isArray(roles) ? roles : [], total: (roles || []).length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/users/roles — Get role definitions and permission matrix
+app.get('/api/users/roles', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  res.json({ roles: ROLE_PERMISSIONS });
+});
+
+// POST /api/users/role — Assign or update a user's role (admin only)
+app.post('/api/users/role', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+
+  // Check admin role
+  let callerRole = 'planner';
+  try {
+    const roleRows = await dbSelect('user_roles',
+      `select=*&user_id=eq.${encodeURIComponent(user.id)}&limit=1`, null);
+    if (Array.isArray(roleRows) && roleRows.length > 0) callerRole = roleRows[0].role;
+  } catch(e) {}
+
+  if (callerRole !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can assign roles' });
+  }
+
+  const { user_id, email, name, role } = req.body;
+  if (!user_id || !role) {
+    return res.status(400).json({ error: 'user_id and role are required' });
+  }
+  if (!ROLE_PERMISSIONS[role]) {
+    return res.status(400).json({ error: 'Invalid role. Must be one of: ' + Object.keys(ROLE_PERMISSIONS).join(', ') });
+  }
+
+  try {
+    const row = await dbUpsert('user_roles', {
+      id: user_id,
+      user_id: user_id,
+      email: email || '',
+      name: name || '',
+      role: role,
+      updated_at: new Date().toISOString(),
+    }, null);
+    console.log(`[Users] Role assigned: ${email || user_id} → ${role}`);
+    res.json({ success: true, user_role: row });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/users/role/:userId — Remove a user's role assignment (admin only)
+app.delete('/api/users/role/:userId', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+
+  // Check admin role
+  let callerRole = 'planner';
+  try {
+    const roleRows = await dbSelect('user_roles',
+      `select=*&user_id=eq.${encodeURIComponent(user.id)}&limit=1`, null);
+    if (Array.isArray(roleRows) && roleRows.length > 0) callerRole = roleRows[0].role;
+  } catch(e) {}
+
+  if (callerRole !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can remove users' });
+  }
+
+  // Prevent self-removal
+  if (req.params.userId === user.id) {
+    return res.status(400).json({ error: 'Cannot remove your own role' });
+  }
+
+  try {
+    await dbDelete('user_roles', req.params.userId, null);
+    console.log(`[Users] Role removed: ${req.params.userId}`);
+    res.json({ deleted: true, userId: req.params.userId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ── Tenants/config ─────────────────────────────────────────────────
 app.get('/api/tenants/me', async (req, res) => {
