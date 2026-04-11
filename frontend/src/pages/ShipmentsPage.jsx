@@ -813,6 +813,14 @@ export default function ShipmentsPage() {
         console.warn("[OMS Push] Failed:", omsErr.message);
         toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS push failed (non-blocking)`, "success");
       }
+      // Notify WebSocket so all TMS clients and middleware update instantly
+      try {
+        fetch("/api/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "tender_accepted", data: { shipmentId: row.id, proNumber: pro, orderIds: linkedOrders.map((o) => o.id) } }),
+        }).catch(() => {});
+      } catch { /* non-blocking */ }
       setAcceptModal(null);
       await refreshData();
     } catch (err) {

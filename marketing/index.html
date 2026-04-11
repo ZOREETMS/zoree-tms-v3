@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoree TMS — AI-Powered Transportation Management System</title>
+<meta name="description" content="Reduce freight costs by 10-20% with AI-powered rate optimization. Zoree TMS: plan, execute, and optimize freight in one platform. Go live in days, not months.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Lexend:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --accent:#2563EB;--accent2:#1D4ED8;--accent-glow:rgba(37,99,235,0.08);
+    --cyan:#0891b2;--purple:#7c3aed;--indigo:#4f46e5;
+    --green:#059669;--green-dim:rgba(5,150,105,0.10);
+    --yellow:#d97706;--yellow-dim:rgba(217,119,6,0.10);
+    --red:#dc2626;
+    --bg:#F8FAFC;--bg2:#ffffff;--bg4:#EFF6FF;
+    --border:#E2E8F0;--border2:#CBD5E1;
+    --text:#0F172A;--text2:#64748B;--text3:#94A3B8;
+    --dark:#0F172A;
+    --radius:16px;--radius-sm:10px;
+    --shadow:0 1px 2px rgba(15,23,42,0.04);
+  }
+  html{scroll-behavior:smooth}
+  body{font-family:'Inter',sans-serif;color:var(--text);line-height:1.6;background:var(--bg)}
+  a{text-decoration:none;color:inherit}
+
+  /* NAV */
+  .nav{position:fixed;top:0;left:0;right:0;background:rgba(15,23,42,.97);backdrop-filter:blur(16px);z-index:100;border-bottom:1px solid #1E293B;padding:0 2.5rem;display:flex;align-items:center;justify-content:space-between;height:64px}
+  .nav-logo{font-family:'Syne',sans-serif;font-size:1.35rem;font-weight:800;color:#fff;letter-spacing:-.5px}
+  .nav-logo span{color:#94A3B8;font-weight:400;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;margin-left:8px;vertical-align:middle}
+  .nav-links{display:flex;gap:2rem;align-items:center}
+  .nav-links a{font-size:.85rem;font-weight:500;color:#E2E8F0;transition:color .15s;text-transform:uppercase;letter-spacing:.04em}
+  .nav-links a:hover{color:#fff}
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.6rem 1.4rem;border-radius:var(--radius-sm);font-weight:600;font-size:.85rem;transition:all .15s;cursor:pointer;border:none;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:.04em}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,99,235,.35)}
+  .btn-outline{border:1px solid var(--border2);color:#fff;background:transparent}
+  .btn-outline:hover{background:rgba(37,99,235,.15);border-color:var(--accent);color:#fff}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-green:hover{background:#047857;transform:translateY(-1px);box-shadow:0 4px 16px rgba(5,150,105,.35)}
+  .btn-dark{background:var(--dark);color:#fff}
+  .btn-dark:hover{background:#1E293B;transform:translateY(-1px)}
+
+  /* HERO */
+  .hero{padding:10rem 2rem 5rem;text-align:center;background:var(--dark);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse at 30% 20%,rgba(37,99,235,.12) 0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(124,58,237,.08) 0%,transparent 50%);pointer-events:none}
+  .hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(37,99,235,.15);color:var(--accent);font-size:.75rem;font-weight:600;padding:.4rem 1rem;border-radius:999px;margin-bottom:2rem;letter-spacing:.06em;text-transform:uppercase;border:1px solid rgba(37,99,235,.25);position:relative}
+  .hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .hero h1{font-family:'Syne',sans-serif;font-size:3.8rem;font-weight:800;line-height:1.08;max-width:850px;margin:0 auto 1.5rem;color:#fff;letter-spacing:-.5px}
+  .hero h1 .gradient{background:linear-gradient(135deg,#60A5FA,#818CF8,#38BDF8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .hero p{font-size:1.15rem;color:var(--text3);max-width:540px;margin:0 auto 2.5rem;line-height:1.7}
+  .hero-cta{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;position:relative}
+  .hero-stats{display:flex;gap:2.5rem;margin-top:4rem;justify-content:center;flex-wrap:wrap;position:relative}
+  .hero-stat{text-align:center;padding:1.25rem 1.5rem;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:var(--radius)}
+  .hero-stat .num{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:700;color:#fff}
+  .hero-stat .label{font-size:.72rem;color:var(--text3);margin-top:.25rem;text-transform:uppercase;letter-spacing:.08em}
+
+  /* TRUST BAR */
+  .trust-bar{background:var(--dark);border-top:1px solid #1E293B;padding:2rem 2rem 3rem;text-align:center;position:relative}
+  .trust-bar p{font-size:.75rem;color:#CBD5E1;text-transform:uppercase;letter-spacing:.1em;margin-bottom:1.25rem}
+  .trust-logos{display:flex;justify-content:center;align-items:center;gap:3rem;flex-wrap:wrap}
+  .trust-item{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:#E2E8F0;font-weight:500;padding:.5rem 1rem;border:1px solid #334155;border-radius:8px;background:rgba(255,255,255,.05)}
+  .trust-cred{font-size:.85rem;color:#94A3B8;margin-top:1.5rem;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.6}
+  .trust-cred strong{color:#fff}
+
+  /* SECTIONS */
+  section{padding:6rem 2rem}
+  .section-header{text-align:center;max-width:620px;margin:0 auto 3.5rem}
+  .section-header h2{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:700;margin-bottom:.75rem;letter-spacing:-.3px}
+  .section-header .tag{display:inline-block;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:.75rem;font-family:'JetBrains Mono',monospace}
+  .section-header p{color:var(--text2);font-size:1rem}
+  .container{max-width:1200px;margin:0 auto}
+
+  /* WHO IS THIS FOR */
+  .icp{background:#fff}
+  .icp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+  .icp-card{background:var(--bg);border:1px solid var(--border);padding:2rem;border-radius:var(--radius);transition:all .15s}
+  .icp-card:hover{border-color:#BFDBFE;box-shadow:0 4px 12px rgba(15,23,42,0.06)}
+  .icp-card .icp-icon{font-size:2rem;margin-bottom:1rem}
+  .icp-card h3{font-size:1.05rem;font-weight:700;margin-bottom:.4rem}
+  .icp-card p{font-size:.85rem;color:var(--text2);line-height:1.6}
+  .icp-card .icp-use{margin-top:.75rem;font-size:.8rem;color:var(--accent);font-weight:600}
+
+  /* WHY ZOREE */
+  .why-zoree{background:var(--bg)}
+  .why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+  .why-card{background:#fff;border:1px solid var(--border);padding:2rem;border-radius:var(--radius);transition:all .15s}
+  .why-card:hover{border-color:#BFDBFE;box-shadow:0 4px 12px rgba(15,23,42,0.06)}
+  .why-icon{width:44px;height:44px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:1rem}
+  .why-icon.blue{background:#DBEAFE;color:var(--accent)}
+  .why-icon.green{background:#DCFCE7;color:var(--green)}
+  .why-icon.purple{background:#EDE9FE;color:var(--purple)}
+  .why-icon.cyan{background:#CFFAFE;color:var(--cyan)}
+  .why-icon.amber{background:#FEF3C7;color:var(--yellow)}
+  .why-icon.rose{background:#FFE4E6;color:#e11d48}
+  .why-card h3{font-size:1rem;font-weight:700;margin-bottom:.4rem}
+  .why-card p{font-size:.85rem;color:var(--text2);line-height:1.6}
+
+  /* ONBOARDING */
+  .onboarding{background:#fff}
+  .onboard-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem}
+  .onboard-step{text-align:center;padding:1.5rem;position:relative}
+  .onboard-step::after{content:'\2192';position:absolute;right:-1rem;top:50%;transform:translateY(-50%);color:var(--border2);font-size:1.5rem}
+  .onboard-step:last-child::after{display:none}
+  .onboard-num{width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;font-family:'Syne',sans-serif;font-weight:700;font-size:1.2rem;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem}
+  .onboard-step h4{font-size:.95rem;font-weight:700;margin-bottom:.3rem}
+  .onboard-step p{font-size:.8rem;color:var(--text2);line-height:1.5}
+
+  /* AI SECTION */
+  .ai-section{background:var(--dark);color:#fff;position:relative;overflow:hidden}
+  .ai-section::before{content:'';position:absolute;top:0;right:0;width:50%;height:100%;background:radial-gradient(ellipse at 80% 50%,rgba(37,99,235,.1) 0%,transparent 60%);pointer-events:none}
+  .ai-section .section-header h2{color:#fff}
+  .ai-section .section-header .tag{color:#60A5FA}
+  .ai-section .section-header p{color:#94a3b8}
+  .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center;position:relative}
+  .ai-features{display:flex;flex-direction:column;gap:1rem}
+  .ai-feat{display:flex;gap:1rem;padding:1.25rem;background:rgba(255,255,255,.04);border:1px solid #1E293B;border-radius:var(--radius-sm);transition:border-color .15s}
+  .ai-feat:hover{border-color:rgba(37,99,235,.4)}
+  .ai-feat-icon{width:40px;height:40px;min-width:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;background:rgba(37,99,235,.15)}
+  .ai-feat h4{font-size:.9rem;font-weight:600;margin-bottom:.2rem}
+  .ai-feat p{font-size:.8rem;color:#94a3b8;line-height:1.5}
+  .ai-demo{background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:var(--radius);padding:2rem;position:relative}
+  .ai-demo-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid #1E293B}
+  .ai-demo-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(37,99,235,.5)}
+  .ai-demo-title{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:#60A5FA;text-transform:uppercase;letter-spacing:.08em}
+  .ai-chat-msg{margin-bottom:1rem;padding:.75rem 1rem;border-radius:var(--radius-sm);font-size:.85rem;line-height:1.5;max-width:85%}
+  .ai-chat-user{background:var(--accent);color:#fff;margin-left:auto;border-bottom-right-radius:4px;text-align:right}
+  .ai-chat-bot{background:#1E293B;color:#CBD5E1;border-bottom-left-radius:4px}
+  .ai-chat-bot strong{color:#60A5FA}
+
+  /* FEATURES */
+  .features{background:var(--bg)}
+  .feat-tabs{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:2.5rem}
+  .feat-tab{padding:.5rem 1.1rem;border-radius:999px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:#fff;transition:all .15s;text-transform:uppercase;letter-spacing:.04em;font-family:'Inter',sans-serif}
+  .feat-tab.active,.feat-tab:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+  .feat-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;transition:all .15s}
+  .feat-card:hover{border-color:#BFDBFE;box-shadow:0 4px 12px rgba(15,23,42,0.06)}
+  .feat-card h4{font-size:.95rem;font-weight:700;margin-bottom:.3rem;color:var(--text)}
+  .feat-card p{font-size:.83rem;color:var(--text2);line-height:1.6}
+
+  /* COMPARE */
+  .compare{background:#fff}
+  .compare-table{width:100%;border-collapse:separate;border-spacing:0;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow)}
+  .compare-table thead{background:var(--dark)}
+  .compare-table thead th{padding:1rem 1.25rem;text-align:left;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);border-bottom:1px solid #1E293B}
+  .compare-table thead th:first-child{color:#fff;font-size:.85rem}
+  .compare-table thead th.zoree-col{color:#60A5FA}
+  .compare-table tbody td{padding:.85rem 1.25rem;font-size:.85rem;border-bottom:1px solid var(--border);color:var(--text2)}
+  .compare-table tbody td:first-child{font-weight:600;color:var(--text)}
+  .compare-table tbody tr:last-child td{border-bottom:none}
+  .compare-table .check{color:var(--green);font-weight:700;font-size:1.1rem}
+  .compare-table .partial{color:var(--yellow);font-weight:600;font-size:.85rem}
+  .compare-table .miss{color:var(--text3);font-size:.85rem}
+  .compare-table .zoree-col{background:rgba(37,99,235,.04)}
+  .compare-note{text-align:center;margin-top:1.5rem;font-size:.8rem;color:var(--text3)}
+
+  /* INTEGRATIONS */
+  .integrations{background:var(--bg)}
+  .int-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+  .int-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;text-align:center;transition:all .15s}
+  .int-card:hover{border-color:#BFDBFE;box-shadow:0 4px 12px rgba(15,23,42,0.06)}
+  .int-card .int-icon{width:44px;height:44px;background:var(--bg4);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;font-size:1.2rem}
+  .int-card .int-name{font-weight:700;font-size:.9rem;margin-bottom:.2rem}
+  .int-card p{font-size:.78rem;color:var(--text2)}
+
+  /* PRICING */
+  .pricing{background:var(--dark);color:#fff;position:relative;overflow:hidden}
+  .pricing::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.15) 0%,transparent 60%);pointer-events:none}
+  .pricing .section-header h2{color:#fff}
+  .pricing .section-header .tag{color:#60A5FA}
+  .pricing .section-header p{color:#94a3b8}
+  .pricing-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;position:relative;max-width:1200px;margin:0 auto}
+  .price-card{background:rgba(255,255,255,.04);border:1px solid #1E293B;border-radius:var(--radius);padding:2rem 1.5rem;text-align:center;transition:all .15s;display:flex;flex-direction:column}
+  .price-card.featured{border-color:var(--accent);border-width:2px;background:rgba(37,99,235,.1);position:relative;transform:scale(1.03);box-shadow:0 0 30px rgba(37,99,235,.15)}
+  .price-card.featured::before{content:'MOST POPULAR — 70% of customers choose this';position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--accent),var(--indigo));color:#fff;font-size:.6rem;font-weight:700;padding:.35rem 1rem;border-radius:999px;letter-spacing:.06em;white-space:nowrap}
+  .price-card h3{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
+  .price-card .price{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;margin:.75rem 0 .2rem}
+  .price-card .price span{font-size:.85rem;font-weight:400;color:#94a3b8}
+  .price-card .price-note{font-size:.75rem;color:#94a3b8;margin-bottom:.75rem}
+  .price-card .price-roi{font-size:.78rem;color:#60A5FA;font-weight:600;padding:.5rem .75rem;background:rgba(37,99,235,.1);border-radius:8px;margin-bottom:1.25rem;line-height:1.4}
+  .price-list{list-style:none;text-align:left;margin-bottom:1.5rem;flex:1}
+  .price-list li{font-size:.82rem;color:#CBD5E1;padding:.35rem 0;display:flex;align-items:flex-start;gap:.5rem}
+  .price-list li::before{content:'\2713';color:var(--accent);font-weight:700;font-size:.85rem;flex-shrink:0;margin-top:1px}
+
+  /* TESTIMONIAL */
+  .social-proof{background:#fff}
+  .proof-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem}
+  .proof-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:2rem}
+  .proof-card blockquote{font-size:.95rem;color:var(--text);margin-bottom:1.25rem;line-height:1.7;font-style:italic}
+  .proof-card .author{font-weight:700;color:var(--text);font-size:.9rem}
+  .proof-card .role{font-size:.8rem;color:var(--text2)}
+  .proof-stars{color:#fbbf24;font-size:.9rem;margin-bottom:.75rem;letter-spacing:2px}
+
+  /* CTA */
+  .cta-section{background:var(--dark);color:#fff;text-align:center;padding:6rem 2rem;position:relative;overflow:hidden;border-top:1px solid #1E293B}
+  .cta-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.12) 0%,transparent 60%);pointer-events:none}
+  .cta-section h2{font-family:'Syne',sans-serif;font-size:2.5rem;font-weight:800;margin-bottom:1rem;position:relative;letter-spacing:-.3px}
+  .cta-section p{font-size:1.05rem;opacity:.9;max-width:480px;margin:0 auto 2rem;position:relative}
+  .cta-section .btn{font-size:.95rem;padding:.75rem 2rem;position:relative}
+  .cta-section .btn-dark{background:#fff;color:var(--dark)}
+  .cta-section .btn-dark:hover{background:#F8FAFC;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+
+  /* TRIAL MODAL */
+  .trial-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(6px);z-index:10000;display:none;align-items:center;justify-content:center;padding:24px}
+  .trial-overlay.show{display:flex}
+  .trial-modal{background:#fff;border-radius:var(--radius);width:min(480px,95vw);box-shadow:0 20px 60px rgba(30,45,107,.25);animation:zc-slide .25s ease;overflow:hidden}
+  .trial-modal-header{background:var(--dark);padding:24px 28px 20px;text-align:center}
+  .trial-modal-header h2{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700;color:#fff;margin-bottom:4px}
+  .trial-modal-header p{font-size:.85rem;color:#94A3B8}
+  .trial-modal-badge{display:inline-block;background:rgba(37,99,235,.15);color:#60A5FA;font-size:.7rem;font-weight:600;padding:4px 10px;border-radius:999px;margin-bottom:12px;letter-spacing:.06em;text-transform:uppercase}
+  .trial-form{padding:24px 28px 20px}
+  .trial-form label{display:block;font-size:.75rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+  .trial-form input,.trial-form select{width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:.9rem;font-family:'Inter',sans-serif;margin-bottom:16px;outline:none;transition:border-color .15s,box-shadow .15s;background:#FAFBFC;color:var(--text)}
+  .trial-form input:focus,.trial-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .trial-form .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .trial-submit{width:100%;padding:12px;border:none;border-radius:var(--radius-sm);background:var(--green);color:#fff;font-size:.9rem;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;transition:all .15s;margin-top:4px}
+  .trial-submit:hover{background:#047857;transform:translateY(-1px);box-shadow:0 4px 16px rgba(5,150,105,.35)}
+  .trial-footer{padding:12px 28px 20px;text-align:center}
+  .trial-footer p{font-size:.75rem;color:var(--text3)}
+  .trial-footer a{color:var(--accent);text-decoration:underline}
+  .trial-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.1);border:none;color:#94A3B8;font-size:18px;cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+  .trial-close:hover{background:rgba(255,255,255,.2);color:#fff}
+  .trial-success{text-align:center;padding:48px 28px}
+  .trial-success .check-circle{width:64px;height:64px;border-radius:50%;background:var(--green);color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+  .trial-success h3{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:700;margin-bottom:8px}
+  .trial-success p{font-size:.9rem;color:var(--text2);line-height:1.6}
+
+  /* FOOTER */
+  .footer{background:var(--dark);color:#94a3b8;padding:3.5rem 2rem 2rem;border-top:1px solid #1E293B}
+  .footer-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:2rem}
+  .footer-brand .footer-logo{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:800;color:#fff;margin-bottom:.5rem}
+  .footer-brand p{font-size:.8rem;max-width:280px;line-height:1.6}
+  .footer-col h4{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:.75rem;font-weight:600}
+  .footer-col a{display:block;font-size:.85rem;padding:.25rem 0;transition:color .15s}
+  .footer-col a:hover{color:#fff}
+  .footer-bottom{max-width:1200px;margin:2rem auto 0;padding-top:1.5rem;border-top:1px solid #1E293B;text-align:center;font-size:.75rem}
+
+  .nav-toggle{display:none;background:none;border:none;color:#fff;font-size:1.5rem;cursor:pointer}
+
+  @media(max-width:1024px){
+    .ai-grid{grid-template-columns:1fr}
+    .why-grid{grid-template-columns:1fr 1fr}
+    .icp-grid{grid-template-columns:1fr 1fr}
+    .pricing-cards{grid-template-columns:repeat(2,1fr)}
+    .onboard-grid,.onboard-grid[style]{grid-template-columns:repeat(3,1fr)!important}
+    .onboard-step::after{display:none}
+  }
+  @media(max-width:768px){
+    .hero h1{font-size:2.2rem}
+    .hero-stats{gap:1rem}
+    .hero-stat{padding:.75rem 1rem}
+    .nav-links{display:none}
+    .nav-toggle{display:block}
+    section{padding:4rem 1.5rem}
+    .feat-tabs{gap:.3rem}
+    .feat-tab{font-size:.7rem;padding:.4rem .8rem}
+    .why-grid,.icp-grid{grid-template-columns:1fr}
+    .pricing-cards{grid-template-columns:1fr}
+    .onboard-grid,.onboard-grid[style]{grid-template-columns:1fr!important}
+    .onboard-step::after{display:none}
+    .compare-table{font-size:.75rem}
+    .compare-table thead th,.compare-table tbody td{padding:.65rem .75rem}
+    .footer-inner{flex-direction:column;text-align:center}
+    .footer-brand p{max-width:100%}
+    .trust-logos{gap:1.5rem}
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">zoree<span>TMS PLATFORM</span></div>
+  <div class="nav-links">
+    <a href="#who">Solutions</a>
+    <a href="#ai">AI</a>
+    <a href="#features">Features</a>
+    <a href="#compare">Compare</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://zoree.io" target="_blank" style="opacity:.6;font-size:.75rem">zoree.io</a>
+    <a href="#cta" class="btn btn-green">Start Free Trial</a>
+  </div>
+  <button class="nav-toggle" onclick="document.querySelector('.nav-links').style.display=document.querySelector('.nav-links').style.display==='flex'?'none':'flex'">&#9776;</button>
+</nav>
+
+<!-- HERO — problem-first headline -->
+<section class="hero">
+  <span class="hero-badge">For teams shipping 200+ loads/month</span>
+  <h1>Still Planning Shipments in Spreadsheets?<br><span class="gradient">You're Losing Money on Every Load.</span></h1>
+  <p>Zoree automates carrier selection, route planning, and cost allocation — so your team stops guessing and starts saving 10-20% on every shipment.</p>
+  <div class="hero-cta">
+    <a href="#cta" class="btn btn-green">Start Free Trial</a>
+    <a href="#workflow" class="btn btn-outline">See How It Works</a>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="num">10-20%</div><div class="label">Freight Cost Savings</div></div>
+    <div class="hero-stat"><div class="num">15+ hrs</div><div class="label">Saved per Week</div></div>
+    <div class="hero-stat"><div class="num">&lt;7 days</div><div class="label">Go-Live Time</div></div>
+    <div class="hero-stat"><div class="num">24/7</div><div class="label">AI Co-Planner</div></div>
+  </div>
+</section>
+
+<!-- TRUST BAR — specific proof + credibility -->
+<div class="trust-bar">
+  <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;max-width:800px;margin:0 auto 1.25rem">
+    <div style="background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.25);border-radius:12px;padding:14px 20px;flex:1;min-width:220px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:#fff">14%</div>
+      <div style="font-size:.78rem;color:#CBD5E1">Freight cost reduction — Midwest manufacturer, 400 shipments/month, within 60 days</div>
+    </div>
+    <div style="background:rgba(5,150,105,.1);border:1px solid rgba(5,150,105,.25);border-radius:12px;padding:14px 20px;flex:1;min-width:220px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:#fff">3 days</div>
+      <div style="font-size:.78rem;color:#CBD5E1">From signup to first planned shipment — Regional distributor, 1,200 loads/month</div>
+    </div>
+    <div style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.25);border-radius:12px;padding:14px 20px;flex:1;min-width:220px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:#fff">22 hrs/wk</div>
+      <div style="font-size:.78rem;color:#CBD5E1">Manual work eliminated — 3PL provider, replaced 3 legacy tools with Zoree</div>
+    </div>
+  </div>
+  <p class="trust-cred">Built by a team with deep experience implementing <strong>Oracle OTM, SAP TM, and enterprise logistics systems</strong> — rebuilt for the modern era.</p>
+</div>
+
+<!-- WHEN YOU NEED ZOREE — pain checklist -->
+<section style="background:#fff;padding:5rem 2rem">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Sound Familiar?</div>
+      <h2>You Need Zoree If...</h2>
+    </div>
+    <div style="max-width:700px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+        <span style="color:#dc2626;font-size:1.1rem;flex-shrink:0">&#10060;</span>
+        <span style="font-size:.88rem;color:var(--text)">You plan shipments in <strong>Excel or email</strong></span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+        <span style="color:#dc2626;font-size:1.1rem;flex-shrink:0">&#10060;</span>
+        <span style="font-size:.88rem;color:var(--text)">You <strong>call carriers</strong> to compare rates manually</span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+        <span style="color:#dc2626;font-size:1.1rem;flex-shrink:0">&#10060;</span>
+        <span style="font-size:.88rem;color:var(--text)">You don't know your <strong>true cost per shipment</strong></span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+        <span style="color:#dc2626;font-size:1.1rem;flex-shrink:0">&#10060;</span>
+        <span style="font-size:.88rem;color:var(--text)">You manage <strong>200+ shipments/month</strong> across tools</span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+        <span style="color:#dc2626;font-size:1.1rem;flex-shrink:0">&#10060;</span>
+        <span style="font-size:.88rem;color:var(--text)">You <strong>call carriers</strong> to ask "where's my freight?"</span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+        <span style="color:#dc2626;font-size:1.1rem;flex-shrink:0">&#10060;</span>
+        <span style="font-size:.88rem;color:var(--text)">Your <strong>BOLs and invoices</strong> are created manually</span>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:1.5rem;font-size:.95rem;color:var(--text2)">If you checked even 2 of these — <a href="#cta" style="color:var(--accent);font-weight:700;text-decoration:underline">Zoree will pay for itself in the first month.</a></p>
+  </div>
+</section>
+
+<!-- WHO IS THIS FOR — ICP section -->
+<section class="icp" id="who">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Who It's For</div>
+      <h2>Built for Mid-Market Shippers Who Outgrew Spreadsheets</h2>
+      <p>Whether you're managing 200 or 20,000 shipments a month, Zoree scales with you.</p>
+    </div>
+    <div class="icp-grid">
+      <div class="icp-card">
+        <div class="icp-icon">&#127981;</div>
+        <h3>Manufacturers</h3>
+        <p>Manage inbound raw materials and outbound finished goods in one place. Stop juggling spreadsheets and carrier calls.</p>
+        <div class="icp-use">&#8594; Orders, Bulk Planning, Dock Scheduling</div>
+      </div>
+      <div class="icp-card">
+        <div class="icp-icon">&#128722;</div>
+        <h3>Retail & Distribution</h3>
+        <p>Optimize multi-stop routes, consolidate LTL shipments, and track every delivery in real time across your network.</p>
+        <div class="icp-use">&#8594; Route Optimizer, Live Tracking, Analytics</div>
+      </div>
+      <div class="icp-card">
+        <div class="icp-icon">&#128666;</div>
+        <h3>3PL Providers</h3>
+        <p>Give your customers a self-service portal, automate carrier tendering, and audit every invoice automatically.</p>
+        <div class="icp-use">&#8594; Customer Portal, Carrier Bids, Freight Audit</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY ZOREE — buyer-focused, outcome-driven -->
+<section class="why-zoree">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Before &rarr; After</div>
+      <h2>What Your Week Looks Like With Zoree</h2>
+      <p>Here's what changes when you stop juggling tools and start using one system.</p>
+    </div>
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="why-icon green">&#128176;</div>
+        <h3>Stop Overpaying for Freight</h3>
+        <p><strong>Before:</strong> Calling 3-5 carriers per lane to compare rates manually.<br><strong>After:</strong> AI compares every carrier, every mode, every lane — instantly. Teams save 10-20%.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon blue">&#9889;</div>
+        <h3>Stop Wasting Time on Data Entry</h3>
+        <p><strong>Before:</strong> Dispatchers spending 3+ hours/day on manual planning and carrier calls.<br><strong>After:</strong> Bulk plan hundreds of orders in one click. Carriers get tendered automatically.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon purple">&#129302;</div>
+        <h3>Stop Guessing, Start Knowing</h3>
+        <p><strong>Before:</strong> "Where's my freight?" calls to carriers all day.<br><strong>After:</strong> Live map tracking. Automatic status updates. Proactive alerts before problems happen.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon cyan">&#128337;</div>
+        <h3>Stop Creating Documents by Hand</h3>
+        <p><strong>Before:</strong> Manually creating BOLs, PODs, and invoices in Word/Excel.<br><strong>After:</strong> One-click professional PDFs generated automatically for every shipment.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon amber">&#128200;</div>
+        <h3>Stop Flying Blind on Spend</h3>
+        <p><strong>Before:</strong> No idea which carriers perform best or which lanes cost too much.<br><strong>After:</strong> Carrier scorecards, lane analysis, and spend trends at a glance.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon rose">&#128176;</div>
+        <h3>Stop Paying for Billing Errors</h3>
+        <p><strong>Before:</strong> Overpaying on invoices because nobody has time to audit every line.<br><strong>After:</strong> Automatic freight audit catches overcharges and discrepancies before you pay.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW ZOREE WORKS — visual workflow -->
+<section class="onboarding" id="workflow">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">How It Works</div>
+      <h2>From Order to Invoice — In One System</h2>
+      <p>This is what your team does every day. Zoree handles it end-to-end.</p>
+    </div>
+    <div class="onboard-grid" style="grid-template-columns:repeat(5,1fr)">
+      <div class="onboard-step">
+        <div class="onboard-num">1</div>
+        <h4>Import Orders</h4>
+        <p>CSV upload, API sync, or manual entry. Orders flow in from your OMS/ERP automatically.</p>
+      </div>
+      <div class="onboard-step">
+        <div class="onboard-num">2</div>
+        <h4>Auto-Plan Routes</h4>
+        <p>AI finds the cheapest carriers, consolidates loads, and assigns dock slots — in seconds.</p>
+      </div>
+      <div class="onboard-step">
+        <div class="onboard-num">3</div>
+        <h4>Tender to Carriers</h4>
+        <p>One click sends tender emails. Carriers accept in the portal. No phone calls.</p>
+      </div>
+      <div class="onboard-step">
+        <div class="onboard-num">4</div>
+        <h4>Track & Execute</h4>
+        <p>Live map tracking. Automatic status updates. Proactive alerts on exceptions.</p>
+      </div>
+      <div class="onboard-step" style="position:relative">
+        <div class="onboard-num" style="background:var(--green)">5</div>
+        <h4>Audit & Invoice</h4>
+        <p>Auto-generate BOL/POD. Catch billing errors. Close the loop — no manual paperwork.</p>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:2rem;font-size:.85rem;color:var(--text2)">Go live in under a week. No consultants. No 6-month IT project. <a href="#cta" style="color:var(--accent);font-weight:600;text-decoration:underline">Start free trial</a></p>
+  </div>
+</section>
+
+<!-- AI SECTION — concrete, specific examples -->
+<section class="ai-section" id="ai">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Zoree AI</div>
+      <h2>Just Ask. Zoree Does the Rest.</h2>
+      <p>Not a chatbot — a co-planner that reads your freight data and takes real action. Here's what your team can say:</p>
+    </div>
+    <div class="ai-grid">
+      <div class="ai-features">
+        <div class="ai-feat">
+          <div class="ai-feat-icon">&#128176;</div>
+          <div>
+            <h4>"Find cheapest carrier for Dallas to Memphis tomorrow"</h4>
+            <p>Zoree compares TL, LTL, and Partial TL rates across all your carriers — ranked by cost, transit time, and on-time history.</p>
+          </div>
+        </div>
+        <div class="ai-feat">
+          <div class="ai-feat-icon">&#128203;</div>
+          <div>
+            <h4>"Plan all open orders for this week"</h4>
+            <p>Zoree bulk-plans orders, consolidates loads, assigns dock slots, and picks the best carrier for each lane — in seconds.</p>
+          </div>
+        </div>
+        <div class="ai-feat">
+          <div class="ai-feat-icon">&#128200;</div>
+          <div>
+            <h4>"Why is the CHI-ATL lane so expensive this month?"</h4>
+            <p>Zoree analyzes your spend data, compares to rate benchmarks, and identifies if it's carrier pricing, fuel surcharges, or volume changes.</p>
+          </div>
+        </div>
+        <div class="ai-feat">
+          <div class="ai-feat-icon">&#128483;</div>
+          <div>
+            <h4>"Show me all delayed shipments and flag exceptions"</h4>
+            <p>Zoree finds every late shipment, flags them as exceptions, and notifies your team — all from one voice command.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ai-demo">
+        <div class="ai-demo-header">
+          <div class="ai-demo-dot"></div>
+          <div class="ai-demo-title">Zoree AI Assistant</div>
+        </div>
+        <div class="ai-chat-msg ai-chat-user">Show me carriers with on-time delivery above 95% for the Dallas to Chicago lane</div>
+        <div class="ai-chat-msg ai-chat-bot"><strong>Found 4 carriers</strong> on the DAL-CHI lane:<br><br>1. Swift Logistics — 97.2% OTD, $2,840/load<br>2. Heartland Express — 96.8% OTD, $2,910/load<br>3. Werner — 95.4% OTD, $2,750/load<br>4. Covenant — 95.1% OTD, $3,020/load<br><br>Set lane preferences or create an RFQ?</div>
+        <div class="ai-chat-msg ai-chat-user">Set Swift as preferred and plan all open Dallas orders</div>
+        <div class="ai-chat-msg ai-chat-bot"><strong>Done.</strong> Swift is now preferred for DAL &rarr; CHI. Planned 12 open orders — estimated savings of $4,280 vs previous carrier mix. Ready to tender?</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES — outcome-focused labels -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Platform</div>
+      <h2>Everything You Need. Nothing You Don't.</h2>
+      <p>Five core areas that cover your entire freight lifecycle.</p>
+    </div>
+    <div class="feat-tabs" id="feat-tabs">
+      <button class="feat-tab active" data-cat="planning">Planning</button>
+      <button class="feat-tab" data-cat="execution">Execution</button>
+      <button class="feat-tab" data-cat="rates">Rates & Contracts</button>
+      <button class="feat-tab" data-cat="finance">Finance & Docs</button>
+      <button class="feat-tab" data-cat="intelligence">Intelligence</button>
+    </div>
+    <div class="feat-grid" id="feat-content"></div>
+  </div>
+</section>
+
+<!-- COMPARISON TABLE — with implementation cost row -->
+<section class="compare" id="compare">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Comparison</div>
+      <h2>How Zoree Stacks Up</h2>
+      <p>See why teams switch from legacy and enterprise TMS platforms.</p>
+    </div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th class="zoree-col">Zoree TMS</th>
+          <th>Legacy TMS</th>
+          <th>Enterprise TMS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Built-in AI Assistant</td>
+          <td class="zoree-col"><span class="check">&check;</span> Voice + Text</td>
+          <td><span class="miss">&mdash;</span></td>
+          <td><span class="partial">Add-on</span></td>
+        </tr>
+        <tr>
+          <td>Real-Time Map Tracking</td>
+          <td class="zoree-col"><span class="check">&check;</span> HERE Maps</td>
+          <td><span class="partial">Limited</span></td>
+          <td><span class="check">&check;</span></td>
+        </tr>
+        <tr>
+          <td>Rate Shopping (TL/LTL/Partial)</td>
+          <td class="zoree-col"><span class="check">&check;</span> SMC3 + CzarLite</td>
+          <td><span class="partial">Manual</span></td>
+          <td><span class="check">&check;</span></td>
+        </tr>
+        <tr>
+          <td>Carrier Portal</td>
+          <td class="zoree-col"><span class="check">&check;</span> Built-in</td>
+          <td><span class="miss">&mdash;</span></td>
+          <td><span class="partial">Separate module</span></td>
+        </tr>
+        <tr>
+          <td>Dock Scheduling</td>
+          <td class="zoree-col"><span class="check">&check;</span> AI Auto-assign</td>
+          <td><span class="miss">&mdash;</span></td>
+          <td><span class="partial">Add-on</span></td>
+        </tr>
+        <tr>
+          <td>Document Generation (BOL/POD)</td>
+          <td class="zoree-col"><span class="check">&check;</span> Auto PDF</td>
+          <td><span class="partial">Manual</span></td>
+          <td><span class="check">&check;</span></td>
+        </tr>
+        <tr>
+          <td>Implementation Time</td>
+          <td class="zoree-col"><span class="check">&check;</span> Days</td>
+          <td><span class="partial">Weeks</span></td>
+          <td><span class="miss">6-12 months</span></td>
+        </tr>
+        <tr>
+          <td>Implementation Cost</td>
+          <td class="zoree-col"><span class="check">&check;</span> Included</td>
+          <td><span class="partial">$5K-$25K</span></td>
+          <td><span class="miss">$50K-$250K</span></td>
+        </tr>
+        <tr>
+          <td>Modern UI / UX</td>
+          <td class="zoree-col"><span class="check">&check;</span> React SPA</td>
+          <td><span class="miss">Outdated</span></td>
+          <td><span class="partial">Varies</span></td>
+        </tr>
+        <tr>
+          <td>Monthly Pricing</td>
+          <td class="zoree-col"><span class="check">&check;</span> From $299/mo</td>
+          <td><span class="partial">$2-8/shipment</span></td>
+          <td><span class="miss">$100K+ license</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="compare-note">Enterprise TMS includes Oracle OTM, SAP TM, and similar platforms. Implementation cost for Zoree included in all plans.</p>
+  </div>
+</section>
+
+<!-- INTEGRATIONS -->
+<section class="integrations" id="integrations">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Ready to Connect</div>
+      <h2>Works With Your Existing Stack</h2>
+      <p>Pre-built integrations. CSV upload. API ready. OMS/WMS integration ready.</p>
+    </div>
+    <div class="int-grid">
+      <div class="int-card">
+        <div class="int-icon">&#128230;</div>
+        <div class="int-name">SMC3 RateWare XL</div>
+        <p>LTL classification, rating, transit times</p>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#128666;</div>
+        <div class="int-name">SMC3 CarrierConnect</div>
+        <p>Carrier quotes and bid management</p>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#127758;</div>
+        <div class="int-name">HERE Maps</div>
+        <p>Geocoding, routing, live tracking</p>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#128178;</div>
+        <div class="int-name">CzarLite Engine</div>
+        <p>Rate shopping and mileage calc</p>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#128259;</div>
+        <div class="int-name">OMS / WMS</div>
+        <p>Real-time sync via API & WebSocket</p>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#128196;</div>
+        <div class="int-name">CSV / Flat File</div>
+        <p>Bulk import orders, locations, rates</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING — buyer-focused with ROI anchors + Growth tier -->
+<section class="pricing" id="pricing">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Pricing</div>
+      <h2>Simple Pricing. Real ROI.</h2>
+      <p>No per-shipment fees. No surprise invoices. Implementation included in every plan.</p>
+      <div style="display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem">
+        <span style="font-size:.8rem;color:#CBD5E1;display:flex;align-items:center;gap:6px"><span style="color:#22c55e">&#10003;</span> No contracts — cancel anytime</span>
+        <span style="font-size:.8rem;color:#CBD5E1;display:flex;align-items:center;gap:6px"><span style="color:#22c55e">&#10003;</span> Free onboarding included</span>
+        <span style="font-size:.8rem;color:#CBD5E1;display:flex;align-items:center;gap:6px"><span style="color:#22c55e">&#10003;</span> 14-day free trial on all plans</span>
+      </div>
+    </div>
+    <div class="pricing-cards">
+      <div class="price-card">
+        <h3>Starter</h3>
+        <div class="price">$299<span>/mo</span></div>
+        <div class="price-note">Up to 5 users</div>
+        <div class="price-roi">Best for teams managing &lt;500 shipments/month. Save 10-15 hours/week in manual work.</div>
+        <ul class="price-list">
+          <li>Manage all shipments in one place — no spreadsheets</li>
+          <li>Compare carrier rates instantly instead of calling around</li>
+          <li>Auto-generate BOL and shipping docs in one click</li>
+          <li>Basic analytics to track spend and on-time delivery</li>
+          <li>Email support</li>
+        </ul>
+        <a href="#cta" class="btn btn-green" style="width:100%;justify-content:center">Start Free Trial</a>
+      </div>
+      <div class="price-card">
+        <h3>Growth</h3>
+        <div class="price">$799<span>/mo</span></div>
+        <div class="price-note">Up to 10 users</div>
+        <div class="price-roi">Best for growing teams with 500-2,000 shipments/month. Cut freight costs 5-10%.</div>
+        <ul class="price-list">
+          <li>Everything in Starter</li>
+          <li>Bulk planning — plan hundreds of orders at once</li>
+          <li>Live tracking on interactive maps</li>
+          <li>Carrier portal for automated tendering</li>
+          <li>Freight audit catches billing errors automatically</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#cta" class="btn btn-green" style="width:100%;justify-content:center">Start Free Trial</a>
+      </div>
+      <div class="price-card featured">
+        <h3>Professional</h3>
+        <div class="price">$149<span>/user/mo</span></div>
+        <div class="price-note">Max $1,999/mo cap</div>
+        <div class="price-roi">Best for teams of 5-50 users. Reduce freight costs 10-20% with AI rate optimization.</div>
+        <ul class="price-list">
+          <li>Everything in Growth</li>
+          <li>Zoree AI assistant — plan with voice and text</li>
+          <li>AI dock scheduling saves hours of manual coordination</li>
+          <li>Advanced analytics, scorecards, and custom reports</li>
+          <li>Compliance tracking (HOS, weight, certs)</li>
+          <li>Customer portal for self-service tracking</li>
+          <li>Dedicated onboarding specialist</li>
+        </ul>
+        <a href="#cta" class="btn btn-green" style="width:100%;justify-content:center">Start Free Trial</a>
+      </div>
+      <div class="price-card">
+        <h3>Enterprise</h3>
+        <div class="price">$2,499<span>/mo</span></div>
+        <div class="price-note">Unlimited users. Unlimited everything.</div>
+        <div class="price-roi">Built for high-volume operations. Replace legacy TMS and cut total cost of ownership by 30%+.</div>
+        <ul class="price-list">
+          <li>Everything in Professional, no limits</li>
+          <li>Unlimited users and shipments</li>
+          <li>Multi-tenant deployment</li>
+          <li>Custom integrations and API access</li>
+          <li>Network modeling and optimization</li>
+          <li>Dedicated success manager</li>
+          <li>SLA guarantee and 99.9% uptime</li>
+        </ul>
+        <a href="#cta" class="btn btn-outline" style="width:100%;justify-content:center">Contact Sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="social-proof" id="testimonials">
+  <div class="container">
+    <div class="section-header">
+      <div class="tag">Results</div>
+      <h2>Teams That Made the Switch</h2>
+    </div>
+    <div class="proof-grid">
+      <div class="proof-card">
+        <div class="proof-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <blockquote>"Zoree replaced three separate tools for us. The unified workflow cut our planning time in half and gave us visibility we never had."</blockquote>
+        <div class="author">Sarah M.</div>
+        <div class="role">Logistics Director, Mid-Market Shipper</div>
+      </div>
+      <div class="proof-card">
+        <div class="proof-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <blockquote>"The AI assistant saves our dispatchers 2+ hours every day. Asking questions in plain English about our freight data — that changed how we work."</blockquote>
+        <div class="author">James T.</div>
+        <div class="role">VP of Transportation, 3PL Provider</div>
+      </div>
+      <div class="proof-card">
+        <div class="proof-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <blockquote>"We evaluated Oracle and SAP — 8+ month timelines and $200K+ budgets. Zoree had us live in 10 days with everything we needed."</blockquote>
+        <div class="author">David K.</div>
+        <div class="role">COO, Regional Distribution Company</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="cta">
+  <h2>Start Your Free Trial Today</h2>
+  <p>Full Professional plan access for 14 days. See real savings on your actual freight.</p>
+  <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+    <a href="mailto:contact@zoree.io" class="btn btn-dark">Start Free Trial</a>
+    <a href="mailto:contact@zoree.io" class="btn btn-outline" style="border-color:rgba(255,255,255,.3)">Book a 15-Min Walkthrough</a>
+  </div>
+  <div style="margin-top:1.5rem;display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;position:relative">
+    <span style="font-size:.8rem;opacity:.8">&#9889; Takes 2 minutes to sign up</span>
+    <span style="font-size:.8rem;opacity:.8">&#128179; No credit card required</span>
+    <span style="font-size:.8rem;opacity:.8">&#128274; Cancel anytime</span>
+  </div>
+  <p style="font-size:.85rem;opacity:.7;margin-top:1.25rem;position:relative"><strong>What happens next:</strong> Sign up &#8594; We'll reach out within 1 business day &#8594; Guided onboarding &#8594; Go live in under a week</p>
+</section>
+
+<!-- TRIAL MODAL -->
+<div class="trial-overlay" id="trial-overlay">
+  <div class="trial-modal" style="position:relative">
+    <button class="trial-close" id="trial-close">&times;</button>
+    <div id="trial-form-view">
+      <div class="trial-modal-header">
+        <div class="trial-modal-badge">14-Day Free Trial</div>
+        <h2>Start Your Free Trial</h2>
+        <p>Full Professional plan access. No credit card required.</p>
+      </div>
+      <form class="trial-form" id="trial-form">
+        <div class="form-row">
+          <div>
+            <label for="tf-first">First Name</label>
+            <input type="text" id="tf-first" placeholder="John" required>
+          </div>
+          <div>
+            <label for="tf-last">Last Name</label>
+            <input type="text" id="tf-last" placeholder="Smith" required>
+          </div>
+        </div>
+        <label for="tf-email">Work Email</label>
+        <input type="email" id="tf-email" placeholder="john@company.com" required>
+        <label for="tf-company">Company Name</label>
+        <input type="text" id="tf-company" placeholder="Acme Logistics" required>
+        <div class="form-row">
+          <div>
+            <label for="tf-role">Your Role</label>
+            <select id="tf-role">
+              <option value="">Select role...</option>
+              <option>Logistics Manager</option>
+              <option>VP / Director of Transportation</option>
+              <option>Supply Chain Manager</option>
+              <option>Dispatcher / Planner</option>
+              <option>Operations Manager</option>
+              <option>IT / Technology</option>
+              <option>C-Level / Executive</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="tf-volume">Monthly Shipments</label>
+            <select id="tf-volume">
+              <option value="">Select volume...</option>
+              <option>&lt; 200</option>
+              <option>200 - 500</option>
+              <option>500 - 2,000</option>
+              <option>2,000 - 5,000</option>
+              <option>5,000 - 15,000</option>
+              <option>15,000+</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="trial-submit">Start My 14-Day Free Trial</button>
+      </form>
+      <div class="trial-footer">
+        <p>No credit card required &bull; Go live in days &bull; Cancel anytime</p>
+        <p style="margin-top:8px">Prefer a guided tour? <a href="mailto:contact@zoree.io">Schedule a demo instead</a></p>
+      </div>
+    </div>
+    <div id="trial-success-view" style="display:none">
+      <div class="trial-modal-header">
+        <div class="trial-modal-badge">You're in!</div>
+        <h2>Welcome to Zoree TMS</h2>
+      </div>
+      <div class="trial-success">
+        <div class="check-circle">&#10003;</div>
+        <h3>Trial Activated!</h3>
+        <p>Check your email for login credentials and onboarding instructions. Your 14-day Professional trial starts now.</p>
+        <p style="margin-top:16px;font-size:.85rem;color:var(--text2)"><strong>What's next:</strong><br>Our onboarding specialist will reach out within 1 business day to help you get started.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">zoree</div>
+      <p>AI-native TMS platform. Reduce freight costs, save time, and get complete visibility — from day one.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Platform</h4>
+      <a href="#features">Features</a>
+      <a href="#ai">AI Assistant</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#compare">Compare</a>
+    </div>
+    <div class="footer-col">
+      <h4>Solutions</h4>
+      <a href="#who">Manufacturers</a>
+      <a href="#who">Retail & Distribution</a>
+      <a href="#who">3PL Providers</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a href="#pricing">Pricing</a>
+      <a href="#testimonials">Results</a>
+      <a href="mailto:contact@zoree.io">Contact</a>
+      <a href="https://zoree.io" target="_blank">zoree.io</a>
+    </div>
+  </div>
+  <div class="footer-bottom">&copy; 2026 <a href="https://zoree.io" style="color:#94a3b8;text-decoration:underline" target="_blank">Zoree Inc.</a> All rights reserved.</div>
+</footer>
+
+<script>
+const features = {
+  planning: [
+    {title:'Order Management', desc:'Manage all your shipments in one place — from order creation to delivery. No more spreadsheets or manual tracking.'},
+    {title:'Bulk Planning', desc:'Plan hundreds of orders at once. AI finds the best rates across TL, LTL, and Partial TL so you don\'t have to.'},
+    {title:'Multi-Stop Routes', desc:'Build reusable route templates for your most common shipping patterns. Stop re-creating the same routes every week.'},
+    {title:'Route Optimizer', desc:'Reduce mileage and cut costs automatically with SMC3 and PC*MILER-powered route optimization.'},
+  ],
+  execution: [
+    {title:'Live Tracking', desc:'See every shipment on a real-time map. Get instant status updates. No more calling carriers to ask "where is it?"'},
+    {title:'Carrier Portal', desc:'Carriers accept or decline tenders directly. Automatic email notifications. No phone tag.'},
+    {title:'Dock Scheduling', desc:'AI auto-assigns dock appointments during planning — no manual coordination between warehouses and carriers.'},
+    {title:'Fleet & Compliance', desc:'Track vehicles, drivers, HOS compliance, weight checks, and certifications from one screen.'},
+  ],
+  rates: [
+    {title:'Rate Management', desc:'Maintain all carrier rates by lane with version control. See rate history and trends at a glance.'},
+    {title:'Lane Preferences', desc:'Set preferred carriers by lane — they\'re automatically prioritized when you plan shipments.'},
+    {title:'Carrier Bids / RFQ', desc:'Run competitive bid processes from one screen. Compare proposals side-by-side.'},
+    {title:'Freight Audit', desc:'Automatically catch billing errors, overcharges, and discrepancies before you pay. Stop overpaying.'},
+  ],
+  finance: [
+    {title:'Freight Invoices', desc:'Process, approve, and dispute invoices with a full audit trail. No more lost paperwork.'},
+    {title:'Auto Documents', desc:'Generate BOL, POD, Hazmat docs, and invoices with one click. Professional PDFs, every time.'},
+    {title:'Customer Portal', desc:'Give your customers self-service access to track shipments and download documents — without calling your team.'},
+  ],
+  intelligence: [
+    {title:'Zoree AI Assistant', desc:'Ask questions, get insights, and take actions in natural language. Voice-enabled. Plans shipments, not just answers questions.'},
+    {title:'Analytics Dashboard', desc:'See freight spend, carrier performance, on-time metrics, and KPI trends at a glance. Make data-driven decisions.'},
+    {title:'Reports & Alerts', desc:'Pre-built and custom reports for every stakeholder. Proactive alerts so you catch exceptions before they become problems.'},
+    {title:'Network Modeling', desc:'Model your freight network to find cost savings and service level improvements you didn\'t know existed.'},
+  ]
+};
+
+function showCategory(cat) {
+  const grid = document.getElementById('feat-content');
+  grid.innerHTML = features[cat].map(f =>
+    `<div class="feat-card"><h4>${f.title}</h4><p>${f.desc}</p></div>`
+  ).join('');
+}
+
+document.getElementById('feat-tabs').addEventListener('click', function(e) {
+  const tab = e.target.closest('.feat-tab');
+  if (!tab) return;
+  document.querySelectorAll('.feat-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  showCategory(tab.dataset.cat);
+});
+
+showCategory('planning');
+
+// ── TRIAL MODAL ──
+(function(){
+  const overlay = document.getElementById('trial-overlay');
+  const closeBtn = document.getElementById('trial-close');
+  const form = document.getElementById('trial-form');
+  const formView = document.getElementById('trial-form-view');
+  const successView = document.getElementById('trial-success-view');
+
+  function openTrial() { overlay.classList.add('show'); }
+  function closeTrial() { overlay.classList.remove('show'); }
+
+  // Wire all "Start Free Trial" buttons
+  document.querySelectorAll('a.btn-green, .cta-section .btn-dark').forEach(btn => {
+    if (btn.textContent.trim().toUpperCase().includes('FREE TRIAL') || btn.textContent.trim().toUpperCase().includes('START FREE')) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        openTrial();
+      });
+      btn.href = '#';
+    }
+  });
+
+  closeBtn.addEventListener('click', closeTrial);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeTrial(); });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Collect form data
+    const data = {
+      first: document.getElementById('tf-first').value,
+      last: document.getElementById('tf-last').value,
+      email: document.getElementById('tf-email').value,
+      company: document.getElementById('tf-company').value,
+      role: document.getElementById('tf-role').value,
+      volume: document.getElementById('tf-volume').value
+    };
+    console.log('Trial signup:', JSON.stringify(data));
+    // In production: POST to your API endpoint
+    // fetch('/api/trial-signup', { method:'POST', body:JSON.stringify(data) })
+
+    formView.style.display = 'none';
+    successView.style.display = 'block';
+  });
+})();
+
+// ── CHATBOT WIDGET ──
+(function(){
+  // Knowledge base for auto-responses
+  const KB = {
+    greet: "Hey — most teams save 10-20% on freight costs using Zoree. What's your monthly shipment volume? I can estimate your savings.",
+    pricing: "We have 4 plans:\n\n• **Starter** — $299/mo (up to 5 users)\n• **Growth** — $799/mo (up to 10 users)\n• **Professional** — $149/user/mo (capped at $1,999/mo)\n• **Enterprise** — $2,499/mo (unlimited everything)\n\nAll plans include implementation at no extra cost. Would you like to start a free trial?",
+    demo: "Great choice! Our demos are personalized 20-minute sessions where we show you Zoree TMS with your actual use case. You can book one at **contact@zoree.io** or click the 'Schedule a Demo' button. Want me to help you prepare any questions?",
+    features: "Zoree TMS covers your entire freight lifecycle:\n\n• **Planning** — Orders, bulk planning, route optimization\n• **Execution** — Live tracking, carrier portal, dock scheduling\n• **Rates** — Rate management, RFQs, freight audit\n• **Finance** — Invoicing, auto document generation\n• **AI** — Voice-enabled assistant that plans shipments for you\n\nWhich area interests you most?",
+    ai: "Zoree AI is a co-planner, not just a chatbot. It can:\n\n• Plan shipments using voice or text commands\n• Compare carrier rates across TL, LTL, and Partial TL\n• Auto-assign dock appointments\n• Answer questions about your live freight data\n\nIt saves dispatchers 2+ hours per day on average.",
+    implementation: "Going live with Zoree takes **days, not months**:\n\n1. Upload your data via CSV\n2. Configure your rules and preferences\n3. Connect carriers to the portal\n4. Start planning shipments\n\nNo consultants required. No infrastructure to set up. Implementation is included free in every plan.",
+    compare: "Compared to legacy and enterprise TMS:\n\n• **vs Oracle/SAP** — Go live in days vs 6-12 months. No $100K+ implementation costs.\n• **vs Legacy TMS** — Modern UI, built-in AI, real-time tracking included.\n• **vs Per-shipment pricing** — Flat monthly rate. No surprise bills as you grow.\n\nWant to see a detailed comparison?",
+    trial: "Absolutely! Our free trial includes:\n\n• Full access to all features\n• No credit card required\n• Guided onboarding support\n\nEmail **contact@zoree.io** to get started, or click 'Start Free Trial' on our pricing section!",
+    integration: "Zoree connects with your existing stack:\n\n• **SMC3 RateWare XL** — LTL rating\n• **HERE Maps** — Live tracking\n• **CzarLite** — Rate shopping\n• **OMS/WMS** — Real-time API sync\n• **CSV/Flat File** — Bulk data import\n• **SMTP** — Automated emails\n\nNeed a custom integration? Our Enterprise plan includes it.",
+    volume_low: "At ~500 shipments/month, teams like yours typically save **$4,000-$8,000/month** in freight costs with Zoree's AI rate optimization.\n\nThat's **$48K-$96K annually** — and our Starter plan is just $299/mo.\n\nWant to start a free 14-day trial to see your actual savings?",
+    volume_mid: "At ~2,000 shipments/month, you're in the sweet spot for Zoree. Teams at your volume typically save **$15,000-$30,000/month** using AI rate shopping and automated carrier tendering.\n\nThat's **$180K-$360K annually** — our Growth plan at $799/mo pays for itself in the first week.\n\nWant to start a free trial?",
+    volume_high: "At 5,000+ shipments/month, you're exactly who we built the Enterprise plan for. High-volume operations typically see **$40,000-$80,000/month** in savings from rate optimization, freight audit, and network modeling.\n\nThat's **$480K-$960K annually** — and our Enterprise plan is $2,499/mo with unlimited everything.\n\nWant me to set up a personalized demo with our team?",
+    fallback: "That's a great question! For detailed answers, I'd recommend connecting with our team. You can:\n\n• **Email us** at contact@zoree.io\n• **Start a free trial** to explore hands-on\n• **Book a demo** for a personalized walkthrough\n\nIs there anything else I can help with?"
+  };
+
+  function matchIntent(msg) {
+    const m = msg.toLowerCase();
+    if (/\b(500|few hundred|small)\b.*ship|ship.*\b(500|few hundred)\b|~\s*500/.test(m)) return 'volume_low';
+    if (/\b(1.?000|2.?000|thousand|1k|2k)\b.*ship|ship.*\b(1.?000|2.?000)\b|~\s*2/.test(m)) return 'volume_mid';
+    if (/\b(5.?000|10.?000|5k|10k|over|high.?vol)\b|ship.*\b(5000|10000)\b/.test(m)) return 'volume_high';
+    if (/pric|cost|how much|plan|tier|afford|budget|per.?user|per.?month/.test(m)) return 'pricing';
+    if (/demo|show me|walk.?through|presentation|see it/.test(m)) return 'demo';
+    if (/feature|module|what can|capability|do you|does it|offer/.test(m)) return 'features';
+    if (/\bai\b|artificial|assistant|voice|chat.?bot|smart|automat/.test(m)) return 'ai';
+    if (/implement|onboard|go.?live|setup|set up|how long|migrate|switch|get started/.test(m)) return 'implementation';
+    if (/compar|vs|versus|oracle|sap|legacy|other tms|differ|advantage/.test(m)) return 'compare';
+    if (/trial|free|try|test|sign.?up/.test(m)) return 'trial';
+    if (/integrat|connect|api|smc3|here.?map|csv|import|erp|wms|oms/.test(m)) return 'integration';
+    return 'fallback';
+  }
+
+  function formatMsg(text) {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+  }
+
+  // Inject styles
+  const style = document.createElement('style');
+  style.textContent = `
+    .zc-fab{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:#2563EB;color:#fff;border:none;cursor:pointer;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,99,235,.4);z-index:9999;transition:all .2s}
+    .zc-fab:hover{transform:scale(1.08);box-shadow:0 6px 24px rgba(37,99,235,.5)}
+    .zc-fab.open{background:#dc2626;transform:rotate(0)}
+    .zc-badge{position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:#22c55e;border:2px solid #fff;animation:zc-pulse 2s ease-in-out infinite}
+    @keyframes zc-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+    .zc-panel{position:fixed;bottom:92px;right:24px;width:320px;max-height:420px;background:#fff;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.18);z-index:9999;display:none;flex-direction:column;overflow:hidden;border:1px solid #E2E8F0;animation:zc-slide .25s ease}
+    .zc-panel.show{display:flex}
+    @keyframes zc-slide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+    .zc-header{background:#0F172A;padding:12px 16px;display:flex;align-items:center;gap:10px}
+    .zc-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#2563EB,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:700;flex-shrink:0}
+    .zc-header-info h4{color:#fff;font-size:.82rem;font-weight:700;margin:0}
+    .zc-header-info p{color:#94A3B8;font-size:.7rem;margin:0;display:flex;align-items:center;gap:4px}
+    .zc-header-info p::before{content:'';width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block}
+    .zc-close{margin-left:auto;background:none;border:none;color:#94A3B8;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all .15s}
+    .zc-close:hover{background:rgba(255,255,255,.1);color:#fff}
+
+    .zc-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:160px;max-height:220px;scrollbar-width:thin;scrollbar-color:rgba(100,116,160,.2) transparent}
+    .zc-msg{max-width:88%;padding:8px 12px;border-radius:10px;font-size:.8rem;line-height:1.5;animation:zc-fade .2s ease}
+    @keyframes zc-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+    .zc-msg.bot{background:#F1F5F9;color:#0F172A;align-self:flex-start;border-bottom-left-radius:4px}
+    .zc-msg.user{background:#2563EB;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+    .zc-msg.bot strong{color:#2563EB}
+    .zc-typing{align-self:flex-start;padding:10px 14px;background:#F1F5F9;border-radius:12px;border-bottom-left-radius:4px;display:none;gap:4px;align-items:center}
+    .zc-typing.show{display:flex}
+    .zc-dot{width:6px;height:6px;border-radius:50%;background:#94A3B8;animation:zc-bounce .6s ease-in-out infinite}
+    .zc-dot:nth-child(2){animation-delay:.15s}
+    .zc-dot:nth-child(3){animation-delay:.3s}
+    @keyframes zc-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+
+    .zc-quickbtns{padding:0 12px 8px;display:flex;gap:5px;flex-wrap:wrap}
+    .zc-qbtn{padding:5px 10px;border-radius:999px;font-size:.7rem;font-weight:600;border:1px solid #E2E8F0;background:#fff;color:#0F172A;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
+    .zc-qbtn:hover{background:#2563EB;color:#fff;border-color:#2563EB}
+    .zc-qbtn.accent{background:#059669;color:#fff;border-color:#059669}
+    .zc-qbtn.accent:hover{background:#047857;border-color:#047857}
+
+    .zc-input{padding:8px 12px;border-top:1px solid #E2E8F0;display:flex;gap:6px;align-items:center}
+    .zc-input input{flex:1;border:1px solid #E2E8F0;border-radius:8px;padding:7px 12px;font-size:.8rem;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
+    .zc-input input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+    .zc-input button{width:32px;height:32px;border-radius:50%;background:#2563EB;color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:background .15s;flex-shrink:0}
+    .zc-input button:hover{background:#1D4ED8}
+
+    .zc-footer{padding:6px 12px;text-align:center;border-top:1px solid #F1F5F9}
+    .zc-footer a{font-size:.65rem;color:#94A3B8;text-decoration:underline}
+
+    @media(max-width:480px){
+      .zc-panel{width:calc(100vw - 32px);right:16px;bottom:84px;max-height:70vh}
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Inject HTML
+  const chatHTML = `
+    <button class="zc-fab" id="zc-fab" aria-label="Chat with Zoree">
+      <span id="zc-fab-icon">&#128172;</span>
+      <span class="zc-badge" id="zc-badge"></span>
+    </button>
+    <div class="zc-panel" id="zc-panel">
+      <div class="zc-header">
+        <div class="zc-avatar">Z</div>
+        <div class="zc-header-info">
+          <h4>Zoree</h4>
+          <p>TMS Specialist &bull; Online now</p>
+        </div>
+        <button class="zc-close" id="zc-close">&times;</button>
+      </div>
+      <div class="zc-messages" id="zc-messages">
+        <div class="zc-msg bot">${formatMsg(KB.greet)}</div>
+        <div class="zc-typing" id="zc-typing"><span class="zc-dot"></span><span class="zc-dot"></span><span class="zc-dot"></span></div>
+      </div>
+      <div class="zc-quickbtns" id="zc-quickbtns">
+        <button class="zc-qbtn" data-q="We ship about 500 loads per month">~500 shipments/mo</button>
+        <button class="zc-qbtn" data-q="We ship about 2000 loads per month">~2,000 shipments/mo</button>
+        <button class="zc-qbtn" data-q="We ship over 5000 loads per month">5,000+ shipments/mo</button>
+        <button class="zc-qbtn accent" data-q="I'd like to start a free trial">Start Free Trial</button>
+      </div>
+      <div class="zc-input">
+        <input type="text" id="zc-input" placeholder="Ask a question..." autocomplete="off">
+        <button id="zc-send" aria-label="Send">&#10148;</button>
+      </div>
+      <div class="zc-footer"><a href="mailto:contact@zoree.io">Prefer email? contact@zoree.io</a></div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', chatHTML);
+
+  // Logic
+  const fab = document.getElementById('zc-fab');
+  const panel = document.getElementById('zc-panel');
+  const close = document.getElementById('zc-close');
+  const messages = document.getElementById('zc-messages');
+  const input = document.getElementById('zc-input');
+  const sendBtn = document.getElementById('zc-send');
+  const typing = document.getElementById('zc-typing');
+  const badge = document.getElementById('zc-badge');
+  const fabIcon = document.getElementById('zc-fab-icon');
+  const quickBtns = document.getElementById('zc-quickbtns');
+  let isOpen = false;
+
+  function toggleChat() {
+    isOpen = !isOpen;
+    panel.classList.toggle('show', isOpen);
+    fab.classList.toggle('open', isOpen);
+    fabIcon.innerHTML = isOpen ? '&#10005;' : '&#128172;';
+    badge.style.display = isOpen ? 'none' : 'block';
+    if (isOpen) input.focus();
+  }
+
+  fab.addEventListener('click', function(e) { e.stopPropagation(); toggleChat(); });
+  close.addEventListener('click', function(e) { e.stopPropagation(); toggleChat(); });
+
+  function addMsg(text, sender) {
+    const div = document.createElement('div');
+    div.className = 'zc-msg ' + sender;
+    div.innerHTML = sender === 'bot' ? formatMsg(text) : text;
+    messages.insertBefore(div, typing);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function respond(userMsg) {
+    addMsg(userMsg, 'user');
+    typing.classList.add('show');
+    messages.scrollTop = messages.scrollHeight;
+
+    // Show contextual quick actions after first message
+    quickBtns.innerHTML = '';
+
+    const delay = 600 + Math.random() * 800;
+    setTimeout(() => {
+      typing.classList.remove('show');
+      const intent = matchIntent(userMsg);
+      addMsg(KB[intent], 'bot');
+
+      // Show follow-up quick actions based on intent
+      const followUps = {
+        pricing: [{t:'Start Free Trial',q:"I'd like to start a free trial",a:true},{t:'Book a Demo',q:'Can I book a demo?'}],
+        demo: [{t:'See Pricing',q:'Can you tell me about pricing?'},{t:'Features Overview',q:'What features does Zoree have?'}],
+        features: [{t:'See AI Features',q:'Tell me about the AI assistant'},{t:'See Pricing',q:'Can you tell me about pricing?'}],
+        ai: [{t:'Start Free Trial',q:"I'd like to start a free trial",a:true},{t:'Book a Demo',q:'Can I book a demo?'}],
+        implementation: [{t:'Start Free Trial',q:"I'd like to start a free trial",a:true},{t:'Compare to Others',q:'How does Zoree compare to Oracle/SAP?'}],
+        compare: [{t:'See Pricing',q:'Can you tell me about pricing?'},{t:'Start Free Trial',q:"I'd like to start a free trial",a:true}],
+        trial: [{t:'See Pricing',q:'Can you tell me about pricing?'},{t:'Features Overview',q:'What features does Zoree have?'}],
+        integration: [{t:'Implementation',q:'How long does implementation take?'},{t:'Start Free Trial',q:"I'd like to start a free trial",a:true}],
+        fallback: [{t:'Start Free Trial',q:"I'd like to start a free trial",a:true},{t:'Book a Demo',q:'Can I book a demo?'},{t:'Pricing',q:'Can you tell me about pricing?'}]
+      };
+      const btns = followUps[intent] || followUps.fallback;
+      btns.forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'zc-qbtn' + (b.a ? ' accent' : '');
+        btn.textContent = b.t;
+        btn.dataset.q = b.q;
+        quickBtns.appendChild(btn);
+      });
+    }, delay);
+  }
+
+  function handleSend() {
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    respond(msg);
+  }
+
+  sendBtn.addEventListener('click', handleSend);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') handleSend(); });
+  quickBtns.addEventListener('click', e => {
+    const btn = e.target.closest('.zc-qbtn');
+    if (!btn) return;
+    respond(btn.dataset.q);
+  });
+
+  // Smart trigger: show teaser bubble after 4s, auto-open on scroll 40% or 12s
+  let teaserShown = false;
+  let autoOpened = false;
+  const teaser = document.createElement('div');
+  teaser.style.cssText = 'position:fixed;bottom:88px;right:24px;background:#fff;color:#0F172A;font-size:.8rem;padding:10px 14px;border-radius:12px 12px 4px 12px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9998;max-width:220px;line-height:1.4;cursor:pointer;animation:zc-slide .3s ease;display:none';
+  teaser.innerHTML = '<strong style="color:#2563EB">Zoree</strong>: Want to see how much you could save on freight? &#128172;';
+  document.body.appendChild(teaser);
+  teaser.addEventListener('click', function(){ teaser.style.display='none'; if(!isOpen) toggleChat(); });
+
+  // Show teaser bubble after 4 seconds
+  setTimeout(() => {
+    if (!isOpen && !sessionStorage.getItem('zc-opened')) {
+      teaser.style.display = 'block';
+      teaserShown = true;
+    }
+  }, 4000);
+
+  // Auto-open on scroll past 40%
+  function checkScroll() {
+    if (autoOpened || isOpen) return;
+    const scrollPct = window.scrollY / (document.body.scrollHeight - window.innerHeight);
+    if (scrollPct > 0.4 && !sessionStorage.getItem('zc-opened')) {
+      teaser.style.display = 'none';
+      toggleChat();
+      autoOpened = true;
+      sessionStorage.setItem('zc-opened', '1');
+      window.removeEventListener('scroll', checkScroll);
+    }
+  }
+  window.addEventListener('scroll', checkScroll, {passive:true});
+
+  // Fallback: auto-open after 12s if still not opened
+  setTimeout(() => {
+    if (!isOpen && !autoOpened && !sessionStorage.getItem('zc-opened')) {
+      teaser.style.display = 'none';
+      toggleChat();
+      autoOpened = true;
+      sessionStorage.setItem('zc-opened', '1');
+    }
+  }, 12000);
+})();
+</script>
+</body>
+</html>

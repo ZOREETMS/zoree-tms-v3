@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { DbApi, OrdersApi, BulkPlanApi } from "../lib/api";
+import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
-import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder } from "../services/ordersService";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines } from "../services/ordersService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
@@ -14,8 +14,8 @@ import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 
 export default function OrdersPage() {
-  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [] } = useOutletContext();
-  const [itemMaster, setItemMaster] = useState([]);
+  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
+  const itemMaster = items;
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [customerFilter, setCustomerFilter] = useState("All");
@@ -189,7 +189,7 @@ export default function OrdersPage() {
     if (!window.confirm(`Cancel order ${id}?`)) return;
     setBusyId(id);
     try {
-      await DbApi.patch("orders", id, { status: "Cancelled", notes: (o.notes ? o.notes + " | " : "") + "CANCELLED: Manual user action (" + new Date().toLocaleDateString() + ")" });
+      await cancelOrderService(id, o.notes);
       toast(`🚫 Order ${id} cancelled`, "warning");
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
@@ -200,7 +200,7 @@ export default function OrdersPage() {
     if (!window.confirm(`Permanently delete order ${id}? This cannot be undone.`)) return;
     setBusyId(id);
     try {
-      await DbApi.remove("orders", id);
+      await deleteOrderById(id);
       toast(`Order ${id} deleted`, "success");
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
@@ -320,7 +320,7 @@ export default function OrdersPage() {
       patch.notes = f.notes || null;
       // Weight and pieces are taken directly from the form — user's input always wins.
       // Line items display their own totals separately for reference.
-      await DbApi.patch("orders", o.id, patch);
+      await saveOrderService(o.id, patch);
       // Log to history (only if changes detected)
       if (changes.length > 0) {
         setOrderChangeLog((prev) => ({
@@ -362,7 +362,7 @@ export default function OrdersPage() {
     };
     setDetailBusy(true);
     try {
-      await DbApi.upsert("orders", orderData);
+      await createNewOrder(orderData);
       // Save line items if any
       if (newOrderLines.length > 0) {
         const linePayload = newOrderLines.map((ln, idx) => {
@@ -433,7 +433,7 @@ export default function OrdersPage() {
       // 1. Check for multi-stop route matches
       let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
       if (templates.length === 0) {
-        try { templates = await DbApi.routeTemplates() || []; } catch { /* ignore */ }
+        templates = routeTemplates || [];
       }
       const routeMatch = findMatchingRoute(templates, selected);
       let routePlanned = [];
@@ -771,7 +771,6 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    DbApi.items().then((res) => { setItemMaster(Array.isArray(res) ? res : []); }).catch(() => {});
     return () => { clearInterval(schedTimerRef.current); clearInterval(schedCdRef.current); };
   }, []);
 
@@ -1077,6 +1076,7 @@ export default function OrdersPage() {
         onSave={saveOrderEdit} onSaveLines={saveLines}
         onClose={() => setDetailOrder(null)}
         onPlan={(id) => openPlanModal(id)} onUnplan={unplanOrder} onCopy={handleCopyOrder}
+        onClearLines={async (id) => { await clearOrderLines(id); setDetailLines([]); toast("Lines cleared", "success"); }}
         busy={detailBusy}
         changeLog={orderChangeLog[detailOrder?.id] || []}
         onClearHistory={() => setOrderChangeLog((prev) => ({ ...prev, [detailOrder?.id]: [] }))}

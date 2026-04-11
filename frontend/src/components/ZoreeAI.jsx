@@ -83,8 +83,9 @@ function buildTMSContext(data) {
     "",
     "Rules for actions:",
     '- "plan ORD-XXXX" = emit PLAN_ORDER action immediately. Keep text to 1-2 lines then the action block.',
-    "- PLAN_ORDER is safe and non-destructive — never ask for confirmation before planning.",
-    "- Only ask for confirmation before CANCEL_ORDER or CANCEL_SHIPMENT.",
+    "- PLAN_ORDER, ASSIGN_CARRIER, UPDATE_ORDER_STATUS, UPDATE_SHIPMENT_STATUS, HOLD_ORDER, FLAG_EXCEPTION, and GET_RATES are safe actions — they will be auto-executed immediately. Do NOT say 'click confirm' or 'waiting for confirmation' for these actions.",
+    "- CANCEL_ORDER and CANCEL_SHIPMENT are destructive — they will show a confirmation prompt to the user before executing.",
+    "- After emitting a safe action block, do NOT say the action was already executed. The system will execute it automatically and show the result.",
     "- Never fabricate order or shipment IDs — only use IDs from the data above.",
     "",
     "IMPORTANT: You can see ALL orders above. When a user asks about a specific order ID, find it in the list.",
@@ -420,11 +421,8 @@ export default function ZoreeAI({ data }) {
     }
   }
 
-  async function handleConfirmAction(actionId) {
-    const actionData = pendingActionsRef.current[actionId];
-    if (!actionData) return;
-    delete pendingActionsRef.current[actionId];
-
+  // Shared action runner — executes an action by ID, updates message status and chat history
+  async function runAction(actionId, actionData) {
     setMessages((prev) =>
       prev.map((m) =>
         m.actionId === actionId ? { ...m, actionStatus: "executing" } : m
@@ -447,6 +445,13 @@ export default function ZoreeAI({ data }) {
         )
       );
     }
+  }
+
+  async function handleConfirmAction(actionId) {
+    const actionData = pendingActionsRef.current[actionId];
+    if (!actionData) return;
+    delete pendingActionsRef.current[actionId];
+    await runAction(actionId, actionData);
   }
 
   function handleDeclineAction(actionId) {
@@ -505,8 +510,18 @@ export default function ZoreeAI({ data }) {
         const action = parseAction(reply);
         if (action) {
           const actionId = `act-${Date.now()}`;
-          pendingActionsRef.current[actionId] = action;
-          setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "pending" }]);
+          // Destructive actions require user confirmation; safe actions auto-execute
+          const destructiveActions = ["CANCEL_ORDER", "CANCEL_SHIPMENT"];
+          const needsConfirmation = destructiveActions.includes(action.action);
+
+          if (needsConfirmation) {
+            pendingActionsRef.current[actionId] = action;
+            setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "pending" }]);
+          } else {
+            // Auto-execute safe actions (PLAN_ORDER, ASSIGN_CARRIER, etc.)
+            setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "executing" }]);
+            await runAction(actionId, action);
+          }
         } else {
           setMessages((prev) => [...prev, { role: "ai", text: reply }]);
         }

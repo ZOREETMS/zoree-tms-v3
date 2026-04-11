@@ -38,4 +38,5 @@ export const EQUIPMENT_TYPES = {
 
 export const DEFAULT_EQUIP = "Dry Van 53'";
 export const LTL_MAX_WEIGHT = 15000;
+export const TL_MAX_WEIGHT = 44000;
 export const DEMO_USERS = ["Sridhar (Dispatcher)", "Tulasi (Admin)", "System (Auto)"];

@@ -128,9 +128,13 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshData();
-    // Auto-refresh every 5 seconds to pick up OMS/Middleware changes instantly
-    const poll = setInterval(refreshData, 5000);
-    return () => clearInterval(poll);
+    // Real-time updates via WebSocket — instant notification from OMS/Middleware
+    import("./lib/wsClient.js").then(({ connect, onMessage, disconnect }) => {
+      connect();
+      const unsub = onMessage(() => refreshData());
+      window.__wsCleanup = () => { unsub(); disconnect(); };
+    });
+    return () => { if (window.__wsCleanup) window.__wsCleanup(); };
   }, [isAuthenticated]);
 
   if (booting) {

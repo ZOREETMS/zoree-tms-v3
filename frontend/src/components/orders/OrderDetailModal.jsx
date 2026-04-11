@@ -1,6 +1,6 @@
 import React from "react";
 import OrderLinesEditor from "../OrderLinesEditor";
-import { OrdersApi } from "../../lib/api";
+// API calls handled via props from parent (services layer)
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEMO_USERS } from "../../constants/orders";
 import { fmt$, constraintBadges, SdField, cityZipLookup } from "../../utils/orderUtils.jsx";
 
@@ -23,6 +23,7 @@ export default function OrderDetailModal({
   onPlan,
   onUnplan,
   onCopy,
+  onClearLines,
   busy,
   changeLog,
   itemMaster,
@@ -113,7 +114,7 @@ export default function OrderDetailModal({
             <div style={{ padding: "14px 24px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{"\ud83d\udce6"} Line Items{detailLines.length > 0 && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text3)", marginLeft: 4 }}>({detailLines.length})</span>}</div>
               <OrderLinesEditor orderId={o.id} lines={detailLines} onChange={onLinesChange} onSave={onSaveLines}
-                onClear={() => { if (window.confirm("Clear all lines?")) { OrdersApi.clearLines(o.id).then(() => { onLinesChange([]); toast("Lines cleared", "success"); }); } }}
+                onClear={() => { if (window.confirm("Clear all lines?")) { onClearLines(o.id); } }}
                 busy={busy} mode="view" items={itemMaster} />
             </div>
 
@@ -238,7 +239,7 @@ export default function OrderDetailModal({
               {/* Line Items in edit */}
               <div style={{ marginBottom: 16 }}>
                 <OrderLinesEditor orderId={o.id} lines={detailLines} onChange={onLinesChange} onSave={onSaveLines}
-                  onClear={() => { if (window.confirm("Clear all lines?")) { OrdersApi.clearLines(o.id).then(() => { onLinesChange([]); toast("Lines cleared", "success"); }); } }}
+                  onClear={() => { if (window.confirm("Clear all lines?")) { onClearLines(o.id); } }}
                   busy={busy} items={itemMaster} />
               </div>
             </div>

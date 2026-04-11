@@ -5,9 +5,11 @@
 // ═══════════════════════════════════════════════════════════════════
 
 require('dotenv').config();
+const http    = require('http');
 const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
+const WebSocket = require('ws');
 const nodemailer = require('nodemailer');
 
 
@@ -2343,15 +2345,52 @@ app.post('/api/mileage/bulk', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ══════════════════════════════════════════════════════════════════
+// WebSocket Server — real-time notifications to TMS frontend
+// ══════════════════════════════════════════════════════════════════
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+const wsClients = new Set();
+wss.on('connection', (ws) => {
+  wsClients.add(ws);
+  console.log(`[WS] Client connected (${wsClients.size} total)`);
+  ws.on('close', () => {
+    wsClients.delete(ws);
+    console.log(`[WS] Client disconnected (${wsClients.size} total)`);
+  });
+});
+
+/** Broadcast an event to all connected TMS clients */
+function wsBroadcast(event, data) {
+  const msg = JSON.stringify({ event, data, ts: new Date().toISOString() });
+  wsClients.forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  });
+}
+
+// POST /api/notify — called by Middleware after pushing data to TMS
+app.post('/api/notify', (req, res) => {
+  const { event, data } = req.body || {};
+  if (!event) return res.status(400).json({ error: 'event required' });
+  wsBroadcast(event, data || {});
+  console.log(`[WS] Broadcast: ${event}`, data ? JSON.stringify(data).slice(0, 100) : '');
+  res.json({ ok: true, clients: wsClients.size });
+});
+
 // ── 404 catch-all (must be AFTER all route definitions) ──────────────────────
 app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
 app.use((err, req, res, next) => { console.error('[Error]', err.message); res.status(500).json({ error: err.message }); });
 
-app.listen(PORT, () => {
+// ══════════════════════════════════════════════════════════════════
+// Start Server
+// ══════════════════════════════════════════════════════════════════
+server.listen(PORT, () => {
   console.log(`\n🚛 ZoreeTMS API — Tier 2 running on http://localhost:${PORT}`);
   console.log(`   ✅ Supabase credentials: SERVER-SIDE ONLY`);
   console.log(`   ✅ Browser never touches Supabase directly`);
   console.log(`   ✅ 3-Tier Architecture active`);
+  console.log(`   ✅ WebSocket server active on ws://localhost:${PORT}`);
   console.log(`   ℹ️  Tender email check: GET http://localhost:${PORT}/health → tenderEmail`);
   verifySmtpOnStartup().catch(function(err) {
     console.error('   📧 Tender email: verify error:', err && err.message ? err.message : err);

@@ -24,6 +24,55 @@ export function buildLocationString(city, state, zip) {
 }
 
 /**
+ * Cancel an order — sets status to Cancelled with a note.
+ * @param {string} id - Order ID
+ * @param {string} [existingNotes] - Existing notes to append to
+ * @returns {Promise<object>}
+ */
+export async function cancelOrder(id, existingNotes) {
+  const note = (existingNotes ? existingNotes + " | " : "") +
+    "CANCELLED: Manual user action (" + new Date().toLocaleDateString() + ")";
+  return DbApi.patch("orders", id, { status: "Cancelled", notes: note });
+}
+
+/**
+ * Permanently delete an order from the database.
+ * @param {string} id - Order ID
+ * @returns {Promise<void>}
+ */
+export async function deleteOrderById(id) {
+  return DbApi.remove("orders", id);
+}
+
+/**
+ * Save edited order fields to the database.
+ * @param {string} id - Order ID
+ * @param {object} patch - Fields to update
+ * @returns {Promise<object>}
+ */
+export async function saveOrder(id, patch) {
+  return DbApi.patch("orders", id, patch);
+}
+
+/**
+ * Create a new order in the database.
+ * @param {object} orderData - Full order object
+ * @returns {Promise<object>}
+ */
+export async function createNewOrder(orderData) {
+  return DbApi.upsert("orders", orderData);
+}
+
+/**
+ * Clear all line items for an order.
+ * @param {string} orderId - Order ID
+ * @returns {Promise<void>}
+ */
+export async function clearOrderLines(orderId) {
+  return OrdersApi.clearLines(orderId);
+}
+
+/**
  * Copy an existing order with a new ID and "Unplanned" status.
  * @param {object} source - The order to copy
  * @returns {Promise<object>} The newly created order
@@ -439,8 +488,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
     return { created: 0, updated: 0, cost: 0, noQuotes: true };
   }
 
-  const LTL_MAX = 15000;
-  const TL_MAX = 44000;
+  const { LTL_MAX_WEIGHT: LTL_MAX, TL_MAX_WEIGHT: TL_MAX } = await import("../constants/orders.js");
   const { calcDates } = await import("./bulkPlanService.js");
 
   // Group by lane

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DbApi } from "../lib/api";
+// API calls go through services layer
 import { buildLaneGroups } from "../utils/laneUtils";
 import { createShipmentsFromRoute, findMatchingRoute, bulkPlanOrders } from "../services/ordersService";
 import { isFeatureEnabled } from "../services/planningParametersService";
@@ -119,7 +119,7 @@ export default function BulkPlanPage() {
       // ── Step 1: Check for multi-stop route matches ──
       let templates = Array.isArray(routeTemplates) ? routeTemplates : [];
       if (templates.length === 0) {
-        try { templates = await DbApi.routeTemplates() || []; } catch { /* ignore */ }
+        templates = routeTemplates || [];
       }
       const routeMatch = findMatchingRoute(templates, selected);
       let routePlanned = [];

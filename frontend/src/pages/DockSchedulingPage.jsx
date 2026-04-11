@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { DOCK_DOORS, DEFAULT_DOCK_CONFIG } from "../constants/docks";
-import { DbApi } from "../lib/api";
+// API calls go through dockScheduleService (services layer)
 import { parseLoadingWindow } from "../services/dockService";
 import { getDockConfigForWarehouse, saveDockConfig } from "../services/dockScheduleService";
 import DockLegend from "../components/dock-scheduling/DockLegend";
