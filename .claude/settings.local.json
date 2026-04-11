@@ -577,7 +577,9 @@
       "WebFetch(domain:blog.shipperguide.com)",
       "WebFetch(domain:quantumbyte.ai)",
       "Bash(grep -r \"anthropic\\\\|claude\\\\|chatbot\\\\|ai\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src --include=*.jsx --include=*.js --include=*.tsx --include=*.ts -i)",
-      "WebFetch(domain:zoree.io)"
+      "WebFetch(domain:zoree.io)",
+      "Bash(curl -s -X POST http://localhost:61950/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Test\"\",\"\"last_name\"\":\"\"User\"\",\"\"email\"\":\"\"test@example.com\"\",\"\"company\"\":\"\"Test Corp\"\",\"\"role\"\":\"\"Logistics Manager\"\",\"\"monthly_shipments\"\":\"\"500 - 2,000\"\"}')",
+      "Bash(curl -s -X POST http://localhost:61950/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Test\"\",\"\"last_name\"\":\"\"User\"\",\"\"email\"\":\"\"test@example.com\"\",\"\"company\"\":\"\"Test Corp\"\"}')"
     ]
   }
 }

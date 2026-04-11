@@ -149,6 +149,8 @@ const ALLOWED = [
   'oms_inventory','oms_inv_transactions','oms_dock_schedule','oms_stage_log',
   // Middleware
   'mw_requests','mw_event_log',
+  // Marketing
+  'trial_signups',
 ];
 
 // ══════════════════════════════════════════════════════════════════
@@ -185,6 +187,139 @@ app.get('/health', (req, res) => res.json({
     verifyCheckedAt: smtpVerifyState.checkedAt,
   },
 }));
+
+// ── POST /api/trial-signup (public — no auth) ────────────────────────
+const trialSignupLimiter = require('express-rate-limit')({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: { error: 'Too many signup requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/trial-signup', trialSignupLimiter, async (req, res) => {
+  try {
+    const { first_name, last_name, email, company, role, monthly_shipments } = req.body;
+
+    // Validate required fields
+    if (!first_name || !last_name || !email || !company) {
+      return res.status(400).json({ error: 'first_name, last_name, email, and company are required' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check for duplicate
+    const existing = await fetch(
+      `${SUPABASE_URL}/rest/v1/trial_signups?email=eq.${encodeURIComponent(email)}&select=id,created_at&limit=1`,
+      { headers: sbHeaders() }
+    );
+    const existingData = await existing.json();
+    if (Array.isArray(existingData) && existingData.length > 0) {
+      return res.json({ success: true, message: 'We already have your request — our team will be in touch soon!' });
+    }
+
+    // Save to database
+    const record = { first_name, last_name, email, company, role: role || null, monthly_shipments: monthly_shipments || null, status: 'pending', source: 'landing_page' };
+    const saved = await dbUpsert('trial_signups', record);
+
+    // Send notification email to Zoree team
+    const transport = getSmtpTransport();
+    const fromAddr = process.env.SMTP_FROM || process.env.SMTP_USER || 'contact@zoree.io';
+
+    if (transport) {
+      // Notification to team
+      await transport.sendMail({
+        from: `"Zoree TMS" <${fromAddr}>`,
+        to: 'contact@zoree.io',
+        subject: `New Trial Signup: ${company} — ${first_name} ${last_name}`,
+        text: [
+          'NEW TRIAL SIGNUP REQUEST',
+          '========================',
+          '',
+          `Name: ${first_name} ${last_name}`,
+          `Email: ${email}`,
+          `Company: ${company}`,
+          `Role: ${role || 'Not specified'}`,
+          `Monthly Shipments: ${monthly_shipments || 'Not specified'}`,
+          '',
+          `Submitted: ${new Date().toISOString()}`,
+          '',
+          '---',
+          'Reply to this email to contact the lead directly.',
+        ].join('\n'),
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+            <div style="background:#0F172A;padding:20px 24px;border-radius:12px 12px 0 0">
+              <h2 style="color:#fff;margin:0;font-size:18px">New Trial Signup</h2>
+              <p style="color:#94A3B8;margin:4px 0 0;font-size:13px">${new Date().toLocaleString()}</p>
+            </div>
+            <div style="border:1px solid #E2E8F0;border-top:none;padding:24px;border-radius:0 0 12px 12px">
+              <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:8px 0;color:#64748B;font-size:13px;width:140px">Name</td><td style="padding:8px 0;font-weight:600;font-size:14px">${first_name} ${last_name}</td></tr>
+                <tr><td style="padding:8px 0;color:#64748B;font-size:13px">Email</td><td style="padding:8px 0;font-size:14px"><a href="mailto:${email}" style="color:#2563EB">${email}</a></td></tr>
+                <tr><td style="padding:8px 0;color:#64748B;font-size:13px">Company</td><td style="padding:8px 0;font-weight:600;font-size:14px">${company}</td></tr>
+                <tr><td style="padding:8px 0;color:#64748B;font-size:13px">Role</td><td style="padding:8px 0;font-size:14px">${role || '—'}</td></tr>
+                <tr><td style="padding:8px 0;color:#64748B;font-size:13px">Monthly Shipments</td><td style="padding:8px 0;font-weight:600;font-size:14px;color:#2563EB">${monthly_shipments || '—'}</td></tr>
+              </table>
+              <div style="margin-top:20px;padding:12px 16px;background:#F0FDF4;border-radius:8px;border-left:4px solid #22c55e">
+                <p style="margin:0;font-size:13px;color:#15803D"><strong>Action needed:</strong> Reach out within 1 business day to set up their trial environment.</p>
+              </div>
+            </div>
+          </div>`,
+        replyTo: email,
+      });
+
+      // Confirmation email to lead
+      await transport.sendMail({
+        from: `"Zoree TMS" <${fromAddr}>`,
+        to: email,
+        subject: `Welcome to Zoree TMS, ${first_name}!`,
+        text: [
+          `Hi ${first_name},`,
+          '',
+          'Thanks for your interest in Zoree TMS! We received your trial request.',
+          '',
+          'Our onboarding specialist will reach out within 1 business day to:',
+          '  - Understand your operations and shipment volume',
+          '  - Set up your personalized trial environment',
+          '  - Walk you through getting started',
+          '',
+          'In the meantime, feel free to reply to this email with any questions.',
+          '',
+          'Best,',
+          'The Zoree TMS Team',
+          'contact@zoree.io',
+        ].join('\n'),
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+            <div style="background:linear-gradient(135deg,#0F172A,#1E293B);padding:28px 24px;border-radius:12px 12px 0 0;text-align:center">
+              <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800">Zoree<span style="color:#60A5FA">TMS</span></h1>
+              <p style="color:#94A3B8;margin:6px 0 0;font-size:12px">Modern Transportation Management</p>
+            </div>
+            <div style="border:1px solid #E2E8F0;border-top:none;padding:28px 24px;border-radius:0 0 12px 12px">
+              <h2 style="font-size:20px;color:#0F172A;margin:0 0 12px">Thanks for signing up, ${first_name}!</h2>
+              <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 16px">We received your trial request for <strong>${company}</strong>. Our team is excited to help you reduce freight costs and streamline your operations.</p>
+              <div style="background:#F8FAFC;border-radius:10px;padding:16px;margin:16px 0">
+                <p style="font-size:13px;color:#0F172A;font-weight:600;margin:0 0 8px">What happens next:</p>
+                <p style="font-size:13px;color:#475569;margin:0;line-height:1.7">1. Our onboarding specialist will reach out within <strong>1 business day</strong><br>2. We'll configure your personalized trial environment<br>3. You'll get full Professional plan access for <strong>14 days</strong></p>
+              </div>
+              <p style="font-size:14px;color:#475569;line-height:1.6;margin:16px 0 0">Questions? Just reply to this email — we're here to help.</p>
+              <p style="font-size:14px;color:#475569;margin:20px 0 0">Best,<br><strong style="color:#0F172A">The Zoree TMS Team</strong></p>
+            </div>
+            <p style="text-align:center;font-size:11px;color:#94A3B8;margin-top:16px">Zoree TMS — Reduce freight costs, save time, get visibility.</p>
+          </div>`,
+      });
+    }
+
+    console.log(`[trial-signup] New signup: ${email} (${company})`);
+    res.json({ success: true, message: 'Your trial request has been received. Our team will reach out within 1 business day.' });
+
+  } catch (err) {
+    console.error('[trial-signup] Error:', err);
+    res.status(500).json({ error: 'Something went wrong. Please try again or email contact@zoree.io directly.' });
+  }
+});
 
 // ── POST /api/auth/login ───────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {

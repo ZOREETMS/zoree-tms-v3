@@ -859,14 +859,15 @@
     </div>
     <div id="trial-success-view" style="display:none">
       <div class="trial-modal-header">
-        <div class="trial-modal-badge">You're in!</div>
-        <h2>Welcome to Zoree TMS</h2>
+        <div class="trial-modal-badge">Request Received</div>
+        <h2>Thanks for Your Interest!</h2>
       </div>
       <div class="trial-success">
         <div class="check-circle">&#10003;</div>
-        <h3>Trial Activated!</h3>
-        <p>Check your email for login credentials and onboarding instructions. Your 14-day Professional trial starts now.</p>
-        <p style="margin-top:16px;font-size:.85rem;color:var(--text2)"><strong>What's next:</strong><br>Our onboarding specialist will reach out within 1 business day to help you get started.</p>
+        <h3>We've Got Your Details</h3>
+        <p>Our team will review your request and reach out within <strong>1 business day</strong> to set up your personalized 14-day trial.</p>
+        <p style="margin-top:16px;font-size:.85rem;color:var(--text2)"><strong>What to expect:</strong><br>A Zoree onboarding specialist will contact you to understand your operations and configure your trial environment.</p>
+        <p style="margin-top:12px;font-size:.82rem;color:var(--text3)">Questions? Email us at <a href="mailto:contact@zoree.io" style="color:var(--accent);text-decoration:underline">contact@zoree.io</a></p>
       </div>
     </div>
   </div>
@@ -978,23 +979,53 @@ showCategory('planning');
   closeBtn.addEventListener('click', closeTrial);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) closeTrial(); });
 
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    // Collect form data
-    const data = {
-      first: document.getElementById('tf-first').value,
-      last: document.getElementById('tf-last').value,
-      email: document.getElementById('tf-email').value,
-      company: document.getElementById('tf-company').value,
-      role: document.getElementById('tf-role').value,
-      volume: document.getElementById('tf-volume').value
-    };
-    console.log('Trial signup:', JSON.stringify(data));
-    // In production: POST to your API endpoint
-    // fetch('/api/trial-signup', { method:'POST', body:JSON.stringify(data) })
+  // API URL — change to your deployed API URL in production
+  const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://your-api.zoree.io';
 
-    formView.style.display = 'none';
-    successView.style.display = 'block';
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const submitBtn = form.querySelector('.trial-submit');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'SUBMITTING...';
+    submitBtn.disabled = true;
+
+    try {
+      const resp = await fetch(API_URL + '/api/trial-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: document.getElementById('tf-first').value,
+          last_name: document.getElementById('tf-last').value,
+          email: document.getElementById('tf-email').value,
+          company: document.getElementById('tf-company').value,
+          role: document.getElementById('tf-role').value,
+          monthly_shipments: document.getElementById('tf-volume').value,
+        }),
+      });
+      const data = await resp.json();
+
+      if (resp.ok) {
+        formView.style.display = 'none';
+        successView.style.display = 'block';
+      } else {
+        alert(data.error || 'Something went wrong. Please try again.');
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+      }
+    } catch (err) {
+      // Fallback to mailto if API is unreachable
+      const d = {
+        first: document.getElementById('tf-first').value,
+        last: document.getElementById('tf-last').value,
+        email: document.getElementById('tf-email').value,
+        company: document.getElementById('tf-company').value,
+      };
+      const subject = encodeURIComponent('New Trial Request: ' + d.company);
+      const body = encodeURIComponent('Name: ' + d.first + ' ' + d.last + '\nEmail: ' + d.email + '\nCompany: ' + d.company);
+      window.open('mailto:contact@zoree.io?subject=' + subject + '&body=' + body, '_blank');
+      formView.style.display = 'none';
+      successView.style.display = 'block';
+    }
   });
 })();
 
