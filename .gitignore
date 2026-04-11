@@ -134,3 +134,7 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Claude Code agent artifacts
+.claude/worktrees/
+.claude/settings.local.json
