@@ -24,6 +24,8 @@ function dbToShipment(r) {
     spotRate:           r.spot_rate      || false,
     czarliteRate:       r.czarlite_rate  || false,
     notes:              r.notes          || null,
+    loadingStart:       r.loading_start  || null,
+    loadingEnd:         r.loading_end    || null,
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
   };
@@ -50,6 +52,8 @@ function shipmentToDb(s) {
     spot_rate:        !!s.spotRate,
     czarlite_rate:    !!s.czarliteRate,
     notes:            s.notes           || null,
+    loading_start:    s.loadingStart    || null,
+    loading_end:      s.loadingEnd      || null,
   };
 }
 
