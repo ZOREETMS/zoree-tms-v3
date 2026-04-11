@@ -962,8 +962,21 @@ showCategory('planning');
   const formView = document.getElementById('trial-form-view');
   const successView = document.getElementById('trial-success-view');
 
-  function openTrial() { overlay.classList.add('show'); }
-  function closeTrial() { overlay.classList.remove('show'); }
+  function openTrial() {
+    overlay.classList.add('show');
+    // Hide chatbot when trial modal is open
+    const fab = document.getElementById('zc-fab');
+    const panel = document.getElementById('zc-panel');
+    const teaser = document.querySelector('div[style*="bottom:88px"]');
+    if (fab) fab.style.display = 'none';
+    if (panel) panel.classList.remove('show');
+    if (teaser) teaser.style.display = 'none';
+  }
+  function closeTrial() {
+    overlay.classList.remove('show');
+    const fab = document.getElementById('zc-fab');
+    if (fab) fab.style.display = 'flex';
+  }
 
   // Wire all "Start Free Trial" buttons
   document.querySelectorAll('a.btn-green, .cta-section .btn-dark').forEach(btn => {
@@ -1013,6 +1026,7 @@ showCategory('planning');
         submitBtn.disabled = false;
       }
     } catch (err) {
+      console.error('Trial signup failed:', err);
       // Fallback to mailto if API is unreachable
       const d = {
         first: document.getElementById('tf-first').value,
@@ -1245,8 +1259,10 @@ showCategory('planning');
   });
 
   // Smart trigger: show teaser bubble after 4s, auto-open on scroll 40% or 12s
+  // Never auto-open if trial modal is visible
   let teaserShown = false;
   let autoOpened = false;
+  function isTrialOpen() { return document.getElementById('trial-overlay')?.classList.contains('show'); }
   const teaser = document.createElement('div');
   teaser.style.cssText = 'position:fixed;bottom:88px;right:24px;background:#fff;color:#0F172A;font-size:.8rem;padding:10px 14px;border-radius:12px 12px 4px 12px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9998;max-width:220px;line-height:1.4;cursor:pointer;animation:zc-slide .3s ease;display:none';
   teaser.innerHTML = '<strong style="color:#2563EB">Zoree</strong>: Want to see how much you could save on freight? &#128172;';
@@ -1255,7 +1271,7 @@ showCategory('planning');
 
   // Show teaser bubble after 4 seconds
   setTimeout(() => {
-    if (!isOpen && !sessionStorage.getItem('zc-opened')) {
+    if (!isOpen && !sessionStorage.getItem('zc-opened') && !isTrialOpen()) {
       teaser.style.display = 'block';
       teaserShown = true;
     }
@@ -1263,7 +1279,7 @@ showCategory('planning');
 
   // Auto-open on scroll past 40%
   function checkScroll() {
-    if (autoOpened || isOpen) return;
+    if (autoOpened || isOpen || isTrialOpen()) return;
     const scrollPct = window.scrollY / (document.body.scrollHeight - window.innerHeight);
     if (scrollPct > 0.4 && !sessionStorage.getItem('zc-opened')) {
       teaser.style.display = 'none';
@@ -1277,7 +1293,7 @@ showCategory('planning');
 
   // Fallback: auto-open after 12s if still not opened
   setTimeout(() => {
-    if (!isOpen && !autoOpened && !sessionStorage.getItem('zc-opened')) {
+    if (!isOpen && !autoOpened && !sessionStorage.getItem('zc-opened') && !isTrialOpen()) {
       teaser.style.display = 'none';
       toggleChat();
       autoOpened = true;

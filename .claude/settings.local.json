@@ -579,7 +579,28 @@
       "Bash(grep -r \"anthropic\\\\|claude\\\\|chatbot\\\\|ai\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src --include=*.jsx --include=*.js --include=*.tsx --include=*.ts -i)",
       "WebFetch(domain:zoree.io)",
       "Bash(curl -s -X POST http://localhost:61950/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Test\"\",\"\"last_name\"\":\"\"User\"\",\"\"email\"\":\"\"test@example.com\"\",\"\"company\"\":\"\"Test Corp\"\",\"\"role\"\":\"\"Logistics Manager\"\",\"\"monthly_shipments\"\":\"\"500 - 2,000\"\"}')",
-      "Bash(curl -s -X POST http://localhost:61950/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Test\"\",\"\"last_name\"\":\"\"User\"\",\"\"email\"\":\"\"test@example.com\"\",\"\"company\"\":\"\"Test Corp\"\"}')"
+      "Bash(curl -s -X POST http://localhost:61950/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Test\"\",\"\"last_name\"\":\"\"User\"\",\"\"email\"\":\"\"test@example.com\"\",\"\"company\"\":\"\"Test Corp\"\"}')",
+      "Bash(curl -s http://localhost:62476/health)",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:62476/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Tulasi\"\",\"\"last_name\"\":\"\"Konathala\"\",\"\"email\"\":\"\"tulasi@zoree.io\"\",\"\"company\"\":\"\"Zoree Inc\"\",\"\"role\"\":\"\"CEO\"\",\"\"monthly_shipments\"\":\"\"2,000 - 5,000\"\"}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"test\"\",\"\"last_name\"\":\"\"test\"\",\"\"email\"\":\"\"test@test.com\"\",\"\"company\"\":\"\"test\"\"}')",
+      "Bash(findstr :3001)",
+      "Bash(taskkill /PID 43684 /F)",
+      "Bash(cmd //c \"taskkill /PID 43684 /F\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Sridhar\"\",\"\"last_name\"\":\"\"Konathala\"\",\"\"email\"\":\"\"sridharkonathala@zoreeconsulting.com\"\",\"\"company\"\":\"\"Zoree Consulting\"\",\"\"role\"\":\"\"CEO\"\",\"\"monthly_shipments\"\":\"\"2,000 - 5,000\"\"}')",
+      "Bash(curl -s http://localhost:3001/api/trial-signup -X POST -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"test\"\",\"\"last_name\"\":\"\"test\"\",\"\"email\"\":\"\"test@t.com\"\",\"\"company\"\":\"\"t\"\"}')",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/trial_signups?email=eq.sridhart09%40gmail.com&select=*\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/trial-signup -H \"Content-Type: application/json\" -H \"Origin: http://localhost:5174\" -d '{\"\"first_name\"\":\"\"Sridhar\"\",\"\"last_name\"\":\"\"T\"\",\"\"email\"\":\"\"sridhart09@gmail.com\"\",\"\"company\"\":\"\"Test Company\"\",\"\"role\"\":\"\"CEO\"\",\"\"monthly_shipments\"\":\"\"500 - 2,000\"\"}')",
+      "Bash(cmd //c \"taskkill /PID 89176 /F\")",
+      "Bash(curl -s -X DELETE \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/trial_signups?email=eq.sridhart09%40gmail.com\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/trial_signups?select=*&order=created_at.desc&limit=5\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s \"https://ljbeihotrmyqthxptcgp.supabase.co/rest/v1/trial_signups?select=email,company,created_at&order=created_at.desc&limit=3\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqYmVpaG90cm15cXRoeHB0Y2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1ODIsImV4cCI6MjA4ODQ3NDU4Mn0.dc1WOPBdJuDKOOjJnl1roVFVI6e0DMrAD1zQf2iJqAE\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/trial-signup -H \"Content-Type: application/json\" -d '{\"\"first_name\"\":\"\"Sridhar\"\",\"\"last_name\"\":\"\"T\"\",\"\"email\"\":\"\"sridhart09@gmail.com\"\",\"\"company\"\":\"\"Zoree\"\",\"\"role\"\":\"\"Founder\"\",\"\"monthly_shipments\"\":\"\"500 - 2,000\"\"}')",
+      "Bash(findstr -E \":517[0-9]|:300[0-9]|:808[0-9]\")",
+      "Bash(findstr \"5173 5174 3001 3000 8080\")",
+      "Bash(npx serve:*)",
+      "Bash(curl -s http://localhost:5174)",
+      "Bash(cmd //c \"taskkill /PID 38224 /F\")"
     ]
   }
 }

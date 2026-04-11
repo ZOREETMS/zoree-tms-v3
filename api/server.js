@@ -262,8 +262,8 @@ app.post('/api/trial-signup', trialSignupLimiter, async (req, res) => {
                 <tr><td style="padding:8px 0;color:#64748B;font-size:13px">Role</td><td style="padding:8px 0;font-size:14px">${role || '—'}</td></tr>
                 <tr><td style="padding:8px 0;color:#64748B;font-size:13px">Monthly Shipments</td><td style="padding:8px 0;font-weight:600;font-size:14px;color:#2563EB">${monthly_shipments || '—'}</td></tr>
               </table>
-              <div style="margin-top:20px;padding:12px 16px;background:#F0FDF4;border-radius:8px;border-left:4px solid #22c55e">
-                <p style="margin:0;font-size:13px;color:#15803D"><strong>Action needed:</strong> Reach out within 1 business day to set up their trial environment.</p>
+              <div style="margin-top:20px;padding:12px 16px;background:#FEF3C7;border-radius:8px;border-left:4px solid #d97706">
+                <p style="margin:0;font-size:13px;color:#92400E"><strong>Action needed:</strong> Reach out to this lead within 1 business day to set up their trial environment.</p>
               </div>
             </div>
           </div>`,
