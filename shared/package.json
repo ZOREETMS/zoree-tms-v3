@@ -1,0 +1,7 @@
+{
+  "name": "@zoree/shared",
+  "version": "1.0.0",
+  "description": "Shared business logic for Zoree TMS (web + mobile)",
+  "main": "src/index.js",
+  "private": true
+}

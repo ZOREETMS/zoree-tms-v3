@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 62 62" fill="none">
+  <defs>
+    <linearGradient id="zlogin" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#818CF8" />
+    </linearGradient>
+  </defs>
+  <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#zlogin)" stroke-width="2" />
+  <line x1="15" y1="18" x2="47" y2="18" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <line x1="47" y1="18" x2="15" y2="44" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <line x1="15" y1="44" x2="47" y2="44" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <circle cx="47" cy="18" r="5" fill="#38BDF8" />
+</svg>

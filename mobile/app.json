@@ -1,0 +1,19 @@
+{
+  "name": "ZoreeTmsMobile",
+  "displayName": "Zoree TMS",
+  "expo": {
+    "name": "Zoree TMS",
+    "slug": "zoree-tms-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zoree.tms"
+    },
+    "android": {
+      "package": "com.zoree.tms"
+    }
+  }
+}

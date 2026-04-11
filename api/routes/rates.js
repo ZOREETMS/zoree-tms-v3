@@ -81,6 +81,16 @@ router.get('/quote', async (req, res, next) => {
       return res.status(400).json({ error: 'origin, dest, weight required' });
     }
 
+    // Fetch real mileage from PC*MILER (falls back to 500 if unavailable)
+    let miles = 500;
+    try {
+      const mileResp = await fetch(`http://localhost:${process.env.PORT || 3001}/api/mileage?origin=${encodeURIComponent(origin)}&dest=${encodeURIComponent(dest)}`);
+      if (mileResp.ok) {
+        const mileData = await mileResp.json();
+        miles = mileData.miles || 500;
+      }
+    } catch (_) { /* use fallback */ }
+
     const filters = [
       ['origin', 'ilike', `%${origin}%`],
       ['dest',   'ilike', `%${dest}%`],
@@ -90,7 +100,6 @@ router.get('/quote', async (req, res, next) => {
     const rows = await dbSelect('rates', { filters, limit: 10 }, req.tenant);
     const quotes = rows.map(r => {
       const rate    = dbToRate(r);
-      const miles   = 750; // TODO: integrate distance API
       const baseCost= parseFloat(weight) * rate.ratePerMile / 100;
       const fsc     = baseCost * (rate.fscPct / 100);
       return {
@@ -98,12 +107,13 @@ router.get('/quote', async (req, res, next) => {
         mode:        rate.mode,
         ratePerMile: rate.ratePerMile,
         fscPct:      rate.fscPct,
+        miles,
         estimatedCost: Math.round((baseCost + fsc) * 100) / 100,
         transitDays: rate.transitDays,
       };
     }).sort((a, b) => a.estimatedCost - b.estimatedCost);
 
-    res.json({ quotes, count: quotes.length });
+    res.json({ quotes, count: quotes.length, miles });
   } catch (err) { next(err); }
 });
 

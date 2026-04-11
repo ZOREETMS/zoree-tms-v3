@@ -1,0 +1,340 @@
+import { useState, useEffect } from "react";
+
+const MODE_OPTIONS = ["TL", "LTL", "Intermodal", "Flatbed", "Reefer", "Air Freight"];
+const STATUS_OPTIONS = ["Active", "Expiring", "Expired"];
+const SERVICE_LEVEL_OPTIONS = ["Standard", "Express", "Expedited", "Economy"];
+const UNIT_OPTIONS = [
+  { value: "per mile", label: "PER MILE" },
+  { value: "per cwt", label: "PER CWT" },
+  { value: "flat", label: "FLAT" },
+  { value: "container", label: "CONTAINER" },
+];
+
+/* ── Normalize unit value to match select options ── */
+function normalizeUnit(raw) {
+  if (!raw) return "per mile";
+  const u = raw.toLowerCase().trim();
+  if (u.includes("mile")) return "per mile";
+  if (u.includes("cwt")) return "per cwt";
+  if (u === "flat") return "flat";
+  if (u.includes("container")) return "container";
+  return "per mile";
+}
+const FREIGHT_CLASSES = [
+  "50", "55", "60", "65", "70", "77.5", "85", "92.5",
+  "100", "110", "125", "150", "175", "200", "250", "300",
+];
+
+/* ── Normalize helpers (handle both snake_case DB and camelCase) ── */
+function getField(r, ...keys) {
+  for (const k of keys) {
+    if (r[k] !== undefined && r[k] !== null && r[k] !== "") return r[k];
+  }
+  return "";
+}
+
+function parseLocation(str) {
+  if (!str) return { city: "", state: "", zip: "" };
+  let s = str;
+  let zip = "";
+  const m = s.match(/(\d{5})/);
+  if (m) { zip = m[1]; s = s.replace(m[1], "").trim(); }
+  const parts = s.split(",");
+  return { city: (parts[0] || "").trim(), state: (parts[1] || "").trim().replace(/\s+/g, ""), zip };
+}
+
+function buildInitialForm(rate) {
+  if (!rate) return {};
+  const oLoc = parseLocation(rate.origin);
+  const dLoc = parseLocation(rate.dest);
+  return {
+    lane: rate.lane || "",
+    mode: rate.mode || "TL",
+    origin: rate.origin || "",
+    originCity: rate.originCity || oLoc.city,
+    originState: rate.originState || oLoc.state,
+    originZip: rate.originZip || oLoc.zip,
+    dest: rate.dest || "",
+    destCity: rate.destCity || dLoc.city,
+    destState: rate.destState || dLoc.state,
+    destZip: rate.destZip || dLoc.zip,
+    carrier: rate.carrier || "",
+    status: rate.status || "Active",
+    rate: String(getField(rate, "rate", "rate_per_mile")).replace(/[$]/g, ""),
+    unit: normalizeUnit(getField(rate, "unit", "rate_unit")),
+    fsc: String(getField(rate, "fsc", "fsc_pct")).replace(/%/g, ""),
+    discount: getField(rate, "discount", "discount_pct"),
+    discountFlat: getField(rate, "discountFlat", "discount_flat", "discount_amt"),
+    eff: getField(rate, "eff", "effective", "effective_date", "effectiveDate"),
+    exp: getField(rate, "exp", "expires", "expiry_date", "expiryDate"),
+    miles: getField(rate, "miles", "distance") || "",
+    transitDays: getField(rate, "transitDays", "transit_days"),
+    serviceLevel: getField(rate, "serviceLevel", "service_level"),
+    czarlite: !!rate.czarlite,
+    czarliteClass: getField(rate, "czarliteClass", "czarlite_class", "freight_class") || "70",
+    czarliteMinWt: getField(rate, "czarliteMinWt", "czarlite_min_wt", "czar_min_wt") || 500,
+    czarliteMaxWt: getField(rate, "czarliteMaxWt", "czarlite_max_wt", "czar_max_wt") || 9999,
+  };
+}
+
+function buildPayload(form) {
+  // Combine city/state/zip into origin/dest strings
+  const origin = [form.originCity, form.originState?.toUpperCase()].filter(Boolean).join(", ") + (form.originZip ? " " + form.originZip : "");
+  const dest = [form.destCity, form.destState?.toUpperCase()].filter(Boolean).join(", ") + (form.destZip ? " " + form.destZip : "");
+  // Format rate as "$X.XX" and FSC as "X.X%" to match DB convention
+  const rateNum = parseFloat(String(form.rate).replace(/[^0-9.]/g, ""));
+  const fscNum = parseFloat(String(form.fsc).replace(/[^0-9.]/g, ""));
+  return {
+    lane: form.lane,
+    mode: form.mode,
+    origin: origin || form.origin,
+    dest: dest || form.dest,
+    carrier: form.carrier,
+    status: form.status,
+    rate: isNaN(rateNum) ? form.rate : `$${rateNum.toFixed(2)}`,
+    unit: form.unit,
+    fsc: isNaN(fscNum) ? form.fsc : `${fscNum.toFixed(1)}%`,
+    discount: form.discount ? parseFloat(form.discount) : null,
+    discount_flat: form.discountFlat ? parseFloat(form.discountFlat) : null,
+    eff: form.eff || null,
+    exp: form.exp || null,
+    miles: form.miles ? Number(form.miles) : null,
+    transit_days: form.transitDays ? Number(form.transitDays) : null,
+    service_level: form.serviceLevel || null,
+    czarlite: form.czarlite,
+    czarlite_class: form.czarliteClass ? Number(form.czarliteClass) : null,
+    czarlite_min_wt: form.czarliteMinWt ? Number(form.czarliteMinWt) : null,
+    czarlite_max_wt: form.czarliteMaxWt ? Number(form.czarliteMaxWt) : null,
+  };
+}
+
+export default function EditRateModal({ rate, onClose, onSave, isNew, carriers = [], existingLanes = [] }) {
+  const [form, setForm] = useState({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (rate) setForm(buildInitialForm(rate));
+  }, [rate]);
+
+
+  if (!rate) return null;
+
+  function setField(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handleSave() {
+    // Auto-generate lane ID if empty
+    if (!form.lane && form.carrier && form.originCity && form.destCity) {
+      const carrierCode = (form.carrier || "").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 4);
+      const oCode = (form.originCity || "").slice(0, 3).toUpperCase();
+      const dCode = (form.destCity || "").slice(0, 3).toUpperCase();
+      const modeCode = (form.mode || "TL").toUpperCase();
+      const svcCode = (form.serviceLevel || "STD").slice(0, 3).toUpperCase();
+      const dateCode = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      setField("lane", `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`);
+      form.lane = `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`;
+    }
+    if (!form.lane) {
+      alert("Lane ID is required.");
+      return;
+    }
+    if (isNew && existingLanes.includes(form.lane)) {
+      alert(`Duplicate Lane ID: "${form.lane}" already exists. Please use a unique Lane ID.`);
+      return;
+    }
+    if (!(form.originCity || form.origin) || !(form.destCity || form.dest) || !form.carrier) {
+      alert("Origin, Destination, and Carrier are required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = buildPayload(form);
+      await onSave(rate.id, payload, isNew);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const title = isNew ? "ADD RATE" : `EDIT RATE \u2014 ${form.lane || ""}`;
+
+  return (
+    <div className="modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="modal-card" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button className="modal-close" onClick={() => !busy && onClose()}>✕</button>
+        </div>
+        <div className="modal-body">
+
+          {/* Lane ID + Mode */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">LANE ID *</label>
+              <input value={form.lane || ""} onChange={(e) => setField("lane", e.target.value)} placeholder="Auto-generated if empty" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">MODE *</label>
+              <select value={form.mode || "TL"} onChange={(e) => {
+                setField("mode", e.target.value);
+                if (e.target.value === "LTL") setField("czarlite", true);
+              }}>
+                {MODE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Origin */}
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label">ORIGIN *</label>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+              <input value={form.originCity || ""} onChange={(e) => setField("originCity", e.target.value)} placeholder="City (e.g. Chicago)" />
+              <input value={form.originState || ""} onChange={(e) => setField("originState", e.target.value)} placeholder="ST" maxLength={2} style={{ textTransform: "uppercase" }} />
+              <input value={form.originZip || ""} onChange={(e) => setField("originZip", e.target.value)} placeholder="ZIP (opt)" maxLength={5} />
+            </div>
+          </div>
+          {/* Destination */}
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label">DESTINATION *</label>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+              <input value={form.destCity || ""} onChange={(e) => setField("destCity", e.target.value)} placeholder="City (e.g. Dallas)" />
+              <input value={form.destState || ""} onChange={(e) => setField("destState", e.target.value)} placeholder="ST" maxLength={2} style={{ textTransform: "uppercase" }} />
+              <input value={form.destZip || ""} onChange={(e) => setField("destZip", e.target.value)} placeholder="ZIP (opt)" maxLength={5} />
+            </div>
+          </div>
+
+          {/* Carrier + Status */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">CARRIER *</label>
+              {carriers.length > 0 ? (<>
+                <select value={form.carrier || ""} onChange={(e) => setField("carrier", e.target.value)}>
+                  <option value="">— Select Carrier —</option>
+                  {carriers.map((c) => {
+                    const name = c.name || c;
+                    return <option key={name} value={name}>{name}</option>;
+                  })}
+                  {/* If current carrier not in list, show it as an option */}
+                  {form.carrier && !carriers.some((c) => (c.name || c) === form.carrier) && (
+                    <option value={form.carrier}>{form.carrier}</option>
+                  )}
+                </select>
+              </>) : (
+                <input value={form.carrier || ""} onChange={(e) => setField("carrier", e.target.value)} placeholder="e.g. Werner Enterprises" />
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">STATUS</label>
+              <select value={form.status || "Active"} onChange={(e) => setField("status", e.target.value)}>
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Rate + Rate Unit + FSC */}
+          <div className="form-row-3">
+            <div className="form-group">
+              <label className="form-label">RATE *</label>
+              <input value={form.rate || ""} onChange={(e) => setField("rate", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">RATE UNIT</label>
+              <select value={form.unit || "per mile"} onChange={(e) => setField("unit", e.target.value)}>
+                {UNIT_OPTIONS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">FSC %</label>
+              <input value={form.fsc || ""} onChange={(e) => setField("fsc", e.target.value)} />
+            </div>
+          </div>
+
+
+          {/* Effective + Expiration */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">EFFECTIVE DATE</label>
+              <input type="date" value={form.eff || ""} onChange={(e) => setField("eff", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">EXPIRATION DATE</label>
+              <input type="date" value={form.exp || ""} onChange={(e) => setField("exp", e.target.value)} />
+            </div>
+          </div>
+
+          {/* Service Level + Transit Days + Miles */}
+          <div className="form-row-3">
+            <div className="form-group">
+              <label className="form-label">⭐ SERVICE LEVEL</label>
+              <select value={form.serviceLevel || ""} onChange={(e) => setField("serviceLevel", e.target.value)}>
+                <option value="">— Select —</option>
+                {SERVICE_LEVEL_OPTIONS.map((s) => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">📅 TRANSIT DAYS</label>
+              <input type="number" min="1" max="30" value={form.transitDays || ""} onChange={(e) => setField("transitDays", e.target.value)} />
+              <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>BUSINESS DAYS, CARRIER-COMMITTED</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">📏 DISTANCE (MILES)</label>
+              <input
+                type="number"
+                min="1"
+                max="99999"
+                placeholder="Manual or from PC*MILER"
+                value={form.miles || ""}
+                onChange={(e) => setField("miles", e.target.value ? Number(e.target.value) : "")}
+              />
+              <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>EDITABLE — PC*MILER FILLS DURING RATING</span>
+            </div>
+          </div>
+
+          {/* CzarLite / LTL Rate Fields — always visible */}
+          <div style={{
+            marginTop: 16, padding: "14px 16px", borderRadius: 12,
+            background: "rgba(99,102,241,.04)",
+            border: "1.5px solid rgba(99,102,241,.15)",
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 10 }}>📊 LTL / CZARLITE RATE CONFIGURATION</div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" style={{ color: "#059669" }}>💲 DISCOUNT % OFF CZARLITE BASE</label>
+                <input type="number" min="0" max="50" step="0.5" value={form.discount || ""} onChange={(e) => setField("discount", e.target.value)} placeholder="e.g. 10" />
+                <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>% REDUCTION OFF CZARLITE BASE RATE BEFORE FSC</span>
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ color: "#059669" }}>💲 DISCOUNT $ FLAT OFF BASE</label>
+                <input type="number" min="0" value={form.discountFlat || ""} onChange={(e) => setField("discountFlat", e.target.value)} placeholder="e.g. 50" />
+                <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>FIXED $ DEDUCTION OFF BASE (APPLIED BEFORE FSC)</span>
+              </div>
+            </div>
+            <div className="form-row-3" style={{ marginTop: 10 }}>
+              <div className="form-group">
+                <label className="form-label">NMFC FREIGHT CLASS</label>
+                <select value={form.czarliteClass || "70"} onChange={(e) => setField("czarliteClass", e.target.value)}>
+                  {FREIGHT_CLASSES.map((c) => <option key={c} value={c}>CLASS {c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">MIN WEIGHT (LBS)</label>
+                <input type="number" value={form.czarliteMinWt || 500} onChange={(e) => setField("czarliteMinWt", e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">MAX WEIGHT (LBS)</label>
+                <input type="number" value={form.czarliteMaxWt || 9999} onChange={(e) => setField("czarliteMaxWt", e.target.value)} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn btn-green" onClick={handleSave} disabled={busy}>
+            {busy ? "Saving..." : "💾 Save Rate"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

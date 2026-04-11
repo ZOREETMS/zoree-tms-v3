@@ -1146,7 +1146,7 @@ async function runPushOrderFlow(){
     locMap[l.id] = {
       id:      l.id,
       name:    l.name,
-      display: (l.city && l.state) ? l.city + ', ' + l.state : (l.name || l.id),
+      display: (l.city && l.state) ? l.city + ', ' + l.state + (l.zip ? ' ' + l.zip : '') : (l.name || l.id),
       address: l.address || null,
       zip:     l.zip     || null,
     };
@@ -1170,8 +1170,8 @@ async function runPushOrderFlow(){
   var pushed = 0;
   for(var o of data){
     var lines = o.oms_order_lines || [];
-    var wt  = lines.reduce((s,l)=>s+(l.qty_ordered*(parseFloat(l.unit_weight)||0)),0);
-    var pcs = lines.reduce((s,l)=>s+l.qty_ordered,0);
+    var wt  = lines.reduce((s,l)=>s+((l.qty_ordered||0)*(parseFloat(l.unit_weight)||0)),0);
+    var pcs = Math.round(lines.reduce((s,l)=>s+(l.qty_ordered||0),0));
 
     // ── Resolve origin location ────────────────────────────────────
     var originLoc    = locMap[o.origin_location] || null;
@@ -1233,6 +1233,8 @@ async function runPushOrderFlow(){
       po_number:          o.po_number        || null,
       hazmat:             false,
       line_count:         lines.length,
+      origin_zip:         originLoc ? originLoc.zip : (o.origin_zip || null),
+      dest_zip:           o.dest_zip || (o.destination || '').match(/(\d{5})/)?.[1] || null,
     };
 
     // ── Push order header to TMS ───────────────────────────────────
@@ -1304,6 +1306,16 @@ async function runPushOrderFlow(){
         }
       }
     );
+  }
+  // Notify TMS frontend via WebSocket so it refreshes instantly
+  if (pushed > 0) {
+    try {
+      fetch('http://localhost:3001/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'orders_updated', data: { source: 'middleware', count: pushed } })
+      }).catch(function(){});
+    } catch(e) { /* non-blocking */ }
   }
   return pushed + ' order(s) pushed with full lines';
 }
@@ -1429,6 +1441,16 @@ async function runPushShipFlow(){
       );
     }
   }
+  // Notify TMS frontend so shipment status updates instantly
+  if (pushed > 0) {
+    try {
+      fetch('http://localhost:3001/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'shipment_status_updated', data: { source: 'oms', count: pushed } })
+      }).catch(function(){});
+    } catch(e) { /* non-blocking */ }
+  }
   return pushed + ' status push(es)';
 }
 
@@ -1481,6 +1503,16 @@ async function runPushPODFlow(){
         { srcSystem:'OMS', dstSystem:'TMS', recordId:o.tms_shipment_id, payload:{ error:err.message, attempted:shipUpd } }
       );
     }
+  }
+  // Notify TMS frontend so delivery status updates instantly
+  if (pushed > 0) {
+    try {
+      fetch('http://localhost:3001/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'shipment_delivered', data: { source: 'oms', count: pushed } })
+      }).catch(function(){});
+    } catch(e) { /* non-blocking */ }
   }
   return pushed + ' delivery confirmation(s)';
 }
@@ -2036,6 +2068,34 @@ function doLogin(){
   }, 1200);
   // Auto-refresh log every 30 seconds
   setInterval(function(){ _loadPersistedEvents(); }, 30000);
+
+  // ── WebSocket: Listen for TMS events (tender accepted, etc.) ──
+  try {
+    var _mwWs = new WebSocket('ws://' + window.location.hostname + ':3001');
+    _mwWs.onopen = function() { console.log('[MW-WS] Connected to TMS'); };
+    _mwWs.onmessage = function(evt) {
+      try {
+        var msg = JSON.parse(evt.data);
+        console.log('[MW-WS] Event:', msg.event, msg.data);
+        if (msg.event === 'tender_accepted') {
+          // Auto-pull planning data from TMS to sync PRO/BOL/carrier back to OMS
+          logEvent('info', '← TMS', 'Auto-pull triggered by tender acceptance: ' + (msg.data?.shipmentId || ''));
+          runPullPlanningFlow().then(function(result) {
+            logEvent('ok', 'TMS → OMS', 'Auto-pull complete after tender: ' + result);
+            renderLog(); renderTransferLog(); updateLogBadges();
+          }).catch(function(err) {
+            logEvent('err', '← TMS', 'Auto-pull failed: ' + err.message);
+          });
+        }
+      } catch(e) { /* ignore non-JSON */ }
+    };
+    _mwWs.onclose = function() {
+      console.log('[MW-WS] Disconnected. Reconnecting in 5s...');
+      setTimeout(function() {
+        try { _mwWs = new WebSocket('ws://' + window.location.hostname + ':3001'); } catch(e) {}
+      }, 5000);
+    };
+  } catch(e) { console.warn('[MW-WS] WebSocket not available:', e.message); }
 }
 
 function doSignOut(){
