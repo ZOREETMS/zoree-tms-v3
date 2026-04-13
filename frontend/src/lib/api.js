@@ -74,6 +74,15 @@ export const AuthApi = {
   me() {
     return api("/auth/me");
   },
+  roles() {
+    return api("/roles");
+  },
+  updateRole(role, permissions) {
+    return api(`/roles/${encodeURIComponent(role)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ permissions }),
+    });
+  },
 };
 
 export const DbApi = {

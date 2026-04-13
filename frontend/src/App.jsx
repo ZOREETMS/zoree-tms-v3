@@ -34,6 +34,7 @@ import MultiStopRoutesPage from "./pages/MultiStopRoutesPage";
 import EquipmentMasterPage from "./pages/EquipmentMasterPage";
 import PlanningParametersPage from "./pages/PlanningParametersPage";
 import HomePage from "./pages/HomePage";
+import UserRolesPage from "./pages/UserRolesPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
 
@@ -48,6 +49,7 @@ function PrivateRoutes({ data }) {
         <Route path="carriers" element={<CarriersPage />} />
         <Route path="bulk-plan" element={<BulkPlanPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="user-roles" element={<UserRolesPage />} />
         {/* Placeholder pages */}
         <Route path="item-master" element={<ItemMasterPage />} />
         <Route path="location-master" element={<LocationMasterPage />} />

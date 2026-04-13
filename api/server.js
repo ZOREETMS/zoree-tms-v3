@@ -11,6 +11,9 @@ const cors    = require('cors');
 const helmet  = require('helmet');
 const WebSocket = require('ws');
 const nodemailer = require('nodemailer');
+const { createRolePermissionService } = require('./services/rolePermissions');
+const { createRolesRouter } = require('./routes/roles');
+const { executeBulkPlans } = require('./services/bulkPlanExecution');
 
 
 // ── Crash prevention ─────────────────────────────────────────────────────────
@@ -144,6 +147,8 @@ const ALLOWED = [
   'dock_appointments','dock_schedules','crossdock_hubs','warehouse_dock_config',
   // Events & messaging
   'shipment_events','tms_messages','system_config','tenant_config',
+  // Access control
+  'access_roles','access_features','role_feature_permissions',
   // OMS
   'oms_orders','oms_order_lines','oms_customers','oms_locations',
   'oms_inventory','oms_inv_transactions','oms_dock_schedule','oms_stage_log',
@@ -152,6 +157,16 @@ const ALLOWED = [
   // Marketing
   'trial_signups',
 ];
+
+const rolePermissionService = createRolePermissionService({ dbSelect, dbUpsert });
+const {
+  ROLE_FEATURES,
+  getTenantId,
+  getUserRole,
+  loadRolePermissions,
+  saveRolePermissions,
+  canWriteTable,
+} = rolePermissionService;
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -366,8 +381,24 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
-  res.json({ user: { id: user.id, email: user.email, role: 'admin' } });
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      role: getUserRole(user),
+      name: (user.user_metadata && user.user_metadata.full_name) || user.email,
+    }
+  });
 });
+
+app.use('/api/roles', createRolesRouter({
+  verifyToken,
+  getTenantId,
+  getUserRole,
+  loadRolePermissions,
+  saveRolePermissions,
+  roleFeatures: ROLE_FEATURES,
+}));
 
 // ── POST /api/tender/email — notify carrier when a shipment is tendered ──
 function getSmtpTransport() {
@@ -787,6 +818,9 @@ app.post('/api/db/:table', async (req, res) => {
   if (!user) return;
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  if (!(await canWriteTable(user, req.params.table, 'POST', getTenantId(user)))) {
+    return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot create ${req.params.table}` });
+  }
   try {
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpsert(req.params.table, req.body, null);
@@ -797,7 +831,11 @@ app.post('/api/db/:table', async (req, res) => {
 // PATCH /api/db/:table/:id  — update by id
 // PATCH /api/db/rates — update by lane query string (for supaSaveRate)
 app.patch('/api/db/rates', async (req, res) => {
-  const user = await verifyTokenSoft(req);
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  if (!(await canWriteTable(user, 'rates', 'PATCH', getTenantId(user)))) {
+    return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot edit rates` });
+  }
   const q = req.query;
   // Build filter from query string e.g. lane=eq.AVRT-HOU-DAL
   const qs = Object.entries(q).map(([k,v]) => k+'='+v).join('&');
@@ -815,9 +853,13 @@ app.patch('/api/db/rates', async (req, res) => {
 });
 
 app.patch('/api/db/:table/:id', async (req, res) => {
-  const user = await verifyTokenSoft(req);
+  const user = await verifyToken(req, res);
+  if (!user) return;
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  if (!(await canWriteTable(user, req.params.table, 'PATCH', getTenantId(user)))) {
+    return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot edit ${req.params.table}` });
+  }
   try {
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpdate(req.params.table, req.params.id, req.body, null);
@@ -827,9 +869,13 @@ app.patch('/api/db/:table/:id', async (req, res) => {
 
 // DELETE /api/db/:table/:id  — delete by id
 app.delete('/api/db/:table/:id', async (req, res) => {
-  const user = await verifyTokenSoft(req);
+  const user = await verifyToken(req, res);
+  if (!user) return;
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  if (!(await canWriteTable(user, req.params.table, 'DELETE', getTenantId(user)))) {
+    return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot delete ${req.params.table}` });
+  }
   try {
     await dbDelete(req.params.table, req.params.id, null);
     res.json({ deleted: true });
@@ -2061,164 +2107,53 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
   try {
     const { plans } = req.body;
     if (!plans || !plans.length) return res.status(400).json({ error: 'plans[] required' });
-
-    const shipments = [];
-    const errors = [];
-    let ordersUpdated = 0;
-
-    for (const plan of plans) {
-      try {
-        const year = new Date().getFullYear();
-        const shipId = `SHP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-        const shipRow = {
-          id: shipId,
-          carrier: plan.carrier || '',
-          mode: plan.mode || 'LTL',
-          origin: plan.origin,
-          dest: plan.destination,
-          weight: plan.totalWeight || 0,
-          pieces: plan.totalPieces || 0,
-          status: 'Planned',
-          total_cost: plan.totalCost || 0,
-          rate: plan.rate || 0,
-          fuel_surcharge: plan.fuelSurcharge || 0,
-          accessorials: plan.accessorials || 0,
-          order_ids: plan.orderIds || [],
-          pickup_date: plan.pickupDate || null,
-          delivery_date: plan.deliveryDate || null,
-          czarlite_rate: !!plan.czarliteRate || (plan.mode || '').toUpperCase() === 'LTL',
-          service_level: plan.serviceLevel || null,
-          miles: plan.miles || null,
-          rate_id: plan.rateId || null,
-        };
-
-        // Add dock fields if available
-        if (plan.dockDoor) shipRow.dock_door = plan.dockDoor;
-        if (plan.dockTime) shipRow.dock_time = plan.dockTime;
-        if (plan.loadingStart) shipRow.loading_start = plan.loadingStart;
-        if (plan.loadingEnd) shipRow.loading_end = plan.loadingEnd;
-        if (plan.dockIssue) shipRow.dock_issue = plan.dockIssue;
-
-        // Create shipment
-        console.log(`[BulkPlan/execute] INSERT payload:`, JSON.stringify(shipRow));
-        let shipRes = await fetch(`${SUPABASE_URL}/rest/v1/shipments?on_conflict=id`, {
-          method: 'POST',
-          headers: {
-            'apikey': SERVICE_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates,return=representation',
-          },
-          body: JSON.stringify(shipRow),
-        });
-        let shipData = await shipRes.json();
-
-        // Fail loudly if dock columns are missing — run migrations before deploying
-        if (!shipRes.ok && shipData?.message?.includes('dock_door')) {
-          console.error(`[BulkPlan/execute] MIGRATION REQUIRED: dock columns (dock_door, dock_time, loading_start, loading_end) not found in shipments table. Run migrations 20260324120000_shipments_loading_times.sql and 20260406_shipments_dock_fields.sql.`);
-          errors.push({ shipId, error: 'Dock columns missing in DB — run pending migrations' });
-          continue;
-        }
-
-        if (!shipRes.ok) {
-          console.error(`[BulkPlan/execute] Supabase INSERT FAILED:`, shipRes.status, JSON.stringify(shipData));
-          errors.push({ shipId, error: shipData.message || 'DB insert failed' });
-          continue;
-        }
-        const created = Array.isArray(shipData) ? shipData[0] : shipData;
-        shipments.push(created);
-
-        // Auto-generate BOL document for the new shipment (with line items + incoterms)
-        try {
-          const bolId = `BOL-${shipId}`;
-          const today = new Date().toISOString().split('T')[0];
-          const oIds = shipRow.order_ids || [];
-
-          // Fetch line items for all linked orders
-          let allLines = [];
-          let linkedOrders = [];
-          for (const oid of oIds) {
-            try {
-              const lines = await dbSelect('order_lines', `select=*&order_id=eq.${encodeURIComponent(oid)}&order=line_num.asc`, null);
-              if (Array.isArray(lines)) allLines.push(...lines);
-            } catch { /* skip */ }
-            try {
-              const ords = await dbSelect('orders', `select=*&id=eq.${encodeURIComponent(oid)}`, null);
-              if (Array.isArray(ords) && ords.length) linkedOrders.push(ords[0]);
-            } catch { /* skip */ }
-          }
-          const incoterms = linkedOrders.map((o) => o.incoterms).find(Boolean) || null;
-
-          const bolRow = {
-            id: bolId,
-            type: 'BOL',
-            status: 'Pending',
-            ship: shipId,
-            carrier: shipRow.carrier,
-            generated: today,
-            origin: shipRow.origin,
-            dest: shipRow.dest,
-            weight: shipRow.weight,
-            pieces: shipRow.pieces,
-            mode: shipRow.mode,
-            pickup_date: shipRow.pickup_date,
-            delivery_date: shipRow.delivery_date,
-            order_ids: oIds,
-            orders: linkedOrders,
-            line_items: allLines,
-            incoterms,
-          };
-          await fetch(`${SUPABASE_URL}/rest/v1/documents?on_conflict=id`, {
-            method: 'POST',
-            headers: {
-              'apikey': SERVICE_KEY,
-              'Content-Type': 'application/json',
-              'Prefer': 'resolution=merge-duplicates,return=minimal',
-            },
-            body: JSON.stringify(bolRow),
-          });
-          // Update shipment with bol_number so it shows in shipment details
-          await fetch(`${SUPABASE_URL}/rest/v1/shipments?id=eq.${encodeURIComponent(shipId)}`, {
-            method: 'PATCH',
-            headers: { 'apikey': SERVICE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ bol_number: bolId }),
-          });
-          console.log(`[BulkPlan/execute] Auto-generated BOL ${bolId} for ${shipId} (${allLines.length} lines, incoterms: ${incoterms})`);
-        } catch (bolErr) {
-          console.error(`[BulkPlan/execute] BOL auto-gen failed for ${shipId}:`, bolErr.message);
-        }
-
-        // Update each order
-        for (const orderId of (plan.orderIds || [])) {
-          const ordPatchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SERVICE_KEY,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal',
-            },
-            body: JSON.stringify({ status: 'Planned', shipment_id: shipId }),
-          });
-          if (ordPatchRes.ok) {
-            ordersUpdated++;
-          } else {
-            console.error(`[BulkPlan/execute] Order PATCH failed for ${orderId}:`, ordPatchRes.status, await ordPatchRes.text().catch(() => ''));
-          }
-        }
-
-        console.log(`[BulkPlan/execute] ${shipId}: ${plan.origin} → ${plan.destination} | ${plan.carrier} | $${plan.totalCost} | ${(plan.orderIds || []).length} orders`);
-
-      } catch (planErr) {
-        errors.push({ lane: plan.laneKey, error: planErr.message });
-        console.error('[BulkPlan/execute] Error:', planErr.message);
-      }
-    }
-
-    console.log(`[BulkPlan/execute] Created ${shipments.length} shipments, updated ${ordersUpdated} orders`);
+    const { shipments, ordersUpdated, errors } = await executeBulkPlans(plans, {
+      SUPABASE_URL,
+      SERVICE_KEY,
+      dbSelect,
+      fetchImpl: fetch,
+    });
     res.json({ shipments, ordersUpdated, errors });
 
   } catch (e) {
     console.error('[BulkPlan/execute]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/orders/reconcile-status — Repair inconsistent order status/shipment links ──
+app.post('/api/orders/reconcile-status', async (req, res) => {
+  const user = await verifyToken(req, res); if (!user) return;
+  if (getUserRole(user) !== 'admin') return res.status(403).json({ error: 'Admin role required' });
+  try {
+    const staleUnplanned = await dbSelect(
+      'orders',
+      'select=id,status,shipment_id&status=eq.Unplanned&shipment_id=not.is.null&limit=10000',
+      null
+    );
+    let fixedToPlanned = 0;
+    for (const row of (staleUnplanned || [])) {
+      await dbUpdate('orders', row.id, { status: 'Planned' }, null);
+      fixedToPlanned++;
+    }
+
+    const stalePlanned = await dbSelect(
+      'orders',
+      'select=id,status,shipment_id&status=eq.Planned&shipment_id=is.null&limit=10000',
+      null
+    );
+    let fixedToUnplanned = 0;
+    for (const row of (stalePlanned || [])) {
+      await dbUpdate('orders', row.id, { status: 'Unplanned' }, null);
+      fixedToUnplanned++;
+    }
+
+    res.json({
+      repaired: fixedToPlanned + fixedToUnplanned,
+      fixedToPlanned,
+      fixedToUnplanned,
+    });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

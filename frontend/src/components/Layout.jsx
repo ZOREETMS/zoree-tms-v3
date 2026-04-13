@@ -49,6 +49,7 @@ const navStructure = [
     { to: "/db-explorer", label: "DB Explorer", icon: "🗄️" },
   ]},
   { section: "System", items: [
+    { to: "/user-roles", label: "User Roles", icon: "🔐" },
     { to: "/settings", label: "Settings", icon: "⚙️" },
   ]},
 ];
@@ -107,7 +108,7 @@ export default function Layout({ data }) {
             <div className="user-avatar">{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: "12.5px", fontWeight: 500, color: "#fff" }}>{user?.email || "Not signed in"}</div>
-              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>Admin · Zoree</div>
+              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>{(user?.role || "admin").toUpperCase()} · Zoree</div>
             </div>
           </div>
           <button onClick={logout} className="sidebar-logout-btn">

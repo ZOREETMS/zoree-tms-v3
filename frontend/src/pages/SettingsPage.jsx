@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 
 export default function SettingsPage() {
@@ -72,8 +73,16 @@ export default function SettingsPage() {
             </div>
             <div className="card-body">
               <InfoRow label="User Email" value={user?.email || "—"} />
-              <InfoRow label="Role" value="Admin" />
+              <InfoRow label="Role" value={(user?.role || "admin").toUpperCase()} />
               <InfoRow label="Organization" value="Zoree" />
+              <div style={{ paddingTop: 12, borderTop: "1px solid var(--border)", marginTop: 8 }}>
+                <Link to="/user-roles" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+                  Open User Roles
+                </Link>
+                <div className="text-muted text-sm mt-2" style={{ textTransform: "none" }}>
+                  Also under System → User Roles in the sidebar (scroll to the bottom).
+                </div>
+              </div>
             </div>
           </div>
 
