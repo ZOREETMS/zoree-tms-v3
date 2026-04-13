@@ -4,7 +4,8 @@ import { plannedDeliveryDate, plannedPickupDate, resolveCarrierName } from "../u
 import {
   ACTIVE_PORTAL_CARRIER,
   buildPersistedTenderResponses,
-  isActivePortalCarrierShipment,
+  isCarrierShipment,
+  mergeCarrierOptions,
   saveTenderResponse,
 } from "../services/carrierPortalService";
 import TenderCard from "../components/carrier-portal/TenderCard";
@@ -19,7 +20,8 @@ const TABS = [
 ];
 
 export default function CarrierPortalPage() {
-  const { shipments, orders, refreshData } = useOutletContext();
+  const { shipments, orders, carriers, refreshData } = useOutletContext();
+  const [selectedCarrier, setSelectedCarrier] = useState("");
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [localTenderResponses, setLocalTenderResponses] = useState({});
@@ -30,6 +32,23 @@ export default function CarrierPortalPage() {
   const [originFilter, setOriginFilter] = useState("All");
   const [destFilter, setDestFilter] = useState("All");
   const [dateFilter, setDateFilter] = useState("All");
+
+  // Build carrier options from DB carriers + unique carriers found in shipments (de-duped)
+  const carrierOptions = useMemo(
+    () => mergeCarrierOptions(carriers, shipments),
+    [carriers, shipments],
+  );
+
+  // Auto-select: match env default to an actual option, or fall back to first option
+  const effectiveCarrier = useMemo(() => {
+    if (selectedCarrier && carrierOptions.includes(selectedCarrier)) return selectedCarrier;
+    // Try to find a match for the env default in the options list
+    const defaultNorm = (ACTIVE_PORTAL_CARRIER || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const match = carrierOptions.find(
+      (c) => c.toLowerCase().replace(/[^a-z0-9]/g, "") === defaultNorm
+    );
+    return match || carrierOptions[0] || "";
+  }, [selectedCarrier, carrierOptions]);
 
   // Modal state
   const [respondModal, setRespondModal] = useState({ open: false, shipId: null, preselect: null });
@@ -54,7 +73,7 @@ export default function CarrierPortalPage() {
 
   // All shipments visible in carrier portal: tendered + those with responses
   const portalShipments = useMemo(() => {
-    const carrierShipments = (shipments || []).filter(isActivePortalCarrierShipment);
+    const carrierShipments = (shipments || []).filter((s) => isCarrierShipment(s, effectiveCarrier));
     const tendered = carrierShipments.filter((s) => s.status === "Tendered");
     const responded = carrierShipments.filter((s) => tenderResponses[s.id]);
     const merged = [...tendered];
@@ -62,7 +81,7 @@ export default function CarrierPortalPage() {
       if (!merged.find((x) => x.id === s.id)) merged.push(s);
     });
     return merged;
-  }, [shipments, tenderResponses]);
+  }, [shipments, tenderResponses, effectiveCarrier]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -218,6 +237,9 @@ export default function CarrierPortalPage() {
         onTabChange={setTab}
         search={search}
         onSearchChange={setSearch}
+        selectedCarrier={effectiveCarrier}
+        onCarrierChange={setSelectedCarrier}
+        carrierOptions={carrierOptions}
         modeFilter={modeFilter}
         onModeChange={setModeFilter}
         originFilter={originFilter}
@@ -326,6 +348,7 @@ export default function CarrierPortalPage() {
 
 function PageHeader({
   tab, onTabChange, search, onSearchChange,
+  selectedCarrier, onCarrierChange, carrierOptions,
   modeFilter, onModeChange, originFilter, onOriginChange,
   destFilter, onDestChange, dateFilter, onDateChange,
   filterOptions, activeFilterCount, onClearFilters,
@@ -340,7 +363,7 @@ function PageHeader({
         <div>
           <h2 style={{ margin: 0 }}>Carrier Portal</h2>
           <div className="page-subtitle">
-            Tendered shipments awaiting carrier acceptance or rejection ({ACTIVE_PORTAL_CARRIER})
+            Tendered shipments awaiting carrier acceptance or rejection ({selectedCarrier})
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -366,20 +389,26 @@ function PageHeader({
             ))}
           </div>
 
-          <div
+          <select
+            value={selectedCarrier}
+            onChange={(e) => onCarrierChange(e.target.value)}
             style={{
               padding: "7px 10px",
-              border: "1.5px solid var(--border)",
+              border: "1.5px solid var(--accent)",
               borderRadius: 8,
               fontSize: 13,
+              fontWeight: 600,
               fontFamily: "inherit",
-              background: "#fff",
-              color: "var(--text2)",
-              minWidth: 120,
+              background: "#f0f4ff",
+              color: "var(--text1)",
+              minWidth: 140,
+              cursor: "pointer",
             }}
           >
-            {ACTIVE_PORTAL_CARRIER}
-          </div>
+            {carrierOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
 
           {/* Search */}
           <input

@@ -7,6 +7,8 @@ import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
+import NewShipmentModal from "../components/shipments/NewShipmentModal";
+import { createShipment, copyShipment } from "../services/shipmentService";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -735,6 +737,7 @@ export default function ShipmentsPage() {
 
   /* ── Accept Tender Modal ── */
   const [acceptModal, setAcceptModal] = useState(null); // { shipment, pro, pickup, service, bol, dock, dockTime, notes }
+  const [showNewShipment, setShowNewShipment] = useState(false);
 
   function openAcceptTender(row) {
     const today = new Date().toISOString().slice(0, 10);
@@ -868,6 +871,31 @@ export default function ShipmentsPage() {
     }
   }
 
+  async function handleCreateShipment(formData) {
+    try {
+      const shipment = await createShipment(formData);
+      toast(`Shipment ${shipment.id} created`, "success");
+      setShowNewShipment(false);
+      await refreshData();
+    } catch (err) {
+      toast(`Failed to create shipment: ${err.message}`, "error");
+    }
+  }
+
+  async function handleCopyShipment(sourceShipment) {
+    if (!window.confirm(`Copy shipment ${sourceShipment.id}? A new shipment will be created with the same details.`)) return;
+    setBusyId(sourceShipment.id);
+    try {
+      const copy = await copyShipment(sourceShipment);
+      toast(`Shipment copied as ${copy.id}`, "success");
+      await refreshData();
+    } catch (err) {
+      toast(`Failed to copy: ${err.message}`, "error");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function deleteShipment(row) {
     if (effectiveShipmentStatus(row) === "Tendered") {
       toast("Withdraw tender first before deleting", "warning");
@@ -938,7 +966,7 @@ export default function ShipmentsPage() {
         </div>
         <div className="header-actions">
           <button className="btn btn-secondary btn-sm">📥 Export CSV</button>
-          <button className="btn btn-primary btn-sm">+ New Shipment</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowNewShipment(true)}>+ New Shipment</button>
         </div>
       </div>
       <div className="page-content">
@@ -1071,6 +1099,15 @@ export default function ShipmentsPage() {
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Confirmed</span>
                 )}
                 <button
+                  title="Copy Shipment"
+                  style={{ background: "rgba(59,130,246,.08)", color: "#2563eb", border: "1px solid rgba(59,130,246,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: "pointer", lineHeight: 1 }}
+                  disabled={busyId === s.id}
+                  onClick={() => handleCopyShipment(s)}
+                >
+                  📋
+                </button>
+                <button
+                  title="Delete Shipment"
                   style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: "pointer", lineHeight: 1 }}
                   disabled={busyId === s.id}
                   onClick={() => deleteShipment(s)}
@@ -1296,6 +1333,15 @@ export default function ShipmentsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* New Shipment Modal */}
+      {showNewShipment && (
+        <NewShipmentModal
+          carriers={carriers}
+          onSave={handleCreateShipment}
+          onClose={() => setShowNewShipment(false)}
+        />
       )}
 
       </div>{/* end page-content */}

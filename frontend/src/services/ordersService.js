@@ -289,7 +289,8 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
     }).catch(() => {});
 
     for (const ord of cbolOrders) {
-      await DbApi.patch("orders", ord.id, { status: "Planned", shipment_id: childId });
+      const cleanNotes = (ord.notes || "").replace(PLANNING_FAILED_REGEX, "").trim();
+      await DbApi.patch("orders", ord.id, { status: "Planned", shipment_id: childId, notes: cleanNotes || null });
     }
   }
 
@@ -317,12 +318,14 @@ export async function unplanOrderFromShipment(id, orders, shipments) {
 
   let message = `Order ${id} unplanned`;
 
-  // Clean up shipment if no orders remain
   if (shipmentId) {
-    const remainingOrders = orders.filter((o) => o.shipment_id === shipmentId && o.id !== id);
-    if (remainingOrders.length === 0) {
-      // Delete the shipment (and its master if this was the last CBOL)
-      const ship = shipments.find((s) => s.id === shipmentId);
+    const ship = shipments.find((s) => s.id === shipmentId);
+
+    // Remove this order from the shipment's order_ids array
+    const updatedOrderIds = (ship?.order_ids || []).filter((oid) => oid !== id);
+
+    if (updatedOrderIds.length === 0) {
+      // No orders remain — delete the shipment
       await DbApi.remove("shipments", shipmentId).catch(() => {});
       deletedShipments.push(shipmentId);
       // If it was a CBOL, check if the MBOL has any remaining CBOLs
@@ -338,6 +341,10 @@ export async function unplanOrderFromShipment(id, orders, shipments) {
       } else {
         message = `Order ${id} unplanned. Shipment ${shipmentId} deleted.`;
       }
+    } else {
+      // Other orders remain — update the shipment's order_ids to remove this order
+      await DbApi.patch("shipments", shipmentId, { order_ids: updatedOrderIds });
+      message = `Order ${id} unplanned and removed from shipment ${shipmentId}.`;
     }
   }
 
@@ -686,4 +693,73 @@ export function findMatchingRoute(templates, orders) {
   }
 
   return null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Planning Failure — service functions
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+const PLANNING_FAILED_REGEX = /\n?PLANNING FAILED:.*$/gm;
+
+/**
+ * Check if an order is in a plannable state (Unplanned or Planning Failed).
+ * @param {object} order
+ * @returns {boolean}
+ */
+export function isPlannable(order) {
+  return order.status === "Unplanned" || order.status === "Planning Failed";
+}
+
+/**
+ * Clean up stale shipment_id references on Unplanned orders.
+ * Returns the number of orders cleaned.
+ * @param {object[]} orders - Full orders list
+ * @returns {Promise<number>}
+ */
+export async function cleanupStaleShipmentRefs(orders) {
+  const stale = orders.filter((o) => o.status === "Unplanned" && o.shipment_id);
+  if (stale.length === 0) return 0;
+  await Promise.all(stale.map((o) => DbApi.patch("orders", o.id, { shipment_id: null })));
+  return stale.length;
+}
+
+/**
+ * Validate orders for past due dates and mark them as "Planning Failed".
+ * Returns { failed, valid } arrays.
+ * @param {object[]} orders - Orders to validate
+ * @returns {Promise<{ failed: object[], valid: object[] }>}
+ */
+export async function validateAndFailPastDueOrders(orders) {
+  const today = new Date().toISOString().slice(0, 10);
+  const failed = orders.filter((o) => o.due && o.due < today);
+  const valid = orders.filter((o) => !o.due || o.due >= today);
+
+  if (failed.length > 0) {
+    await Promise.all(failed.map((o) => {
+      const cleanNotes = (o.notes || "").replace(PLANNING_FAILED_REGEX, "").trim();
+      return DbApi.patch("orders", o.id, {
+        status: "Planning Failed",
+        notes: (cleanNotes ? cleanNotes + "\n" : "") + `PLANNING FAILED: due date ${o.due} is in the past`,
+      });
+    }));
+  }
+
+  return { failed, valid };
+}
+
+/**
+ * Clear "PLANNING FAILED:" notes from orders after successful planning.
+ * Only patches orders that actually have failure notes.
+ * @param {object[]} orders - Orders to clean
+ * @returns {Promise<void>}
+ */
+export async function clearPlanningFailureNotes(orders) {
+  const withFailNotes = orders.filter((o) => o.notes && PLANNING_FAILED_REGEX.test(o.notes));
+  // Reset regex lastIndex after .test()
+  PLANNING_FAILED_REGEX.lastIndex = 0;
+  if (withFailNotes.length === 0) return;
+  await Promise.all(withFailNotes.map((o) => {
+    const cleanNotes = o.notes.replace(PLANNING_FAILED_REGEX, "").trim();
+    return DbApi.patch("orders", o.id, { notes: cleanNotes || null });
+  }));
 }

@@ -23,21 +23,7 @@ const CITY_ZIP_MAP = {
   "Mountain View, CA": "94041",
 };
 
-const ORIGINS = [
-  "Chicago, IL",
-  "Houston, TX",
-  "Los Angeles, CA",
-  "Atlanta, GA",
-  "Dallas, TX",
-];
-const DESTINATIONS = [
-  "Dallas, TX",
-  "Miami, FL",
-  "Seattle, WA",
-  "Phoenix, AZ",
-  "New York, NY",
-  "Denver, CO",
-];
+/* Origins & Destinations are free-form text — no static arrays needed */
 
 const FALLBACK_TL_RATES = [
   { carrier: "J.B. Hunt Transport", rate: "$2.38", fsc: "21.0%", mode: "TL" },
@@ -68,9 +54,87 @@ const CZARLITE_WEIGHT_BREAKS = [
   { min: 20000, max: 99999, factor: 0.44 },
 ];
 
+/* ─────────── City Coordinates (for client-side haversine fallback) ─────────── */
+const CITY_COORDS = {
+  "chicago": { lat: 41.88, lng: -87.63 },
+  "dallas": { lat: 32.78, lng: -96.80 },
+  "columbus": { lat: 39.96, lng: -82.99 },
+  "atlanta": { lat: 33.75, lng: -84.39 },
+  "houston": { lat: 29.76, lng: -95.37 },
+  "new york": { lat: 40.75, lng: -73.99 },
+  "phoenix": { lat: 33.45, lng: -112.07 },
+  "memphis": { lat: 35.15, lng: -90.05 },
+  "denver": { lat: 39.74, lng: -104.99 },
+  "los angeles": { lat: 34.05, lng: -118.24 },
+  "seattle": { lat: 47.61, lng: -122.33 },
+  "charlotte": { lat: 35.23, lng: -80.84 },
+  "boston": { lat: 42.36, lng: -71.06 },
+  "miami": { lat: 25.76, lng: -80.19 },
+  "san jose": { lat: 37.34, lng: -121.89 },
+  "mountain view": { lat: 37.39, lng: -122.08 },
+  "portland": { lat: 45.52, lng: -122.68 },
+  "san antonio": { lat: 29.42, lng: -98.49 },
+  "austin": { lat: 30.27, lng: -97.74 },
+  "jacksonville": { lat: 30.33, lng: -81.66 },
+  "san francisco": { lat: 37.78, lng: -122.42 },
+  "indianapolis": { lat: 39.77, lng: -86.16 },
+  "nashville": { lat: 36.17, lng: -86.78 },
+  "kansas city": { lat: 39.10, lng: -94.58 },
+  "oklahoma city": { lat: 35.47, lng: -97.52 },
+  "louisville": { lat: 38.25, lng: -85.76 },
+  "detroit": { lat: 42.33, lng: -83.05 },
+  "milwaukee": { lat: 43.04, lng: -87.91 },
+  "minneapolis": { lat: 44.98, lng: -93.27 },
+  "st. louis": { lat: 38.63, lng: -90.20 },
+  "omaha": { lat: 41.26, lng: -95.94 },
+  "new orleans": { lat: 29.95, lng: -90.07 },
+  "salt lake city": { lat: 40.76, lng: -111.89 },
+  "las vegas": { lat: 36.17, lng: -115.14 },
+  "el paso": { lat: 31.76, lng: -106.44 },
+  "albuquerque": { lat: 35.08, lng: -106.65 },
+  "sacramento": { lat: 38.58, lng: -121.49 },
+  "san diego": { lat: 32.72, lng: -117.16 },
+  "cleveland": { lat: 41.50, lng: -81.69 },
+  "baltimore": { lat: 39.29, lng: -76.61 },
+  "richmond": { lat: 37.54, lng: -77.43 },
+  "washington": { lat: 38.90, lng: -77.04 },
+  "philadelphia": { lat: 39.95, lng: -75.16 },
+  "tampa": { lat: 27.95, lng: -82.46 },
+  "orlando": { lat: 28.54, lng: -81.38 },
+  "ft. lauderdale": { lat: 26.12, lng: -80.14 },
+  "fort lauderdale": { lat: 26.12, lng: -80.14 },
+  "west palm beach": { lat: 26.72, lng: -80.05 },
+  "columbia": { lat: 34.00, lng: -81.03 },
+};
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 3959; // Earth radius in miles
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Extract city name from "City, ST" format */
+function extractCity(addr) {
+  return (addr || "").split(",")[0].trim().toLowerCase();
+}
+
+/** Client-side haversine estimate using city coords, with 1.3x road factor */
+function estimateDistByCity(origin, dest) {
+  const oCoords = CITY_COORDS[extractCity(origin)];
+  const dCoords = CITY_COORDS[extractCity(dest)];
+  if (!oCoords || !dCoords) return null;
+  const straightLine = haversineDistance(oCoords.lat, oCoords.lng, dCoords.lat, dCoords.lng);
+  return Math.round(straightLine * 1.2); // Road factor
+}
+
 /* ─────────── Helper Functions ─────────── */
 async function getDist(o, d, oZip, dZip) {
-  // Try haversine estimate from zip codes via backend
+  // 1. Try ZIP-based haversine via backend
   const oz = oZip || CITY_ZIP_MAP[o] || "";
   const dz = dZip || CITY_ZIP_MAP[d] || "";
   if (oz && dz) {
@@ -82,7 +146,24 @@ async function getDist(o, d, oZip, dZip) {
       }
     } catch (e) { /* fall through */ }
   }
-  return 750; // Last-resort fallback
+
+  // 2. Client-side haversine from city coordinates (lat/lng)
+  const cityDist = estimateDistByCity(o, d);
+  if (cityDist) return cityDist;
+
+  // 3. Server-side geocode + haversine (Nominatim for any city)
+  if (o && d) {
+    try {
+      const res = await fetch(`/api/mileage/city?origin=${encodeURIComponent(o)}&dest=${encodeURIComponent(d)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.miles) return data.miles;
+      }
+    } catch (e) { /* fall through */ }
+  }
+
+  // 4. No data available — return null so caller knows distance is unknown
+  return null;
 }
 
 function normLaneCity(addr) {
@@ -158,8 +239,14 @@ export default function RouteOptimizerPage() {
   const ctx = useOutletContext() || {};
 
   /* ── Route Builder state ── */
-  const [origin, setOrigin] = useState("Chicago, IL");
-  const [dest, setDest] = useState("Dallas, TX");
+  const [originCity, setOriginCity] = useState("");
+  const [originState, setOriginState] = useState("");
+  const [destCity, setDestCity] = useState("");
+  const [destState, setDestState] = useState("");
+
+  /* Derived combined values used by downstream logic */
+  const origin = originCity && originState ? `${originCity}, ${originState}` : originCity || "";
+  const dest = destCity && destState ? `${destCity}, ${destState}` : destCity || "";
   const [mode, setMode] = useState("ALL");
   const [weight, setWeight] = useState("4000");
   const [originZip, setOriginZip] = useState("");
@@ -227,17 +314,19 @@ export default function RouteOptimizerPage() {
         );
       } catch (e) {
         console.warn("[RouteOptimizer] TL bulk-plan/rate error:", e.message);
-        // Fallback to local calc with 750 mi
-        rows = rows.concat(
-          FALLBACK_TL_RATES.map((r) => {
-            const c = calcCost(r.rate, r.fsc, dist);
-            return {
-              carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
-              acc: c.acc, total: c.total, transit: Math.max(1, Math.ceil(dist / 500)),
-              _czarlite: false,
-            };
-          })
-        );
+        // Fallback to local calc using calculated distance
+        if (dist) {
+          rows = rows.concat(
+            FALLBACK_TL_RATES.map((r) => {
+              const c = calcCost(r.rate, r.fsc, dist);
+              return {
+                carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
+                acc: c.acc, total: c.total, transit: Math.max(1, Math.ceil(dist / 500)),
+                _czarlite: false,
+              };
+            })
+          );
+        }
       }
     }
 
@@ -309,6 +398,7 @@ export default function RouteOptimizerPage() {
 
   /* ── Local CzarLite fallback when API unavailable ── */
   function localCzarliteFallback(w, dist) {
+    if (!dist) return []; // Cannot calculate without distance
     const synthCarrierDefs = [
       { name: "Old Dominion Freight", fscPct: 0, ccLive: false, ccFailed: true },
       { name: "Averitt Express", fscPct: 0, ccLive: true, transit: 1, pref: true },
@@ -342,10 +432,10 @@ export default function RouteOptimizerPage() {
       });
       const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
 
-      // Use best carrier's miles, fallback to haversine estimate
+      // Use best carrier's miles, fallback to calculated distance
       const dist = best.miles || await getDist(origin, dest, czarOriginZip || originZip, czarDestZip || destZip);
-      const hrs = (dist / 55).toFixed(1);
-      const hosOk = parseFloat(hrs) <= 11;
+      const hrs = dist ? (dist / 55).toFixed(1) : null;
+      const hosOk = hrs ? parseFloat(hrs) <= 11 : null;
 
       setRateCompareRows(rows);
       setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
@@ -378,8 +468,8 @@ export default function RouteOptimizerPage() {
         });
         const best = rows[0] || { carrier: "TBD", mode: "\u2014", base: 0, fuel: 0, acc: 0, total: 0, _czarlite: false };
         const dist = best.miles || await getDist(origin, dest, czarOriginZip || originZip, czarDestZip || destZip);
-        const hrs = (dist / 55).toFixed(1);
-        const hosOk = parseFloat(hrs) <= 11;
+        const hrs = dist ? (dist / 55).toFixed(1) : null;
+        const hosOk = hrs ? parseFloat(hrs) <= 11 : null;
         setRateCompareRows(rows);
         setOptResults({ origin, dest, dist, hrs, hosOk, best, util, allCount: rows.length });
       } finally {
@@ -454,21 +544,35 @@ export default function RouteOptimizerPage() {
             <div className="card-body">
               <div style={{ marginBottom: 12 }}>
                 <label>Origin</label>
-                <select
-                  value={origin} onChange={(e) => setOrigin(e.target.value)}
-                  style={{ width: "100%", marginTop: 6 }}
-                >
-                  {ORIGINS.map((o) => <option key={o}>{o}</option>)}
-                </select>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginTop: 6 }}>
+                  <input
+                    type="text" placeholder="City (e.g. Chicago)"
+                    value={originCity} onChange={(e) => setOriginCity(e.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                  <input
+                    type="text" placeholder="State (e.g. IL)"
+                    value={originState} onChange={(e) => setOriginState(e.target.value.toUpperCase())}
+                    maxLength={2}
+                    style={{ width: "100%", textTransform: "uppercase" }}
+                  />
+                </div>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label>Destination</label>
-                <select
-                  value={dest} onChange={(e) => setDest(e.target.value)}
-                  style={{ width: "100%", marginTop: 6 }}
-                >
-                  {DESTINATIONS.map((d) => <option key={d}>{d}</option>)}
-                </select>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginTop: 6 }}>
+                  <input
+                    type="text" placeholder="City (e.g. Dallas)"
+                    value={destCity} onChange={(e) => setDestCity(e.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                  <input
+                    type="text" placeholder="State (e.g. TX)"
+                    value={destState} onChange={(e) => setDestState(e.target.value.toUpperCase())}
+                    maxLength={2}
+                    style={{ width: "100%", textTransform: "uppercase" }}
+                  />
+                </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
@@ -542,8 +646,8 @@ export default function RouteOptimizerPage() {
 
                   {/* Result rows */}
                   {[
-                    { icon: "📍", label: "Distance", value: `${optResults.dist.toLocaleString()} miles` },
-                    { icon: "⏱", label: "Drive Time", value: `${optResults.hrs} hrs @ 55 mph` },
+                    { icon: "📍", label: "Distance", value: optResults.dist ? `${optResults.dist.toLocaleString()} miles` : "N/A — enter ZIP codes for estimate" },
+                    { icon: "⏱", label: "Drive Time", value: optResults.hrs ? `${optResults.hrs} hrs @ 55 mph` : "N/A" },
                     {
                       icon: "🚛", label: "Best Carrier",
                       value: (
@@ -613,19 +717,21 @@ export default function RouteOptimizerPage() {
                   </div>
 
                   {/* HOS Alert */}
-                  <div
-                    className={`alert ${optResults.hosOk ? "alert-success" : "alert-warning"}`}
-                    style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", borderRadius: 10 }}
-                  >
-                    <span className="alert-icon">{optResults.hosOk ? "✅" : "⚠️"}</span>
-                    <div className="alert-text">
-                      <strong>HOS: </strong>
-                      {optResults.hosOk
-                        ? "Within 11-hour single-driver limit"
-                        : "Exceeds single-driver limit \u2014 consider team drivers"
-                      }
+                  {optResults.hosOk !== null && (
+                    <div
+                      className={`alert ${optResults.hosOk ? "alert-success" : "alert-warning"}`}
+                      style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", borderRadius: 10 }}
+                    >
+                      <span className="alert-icon">{optResults.hosOk ? "✅" : "⚠️"}</span>
+                      <div className="alert-text">
+                        <strong>HOS: </strong>
+                        {optResults.hosOk
+                          ? "Within 11-hour single-driver limit"
+                          : "Exceeds single-driver limit \u2014 consider team drivers"
+                        }
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

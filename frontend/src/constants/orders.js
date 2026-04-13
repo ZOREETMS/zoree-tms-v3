@@ -10,6 +10,7 @@ export const STATUS_BADGES = {
   "In Transit": "badge badge-blue",
   Delivered: "badge badge-green",
   Cancelled: "badge badge-red",
+  "Planning Failed": "badge badge-red",
 };
 
 export const STATUS_ROW_COLORS = {
@@ -19,8 +20,9 @@ export const STATUS_ROW_COLORS = {
   Tendered:     { bg: "#fffbeb", border: "#d97706" },
   "In Transit": { bg: "#f0f9ff", border: "#0284c7" },
   Delivered:    { bg: "#f0fdf4", border: "#059669" },
-  Exception:    { bg: "#fef2f2", border: "#dc2626" },
-  Cancelled:    { bg: "#f9fafb", border: "#9ca3af" },
+  Exception:        { bg: "#fef2f2", border: "#dc2626" },
+  "Planning Failed": { bg: "#fef2f2", border: "#dc2626" },
+  Cancelled:        { bg: "#f9fafb", border: "#9ca3af" },
 };
 
 export const SPOT_ROW_STYLE = { background: "#fef2f2", borderLeft: "3px solid #dc2626" };

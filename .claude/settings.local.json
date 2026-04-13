@@ -600,7 +600,11 @@
       "Bash(findstr \"5173 5174 3001 3000 8080\")",
       "Bash(npx serve:*)",
       "Bash(curl -s http://localhost:5174)",
-      "Bash(cmd //c \"taskkill /PID 38224 /F\")"
+      "Bash(cmd //c \"taskkill /PID 38224 /F\")",
+      "Bash(git ls-tree:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:52749/)",
+      "Bash(grep -r \"CARRIER_PORTAL\\\\|activePortal\\\\|JB Hunt\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend --include=*.jsx --include=*.js --include=*.env*)",
+      "Bash(python create_user_stories_xlsx.py)"
     ]
   }
 }

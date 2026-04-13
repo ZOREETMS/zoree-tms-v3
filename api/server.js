@@ -2377,7 +2377,7 @@ function estimateMilesByZip(originZip, destZip) {
   const d = zipToCoords(destZip);
   if (!o || !d) return null;
   const straightLine = haversine(o.lat, o.lng, d.lat, d.lng);
-  return Math.round(straightLine * 1.3);
+  return Math.round(straightLine * 1.2);
 }
 
 // ── PC*MILER Mileage ─────────────────────────────────────────────────────────
@@ -2460,6 +2460,57 @@ app.get('/api/mileage/estimate', (req, res) => {
   const miles = estimateMilesByZip(originZip, destZip);
   if (!miles) return res.status(422).json({ error: 'Could not resolve zip coordinates', originZip, destZip });
   res.json({ originZip, destZip, miles, method: 'haversine' });
+});
+
+// ── Geocode + Haversine distance by city names (Nominatim) ──────────────────
+const geocodeCache = {}; // "city, st" → { lat, lng, ts }
+const GEOCODE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+async function geocodeCity(cityState) {
+  const key = (cityState || '').trim().toLowerCase();
+  if (!key) return null;
+  const cached = geocodeCache[key];
+  if (cached && Date.now() - cached.ts < GEOCODE_CACHE_TTL) return { lat: cached.lat, lng: cached.lng };
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityState + ', USA')}&format=json&limit=1`;
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'ZoreeTMS/1.0 (route-optimizer)' },
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    geocodeCache[key] = { lat, lng, ts: Date.now() };
+    console.log(`[Geocode] ${cityState} → ${lat}, ${lng}`);
+    return { lat, lng };
+  } catch (e) {
+    console.warn(`[Geocode] Failed for "${cityState}":`, e.message);
+    return null;
+  }
+}
+
+app.get('/api/mileage/city', async (req, res) => {
+  const { origin, dest } = req.query;
+  if (!origin || !dest) return res.status(400).json({ error: 'origin and dest query params required (City, ST)' });
+
+  const oCoords = await geocodeCity(origin);
+  const dCoords = await geocodeCity(dest);
+  if (!oCoords || !dCoords) {
+    return res.status(422).json({
+      error: 'Could not geocode one or both locations',
+      origin: oCoords ? 'resolved' : 'failed',
+      dest: dCoords ? 'resolved' : 'failed',
+    });
+  }
+
+  const straightLine = haversine(oCoords.lat, oCoords.lng, dCoords.lat, dCoords.lng);
+  const miles = Math.round(straightLine * 1.2); // Road factor
+  res.json({
+    origin, dest, miles, method: 'geocode-haversine',
+    originCoords: oCoords, destCoords: dCoords,
+  });
 });
 
 // Bulk mileage — accepts array of { origin, dest } pairs

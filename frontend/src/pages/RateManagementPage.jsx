@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
+import { downloadRateTemplate } from "../services/rateService";
 
 const STATUS_BADGES = {
   Active: "badge badge-green",
@@ -296,7 +297,7 @@ export default function RateManagementPage() {
         </div>
         <div className="header-actions" style={{ padding: 0 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => toast("Template download started", "success")}>
+            <button className="btn btn-secondary btn-sm" onClick={() => { downloadRateTemplate(); toast("Rate template downloaded", "success"); }}>
               Download Template
             </button>
             <button className="btn btn-primary btn-sm" onClick={() => toast("Upload panel coming soon", "info")}>

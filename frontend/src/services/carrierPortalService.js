@@ -75,12 +75,67 @@ export function effectiveShipmentStatus(s) {
 }
 
 export function isActivePortalCarrierShipment(shipment) {
+  return isCarrierShipment(shipment, ACTIVE_PORTAL_CARRIER);
+}
+
+/**
+ * Check if a shipment belongs to a given carrier (fuzzy match).
+ * @param {object} shipment
+ * @param {string} carrierName
+ */
+export function isCarrierShipment(shipment, carrierName) {
   const shipmentCarrier = normalizeCarrier(resolveCarrierName(shipment));
-  const activeCarrier = normalizeCarrier(ACTIVE_PORTAL_CARRIER);
-  if (!shipmentCarrier || !activeCarrier) return false;
-  return shipmentCarrier === activeCarrier
-    || shipmentCarrier.includes(activeCarrier)
-    || activeCarrier.includes(shipmentCarrier);
+  const target = normalizeCarrier(carrierName);
+  if (!shipmentCarrier || !target) return false;
+  return shipmentCarrier === target
+    || shipmentCarrier.includes(target)
+    || target.includes(shipmentCarrier);
+}
+
+/**
+ * Extract unique carrier names from a list of shipments.
+ * De-duplicates by normalized form; keeps the first-seen display name.
+ * @param {Array} shipments
+ * @returns {string[]} sorted unique carrier names
+ */
+export function getUniqueCarrierNames(shipments) {
+  const seen = new Map(); // normalizedName → displayName
+  (shipments || []).forEach((s) => {
+    const name = resolveCarrierName(s);
+    if (name && name !== "Carrier TBD") {
+      const key = normalizeCarrier(name);
+      if (!seen.has(key)) seen.set(key, name);
+    }
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Merge carrier names from DB records and shipments, de-duplicating by normalized form.
+ * Prefers DB name as the canonical display name.
+ * @param {Array} dbCarriers - carrier records from the carriers table
+ * @param {Array} shipments - shipment records
+ * @returns {string[]} sorted unique carrier names
+ */
+export function mergeCarrierOptions(dbCarriers, shipments) {
+  const seen = new Map(); // normalizedName → displayName
+  // DB carriers first (canonical names)
+  (dbCarriers || []).forEach((c) => {
+    const name = (c.name || c.carrier_name || "").trim();
+    if (name) {
+      const key = normalizeCarrier(name);
+      if (!seen.has(key)) seen.set(key, name);
+    }
+  });
+  // Then shipment carriers (only add if not already present)
+  (shipments || []).forEach((s) => {
+    const name = resolveCarrierName(s);
+    if (name && name !== "Carrier TBD") {
+      const key = normalizeCarrier(name);
+      if (!seen.has(key)) seen.set(key, name);
+    }
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
 
 function parseMissingColumn(errorMessage) {

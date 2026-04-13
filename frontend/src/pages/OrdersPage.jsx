@@ -4,7 +4,7 @@ import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
-import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines } from "../services/ordersService";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes } from "../services/ordersService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
@@ -62,6 +62,14 @@ export default function OrdersPage() {
       }
     }
   }, [orders, searchParams]);
+
+  // Clean up stale shipment_id on Unplanned orders
+  const cleanupRan = useRef(false);
+  useEffect(() => {
+    if (cleanupRan.current || orders.length === 0) return;
+    cleanupRan.current = true;
+    cleanupStaleShipmentRefs(orders).then((count) => { if (count > 0) refreshData(); });
+  }, [orders]);
   const [editUser, setEditUser] = useState("Sridhar (Dispatcher)");
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}
@@ -133,11 +141,13 @@ export default function OrdersPage() {
     return [...filtered].sort((a, b) => {
       // Only do Unplanned-first grouping when sorting by default column (id)
       if (sortCol === "id") {
-        if (a.status === "Unplanned" && b.status !== "Unplanned") return -1;
-        if (b.status === "Unplanned" && a.status !== "Unplanned") return 1;
+        const aP = isPlannable(a);
+        const bP = isPlannable(b);
+        if (aP && !bP) return -1;
+        if (bP && !aP) return 1;
         const ka = `${normalizeLane(a.origin)}||${normalizeLane(a.dest)}`;
         const kb = `${normalizeLane(b.origin)}||${normalizeLane(b.dest)}`;
-        if (a.status === "Unplanned" && ka !== kb) return ka.localeCompare(kb);
+        if (aP && ka !== kb) return ka.localeCompare(kb);
       }
       // Apply user-chosen column sort
       const av = String(a[sortCol] || "").replace(/[$%,\s]|lbs/gi, "");
@@ -152,7 +162,7 @@ export default function OrdersPage() {
   const laneGroups = useMemo(() => {
     const map = {};
     rows.forEach((o) => {
-      if (o.status !== "Unplanned") return;
+      if (!isPlannable(o)) return;
       const key = `${normalizeLane(o.origin)}||${normalizeLane(o.dest)}`;
       if (!map[key]) map[key] = { orders: [], totalWeight: 0, totalPieces: 0, origin: o.origin, dest: o.dest };
       map[key].orders.push(o.id);
@@ -185,7 +195,7 @@ export default function OrdersPage() {
   async function cancelOrder(id) {
     const o = orders.find((x) => x.id === id);
     if (!o) return;
-    if (o.status !== "Unplanned") { toast("Only Unplanned orders can be cancelled", "warning"); return; }
+    if (!isPlannable(o)) { toast("Only Unplanned orders can be cancelled", "warning"); return; }
     if (!window.confirm(`Cancel order ${id}?`)) return;
     setBusyId(id);
     try {
@@ -306,6 +316,12 @@ export default function OrdersPage() {
 
     setDetailBusy(true);
     try {
+      // If status is changing to Unplanned and order has a shipment, clean up the shipment reference
+      const isUnplanning = isPlannable({ status: f.status }) && !isPlannable(o) && o.shipment_id;
+      if (isUnplanning) {
+        await unplanOrderFromShipment(o.id, orders, shipments);
+      }
+
       // Build patch with all editable fields
       const patch = {
         customer: f.customer || null, status: f.status || null,
@@ -314,6 +330,8 @@ export default function OrdersPage() {
         commodity: f.commodity || null,
         ready: f.ready || null, due: f.due || null,
       };
+      // If unplanning, ensure shipment_id is cleared
+      if (isPlannable({ status: f.status })) patch.shipment_id = null;
       // Conditionally add optional columns (may not exist in all schemas)
       if (f.originZip) patch.origin_zip = f.originZip;
       if (f.destZip) patch.dest_zip = f.destZip;
@@ -423,8 +441,16 @@ export default function OrdersPage() {
 
   /* ── Plan Selected: directly create shipments for all selected orders ── */
   async function planSelected() {
-    const selected = orders.filter((o) => selectedOrders.has(o.id) && o.status === "Unplanned");
+    const selected = orders.filter((o) => selectedOrders.has(o.id) && isPlannable(o));
     if (!selected.length) { toast("No unplanned orders selected", "warning"); return; }
+
+    // Fail orders with past due dates
+    const { failed: pastDue, valid: plannable } = await validateAndFailPastDueOrders(selected);
+    if (pastDue.length > 0) {
+      toast(`${pastDue.length} order(s) failed planning — due date is in the past`, "error");
+      await refreshData();
+      if (!plannable.length) { setSelectedOrders(new Set()); return; }
+    }
 
     const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
     setBusyId("plan-selected");
@@ -435,7 +461,7 @@ export default function OrdersPage() {
       if (templates.length === 0) {
         templates = routeTemplates || [];
       }
-      const routeMatch = findMatchingRoute(templates, selected);
+      const routeMatch = findMatchingRoute(templates, plannable);
       let routePlanned = [];
       let multiStopSummary = null;
       if (routeMatch) {
@@ -444,7 +470,7 @@ export default function OrdersPage() {
       }
 
       // 2. Remaining orders — group by lane, rate, and auto-plan
-      const remaining = selected.filter((o) => !routePlanned.includes(o));
+      const remaining = plannable.filter((o) => !routePlanned.includes(o));
       let bulkResult = null;
       if (remaining.length > 0) {
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
@@ -469,9 +495,12 @@ export default function OrdersPage() {
         bulkSiblings: remaining,
         ordersUpdated: totalPlanned,
         totalCost: routeCost + bulkCost,
-        siblings: selected,
+        siblings: plannable,
         elapsedMs: Date.now() - planStartTime,
       });
+      // Clear planning failure notes from successfully planned orders
+      const plannedIds = [...(bulkResult?.plans || []).flatMap((p) => p.orderIds || []), ...routePlanned.map((o) => o.id)];
+      await clearPlanningFailureNotes(plannable.filter((o) => plannedIds.includes(o.id)));
       setSelectedOrders(new Set());
       await refreshData();
     } catch (err) {
@@ -484,10 +513,17 @@ export default function OrdersPage() {
   /* ── Open Plan Confirmation Modal (single order — shows carrier options) ── */
   async function openPlanModal(orderId, consolidate = false) {
     const o = orders.find((x) => x.id === orderId);
-    if (!o || o.status !== "Unplanned") return;
+    if (!o || !isPlannable(o)) return;
+    // Fail if due date is in the past
+    const { failed } = await validateAndFailPastDueOrders([o]);
+    if (failed.length > 0) {
+      toast(`Order ${orderId} failed planning — due date ${o.due} is in the past`, "error");
+      await refreshData();
+      return;
+    }
     // consolidate=true: group all same-lane orders (normalized). false: just this order.
     const sibs = consolidate
-      ? orders.filter((x) => x.status === "Unplanned" && normalizeLane(x.origin) === normalizeLane(o.origin) && normalizeLane(x.dest) === normalizeLane(o.dest))
+      ? orders.filter((x) => isPlannable(x) && normalizeLane(x.origin) === normalizeLane(o.origin) && normalizeLane(x.dest) === normalizeLane(o.dest))
       : [o];
 
     const totalWeight = sibs.reduce((s, x) => s + Number(x.weight || 0), 0);
@@ -712,6 +748,9 @@ export default function OrdersPage() {
         lane, siblings, dates: firstDates,
         elapsedMs: Date.now() - confirmStartTime + (planModal?.ratingElapsedMs || 0),
       });
+      // Clear planning failure notes from successfully planned orders
+      const plannedIds = plans.flatMap((p) => p.orderIds || []);
+      await clearPlanningFailureNotes((siblings || []).filter((o) => plannedIds.includes(o.id)));
       refreshData();
     } catch (err) {
       setPlanModal((prev) => prev ? { ...prev, busy: false, error: err.message } : null);
@@ -720,7 +759,7 @@ export default function OrdersPage() {
 
   /* ── Bulk Plan Scheduler (uses service) ── */
   const runBulk = useCallback(async () => {
-    const unplanned = orders.filter((o) => o.status === "Unplanned");
+    const unplanned = orders.filter((o) => isPlannable(o));
     if (!unplanned.length) {
       setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No unplanned orders.`]);
       return;
@@ -783,7 +822,7 @@ export default function OrdersPage() {
   /* ── Selected orders stats ── */
   const selectedStats = useMemo(() => {
     const sel = orders.filter((o) => selectedOrders.has(o.id));
-    const unplanned = sel.filter((o) => o.status === "Unplanned");
+    const unplanned = sel.filter((o) => isPlannable(o));
     const weight = sel.reduce((s, o) => s + Number(o.weight || 0), 0);
     const pieces = sel.reduce((s, o) => s + Number(o.pieces || 0), 0);
     const util = Math.round((weight / 44000) * 100);
@@ -804,13 +843,13 @@ export default function OrdersPage() {
     rows.forEach((o) => {
       const laneKey = `${normalizeLane(o.origin)}||${normalizeLane(o.dest)}`;
       const group = laneGroups[laneKey];
-      if (showLaneGroups && o.status === "Unplanned" && group && group.orders.length > 1 && laneKey !== lastLaneKey) {
+      if (showLaneGroups && isPlannable(o) && group && group.orders.length > 1 && laneKey !== lastLaneKey) {
         lastLaneKey = laneKey;
         const capacity = group.totalWeight >= 38000 ? "Full TL" : "Partial TL";
         const capacityClass = group.totalWeight >= 38000 ? "badge badge-green" : "badge badge-amber";
         result.push({ type: "lane-header", key: `lane-${laneKey}`, origin: o.origin, dest: o.dest, count: group.orders.length, weight: group.totalWeight, capacity, capacityClass, firstOrderId: group.orders[0] });
       }
-      result.push({ type: "order", key: o.id, order: o, inGroup: showLaneGroups && o.status === "Unplanned" && group && group.orders.length > 1 });
+      result.push({ type: "order", key: o.id, order: o, inGroup: showLaneGroups && isPlannable(o) && group && group.orders.length > 1 });
     });
     return result;
   }, [rows, laneGroups, sortCol]);
@@ -898,7 +937,8 @@ export default function OrdersPage() {
         {[
           { key: "All", emoji: "📋" }, { key: "Unplanned", emoji: "🟡" }, { key: "Planned", emoji: "🟢" },
           { key: "Consolidated", emoji: "🔵" }, { key: "Tendered", emoji: "🟠" },
-          { key: "In Transit", emoji: "🚛" }, { key: "Delivered", emoji: "✅" }, { key: "Cancelled", emoji: "🔴" },
+          { key: "In Transit", emoji: "🚛" }, { key: "Delivered", emoji: "✅" },
+          { key: "Planning Failed", emoji: "⛔" }, { key: "Cancelled", emoji: "🔴" },
         ].map((s) => (
           <button key={s.key} className={`ord-chip ${statusFilter === s.key ? "active-chip" : ""}`} onClick={() => setStatusFilter(s.key)}>
             {s.emoji} {s.key} {statusCounts[s.key] ? `(${statusCounts[s.key]})` : ""}
@@ -1037,7 +1077,7 @@ export default function OrdersPage() {
                 <td>{badges.map((b, i) => <span key={i} style={{ display: "inline-block", fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 600, marginLeft: i > 0 ? 4 : 0, background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>{b.label}</span>)}</td>
                 <td><span className={STATUS_BADGES[o.status] || "badge badge-blue"}>{o.status || "—"}</span></td>
                 <td style={{ whiteSpace: "nowrap" }}>
-                  {o.status === "Unplanned" && (<>
+                  {isPlannable(o) && (<>
                     <button className="btn btn-primary btn-sm" disabled={busyId === o.id} onClick={() => openPlanModal(o.id)}>⚡ Plan</button>{" "}
                     <button className="btn btn-secondary btn-sm" style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }} onClick={() => openPlanModal(o.id)} title="Cross-dock">🔄</button>{" "}
                     <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="Edit">✏️</button>{" "}
