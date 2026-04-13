@@ -1043,11 +1043,11 @@ function _smc3Post(host, path, body, cb) {
 }
 
 // ── SMC3 Global Constants (accessible to all routes) ─────────────────────────
-var SMC3_TARIFF    = 'DEMOLTLA';
-var SMC3_LICENSE   = '8Pzf4XeN63n9';
-var SMC3_CCXL_KEY  = 'W3QQwTa6DdeM';
-var SMC3_USERNAME  = 'zoree-integrations@zoree.io';
-var SMC3_PASSWORD  = 'ujM3W1lM';
+var SMC3_TARIFF    = process.env.SMC3_TARIFF      || 'DEMOLTLA';
+var SMC3_LICENSE   = process.env.SMC3_LICENSE_KEY;
+var SMC3_CCXL_KEY  = process.env.SMC3_CCXL_KEY;
+var SMC3_USERNAME  = process.env.SMC3_USERNAME;
+var SMC3_PASSWORD  = process.env.SMC3_PASSWORD;
 var SMC3_RW_HOST   = 'applications.smc3.com';
 var SMC3_RW_BASE   = '/RateWareXL/services/rest/v2';
 var SMC3_CC_HOST   = 'ccxl.smc3.com';
@@ -1055,15 +1055,15 @@ var SMC3_CC_BASE   = '/CarrierConnectXL/services/rest/v3';
 
 (function() {
   var https = require('https');
-  var SMC3_L = '8Pzf4XeN63n9';
-  var SMC3_U = 'zoree-integrations@zoree.io';
-  var SMC3_P = 'ujM3W1lM';
-  var SMC3_T = 'DEMOLTLA';
-  var SMC3_HOST  = 'applications.smc3.com';
-  var SMC3_BASE  = '/RateWareXL/services/rest/v2';
-  var CCXL_HOST  = 'ccxl.smc3.com';
-  var CCXL_BASE  = '/CarrierConnectXL/services/rest/v3';
-  var CCXL_L     = 'W3QQwTa6DdeM'; // CarrierConnect XL has its own license key
+  var SMC3_L = SMC3_LICENSE;
+  var SMC3_U = SMC3_USERNAME;
+  var SMC3_P = SMC3_PASSWORD;
+  var SMC3_T = SMC3_TARIFF;
+  var SMC3_HOST  = SMC3_RW_HOST;
+  var SMC3_BASE  = SMC3_RW_BASE;
+  var CCXL_HOST  = SMC3_CC_HOST;
+  var CCXL_BASE  = SMC3_CC_BASE;
+  var CCXL_L     = SMC3_CCXL_KEY;
 
   function smc3Headers(contentLength) {
     return {
@@ -1629,11 +1629,11 @@ app.get('/api/ltl/rates', async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const SMC3 = {
-  licenseKey:     process.env.SMC3_LICENSE_KEY || '8Pzf4XeN63n9',  // RateWare license
-  ccxlLicenseKey: process.env.SMC3_CCXL_KEY   || 'W3QQwTa6DdeM',  // CarrierConnect license
-  username:       process.env.SMC3_USERNAME    || 'zoree-integrations@zoree.io',
-  password:       process.env.SMC3_PASSWORD    || 'ujM3W1lM',
-  tariff:         'CZAR2025',
+  licenseKey:     process.env.SMC3_LICENSE_KEY,
+  ccxlLicenseKey: process.env.SMC3_CCXL_KEY,
+  username:       process.env.SMC3_USERNAME,
+  password:       process.env.SMC3_PASSWORD,
+  tariff:         process.env.SMC3_TARIFF || 'DEMOLTLA',
   rateware:       'https://applications.smc3.com/RateWareXL/services/rest/v2',
   ccxl:           'https://ccxl.smc3.com/CarrierConnectXL/services/rest/v3',
 };

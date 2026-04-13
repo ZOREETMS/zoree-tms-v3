@@ -23,6 +23,8 @@ export default function OrdersPage() {
   const [readyTo, setReadyTo] = useState("");
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState({ text: "", type: "" });
   const [selectedOrders, setSelectedOrders] = useState(new Set());
@@ -121,6 +123,8 @@ export default function OrdersPage() {
     if (readyTo) filtered = filtered.filter((o) => (o.ready || "") <= readyTo);
     if (dueFrom) filtered = filtered.filter((o) => (o.due || "") >= dueFrom);
     if (dueTo) filtered = filtered.filter((o) => (o.due || "") <= dueTo);
+    if (createdFrom) filtered = filtered.filter((o) => (o.created_at || "") >= createdFrom);
+    if (createdTo) filtered = filtered.filter((o) => (o.created_at || "") <= createdTo + "T23:59:59");
     if (q.trim()) {
       // Support comma-separated search: "ORD-546192, ORD-2024-009" matches either
       const terms = q.split(",").map((s) => {
@@ -156,7 +160,7 @@ export default function OrdersPage() {
       const cmp = (!isNaN(an) && !isNaN(bn)) ? (an - bn) : av.toLowerCase().localeCompare(bv.toLowerCase(), undefined, { numeric: true, sensitivity: "base" });
       return sortAsc ? cmp : -cmp;
     });
-  }, [orders, q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, sortCol, sortAsc]);
+  }, [orders, q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
 
   /* ── Lane groups for unplanned orders ── */
   const laneGroups = useMemo(() => {
@@ -188,8 +192,9 @@ export default function OrdersPage() {
   function clearFilters() {
     setStatusFilter("All"); setCustomerFilter("All"); setQ("");
     setReadyFrom(""); setReadyTo(""); setDueFrom(""); setDueTo("");
+    setCreatedFrom(""); setCreatedTo("");
   }
-  const hasFilters = statusFilter !== "All" || customerFilter !== "All" || q || readyFrom || readyTo || dueFrom || dueTo;
+  const hasFilters = statusFilter !== "All" || customerFilter !== "All" || q || readyFrom || readyTo || dueFrom || dueTo || createdFrom || createdTo;
 
   /* ── Actions ── */
   async function cancelOrder(id) {
@@ -966,6 +971,10 @@ export default function OrdersPage() {
         <input type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
         <span style={{ fontSize: 12, color: "var(--text3)" }}>To</span>
         <input type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text3)" }}>Created From</span>
+        <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
+        <span style={{ fontSize: 12, color: "var(--text3)" }}>To</span>
+        <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
       </div>
 
       {/* Selection Bar */}

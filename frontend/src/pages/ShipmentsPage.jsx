@@ -483,6 +483,8 @@ export default function ShipmentsPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [modeFilter, setModeFilter] = useState("All");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
   const [idsFilter, setIdsFilter] = useState(null); // Set from ?ids= URL param for bulk plan filtering
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState({ text: "", type: "" });
@@ -580,6 +582,8 @@ export default function ShipmentsPage() {
     if (idsFilter) list = list.filter((s) => idsFilter.has(s.id));
     if (statusFilter !== "All") list = list.filter((s) => s._displayStatus === statusFilter);
     if (modeFilter !== "All") list = list.filter((s) => (s.mode || "").toUpperCase() === modeFilter);
+    if (createdFrom) list = list.filter((s) => (s.created_at || "") >= createdFrom);
+    if (createdTo) list = list.filter((s) => (s.created_at || "") <= createdTo + "T23:59:59");
     if (q.trim()) {
       const terms = q.split(",").map((s) => s.toLowerCase().trim()).filter(Boolean);
       list = list.filter((s) => {
@@ -596,7 +600,7 @@ export default function ShipmentsPage() {
       const bv = String((sortCol === "status" ? b._displayStatus : b[sortCol]) || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [shipments, orders, q, statusFilter, modeFilter, idsFilter, sortCol, sortAsc]);
+  }, [shipments, orders, q, statusFilter, modeFilter, createdFrom, createdTo, idsFilter, sortCol, sortAsc]);
 
   const laneRoutes = useMemo(() => {
     const lanes = new Map();
@@ -1002,6 +1006,13 @@ export default function ShipmentsPage() {
           <option value="LTL">LTL</option>
           <option value="TL">TL</option>
         </select>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text3)" }}>Created From</span>
+        <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
+        <span style={{ fontSize: 12, color: "var(--text3)" }}>To</span>
+        <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
+        {(createdFrom || createdTo) && (
+          <button onClick={() => { setCreatedFrom(""); setCreatedTo(""); }} style={{ fontSize: 11, color: "#dc2626", background: "rgba(220,38,38,.06)", border: "1px solid rgba(220,38,38,.2)", borderRadius: 16, padding: "3px 10px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>✕ Clear Dates</button>
+        )}
       </div>
 
       {/* Toast */}

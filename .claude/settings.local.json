@@ -604,7 +604,8 @@
       "Bash(git ls-tree:*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:52749/)",
       "Bash(grep -r \"CARRIER_PORTAL\\\\|activePortal\\\\|JB Hunt\" /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend --include=*.jsx --include=*.js --include=*.env*)",
-      "Bash(python create_user_stories_xlsx.py)"
+      "Bash(python create_user_stories_xlsx.py)",
+      "Bash(curl -s http://localhost:5176/orders)"
     ]
   }
 }
