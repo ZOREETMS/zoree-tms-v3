@@ -32,7 +32,7 @@ export function buildLocationString(city, state, zip) {
 export async function cancelOrder(id, existingNotes) {
   const note = (existingNotes ? existingNotes + " | " : "") +
     "CANCELLED: Manual user action (" + new Date().toLocaleDateString() + ")";
-  return DbApi.patch("orders", id, { status: "Cancelled", notes: note });
+  return OrdersApi.update(id, { status: "Cancelled", notes: note });
 }
 
 /**
@@ -41,7 +41,7 @@ export async function cancelOrder(id, existingNotes) {
  * @returns {Promise<void>}
  */
 export async function deleteOrderById(id) {
-  return DbApi.remove("orders", id);
+  return OrdersApi.remove(id);
 }
 
 /**
@@ -51,7 +51,7 @@ export async function deleteOrderById(id) {
  * @returns {Promise<object>}
  */
 export async function saveOrder(id, patch) {
-  return DbApi.patch("orders", id, patch);
+  return OrdersApi.update(id, mapDbOrderToApiOrder(patch));
 }
 
 /**
@@ -60,7 +60,54 @@ export async function saveOrder(id, patch) {
  * @returns {Promise<object>}
  */
 export async function createNewOrder(orderData) {
-  return DbApi.upsert("orders", orderData);
+  return OrdersApi.create(mapDbOrderToApiOrder(orderData));
+}
+
+function mapDbOrderToApiOrder(payload = {}) {
+  const mapped = { ...payload };
+
+  if ("dest" in payload) {
+    mapped.destination = payload.dest;
+    delete mapped.dest;
+  }
+  if ("ready" in payload) {
+    mapped.readyDate = payload.ready;
+    delete mapped.ready;
+  }
+  if ("due" in payload) {
+    mapped.dueDate = payload.due;
+    delete mapped.due;
+  }
+  if ("shipment_id" in payload) {
+    mapped.shipmentId = payload.shipment_id;
+    delete mapped.shipment_id;
+  }
+  if ("ship_mode" in payload) {
+    mapped.shipMode = payload.ship_mode;
+    delete mapped.ship_mode;
+  }
+  if ("no_contract_rate" in payload) {
+    mapped.noContractRate = payload.no_contract_rate;
+    delete mapped.no_contract_rate;
+  }
+  if ("preferred_carrier" in payload) {
+    mapped.preferredCarrier = payload.preferred_carrier;
+    delete mapped.preferred_carrier;
+  }
+  if ("excluded_carrier" in payload) {
+    mapped.excludedCarrier = payload.excluded_carrier;
+    delete mapped.excluded_carrier;
+  }
+  if ("no_consolidate" in payload) {
+    mapped.noConsolidate = payload.no_consolidate;
+    delete mapped.no_consolidate;
+  }
+  if ("dedicated_equip" in payload) {
+    mapped.dedicatedEquip = payload.dedicated_equip;
+    delete mapped.dedicated_equip;
+  }
+
+  return mapped;
 }
 
 /**

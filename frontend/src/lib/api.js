@@ -153,6 +153,29 @@ export const DbApi = {
 };
 
 export const OrdersApi = {
+  list() {
+    return api("/orders");
+  },
+  get(id) {
+    return api(`/orders/${encodeURIComponent(id)}`);
+  },
+  create(payload) {
+    return api("/orders", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  update(id, payload) {
+    return api(`/orders/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  remove(id) {
+    return api(`/orders/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
   full(id) {
     return api(`/orders/${encodeURIComponent(id)}/full`);
   },
@@ -169,6 +192,12 @@ export const OrdersApi = {
     return api(`/orders/${encodeURIComponent(id)}/lines`, {
       method: "DELETE",
     });
+  },
+};
+
+export const ShipmentsApi = {
+  remove(id) {
+    return api(`/shipments/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 };
 
@@ -260,3 +289,4 @@ export const BulkPlanApi = {
     });
   },
 };
+

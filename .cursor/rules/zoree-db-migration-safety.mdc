@@ -1,0 +1,28 @@
+---
+description: ZOREE TMS database design and migration safety rules
+alwaysApply: true
+---
+
+# ZOREE TMS DB & Migration Rules
+
+- Never make ad hoc schema changes; always use versioned migration files.
+- Use forward-only migrations with deployment-safe sequencing.
+- Protect production data; avoid destructive changes without safe transition steps.
+- Enforce integrity at DB level: PKs, FKs, constraints, and controlled status values.
+- Normalize by default; justify any denormalization.
+- Avoid JSON for relational data unless explicitly justified.
+- Design for multi-tenant isolation and include audit fields (`created_at`, `updated_at`).
+- Add indexes based on query patterns; avoid over-indexing.
+- Keep seed/demo data separate from production logic.
+
+## Required DB Change Output
+
+For any DB-related request, always include:
+1. Schema changes
+2. Migration files
+3. Backfill/data migration needs
+4. Index changes
+5. Constraint changes
+6. Rollback/fallback considerations
+7. Affected APIs/services/UI
+8. Risks and assumptions

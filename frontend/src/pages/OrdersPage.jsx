@@ -332,7 +332,9 @@ export default function OrdersPage() {
         customer: f.customer || null, status: f.status || null,
         origin: newOrigin || null, dest: newDest || null,
         weight: parseFloat(f.weight) || 0, pieces: parseInt(f.pieces) || 0,
+        ship_mode: (f.shipMode || "").trim() || null,
         commodity: f.commodity || null,
+        incoterms: (f.incoterms || "").trim() || null,
         ready: f.ready || null, due: f.due || null,
       };
       // If unplanning, ensure shipment_id is cleared

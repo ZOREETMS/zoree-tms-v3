@@ -8,7 +8,9 @@ import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/h
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
 import NewShipmentModal from "../components/shipments/NewShipmentModal";
-import { createShipment, copyShipment } from "../services/shipmentService";
+import { createShipment, copyShipment, deleteShipmentById } from "../services/shipmentService";
+import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
+import { confirmOrdersForShipment, unassignOrderAndCleanupShipment, unplanOrdersForShipmentRemoval } from "../services/shipmentOrderService";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -278,7 +280,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                   <span style={{ fontSize: 11, color: "var(--text3)" }}>· {(o.origin || "").split(",")[0]} → {(o.dest || "").split(",")[0]}</span>
                   <span style={{ marginLeft: "auto", fontSize: 12, fontFamily: "monospace", color: "var(--text2)" }}>{(o.weight || 0).toLocaleString()} lbs</span>
                   {ds.status === "Planned" && (
-                    <button onClick={() => onUnassign(o.id, ds.id)} style={{ padding: "3px 10px", background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 7, fontSize: 11, fontWeight: 600, color: "#b45309", cursor: "pointer", fontFamily: "inherit" }}>🔓 Unassign</button>
+                    <button onClick={() => onUnassign(o.id, ds.id)} style={{ padding: "3px 10px", background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 7, fontSize: 11, fontWeight: 600, color: "#b45309", cursor: "pointer", fontFamily: "inherit" }}>🔓 Unplan</button>
                   )}
                 </div>
               ))}
@@ -521,31 +523,10 @@ export default function ShipmentsPage() {
   }
 
   async function unassignOrder(orderId, shipmentId) {
+    if (!window.confirm(`Unplan order ${orderId}?`)) return;
     try {
-      await DbApi.patch("orders", orderId, { status: "Unplanned", shipment_id: null });
-      const remaining = orders.filter((o) => o.shipment_id === shipmentId && o.id !== orderId);
-      if (remaining.length === 0) {
-        // No orders left — delete the shipment
-        const ship = shipments.find((s) => s.id === shipmentId);
-        await DbApi.remove("shipments", shipmentId).catch(() => {});
-        // If CBOL, check if MBOL should also be deleted
-        if (ship?.master_shipment_id) {
-          const siblingCbols = shipments.filter((s) => s.master_shipment_id === ship.master_shipment_id && s.id !== shipmentId);
-          if (siblingCbols.length === 0) {
-            await DbApi.remove("shipments", ship.master_shipment_id).catch(() => {});
-            toast(`Order ${orderId} unassigned. Shipment ${shipmentId} and master ${ship.master_shipment_id} deleted.`, "info");
-          } else {
-            toast(`Order ${orderId} unassigned. Shipment ${shipmentId} deleted.`, "info");
-          }
-        } else {
-          toast(`Order ${orderId} unassigned. Shipment ${shipmentId} deleted.`, "info");
-        }
-      } else {
-        const newWeight = remaining.reduce((s, o) => s + (Number(o.weight) || 0), 0);
-        const newPieces = remaining.reduce((s, o) => s + (Number(o.pieces) || 0), 0);
-        await DbApi.patch("shipments", shipmentId, { weight: newWeight, pieces: newPieces });
-        toast(`Order ${orderId} unassigned from shipment ${shipmentId}`, "success");
-      }
+      const msg = await unassignOrderAndCleanupShipment(orderId, shipmentId, orders, shipments);
+      toast(msg, msg.includes("deleted") ? "info" : "success");
       await refreshData();
       setDetailShipment(null);
     } catch (e) {
@@ -783,11 +764,7 @@ export default function ShipmentsPage() {
         await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Confirmed" })));
       }
       // 2. Update linked orders (master + children)
-      const allShipmentIds = [row.id, ...(row.bol_type === "MBOL" ? shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL").map((s) => s.id) : [])];
-      const linkedOrders = orders.filter((o) => allShipmentIds.includes(String(o.shipment_id || "")));
-      await Promise.all(linkedOrders.map((o) =>
-        DbApi.patch("orders", o.id, { status: "Confirmed" })
-      ));
+      const linkedOrders = await confirmOrdersForShipment(row, shipments, orders);
       // 3. Push to OMS
       try {
         const omsResult = await OmsApi.push({
@@ -908,28 +885,13 @@ export default function ShipmentsPage() {
     if (!window.confirm(`Delete shipment ${row.id}? Linked orders will be unplanned.`)) return;
     setBusyId(row.id);
     try {
-      // Unplan linked orders
-      for (const o of row._linkedOrders || []) {
-        await DbApi.patch("orders", o.id, { status: "Unplanned", shipment_id: null });
-      }
-      // If MBOL, also delete all child CBOLs
-      if (row.bol_type === "MBOL") {
-        const children = shipments.filter((s) => s.master_shipment_id === row.id);
-        for (const child of children) {
-          // Unplan any orders on CBOLs
-          const childOrders = orders.filter((o) => o.shipment_id === child.id);
-          for (const co of childOrders) {
-            await DbApi.patch("orders", co.id, { status: "Unplanned", shipment_id: null });
-          }
-          await DbApi.remove("shipments", child.id).catch(() => {});
-        }
-      }
-      await DbApi.remove("shipments", row.id).catch(() => {});
+      await unplanOrdersForShipmentRemoval(row, shipments, orders);
+      await deleteShipmentById(row.id);
       // If CBOL, check if MBOL has remaining children
       if (row.bol_type === "CBOL" && row.master_shipment_id) {
         const siblingCbols = shipments.filter((s) => s.master_shipment_id === row.master_shipment_id && s.id !== row.id);
         if (siblingCbols.length === 0) {
-          await DbApi.remove("shipments", row.master_shipment_id).catch(() => {});
+          await deleteShipmentById(row.master_shipment_id);
           toast(`Shipment ${row.id} and master ${row.master_shipment_id} deleted`, "success");
         } else {
           toast(`Shipment ${row.id} deleted`, "success");

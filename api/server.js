@@ -14,6 +14,7 @@ const nodemailer = require('nodemailer');
 const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
+const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
 
 
 // ── Crash prevention ─────────────────────────────────────────────────────────
@@ -1023,7 +1024,72 @@ function dbToOrderApi(r) {
   };
 }
 app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('orders','select=*&order=created_at.desc&limit=500',u._token); const orders = rows.map(dbToOrderApi); res.json({ orders, total: orders.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+
+app.patch('/api/orders/:id', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    const beforeRows = await dbSelect('orders', `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`, null);
+    const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
+    const patch = apiOrderToDbPatch(req.body);
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+    // Use server-side service key to bypass Supabase client-role RLS on writes.
+    const row = await dbUpdate('orders', req.params.id, patch, null);
+
+    // Auto-clean orphan shipments: if order was unassigned and no orders remain on that shipment, delete it.
+    const prevShipmentId = before?.shipment_id || null;
+    const nowShipmentId = row?.shipment_id || null;
+    if (prevShipmentId && !nowShipmentId) {
+      await cleanupOrphanShipmentAfterUnassign({
+        previousShipmentId: prevShipmentId,
+        dbSelect,
+        dbDelete,
+      });
+    }
+
+    res.json(dbToOrderApi(row));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/orders', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    const id = req.body?.id || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const row = await dbUpsert('orders', { id, ...apiOrderToDbPatch(req.body || {}) }, null);
+    res.status(201).json(dbToOrderApi(row));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/orders/:id', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    await dbDelete('orders', req.params.id, null);
+    res.json({ deleted: true, id: req.params.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/shipments', async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('shipments','select=*&order=created_at.desc&limit=500',u._token); res.json({ shipments: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+app.delete('/api/shipments/:id', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    // Use server-side key for shipment deletes to avoid client-role RLS failures.
+    await dbDelete('shipments', req.params.id, null);
+    res.json({ deleted: true, id: req.params.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/carriers',  async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('carriers','select=*&order=name&limit=200',u._token); res.json({ carriers: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/rates',     async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('rates','select=*&order=lane&limit=500',u._token); res.json({ rates: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 

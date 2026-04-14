@@ -1,4 +1,4 @@
-import { DbApi } from "../lib/api";
+import { DbApi, ShipmentsApi } from "../lib/api";
 
 /**
  * Generate a unique shipment ID.
@@ -77,4 +77,8 @@ export async function copyShipment(sourceShipment) {
 
   await DbApi.upsert("shipments", copy);
   return copy;
+}
+
+export async function deleteShipmentById(shipmentId) {
+  return ShipmentsApi.remove(shipmentId);
 }

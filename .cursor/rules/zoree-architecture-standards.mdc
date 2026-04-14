@@ -1,0 +1,27 @@
+---
+description: ZOREE TMS architecture and coding standards
+alwaysApply: true
+---
+
+# ZOREE TMS Architecture Standards
+
+- Build enterprise-grade, modular software. Prefer maintainability over speed.
+- Keep layers separate:
+  - UI/components in `pages` and `components`
+  - Business logic in `services`/`hooks`/`utils`
+  - Data access via API services only
+- Never call persistence APIs directly from UI components.
+- Keep components small, single-purpose, and reusable.
+- Avoid duplication; extract shared components and utilities.
+- Do not create monolithic files or combine unrelated logic.
+- Define/confirm entity model before implementing UI flows.
+- Use clear naming, small functions, and comments only for non-obvious logic.
+- Prefer controlled constants/types over hardcoded status values.
+
+## Implementation Workflow
+
+1. Define module architecture.
+2. List files to create/update.
+3. Implement file-by-file.
+4. Explain integration points and impact.
+5. Self-review for coupling, layering violations, and reuse opportunities.
