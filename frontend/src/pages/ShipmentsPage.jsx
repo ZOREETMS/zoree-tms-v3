@@ -64,6 +64,45 @@ function statusColor(status) {
   return "#f59e0b";
 }
 
+function parseMissingColumn(errorMessage) {
+  const msg = String(errorMessage || "");
+  const patterns = [
+    /column\s+"?([a-zA-Z0-9_]+)"?\s+does\s+not\s+exist/i,
+    /Could not find the ['"]([a-zA-Z0-9_]+)['"] column/i,
+    /unknown column ['"]?([a-zA-Z0-9_]+)['"]?/i,
+  ];
+  for (const p of patterns) {
+    const m = msg.match(p);
+    if (m) return m[1];
+  }
+  return "";
+}
+
+async function patchShipmentWithFallback(shipmentId, payload) {
+  const patch = { ...payload };
+  const maxAttempts = Math.max(1, Object.keys(patch).length + 2);
+  for (let i = 0; i < maxAttempts; i += 1) {
+    try {
+      return await DbApi.patch("shipments", shipmentId, patch);
+    } catch (err) {
+      const missing = parseMissingColumn(err.message);
+      if (!missing || !Object.prototype.hasOwnProperty.call(patch, missing)) throw err;
+      delete patch[missing];
+      if (!Object.keys(patch).length) throw err;
+    }
+  }
+  return DbApi.patch("shipments", shipmentId, patch);
+}
+
+function withCarrierResponseNotes(existingNotes, response) {
+  const marker = "[CP_RESPONSE]";
+  const text = String(existingNotes || "");
+  const idx = text.lastIndexOf(marker);
+  const cleaned = idx >= 0 ? text.slice(0, idx).trim() : text.trim();
+  const markerLine = `${marker} ${JSON.stringify(response)}`;
+  return cleaned ? `${cleaned}\n${markerLine}` : markerLine;
+}
+
 /* ── InfoBox helper ── */
 function InfoBox({ icon, label, value }) {
   return (
@@ -746,9 +785,21 @@ export default function ShipmentsPage() {
     if (!pickup) { toast("Pickup date is required", "warning"); return; }
     setBusyId(row.id);
     try {
+      const responseMeta = {
+        action: "accept",
+        proNumber: pro || "",
+        carrierPickupDate: pickup || "",
+        serviceLevel: service || "",
+        bolNumber: bol || "",
+        dockDoor: dock || "",
+        dockLoadStart: dockLoadStart || "",
+        dockLoadEnd: dockLoadEnd || "",
+        notes: notes || "",
+        respondedAtIso: new Date().toISOString(),
+      };
       // 1. Update shipment in DB
-      await DbApi.patch("shipments", row.id, {
-        status: "Confirmed",
+      await patchShipmentWithFallback(row.id, {
+        status: "Tendered",
         pro_number: pro || null,
         pickup_date: pickup || null,
         delivery_date: delivery || null,
@@ -756,12 +807,12 @@ export default function ShipmentsPage() {
         bol_number: bol || null,
         dock_assigned: dock || null,
         dock_time: dockLoadStart || null,
-        notes: notes || null,
+        notes: withCarrierResponseNotes(row.notes, responseMeta),
       });
       // 1b. If MBOL, cascade Confirmed to child CBOLs
       if (row.bol_type === "MBOL") {
         const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
-        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Confirmed" })));
+        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Tendered" })));
       }
       // 2. Update linked orders (master + children)
       const linkedOrders = await confirmOrdersForShipment(row, shipments, orders);

@@ -1,4 +1,5 @@
 const ROLE_FEATURES = ['orders.plan', 'shipments.edit'];
+const SUPABASE_SYSTEM_ROLES = new Set(['authenticated', 'anon', 'anonymous', 'service_role']);
 
 const TABLE_ACTION_TO_FEATURE = {
   orders: {
@@ -18,7 +19,23 @@ function createRolePermissionService({ dbSelect, dbUpsert }) {
 
   function getUserRole(user) {
     if (!user) return 'anon';
-    return (user.user_metadata && user.user_metadata.role) || user.role || 'admin';
+    const candidates = [
+      user?.user_metadata?.role,
+      user?.user_metadata?.user_role,
+      user?.raw_user_meta_data?.role,
+      user?.raw_user_meta_data?.user_role,
+      user?.app_metadata?.role,
+      user?.app_metadata?.user_role,
+      user?.role,
+    ]
+      .map((r) => String(r || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    const explicitRole = candidates.find((role) => !SUPABASE_SYSTEM_ROLES.has(role));
+    if (explicitRole) return explicitRole;
+
+    // Backward-compatible fallback: if only Supabase system role exists, default to admin.
+    return 'admin';
   }
 
   function getTenantId(user, fallbackTenantId = DEFAULT_TENANT_ID) {
@@ -141,11 +158,11 @@ function createRolePermissionService({ dbSelect, dbUpsert }) {
   }
 
   async function canWriteTable(user, table, method, tenantId = DEFAULT_TENANT_ID) {
-    if (getUserRole(user) === 'admin') return true;
+    const role = getUserRole(user);
+    if (role === 'admin') return true;
     const feature = TABLE_ACTION_TO_FEATURE[table] && TABLE_ACTION_TO_FEATURE[table][method];
     if (!feature) return false;
     const permissions = await loadRolePermissions(tenantId);
-    const role = getUserRole(user);
     return !!(permissions.roles[role] && permissions.roles[role][feature]);
   }
 

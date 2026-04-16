@@ -10,6 +10,27 @@ import { DOCK_DOORS, LOAD_DURATION_BY_MODE } from "../constants/docks";
 import { getDockConfigForWarehouse } from "./dockScheduleService";
 import { saveDocument } from "./documentService";
 
+const QUOTE_CACHE_TTL_MS = 2 * 60 * 1000;
+const quoteCache = new Map();
+
+function quoteCacheKey(lane) {
+  return JSON.stringify({
+    laneKey: lane?.laneKey || "",
+    origin: lane?.origin || "",
+    destination: lane?.destination || "",
+    originZip: lane?.originZip || "",
+    destZip: lane?.destZip || "",
+    freightClass: lane?.freightClass || "",
+    totalWeight: Number(lane?.totalWeight || 0),
+    totalPieces: Number(lane?.totalPieces || 0),
+    orderCount: Array.isArray(lane?.orderIds) ? lane.orderIds.length : 0,
+  });
+}
+
+export function invalidateQuoteCache() {
+  quoteCache.clear();
+}
+
 /**
  * Normalize an origin/destination string from city, state, zip parts.
  * Uppercases city and state to ensure consistent data storage.
@@ -412,11 +433,23 @@ export async function executeSinglePlan(plans) {
  * @param {string}   dueDate      - Earliest due date (ISO string)
  * @param {string}   readyDate    - Latest ready date (ISO string)
  */
-export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate) {
-  const rateRes = await BulkPlanApi.rate([lane], "cost");
-  const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
-  const rawQuotes = results[0]?.quotes || [];
-  const bestQuote = results[0]?.bestQuote || null;
+export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate, options = {}) {
+  const key = quoteCacheKey(lane);
+  const now = Date.now();
+  const cached = quoteCache.get(key);
+
+  let rawQuotes = [];
+  let bestQuote = null;
+  if (cached && now - cached.ts < QUOTE_CACHE_TTL_MS) {
+    rawQuotes = cached.rawQuotes;
+    bestQuote = cached.bestQuote;
+  } else {
+    const rateRes = await BulkPlanApi.rate([lane], "cost", options);
+    const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
+    rawQuotes = results[0]?.quotes || [];
+    bestQuote = results[0]?.bestQuote || null;
+    quoteCache.set(key, { ts: now, rawQuotes, bestQuote });
+  }
 
   // Sort: feasible (on-time) first, then by cost ascending
   const sortedQuotes = [...rawQuotes].sort((a, b) => {
@@ -431,6 +464,26 @@ export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate) 
   });
 
   return { quotes: sortedQuotes, bestQuote };
+}
+
+/**
+ * Warm quote cache in background for likely plan candidates.
+ * Best-effort: failures are intentionally swallowed.
+ */
+export async function prefetchCarrierQuotes(lane) {
+  try {
+    const key = quoteCacheKey(lane);
+    const now = Date.now();
+    const cached = quoteCache.get(key);
+    if (cached && now - cached.ts < QUOTE_CACHE_TTL_MS) return;
+    const rateRes = await BulkPlanApi.rate([lane], "cost");
+    const results = Array.isArray(rateRes?.results) ? rateRes.results : [];
+    const rawQuotes = results[0]?.quotes || [];
+    const bestQuote = results[0]?.bestQuote || null;
+    quoteCache.set(key, { ts: now, rawQuotes, bestQuote });
+  } catch {
+    // Prefetch must never block UI or throw.
+  }
 }
 
 /**

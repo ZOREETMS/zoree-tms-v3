@@ -15,6 +15,7 @@ const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
+const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 
 
 // ── Crash prevention ─────────────────────────────────────────────────────────
@@ -168,6 +169,34 @@ const {
   saveRolePermissions,
   canWriteTable,
 } = rolePermissionService;
+
+const laneQuoteCache = createLaneQuoteCache({
+  ttlMs: Number(process.env.LANE_QUOTE_CACHE_TTL_MS || 120000),
+  maxEntries: Number(process.env.LANE_QUOTE_CACHE_MAX_ENTRIES || 2000),
+});
+
+let ratesVersionCache = { value: 'none', at: 0 };
+function invalidateLaneRateCaches() {
+  ratesVersionCache = { value: 'none', at: 0 };
+  laneQuoteCache.clear();
+}
+async function getRatesVersionStamp() {
+  const now = Date.now();
+  if (now - ratesVersionCache.at < 15000) return ratesVersionCache.value;
+  try {
+    const rows = await dbSelect(
+      'rates',
+      'select=updated_at,created_at&order=updated_at.desc&limit=1',
+      null
+    );
+    const top = Array.isArray(rows) ? rows[0] : null;
+    const stamp = (top && (top.updated_at || top.created_at)) || 'none';
+    ratesVersionCache = { value: String(stamp), at: now };
+    return ratesVersionCache.value;
+  } catch {
+    return ratesVersionCache.value || 'none';
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES
@@ -825,6 +854,7 @@ app.post('/api/db/:table', async (req, res) => {
   try {
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpsert(req.params.table, req.body, null);
+    if (req.params.table === 'rates') invalidateLaneRateCaches();
     res.status(201).json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -849,6 +879,7 @@ app.patch('/api/db/rates', async (req, res) => {
     });
     const data = await r.json();
     if (!r.ok) return res.status(500).json({ error: 'DB update failed', detail: data });
+    invalidateLaneRateCaches();
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -864,6 +895,7 @@ app.patch('/api/db/:table/:id', async (req, res) => {
   try {
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpdate(req.params.table, req.params.id, req.body, null);
+    if (req.params.table === 'rates') invalidateLaneRateCaches();
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -879,6 +911,7 @@ app.delete('/api/db/:table/:id', async (req, res) => {
   }
   try {
     await dbDelete(req.params.table, req.params.id, null);
+    if (req.params.table === 'rates') invalidateLaneRateCaches();
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1896,8 +1929,9 @@ app.post('/api/smc3/test', async (req, res) => {
 app.post('/api/bulk-plan/rate', async (req, res) => {
   const user = await verifyToken(req, res); if (!user) return;
   try {
-    const { lanes, optimizeBy } = req.body;
+    const { lanes, optimizeBy, includeModes } = req.body;
     if (!lanes || !lanes.length) return res.status(400).json({ error: 'lanes[] required' });
+    const ratesVersion = await getRatesVersionStamp();
 
     // Check if lane_preferences parameter is enabled
     let useLanePreferences = false;
@@ -1938,16 +1972,51 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       }
     } catch(e) { console.warn('[BulkPlan] carrier flags load error:', e.message); }
 
+    let cacheHits = 0;
+    let cacheMisses = 0;
+    const extractCity = (str) => (str || '')
+      .replace(/\d{5}/g, '')
+      .split(',')[0]
+      .replace(/\s+(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s*$/i, '')
+      .trim()
+      .toLowerCase();
+    const normalizedGlobalModes = Array.isArray(includeModes)
+      ? includeModes.map((m) => String(m || '').toUpperCase()).filter(Boolean)
+      : null;
+
     const results = await Promise.allSettled(lanes.map(async (lane) => {
       const { laneKey, originZip, destZip, totalWeight, freightClass, orderIds } = lane;
       const fc = String(freightClass || 70);
       const wt = Math.round(totalWeight || 1000);
       const LTL_MAX = 15000;
       const loadType = wt >= 35000 ? 'Full TL' : wt >= LTL_MAX ? 'Partial TL' : 'LTL';
+      const laneModes = Array.isArray(lane.includeModes)
+        ? lane.includeModes.map((m) => String(m || '').toUpperCase()).filter(Boolean)
+        : normalizedGlobalModes;
+      const allowedModes = laneModes && laneModes.length ? laneModes : ['LTL', 'TL'];
+      const wantsLtl = allowedModes.includes('LTL');
+      const wantsTl = allowedModes.includes('TL');
+      const laneCacheKey = {
+        ratesVersion,
+        optimizeBy: optimizeBy === 'transit' ? 'transit' : 'cost',
+        includeModes: allowedModes.slice().sort().join(','),
+        laneKey: String(laneKey || ''),
+        originZip: String(originZip || ''),
+        destZip: String(destZip || ''),
+        freightClass: fc,
+        totalWeight: wt,
+        orderCount: Array.isArray(orderIds) ? orderIds.length : 0,
+      };
+      const cachedLane = laneQuoteCache.get(laneCacheKey);
+      if (cachedLane) {
+        cacheHits += 1;
+        return cachedLane;
+      }
+      cacheMisses += 1;
       const quotes = [];
 
       // Always fetch LTL rates (CzarLite + CCXL) unless weight exceeds LTL max
-      if (wt <= LTL_MAX) {
+      if (wantsLtl && wt <= LTL_MAX) {
         try {
           const ltlRes = await fetch(`http://localhost:${PORT || 3001}/api/ltl/quote`, {
             method: 'POST',
@@ -2004,20 +2073,17 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       const haversineMiles = estimateMilesByZip(lane.originZip, lane.destZip);
 
       // Always fetch TL rates from DB (for all weight classes)
-      {
+      if (wantsTl) {
         try {
-          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles`;
+          const oCity = extractCity(lane.origin);
+          const dCity = extractCity(lane.destination);
+          const oLike = `%25${encodeURIComponent(oCity)}%25`;
+          const dLike = `%25${encodeURIComponent(dCity)}%25`;
+          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&origin=ilike.${oLike}&dest=ilike.${dLike}&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles`;
           const tlRes = await fetch(tlUrl, {
             headers: { 'apikey': SERVICE_KEY, 'Content-Type': 'application/json' },
           });
           const tlRates = await tlRes.json();
-
-          // Extract city name: strip ZIP codes, state codes, commas
-          function extractCity(str) {
-            return (str || '').replace(/\d{5}/g, '').split(',')[0].replace(/\s+(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s*$/i, '').trim().toLowerCase();
-          }
-          const oCity = extractCity(lane.origin);
-          const dCity = extractCity(lane.destination);
 
           if (Array.isArray(tlRates)) {
             tlRates.forEach((rate) => {
@@ -2057,7 +2123,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               });
             });
           }
-          console.log(`[BulkPlan/rate] TL rates for ${oCity}→${dCity}: ${quotes.filter(q=>q.mode==='TL').length} matched from ${Array.isArray(tlRates)?tlRates.length:0} total`);
+          console.log(`[BulkPlan/rate] TL rates for ${oCity}→${dCity}: ${quotes.filter(q=>q.mode==='TL').length} matched from ${Array.isArray(tlRates)?tlRates.length:0} filtered`);
         } catch (tlErr) {
           console.error('[BulkPlan/rate] TL rates error:', tlErr.message);
         }
@@ -2145,12 +2211,14 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       const validQuotes = quotes.filter(q => q.transitDays > 0);
       if (validQuotes.length > 0) validQuotes[0].recommended = true;
 
-      return {
+      const laneResult = {
         laneKey,
         loadType,
         quotes,
         bestQuote: validQuotes[0] || null,
       };
+      laneQuoteCache.set(laneCacheKey, laneResult);
+      return laneResult;
     }));
 
     const finalResults = results.map((r) => {
@@ -2158,8 +2226,18 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       return { laneKey: 'unknown', loadType: 'LTL', quotes: [], bestQuote: null, error: r.reason?.message };
     });
 
-    console.log(`[BulkPlan/rate] Rated ${finalResults.length} lanes`);
-    res.json({ results: finalResults });
+    console.log(`[BulkPlan/rate] Rated ${finalResults.length} lanes | cache hit=${cacheHits} miss=${cacheMisses} | ratesVersion=${ratesVersion}`);
+    res.json({
+      results: finalResults,
+      meta: {
+        cache: {
+          hits: cacheHits,
+          misses: cacheMisses,
+          ratesVersion,
+          ...laneQuoteCache.stats(),
+        },
+      },
+    });
 
   } catch (e) {
     console.error('[BulkPlan/rate]', e.message);

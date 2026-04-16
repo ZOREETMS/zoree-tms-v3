@@ -17142,14 +17142,21 @@ function appendAIMessage(text) {
     } catch(e) { actionData = null; }
   }
 
+  // For action messages, render only the action card to avoid duplicate narration.
+  if (actionData) {
+    displayText = '';
+  }
+
   // ── Format the text part ──────────────────────────────
-  var html = displayText
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code style="background:#f0f4ff;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>')
-    .replace(/\n\n/g, '</p><p style="margin:6px 0 0">')
-    .replace(/\n/g, '<br>');
-  div.innerHTML = '<p style="margin:0">' + html + '</p>';
+  if (displayText) {
+    var html = displayText
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code style="background:#f0f4ff;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>')
+      .replace(/\n\n/g, '</p><p style="margin:6px 0 0">')
+      .replace(/\n/g, '<br>');
+    div.innerHTML = '<p style="margin:0">' + html + '</p>';
+  }
 
   // ── Render action confirm card if action detected ──────
   if (actionData) {
@@ -17211,7 +17218,6 @@ async function _chatConfirmAction(jsonStr, btn) {
     card.innerHTML = '<div style="color:#34d399;font-weight:600">✅ Done — ' + result + '</div>';
     // Tell the AI what happened so conversation stays in context
     _chatHistory.push({ role: 'user', content: '[SYSTEM: Action executed successfully — ' + result + ']' });
-    appendAIMessage('✅ **Action completed:** ' + result + '\n\nIs there anything else you need?');
   } catch(e) {
     card.style.background = 'rgba(239,68,68,.08)';
     card.style.borderColor = 'rgba(239,68,68,.3)';

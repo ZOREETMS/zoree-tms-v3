@@ -11,11 +11,12 @@ const SpeechRecognition = typeof window !== "undefined"
   ? window.SpeechRecognition || window.webkitSpeechRecognition
   : null;
 
-export default function useSpeechRecognition({ lang = "en-US", onResult, silenceTimeout = 2000 } = {}) {
+export default function useSpeechRecognition({ lang = "en-US", onResult, onError, silenceTimeout = 2000 } = {}) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef(null);
   const silenceTimerRef = useRef(null);
+  const latestTranscriptRef = useRef("");
 
   const isSupported = !!SpeechRecognition;
 
@@ -48,6 +49,7 @@ export default function useSpeechRecognition({ lang = "en-US", onResult, silence
       setIsListening(true);
       setTranscript("");
       finalTranscript = "";
+      latestTranscriptRef.current = "";
     };
 
     recognition.onresult = (event) => {
@@ -62,6 +64,7 @@ export default function useSpeechRecognition({ lang = "en-US", onResult, silence
       }
       const current = finalTranscript + interim;
       setTranscript(current);
+      latestTranscriptRef.current = current;
 
       // Reset silence timer on each result
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -75,20 +78,27 @@ export default function useSpeechRecognition({ lang = "en-US", onResult, silence
       console.warn("[SpeechRecognition] error:", event.error);
       setIsListening(false);
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (onError) onError(event.error || "voice-input-failed");
     };
 
     recognition.onend = () => {
       setIsListening(false);
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       // Deliver final transcript via callback
-      if (finalTranscript.trim() && onResult) {
-        onResult(finalTranscript.trim());
+      const bestTranscript = (finalTranscript || latestTranscriptRef.current || "").trim();
+      if (bestTranscript && onResult) {
+        onResult(bestTranscript);
       }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
-  }, [lang, onResult, silenceTimeout]);
+    try {
+      recognition.start();
+    } catch (err) {
+      setIsListening(false);
+      if (onError) onError(err?.message || "voice-input-start-failed");
+    }
+  }, [lang, onResult, onError, silenceTimeout]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {

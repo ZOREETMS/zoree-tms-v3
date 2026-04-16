@@ -4,7 +4,7 @@ import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
-import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes } from "../services/ordersService";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes } from "../services/ordersService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
@@ -30,6 +30,8 @@ export default function OrdersPage() {
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [sortCol, setSortCol] = useState("id");
   const [sortAsc, setSortAsc] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 100;
 
 
 
@@ -162,10 +164,24 @@ export default function OrdersPage() {
     });
   }, [orders, q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  const pagedRows = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE;
+    return rows.slice(start, start + ROWS_PER_PAGE);
+  }, [rows, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   /* ── Lane groups for unplanned orders ── */
   const laneGroups = useMemo(() => {
     const map = {};
-    rows.forEach((o) => {
+    pagedRows.forEach((o) => {
       if (!isPlannable(o)) return;
       const key = `${normalizeLane(o.origin)}||${normalizeLane(o.dest)}`;
       if (!map[key]) map[key] = { orders: [], totalWeight: 0, totalPieces: 0, origin: o.origin, dest: o.dest };
@@ -174,6 +190,42 @@ export default function OrdersPage() {
       map[key].totalPieces += Number(o.pieces || 0);
     });
     return map;
+  }, [pagedRows]);
+
+  // Warm quote cache for visible unplanned orders so first Plan click is faster
+  // even for rows near the bottom, while throttling requests to avoid API spikes.
+  useEffect(() => {
+    const PREFETCH_MAX = 40;
+    const PREFETCH_DELAY_MS = 180;
+    const queue = rows.filter((o) => isPlannable(o)).slice(0, PREFETCH_MAX);
+    if (!queue.length) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      for (const o of queue) {
+        if (cancelled) break;
+        const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
+        const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.dest);
+        const lane = {
+          laneKey: `${o.origin || ""} -> ${o.dest || ""}`,
+          origin: o.origin || "",
+          destination: o.dest || "",
+          originZip,
+          destZip,
+          freightClass: o.freight_class || "70",
+          totalWeight: Number(o.weight || 0),
+          totalPieces: Number(o.pieces || 0),
+          orderIds: [o.id],
+        };
+        await prefetchCarrierQuotes(lane);
+        await new Promise((resolve) => setTimeout(resolve, PREFETCH_DELAY_MS));
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [rows]);
 
   function toggleSort(col) {
@@ -185,8 +237,17 @@ export default function OrdersPage() {
     setSelectedOrders((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
   function toggleSelectAll() {
-    if (selectedOrders.size === rows.length) setSelectedOrders(new Set());
-    else setSelectedOrders(new Set(rows.map((o) => o.id)));
+    const pageIds = pagedRows.map((o) => o.id);
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedOrders.has(id));
+    setSelectedOrders((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   }
 
   function clearFilters() {
@@ -588,7 +649,8 @@ export default function OrdersPage() {
         shipmentGroups.map(async (sg) => {
           const readyD = sg.orders.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
           const dueD = sg.orders.map((s) => s.due).filter(Boolean).sort()[0] || "";
-          const { quotes, bestQuote } = await fetchCarrierQuotes(sg.lane, calcDates, dueD, readyD);
+          const includeModes = sg.equipType === "LTL Truck" ? ["LTL", "TL"] : ["TL"];
+          const { quotes, bestQuote } = await fetchCarrierQuotes(sg.lane, calcDates, dueD, readyD, { includeModes });
           return { ...sg, quotes, bestQuote };
         })
       );
@@ -636,7 +698,8 @@ export default function OrdersPage() {
 
             const readyD = bestSubset.map(o => o.ready).filter(Boolean).sort().reverse()[0] || "";
             const dueD = bestSubset.map(o => o.due).filter(Boolean).sort()[0] || "";
-            const { quotes: subQuotes, bestQuote: subBest } = await fetchCarrierQuotes(subsetLane, calcDates, dueD, readyD);
+            const includeModes = subsetEquip === "LTL Truck" ? ["LTL", "TL"] : ["TL"];
+            const { quotes: subQuotes, bestQuote: subBest } = await fetchCarrierQuotes(subsetLane, calcDates, dueD, readyD, { includeModes });
 
             finalGroups.push({
               lane: subsetLane, orders: bestSubset, equipType: subsetEquip,
@@ -649,7 +712,8 @@ export default function OrdersPage() {
               const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
               const singleEquip = Number(order.weight || 0) <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
               const singleMaxWt = EQUIPMENT_TYPES[singleEquip].maxWeight;
-              const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
+              const includeModes = singleEquip === "LTL Truck" ? ["LTL", "TL"] : ["TL"];
+              const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "", { includeModes });
               finalGroups.push({
                 lane: singleLane, orders: [order], equipType: singleEquip,
                 maxWt: singleMaxWt, util: Math.round((Number(order.weight || 0) / singleMaxWt) * 100),
@@ -663,7 +727,8 @@ export default function OrdersPage() {
               const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
               const singleEquip = Number(order.weight || 0) <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
               const singleMaxWt = EQUIPMENT_TYPES[singleEquip].maxWeight;
-              const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
+              const includeModes = singleEquip === "LTL Truck" ? ["LTL", "TL"] : ["TL"];
+              const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "", { includeModes });
               finalGroups.push({
                 lane: singleLane, orders: [order], equipType: singleEquip,
                 maxWt: singleMaxWt, util: Math.round((Number(order.weight || 0) / singleMaxWt) * 100),
@@ -847,7 +912,7 @@ export default function OrdersPage() {
     const result = [];
     const showLaneGroups = sortCol === "id"; // only show lane grouping in default sort
     let lastLaneKey = null;
-    rows.forEach((o) => {
+    pagedRows.forEach((o) => {
       const laneKey = `${normalizeLane(o.origin)}||${normalizeLane(o.dest)}`;
       const group = laneGroups[laneKey];
       if (showLaneGroups && isPlannable(o) && group && group.orders.length > 1 && laneKey !== lastLaneKey) {
@@ -859,7 +924,7 @@ export default function OrdersPage() {
       result.push({ type: "order", key: o.id, order: o, inGroup: showLaneGroups && isPlannable(o) && group && group.orders.length > 1 });
     });
     return result;
-  }, [rows, laneGroups, sortCol]);
+  }, [pagedRows, laneGroups, sortCol]);
 
   return (
     <div>
@@ -1020,7 +1085,13 @@ export default function OrdersPage() {
       <table className="grid" style={{ border: "none", boxShadow: "none" }}>
         <thead>
           <tr>
-            <th style={{ width: 36 }}><input type="checkbox" checked={selectedOrders.size === rows.length && rows.length > 0} onChange={toggleSelectAll} /></th>
+            <th style={{ width: 36 }}>
+              <input
+                type="checkbox"
+                checked={pagedRows.length > 0 && pagedRows.every((o) => selectedOrders.has(o.id))}
+                onChange={toggleSelectAll}
+              />
+            </th>
             <th onClick={() => toggleSort("id")} style={{ cursor: "pointer" }}>Order ID <SortIcon col="id" /></th>
             <th onClick={() => toggleSort("customer")} style={{ cursor: "pointer" }}>Customer <SortIcon col="customer" /></th>
             <th onClick={() => toggleSort("origin")} style={{ cursor: "pointer" }}>Origin <SortIcon col="origin" /></th>
@@ -1115,7 +1186,32 @@ export default function OrdersPage() {
       </table>
       </div></div>
 
-      <div className="text-sm text-muted mt-2">{rows.length} of {orders.length} orders</div>
+      <div className="text-sm text-muted mt-2">
+        {rows.length === 0
+          ? `0 of ${orders.length} orders`
+          : `${(currentPage - 1) * ROWS_PER_PAGE + 1}-${Math.min(currentPage * ROWS_PER_PAGE, rows.length)} of ${rows.length} filtered (${orders.length} total)`}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+        <div style={{ fontSize: 12, color: "var(--text3)" }}>
+          Page {currentPage} of {totalPages} · {ROWS_PER_PAGE} per page
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
 
       {/* ═══ ORDER DETAIL MODAL (extracted) ═══ */}
       <OrderDetailModal

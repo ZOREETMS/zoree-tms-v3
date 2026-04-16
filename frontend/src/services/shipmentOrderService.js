@@ -35,7 +35,8 @@ export async function confirmOrdersForShipment(row, shipments, orders) {
       : []),
   ];
   const linkedOrders = orders.filter((o) => allShipmentIds.includes(String(o.shipment_id || "")));
-  await Promise.all(linkedOrders.map((o) => updateOrderStatus(o.id, "Confirmed")));
+  // Keep order status within DB-controlled values; accepted tender is tracked on shipment notes/status.
+  await Promise.all(linkedOrders.map((o) => updateOrderStatus(o.id, "Tendered")));
   return linkedOrders;
 }
 

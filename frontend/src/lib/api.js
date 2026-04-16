@@ -276,10 +276,11 @@ export const RouteApi = {
 };
 
 export const BulkPlanApi = {
-  rate(lanes, optimizeBy = "cost") {
+  rate(lanes, optimizeBy = "cost", options = {}) {
+    const includeModes = Array.isArray(options.includeModes) ? options.includeModes : undefined;
     return api("/bulk-plan/rate", {
       method: "POST",
-      body: JSON.stringify({ lanes, optimizeBy }),
+      body: JSON.stringify({ lanes, optimizeBy, ...(includeModes ? { includeModes } : {}) }),
     });
   },
   execute(plans) {

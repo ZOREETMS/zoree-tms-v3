@@ -170,7 +170,8 @@ async function patchTableWithFallback(table, id, payload) {
 }
 
 async function patchOrderConfirmed(orderId, pickupVal) {
-  const p = { status: "Confirmed" };
+  // Some environments enforce controlled order status values without "Confirmed".
+  const p = { status: "Tendered" };
   if (pickupVal) {
     p.pickup = pickupVal;
     p.ready = pickupVal;
@@ -195,7 +196,9 @@ export async function saveTenderResponse(shipment, responseData, extra = {}) {
   const patch = { notes };
 
   if (normalized.action === "accept") {
-    patch.status = "Confirmed";
+    // Keep DB status within allowed enum (some environments do not allow "Confirmed" in shipments.status).
+    // UI will still show "Confirmed" through effectiveShipmentStatus() when accept response marker is present.
+    patch.status = "Tendered";
     patch.pro_number = normalized.proNumber || null;
     if (normalized.carrierPickupDate) {
       patch.pickup_date = normalized.carrierPickupDate;

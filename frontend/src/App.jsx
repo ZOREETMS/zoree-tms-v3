@@ -87,6 +87,19 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  async function refreshCoreData() {
+    setError("");
+    return Promise.all([DbApi.orders(), DbApi.shipments()])
+      .then(([orders, shipments]) => {
+        setData((prev) => ({
+          ...prev,
+          orders: Array.isArray(orders) ? orders : [],
+          shipments: Array.isArray(shipments) ? shipments : [],
+        }));
+      })
+      .catch((e) => setError(e.message || "Failed loading data"));
+  }
+
   async function refreshData() {
     setError("");
     return Promise.all([
@@ -182,6 +195,7 @@ export default function App() {
         ...data,
         setData,
         refreshData,
+        refreshCoreData,
       }}
     />
   );

@@ -3,6 +3,7 @@ import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
 import { downloadRateTemplate } from "../services/rateService";
+import { invalidateQuoteCache } from "../services/ordersService";
 
 const STATUS_BADGES = {
   Active: "badge badge-green",
@@ -278,6 +279,8 @@ export default function RateManagementPage() {
         await DbApi.patch("rates", id, payload);
         toast(`Rate ${payload.lane || id} updated`, "success");
       }
+      // Ensure planning uses latest rates after any rate mutation.
+      invalidateQuoteCache();
       setEditRate(null);
       if (refreshData) await refreshData();
     } catch (err) {

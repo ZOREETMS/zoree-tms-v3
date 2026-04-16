@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { DbApi } from "../lib/api";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import useSpeechSynthesis from "../hooks/useSpeechSynthesis";
+import { unplanOrderFromShipment } from "../services/ordersService";
 
 /* ─────────────────────────────────────────────
    ZoreeAI — Floating chat assistant
@@ -173,7 +174,21 @@ export default function ZoreeAI({ data }) {
       }, 400);
     }
   }, []);
-  const { transcript, isListening, isSupported: sttSupported, startListening, stopListening } = useSpeechRecognition({ onResult: handleVoiceResult });
+  const handleVoiceError = useCallback((errorCode) => {
+    const map = {
+      "not-allowed": "Mic permission denied. Allow microphone access in your browser and retry.",
+      "service-not-allowed": "Voice service is blocked by browser policy for this page.",
+      "network": "Voice input failed due to network/browser speech service issue.",
+      "audio-capture": "No microphone detected. Check your input device settings.",
+      "aborted": "Voice input was interrupted. Try again.",
+    };
+    const msg = map[errorCode] || `Voice input failed (${errorCode}).`;
+    setMessages((prev) => [...prev, { role: "ai", text: `⚠️ ${msg}` }]);
+  }, []);
+  const { transcript, isListening, isSupported: sttSupported, startListening, stopListening } = useSpeechRecognition({
+    onResult: handleVoiceResult,
+    onError: handleVoiceError,
+  });
   const callAPIRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
@@ -220,7 +235,8 @@ export default function ZoreeAI({ data }) {
   // ── Action executor — calls real TMS API ──────────────
   async function executeAction(actionData) {
     const p = actionData.params || {};
-    const { orders = [], shipments = [], refreshData } = data || {};
+    const { orders = [], shipments = [], refreshData, refreshCoreData } = data || {};
+    const refreshAfterMutation = refreshCoreData || refreshData;
 
     switch (actionData.action) {
       case "PLAN_ORDER": {
@@ -274,7 +290,7 @@ export default function ZoreeAI({ data }) {
           });
         }
 
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Shipment **${newId}** created · ${rawIds.length} order(s) · Carrier: ${chosenCarrier} · ${(o0.origin || "").split(",")[0]} → ${(o0.dest || o0.destination || "").split(",")[0]}`;
       }
 
@@ -282,8 +298,16 @@ export default function ZoreeAI({ data }) {
         const o = orders.find((x) => x.id === p.orderId);
         if (!o) throw new Error(`Order ${p.orderId} not found`);
         const prev = o.status;
+        const isUnplanning = p.newStatus === "Unplanned";
+        if (isUnplanning) {
+          const { message } = await unplanOrderFromShipment(p.orderId, orders, shipments);
+          if (refreshAfterMutation) await refreshAfterMutation();
+          return message;
+        }
+
         await DbApi.patch("orders", p.orderId, { status: p.newStatus });
-        if (refreshData) await refreshData();
+
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Order ${p.orderId} status changed from ${prev} → ${p.newStatus}`;
       }
 
@@ -295,7 +319,7 @@ export default function ZoreeAI({ data }) {
         if (p.newStatus === "In Transit" && !s.shipped_at) patch.shipped_at = new Date().toISOString();
         if (p.newStatus === "Delivered" && !s.delivered_at) patch.delivered_at = new Date().toISOString();
         await DbApi.patch("shipments", p.shipmentId, patch);
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Shipment ${p.shipmentId} status changed from ${prev} → ${p.newStatus}`;
       }
 
@@ -304,19 +328,19 @@ export default function ZoreeAI({ data }) {
         if (!s) throw new Error(`Shipment ${p.shipmentId} not found`);
         const prev = s.carrier || "None";
         await DbApi.patch("shipments", p.shipmentId, { carrier: p.carrier });
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Carrier for shipment ${p.shipmentId} set to ${p.carrier} (was: ${prev})`;
       }
 
       case "HOLD_ORDER": {
         await DbApi.patch("orders", p.orderId, { status: "On Hold", notes: `HOLD: ${p.reason || "AI action"}` });
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Order ${p.orderId} placed On Hold — ${p.reason}`;
       }
 
       case "CANCEL_ORDER": {
         await DbApi.patch("orders", p.orderId, { status: "Cancelled", notes: `CANCELLED: ${p.reason || "AI action"}` });
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Order ${p.orderId} cancelled — ${p.reason}`;
       }
 
@@ -326,13 +350,13 @@ export default function ZoreeAI({ data }) {
           await DbApi.patch("orders", o.id, { status: "Unplanned", shipment_id: null });
         }
         await DbApi.patch("shipments", p.shipmentId, { status: "Cancelled", notes: `CANCELLED: ${p.reason || "AI action"}` });
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Shipment ${p.shipmentId} cancelled · ${linked.length} order(s) returned to Unplanned`;
       }
 
       case "FLAG_EXCEPTION": {
         await DbApi.patch("shipments", p.shipmentId, { status: "Exception", notes: `EXCEPTION: ${p.issue || "Flagged by AI"}` });
-        if (refreshData) await refreshData();
+        if (refreshAfterMutation) await refreshAfterMutation();
         return `Shipment ${p.shipmentId} flagged as Exception — ${p.issue}`;
       }
 
@@ -437,7 +461,6 @@ export default function ZoreeAI({ data }) {
         )
       );
       chatHistoryRef.current.push({ role: "user", content: `[SYSTEM: Action executed successfully — ${result}]` });
-      setMessages((prev) => [...prev, { role: "ai", text: `✅ **Action completed:** ${result}\n\nIs there anything else you need?` }]);
     } catch (e) {
       setMessages((prev) =>
         prev.map((m) =>
@@ -508,6 +531,7 @@ export default function ZoreeAI({ data }) {
 
         // Check for action block
         const action = parseAction(reply);
+        let shouldSpeakReply = true;
         if (action) {
           const actionId = `act-${Date.now()}`;
           // Destructive actions require user confirmation; safe actions auto-execute
@@ -518,15 +542,22 @@ export default function ZoreeAI({ data }) {
             pendingActionsRef.current[actionId] = action;
             setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "pending" }]);
           } else {
-            // Auto-execute safe actions (PLAN_ORDER, ASSIGN_CARRIER, etc.)
-            setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "executing" }]);
-            await runAction(actionId, action);
+            // Auto-execute safe actions silently, then show one final outcome message.
+            try {
+              const result = await executeAction(action);
+              chatHistoryRef.current.push({ role: "user", content: `[SYSTEM: Action executed successfully — ${result}]` });
+              setMessages((prev) => [...prev, { role: "ai", text: `✅ ${result}` }]);
+            } catch (e) {
+              setMessages((prev) => [...prev, { role: "ai", text: `❌ ${e.message}` }]);
+            }
           }
+          // Suppress TTS for action payloads to avoid reading hidden planning narration.
+          shouldSpeakReply = false;
         } else {
           setMessages((prev) => [...prev, { role: "ai", text: reply }]);
         }
         // Auto-speak AI response if voice is enabled
-        if (voiceEnabled && ttsSupported) speak(reply);
+        if (shouldSpeakReply && voiceEnabled && ttsSupported) speak(reply);
       } else if (respData.error) {
         const errMsg = respData.error.message || JSON.stringify(respData.error);
         setMessages((prev) => [
@@ -544,10 +575,10 @@ export default function ZoreeAI({ data }) {
         ...prev,
         { role: "ai", text: `⚠️ Could not reach ZoreeAI.\n\nError: ${err.message}` },
       ]);
+    } finally {
+      setTyping(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
-
-    setTyping(false);
-    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   // Keep ref to callAPI for voice callback
@@ -649,10 +680,12 @@ export default function ZoreeAI({ data }) {
               <div className="zoree-ai-messages">
                 {messages.map((msg, i) => (
                   <div key={i} className={`zoree-ai-msg ${msg.role}`}>
-                    <p
-                      style={{ margin: 0 }}
-                      dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }}
-                    />
+                    {!msg.action || msg.actionStatus === "pending" ? (
+                      <p
+                        style={{ margin: 0 }}
+                        dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }}
+                      />
+                    ) : null}
                     {/* Action confirm card */}
                     {msg.action && msg.actionStatus === "pending" && (
                       <div className="zoree-ai-action-card">
@@ -741,7 +774,6 @@ export default function ZoreeAI({ data }) {
                     }}
                     className={`zoree-ai-mic-btn${isListening ? " listening" : ""}`}
                     title={isListening ? "Stop listening" : "Voice input"}
-                    disabled={typing}
                   >
                     {isListening ? "⏹" : "🎙"}
                   </button>
