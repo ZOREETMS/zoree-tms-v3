@@ -64,6 +64,38 @@ async function api(path, options = {}, _retried = false) {
   return data;
 }
 
+// REQ-08: extended auth API for multi-role switching.
+export const AuthApiExt = {
+  setActiveRole(activeRole) {
+    return api("/auth/active-role", {
+      method: "PATCH",
+      body: JSON.stringify({ activeRole }),
+    });
+  },
+};
+
+// REQ-08: admin user-management API.
+export const UsersApi = {
+  list() {
+    return api("/users");
+  },
+  create({ email, password, fullName, roles, activeRole }) {
+    return api("/users", {
+      method: "POST",
+      body: JSON.stringify({ email, password, fullName, roles, activeRole }),
+    });
+  },
+  update(id, patch) {
+    return api(`/users/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+  remove(id) {
+    return api(`/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};
+
 export const AuthApi = {
   login(email, password) {
     return api("/auth/login", {
@@ -193,11 +225,27 @@ export const OrdersApi = {
       method: "DELETE",
     });
   },
+  // REQ-02: fetch change_history rows for a given order.
+  history(id, limit = 200) {
+    return api(`/orders/${encodeURIComponent(id)}/history?limit=${limit}`);
+  },
 };
 
 export const ShipmentsApi = {
   remove(id) {
     return api(`/shipments/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  // REQ-02: fetch change_history rows for a given shipment.
+  history(id, limit = 200) {
+    return api(`/shipments/${encodeURIComponent(id)}/history?limit=${limit}`);
+  },
+  // REQ-03: manually attach an order to a shipment. Backend recalculates
+  // weight, pieces, and total_cost (proportional to weight).
+  addOrder(shipmentId, orderId) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/add-order`, {
+      method: "POST",
+      body: JSON.stringify({ orderId }),
+    });
   },
 };
 

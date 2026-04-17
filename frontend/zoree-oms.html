@@ -1131,9 +1131,26 @@ var ZoreeMiddleware = {
   async _execDirect(cmd, payload) {
     switch(cmd) {
       case 'PUSH_ORDER_TO_TMS': {
-        var { error } = await this._tmsDb().from('orders').upsert(payload, {onConflict:'id'});
-        if (error) throw error;
-        return { tmsOrderId: payload.id };
+        // REQ-01: route through the TMS ingest endpoint so the server
+        // stamps sync_source='oms', auto_synced_at, and broadcasts the
+        // SSE event that drives the TMS Orders page auto-refresh.
+        // Falls back to direct Supabase upsert if the TMS API is offline.
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        try {
+          var resp = await fetch(tmsApi + '/ingest/oms-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orders: [payload] }),
+          });
+          var body = await resp.json().catch(function(){return {};});
+          if (!resp.ok) throw new Error(body.error || ('TMS ingest returned ' + resp.status));
+          return { tmsOrderId: payload.id, ingestResponse: body, via: 'tms-ingest' };
+        } catch (ingestErr) {
+          console.warn('[PUSH_ORDER_TO_TMS] ingest endpoint unavailable, falling back to direct DB:', ingestErr.message);
+          var { error } = await this._tmsDb().from('orders').upsert(payload, {onConflict:'id'});
+          if (error) throw error;
+          return { tmsOrderId: payload.id, via: 'direct-db' };
+        }
       }
       case 'PULL_TMS_PLANNING': {
         var ids = payload.omsOrderIds || [];
@@ -2124,6 +2141,24 @@ async function confirmAvail(){
     await logStage(o.id,2,3);
     cl('m-avail');ro();ri();updateBadges();updatePipelineCounts();
     toast('🔒 Stock reserved — '+o.id+' · Stage 3','tok');
+
+    // ── REQ-01: Auto Release to TMS (Stage 3→4) — no button click needed ──
+    // As soon as stock is reserved, the order is immediately sent through the
+    // middleware to the TMS. No manual "📤 Release TMS" click, no job.
+    try {
+      var cName = custName(o.cust);
+      o.stage=4; o.tmsId=o.id; o.tmsReleasedAt=new Date().toISOString();
+      await saveOrder(o);
+      await logStage(o.id,3,4);
+      ro(); updateBadges(); updatePipelineCounts();
+      toast('⚡ Auto-released to TMS — '+o.id+' · Stage 4','tok');
+      ZoreeMiddleware.pushOrderToTMS(o, o.lines, cName).catch(function(e){
+        console.warn('[auto-release] MW queue error (non-blocking):', e.message);
+      });
+    } catch (autoErr) {
+      console.warn('[auto-release] failed, order remains at Stage 3:', autoErr.message);
+      toast('⚠ Auto-release to TMS failed — use "Release TMS" button to retry','ter');
+    }
   }catch(e){toast('❌ '+e.message,'ter');}
   finally{btn.textContent='✓ Confirm & Reserve Stock';btn.disabled=false;}
 }

@@ -34,7 +34,6 @@ function createRolePermissionService({ dbSelect, dbUpsert }) {
     const explicitRole = candidates.find((role) => !SUPABASE_SYSTEM_ROLES.has(role));
     if (explicitRole) return explicitRole;
 
-    // Backward-compatible fallback: if only Supabase system role exists, default to admin.
     return 'admin';
   }
 

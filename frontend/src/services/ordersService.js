@@ -4,6 +4,58 @@
  */
 
 import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
+
+// ── REQ-01: Auto order sync — SSE subscription ─────────────────────
+// Browser opens an EventSource to /api/events/orders. Any order
+// created/updated/deleted on the server is pushed to us live, so the
+// Orders page updates without any button click or poll.
+const API_BASE =
+  (import.meta && import.meta.env && import.meta.env.VITE_API_BASE) ||
+  (typeof window !== "undefined" && window.ZOREE_API_URL) ||
+  "http://localhost:3001/api";
+
+/**
+ * Subscribe to live order events from the TMS backend.
+ * @param {object} handlers
+ * @param {(payload: object) => void} [handlers.onCreated]
+ * @param {(payload: object) => void} [handlers.onUpdated]
+ * @param {(payload: object) => void} [handlers.onDeleted]
+ * @param {(payload: { count: number, ids: string[], at: string }) => void} [handlers.onBatch]
+ * @param {(err: Event) => void} [handlers.onError]
+ * @returns {() => void} unsubscribe — call to close the stream.
+ */
+export function subscribeOrderChanges(handlers = {}) {
+  if (typeof window === "undefined" || typeof window.EventSource !== "function") {
+    // SSR / unsupported browser — noop unsubscribe.
+    return () => {};
+  }
+  const url = `${API_BASE}/events/orders`;
+  const es = new EventSource(url, { withCredentials: false });
+
+  if (handlers.onCreated) es.addEventListener("order.created", (e) => safeInvoke(handlers.onCreated, e));
+  if (handlers.onUpdated) es.addEventListener("order.updated", (e) => safeInvoke(handlers.onUpdated, e));
+  if (handlers.onDeleted) es.addEventListener("order.deleted", (e) => safeInvoke(handlers.onDeleted, e));
+  if (handlers.onBatch)   es.addEventListener("oms.sync.batch", (e) => safeInvoke(handlers.onBatch, e));
+
+  es.onerror = (err) => {
+    if (handlers.onError) handlers.onError(err);
+    // EventSource auto-reconnects on its own — no need to re-open manually.
+  };
+
+  return () => {
+    try { es.close(); } catch (_) { /* already closed */ }
+  };
+}
+
+function safeInvoke(cb, event) {
+  try {
+    const payload = event && event.data ? JSON.parse(event.data) : null;
+    cb(payload);
+  } catch (e) {
+    // Malformed payload — swallow so one bad event doesn't tear down the stream.
+    console.warn("[subscribeOrderChanges] invalid event payload:", e?.message || e);
+  }
+}
 import { addBusinessDays } from "../utils/orderUtils.jsx";
 import { assignDocksToPlans, buildDockFields } from "./dockService";
 import { DOCK_DOORS, LOAD_DURATION_BY_MODE } from "../constants/docks";
@@ -382,7 +434,10 @@ export async function unplanOrderFromShipment(id, orders, shipments) {
   const deletedShipments = [];
   const order = orders.find((o) => o.id === id);
   const shipmentId = order?.shipment_id;
-  await DbApi.patch("orders", id, { status: "Unplanned", shipment_id: null });
+  // REQ-02: use the domain endpoint (/api/orders/:id) so the backend
+  // records per-field 'edit' events AND a dedicated 'unassign' event
+  // when shipment_id clears. The generic DbApi.patch skips the hook.
+  await OrdersApi.update(id, { status: "Unplanned", shipmentId: null });
 
   let message = `Order ${id} unplanned`;
 
@@ -607,9 +662,10 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
     laneMap[key].push(o);
   });
 
-  const allPlans = [];
-
-  for (const laneOrders of Object.values(laneMap)) {
+  // REQ-05 perf: rate every lane in parallel via Promise.all. Each
+  // lane-worker emits its own local plan list, then we concatenate.
+  const laneWorkers = Object.values(laneMap).map(async (laneOrders) => {
+    const lanePlans = [];
     const o = laneOrders[0];
     const totalWeight = laneOrders.reduce((s, x) => s + Number(x.weight || 0), 0);
     const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
@@ -624,12 +680,18 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
       orderIds: laneOrders.map((x) => x.id),
     }, equipMaxWeight);
 
-    // Rate each group
-    for (const sg of groups) {
+    // REQ-05 perf: first-pass rating for every group in this lane runs
+    // in parallel (typically 1-2 groups per lane, but still a small win).
+    const initialRates = await Promise.all(groups.map(async (sg) => {
       const readyD = sg.orders.map((s) => s.ready).filter(Boolean).sort().reverse()[0] || "";
       const dueD = sg.orders.map((s) => s.due).filter(Boolean).sort()[0] || "";
       const { quotes, bestQuote } = await fetchCarrierQuotes(sg.lane, calcDates, dueD, readyD);
+      return { sg, readyD, dueD, quotes, bestQuote };
+    }));
 
+    // Handle each rated group sequentially — the subset-rerating code path
+    // is rare and keeps nicer flow when serial, avoiding over-parallelism.
+    for (const { sg, readyD, dueD, bestQuote } of initialRates) {
       if (!bestQuote) continue;
 
       const transit = bestQuote.transitDays;
@@ -663,7 +725,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
           if (subBest) {
             const dates = calcDates(subBest, subDueD, subReadyD);
             if (!dates.error) {
-              allPlans.push({
+              lanePlans.push({
                 laneKey: subsetLane.laneKey, origin: subsetLane.origin, destination: subsetLane.destination,
                 originZip: subsetLane.originZip, destZip: subsetLane.destZip,
                 totalWeight: subsetLane.totalWeight, totalPieces: subsetLane.totalPieces, orderIds: subsetLane.orderIds,
@@ -675,52 +737,51 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
             }
           }
 
-          // Rate remainder individually
+          // Rate remainder individually — parallelize these too since each
+          // order is independent of the others on the same lane.
           const remainder = sg.orders.filter(x => !bestSubset.some(s => s.id === x.id));
-          for (const order of remainder) {
+          const remainderResults = await Promise.all(remainder.map(async (order) => {
             const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
             const { bestQuote: indBest } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
-            if (indBest) {
-              const dates = calcDates(indBest, order.due || "", order.ready || "");
-              if (!dates.error) {
-                allPlans.push({
-                  laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
-                  originZip: singleLane.originZip, destZip: singleLane.destZip,
-                  totalWeight: singleLane.totalWeight, totalPieces: singleLane.totalPieces, orderIds: [order.id],
-                  carrier: indBest.carrier || "", mode: indBest.mode || "LTL",
-                  totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
-                  czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
-                  miles: indBest.miles || null, rateId: indBest.rateId || null,
-                });
-              }
-            }
-          }
+            if (!indBest) return null;
+            const dates = calcDates(indBest, order.due || "", order.ready || "");
+            if (dates.error) return null;
+            return {
+              laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
+              originZip: singleLane.originZip, destZip: singleLane.destZip,
+              totalWeight: singleLane.totalWeight, totalPieces: singleLane.totalPieces, orderIds: [order.id],
+              carrier: indBest.carrier || "", mode: indBest.mode || "LTL",
+              totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
+              czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
+              miles: indBest.miles || null, rateId: indBest.rateId || null,
+            };
+          }));
+          for (const r of remainderResults) if (r) lanePlans.push(r);
         } else {
-          // No compatible subset — plan all individually
-          for (const order of sg.orders) {
+          // No compatible subset — plan all individually (in parallel).
+          const indivResults = await Promise.all(sg.orders.map(async (order) => {
             const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
             const { bestQuote: indBest } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
-            if (indBest) {
-              const dates = calcDates(indBest, order.due || "", order.ready || "");
-              if (!dates.error) {
-                allPlans.push({
-                  laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
-                  originZip: singleLane.originZip, destZip: singleLane.destZip,
-                  totalWeight: singleLane.totalWeight, totalPieces: singleLane.totalPieces, orderIds: [order.id],
-                  carrier: indBest.carrier || "", mode: indBest.mode || "LTL",
-                  totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
-                  czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
-                  miles: indBest.miles || null, rateId: indBest.rateId || null,
-                });
-              }
-            }
-          }
+            if (!indBest) return null;
+            const dates = calcDates(indBest, order.due || "", order.ready || "");
+            if (dates.error) return null;
+            return {
+              laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
+              originZip: singleLane.originZip, destZip: singleLane.destZip,
+              totalWeight: singleLane.totalWeight, totalPieces: singleLane.totalPieces, orderIds: [order.id],
+              carrier: indBest.carrier || "", mode: indBest.mode || "LTL",
+              totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
+              czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
+              miles: indBest.miles || null, rateId: indBest.rateId || null,
+            };
+          }));
+          for (const r of indivResults) if (r) lanePlans.push(r);
         }
       } else {
         // Dates compatible or single order — plan as-is
         const dates = calcDates(bestQuote, dueD, readyD);
         if (!dates.error) {
-          allPlans.push({
+          lanePlans.push({
             laneKey: sg.lane.laneKey, origin: sg.lane.origin, destination: sg.lane.destination,
             originZip: sg.lane.originZip, destZip: sg.lane.destZip,
             totalWeight: sg.lane.totalWeight, totalPieces: sg.lane.totalPieces, orderIds: sg.lane.orderIds,
@@ -732,7 +793,12 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
         }
       }
     }
-  }
+    return lanePlans;
+  });
+
+  // Wait for every lane-worker and flatten their plans.
+  const laneResults = await Promise.all(laneWorkers);
+  const allPlans = laneResults.flat();
 
   if (!allPlans.length) {
     return { created: 0, updated: 0, cost: 0, noQuotes: true };

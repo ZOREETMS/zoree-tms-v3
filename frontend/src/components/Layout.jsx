@@ -2,6 +2,8 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useOutletContext } from "react-router-dom";
 import ZoreeAI from "./ZoreeAI";
+import { visibleNavLabels, canonicalRole } from "../config/roleMatrix";
+import RoleSwitcher from "./RoleSwitcher";
 
 const navStructure = [
   { section: "Overview", items: [
@@ -49,6 +51,7 @@ const navStructure = [
     { to: "/db-explorer", label: "DB Explorer", icon: "🗄️" },
   ]},
   { section: "System", items: [
+    { to: "/user-management", label: "User Management", icon: "👥" },
     { to: "/user-roles", label: "User Roles", icon: "🔐" },
     { to: "/settings", label: "Settings", icon: "⚙️" },
   ]},
@@ -57,6 +60,20 @@ const navStructure = [
 export default function Layout({ data }) {
   const { user, logout } = useAuth();
   const initials = (user?.email || "").slice(0, 2).toUpperCase();
+
+  // REQ-04/08: filter the navStructure by the user's currently active role.
+  // Admin sees everything; planner sees planning/execution + rate-management;
+  // finance sees finance menus + documents + analytics. Users with multiple
+  // roles switch via the RoleSwitcher below; we read activeRole (fallback to
+  // legacy single `role` for older tokens).
+  const role = canonicalRole(user?.activeRole || user?.role);
+  const allowed = visibleNavLabels(role);
+  const filteredNav = navStructure
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => allowed.has(item.label)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   // Dynamic badge counts
   const orderCount = (data?.orders || []).filter(o => o.status === "Unplanned").length;
@@ -74,7 +91,7 @@ export default function Layout({ data }) {
 
         {/* Navigation */}
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 10px" }}>
-          {navStructure.map((group) => (
+          {filteredNav.map((group) => (
             <div className="nav-section" key={group.section}>
               <div className="nav-label">{group.section}</div>
               {group.items.map((item) => {
@@ -104,11 +121,13 @@ export default function Layout({ data }) {
 
         {/* User Footer */}
         <div className="sidebar-footer">
+          {/* REQ-08: role switcher (shown only when user has 2+ roles) */}
+          <RoleSwitcher />
           <div className="user-chip">
             <div className="user-avatar">{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: "12.5px", fontWeight: 500, color: "#fff" }}>{user?.email || "Not signed in"}</div>
-              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>{(user?.role || "admin").toUpperCase()} · Zoree</div>
+              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>{(user?.activeRole || user?.role || "admin").toUpperCase()} · Zoree</div>
             </div>
           </div>
           <button onClick={logout} className="sidebar-logout-btn">

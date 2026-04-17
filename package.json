@@ -16,6 +16,7 @@
     "smoke:cancel-order": "node scripts/smoke-cancel-order.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "concurrently": "^8.2.2"
   },
   "dependencies": {

@@ -317,9 +317,9 @@ tr:hover td{background:var(--bg3);}
             ⏱ Next sync: <span id="auto-sync-countdown">—</span>
           </div>
           <select id="auto-sync-interval" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;background:#fff;color:var(--text)">
-            <option value="5">Every 5 sec</option>
+            <option value="5" selected>Every 5 sec</option>
             <option value="30">Every 30 sec</option>
-            <option value="60" selected>Every 1 min</option>
+            <option value="60">Every 1 min</option>
             <option value="300">Every 5 min</option>
             <option value="900">Every 15 min</option>
           </select>
@@ -2125,6 +2125,18 @@ async function boot(){
   // Test connections
   await testAll();
 
+  // REQ-01: Auto-Sync must be ON by default — "no need to run the job
+  // manually in Middleware". Start polling immediately after boot so
+  // pending mw_requests are forwarded to TMS without any click.
+  try {
+    if (!_autoSyncOn && typeof startAutoSync === 'function') {
+      startAutoSync();
+      logEvent('ok','AUTO','Auto-Sync started automatically at boot · interval '+document.getElementById('auto-sync-interval').value+'s');
+    }
+  } catch (e) {
+    logEvent('err','AUTO','Auto-Sync auto-start failed: '+e.message);
+  }
+
   // Update uptime
   setInterval(()=>{
     var el = document.getElementById('dash-mw-uptime');
@@ -2275,11 +2287,30 @@ async function processMWQueue() {
         switch (req.cmd) {
 
           case 'PUSH_ORDER_TO_TMS': {
-            // Write OMS order → TMS orders table
-            var { error: we } = await tmsDb().from('orders').upsert(payload, { onConflict: 'id' });
-            if (we) throw we;
-            result = { tmsOrderId: payload.id };
-            logEvent('ok', 'OMS → TMS', 'pushOrderToTMS: ' + payload.id, {
+            // REQ-01: route through the TMS ingest endpoint so the server
+            // stamps sync_source='oms', auto_synced_at, and broadcasts the
+            // SSE event that drives the TMS Orders page auto-refresh.
+            // Falls back to direct Supabase upsert if the TMS API is offline.
+            var via = 'tms-ingest';
+            try {
+              var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+              // Ensure oms_order_ref is preserved even if OMS didn't send it explicitly.
+              var ingestPayload = Object.assign({ omsOrderRef: payload.id }, payload);
+              var resp = await fetch(tmsApi + '/ingest/oms-orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orders: [ingestPayload] }),
+              });
+              var body = await resp.json().catch(function(){return {};});
+              if (!resp.ok) throw new Error(body.error || ('TMS ingest ' + resp.status));
+            } catch (ingestErr) {
+              via = 'direct-db';
+              logEvent('inf', 'OMS → TMS', 'ingest unavailable, direct DB fallback: '+ingestErr.message);
+              var { error: we } = await tmsDb().from('orders').upsert(payload, { onConflict: 'id' });
+              if (we) throw we;
+            }
+            result = { tmsOrderId: payload.id, via: via };
+            logEvent('ok', 'OMS → TMS', 'pushOrderToTMS: ' + payload.id + ' · via ' + via, {
               srcSystem:'OMS', dstSystem:'TMS', recordId: payload.id, rowCount: 1,
               fields: ['id','customer','origin','dest','weight','pieces','due'],
               payload: payload,

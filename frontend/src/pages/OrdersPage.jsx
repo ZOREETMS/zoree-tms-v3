@@ -4,7 +4,8 @@ import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
-import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes } from "../services/ordersService";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes, subscribeOrderChanges } from "../services/ordersService";
+import { getOrderHistory } from "../services/historyService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
@@ -12,6 +13,8 @@ import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
+import AddToShipmentModal from "../components/orders/AddToShipmentModal";
+import { addOrderToShipment as addOrderToShipmentSvc } from "../services/shipmentOrderService";
 
 export default function OrdersPage() {
   const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
@@ -74,6 +77,46 @@ export default function OrdersPage() {
     cleanupRan.current = true;
     cleanupStaleShipmentRefs(orders).then((count) => { if (count > 0) refreshData(); });
   }, [orders]);
+
+  // REQ-01: Auto order sync OMS → TMS.
+  // Open an SSE stream and refresh the order list whenever the server
+  // reports a new order — no button click, no polling job.
+  const [autoSyncLive, setAutoSyncLive] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [lastSyncCount, setLastSyncCount] = useState(0);
+  const refreshDebounceRef = useRef(null);
+  useEffect(() => {
+    const debouncedRefresh = () => {
+      if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
+      refreshDebounceRef.current = setTimeout(() => {
+        try { refreshData?.(); } catch (_) { /* noop */ }
+      }, 250);
+    };
+    const unsubscribe = subscribeOrderChanges({
+      onCreated: (payload) => {
+        setAutoSyncLive(true);
+        if (payload && payload.sync_source === "oms") {
+          setLastSyncAt(payload.auto_synced_at || new Date().toISOString());
+        }
+        debouncedRefresh();
+      },
+      onUpdated: () => debouncedRefresh(),
+      onDeleted: () => debouncedRefresh(),
+      onBatch: (payload) => {
+        setAutoSyncLive(true);
+        setLastSyncCount(payload?.count || 0);
+        setLastSyncAt(payload?.at || new Date().toISOString());
+        debouncedRefresh();
+      },
+      onError: () => setAutoSyncLive(false),
+    });
+    return () => {
+      if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
+      unsubscribe();
+    };
+    // Only subscribe once on mount — refreshData is stable from the outlet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [editUser, setEditUser] = useState("Sridhar (Dispatcher)");
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}
@@ -89,6 +132,26 @@ export default function OrdersPage() {
 
   /* ── New Order Modal state ── */
   const [showNewOrder, setShowNewOrder] = useState(false);
+  // REQ-03: which order the user is trying to attach to a shipment (null = modal closed)
+  const [addToShipOrder, setAddToShipOrder] = useState(null);
+
+  async function handleAddToShipment(orderId, shipmentId) {
+    setBusyId(orderId);
+    try {
+      const res = await addOrderToShipmentSvc(orderId, shipmentId);
+      const recalc = res?.recalc || {};
+      const oldCost = res?.before?.shipment?.total_cost ?? 0;
+      const newCost = recalc?.total_cost ?? res?.shipment?.total_cost ?? 0;
+      toast(`Order ${orderId} added to ${shipmentId}. Cost $${Number(oldCost).toFixed(2)} → $${Number(newCost).toFixed(2)}.`, "success");
+      setAddToShipOrder(null);
+      await refreshData();
+    } catch (e) {
+      // Let the modal show the error by rethrowing
+      throw e;
+    } finally {
+      setBusyId("");
+    }
+  }
   const [newOrderForm, setNewOrderForm] = useState({
     customer: "", originCity: "", originState: "", originZip: "",
     destCity: "", destState: "", destZip: "", commodity: "", incoterms: "",
@@ -337,6 +400,16 @@ export default function OrdersPage() {
       setDetailLines(Array.isArray(full?.lines) ? full.lines : []);
     } catch { setDetailLines([]); }
     finally { setDetailBusy(false); }
+
+    // REQ-02: fetch real change_history from the backend into the modal's
+    // History tab. The existing state `orderChangeLog` keeps the legacy
+    // cached format; we overwrite this order's entry with fresh rows.
+    try {
+      const rows = await getOrderHistory(orderId);
+      setOrderChangeLog((prev) => ({ ...prev, [orderId]: rows }));
+    } catch (e) {
+      console.warn('[openDetail] history fetch failed:', e.message);
+    }
   }
 
   async function saveLines() {
@@ -1162,6 +1235,7 @@ export default function OrdersPage() {
                   {isPlannable(o) && (<>
                     <button className="btn btn-primary btn-sm" disabled={busyId === o.id} onClick={() => openPlanModal(o.id)}>⚡ Plan</button>{" "}
                     <button className="btn btn-secondary btn-sm" style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }} onClick={() => openPlanModal(o.id)} title="Cross-dock">🔄</button>{" "}
+                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(59,130,246,.08)", color: "#1d4ed8", borderColor: "rgba(59,130,246,.35)", fontSize: 11 }} disabled={busyId === o.id} onClick={() => setAddToShipOrder(o)} title="Add to an existing shipment (REQ-03)">📦 Add to Ship</button>{" "}
                     <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="Edit">✏️</button>{" "}
                     <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="View">👁</button>{" "}
                     <button style={{ background: "rgba(245,158,11,.10)", color: "#b45309", border: "1px solid rgba(245,158,11,.35)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer", marginLeft: 4 }} disabled={busyId === o.id} onClick={() => cancelOrder(o.id)} title="Cancel order">🚫</button>{" "}
@@ -1238,6 +1312,15 @@ export default function OrdersPage() {
       <NewOrderModal show={showNewOrder} form={newOrderForm} onFormChange={setNewOrderForm}
         lines={newOrderLines} onLinesChange={setNewOrderLines} onSubmit={createOrder}
         onClose={() => setShowNewOrder(false)} carriers={carriers} busy={detailBusy} itemMaster={itemMaster} />
+
+      {addToShipOrder && (
+        <AddToShipmentModal
+          order={addToShipOrder}
+          shipments={shipments}
+          onCancel={() => setAddToShipOrder(null)}
+          onSubmit={(shipmentId) => handleAddToShipment(addToShipOrder.id, shipmentId)}
+        />
+      )}
 
       </div>
     </div>

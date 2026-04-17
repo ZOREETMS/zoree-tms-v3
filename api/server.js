@@ -13,9 +13,28 @@ const WebSocket = require('ws');
 const nodemailer = require('nodemailer');
 const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
+const ingestRouter = require('./routes/ingest');
+const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
+const history = require('./services/changeHistory');
+const shipmentMutations = require('./services/shipmentMutations');
+const userMgmt = require('./services/userManagement');
+const createUsersRouter = require('./routes/users');
+
+// Fields on orders we record diffs for (label used in change_history.field).
+const ORDER_HISTORY_FIELDS = {
+  customer: 'customer', origin: 'origin', dest: 'destination',
+  weight: 'weight', pieces: 'pieces', ship_mode: 'shipMode',
+  commodity: 'commodity', incoterms: 'incoterms', ref_num: 'refNum',
+  po_num: 'poNum', ready: 'readyDate', due: 'dueDate', status: 'status',
+  shipment_id: 'shipmentId', origin_zip: 'originZip', dest_zip: 'destZip',
+  hazmat: 'hazmat', preferred_carrier: 'preferredCarrier',
+  excluded_carrier: 'excludedCarrier', no_consolidate: 'noConsolidate',
+  dedicated_equip: 'dedicatedEquip', no_contract_rate: 'noContractRate',
+  notes: 'notes',
+};
 
 
 // ── Crash prevention ─────────────────────────────────────────────────────────
@@ -118,6 +137,25 @@ async function verifyTokenSoft(req) {
   return { id: 'guest', role: 'anon', _token: ANON_KEY };
 }
 
+// Small in-memory profile cache so verifyToken doesn't load user_profiles
+// on every single request. 30-second TTL keeps role-switch latency short
+// while avoiding per-request DB overhead under load.
+const _profileCache = new Map();  // userId -> { profile, at }
+const PROFILE_TTL_MS = 30_000;
+async function _loadProfileCached(user) {
+  const hit = _profileCache.get(user.id);
+  if (hit && (Date.now() - hit.at) < PROFILE_TTL_MS) return hit.profile;
+  try {
+    const profile = await userMgmt.ensureProfile({
+      userId: user.id, email: user.email,
+      fullName: (user.user_metadata && user.user_metadata.full_name) || user.email,
+    });
+    _profileCache.set(user.id, { profile, at: Date.now() });
+    return profile;
+  } catch (_) { return null; }
+}
+function _invalidateProfileCache(userId) { _profileCache.delete(userId); }
+
 async function verifyToken(req, res) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
@@ -132,6 +170,25 @@ async function verifyToken(req, res) {
     if (!r.ok) { res.status(401).json({ error: 'Invalid or expired token' }); return null; }
     const user = await r.json();
     user._token = token;
+    // REQ-08: hydrate user.roles + user.activeRole from user_profiles (cached).
+    // Endpoints check against user.roles for access; getUserRole() reads activeRole.
+    const profile = await _loadProfileCached(user);
+    if (profile) {
+      user.roles = profile.roles || ['viewer'];
+      user.activeRole = profile.active_role || user.roles[0];
+      user.disabled = !!profile.disabled;
+      if (user.disabled) {
+        res.status(403).json({ error: 'Account disabled. Contact an admin.' });
+        return null;
+      }
+    } else {
+      user.roles = [(user.user_metadata && user.user_metadata.role) || 'viewer'];
+      user.activeRole = user.roles[0];
+    }
+    // REQ-08: reflect activeRole into user_metadata so the legacy getUserRole()
+    // helper returns the UI-selected role. Existing role-check sites
+    // (['admin','planner'].includes(getUserRole(u))) honour the switch for free.
+    user.user_metadata = { ...(user.user_metadata || {}), role: user.activeRole };
     return user;
   } catch (e) {
     res.status(401).json({ error: 'Token verification failed' });
@@ -139,11 +196,18 @@ async function verifyToken(req, res) {
   }
 }
 
+// REQ-08: role check helper. Backend role gates check against the full
+// roles[] list (authorisation), not the UI-driven activeRole.
+function hasAnyRole(user, ...allowedRoles) {
+  if (!user || !Array.isArray(user.roles)) return false;
+  return allowedRoles.some((r) => user.roles.includes(r));
+}
+
 // Allowed tables — security whitelist
 const ALLOWED = [
   // Core TMS
   'orders','shipments','carriers','rates','items','drivers','locations',
-  'order_lines','lane_preferences','order_history','route_templates',
+  'order_lines','lane_preferences','order_history','route_templates','change_history',
   'equipment_types','planning_parameters','documents','vehicles',
   // Dock & scheduling
   'dock_appointments','dock_schedules','crossdock_hubs','warehouse_dock_config',
@@ -384,17 +448,34 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: data.error_description || data.msg || 'Invalid email or password' });
 
     const user = data.user;
+    // REQ-08: look up the user's profile for roles + active_role. If no
+    // profile exists yet, auto-provision a 'viewer' default (safe for
+    // fresh accounts; admin can promote via the User Management page).
+    const fullName = (user.user_metadata && user.user_metadata.full_name) || email.split('@')[0];
+    let profile = null;
+    try {
+      profile = await userMgmt.ensureProfile({ userId: user.id, email: user.email, fullName });
+    } catch (e) {
+      console.error('[login] profile ensure failed:', e.message);
+    }
+    const roles = profile?.roles || ['viewer'];
+    const activeRole = profile?.active_role || roles[0];
+
     res.json({
       token:         data.access_token,
       refresh_token: data.refresh_token,
       expires_at:    data.expires_at,
       expires_in:    data.expires_in,
       user: {
-        id:       user.id,
-        email:    user.email,
-        name:     (user.user_metadata && user.user_metadata.full_name) || email.split('@')[0],
-        role:     (user.user_metadata && user.user_metadata.role) || 'admin',
-        tenantId: 'zoree-default',
+        id:         user.id,
+        email:      user.email,
+        name:       profile?.full_name || fullName,
+        // Back-compat: keep `role` for older clients; new clients use roles+activeRole.
+        role:       activeRole,
+        roles,
+        activeRole,
+        disabled:   !!profile?.disabled,
+        tenantId:   'zoree-default',
       },
       tenant: {
         id: 'zoree-default', brandName: 'ZoreeTMS',
@@ -411,12 +492,27 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
+  // Surface roles + active_role from the profile so the frontend can
+  // render the role switcher without an extra fetch.
+  let profile = null;
+  try {
+    profile = await userMgmt.ensureProfile({
+      userId: user.id,
+      email: user.email,
+      fullName: (user.user_metadata && user.user_metadata.full_name) || user.email,
+    });
+  } catch (_) { /* best effort */ }
+  const roles = profile?.roles || [getUserRole(user)];
+  const activeRole = profile?.active_role || roles[0];
   res.json({
     user: {
       id: user.id,
       email: user.email,
-      role: getUserRole(user),
-      name: (user.user_metadata && user.user_metadata.full_name) || user.email,
+      role: activeRole,
+      roles,
+      activeRole,
+      disabled: !!profile?.disabled,
+      name: profile?.full_name || (user.user_metadata && user.user_metadata.full_name) || user.email,
     }
   });
 });
@@ -429,6 +525,49 @@ app.use('/api/roles', createRolesRouter({
   saveRolePermissions,
   roleFeatures: ROLE_FEATURES,
 }));
+
+// ── REQ-08: PATCH /api/auth/active-role ──────────────────────────
+// Authenticated user switches the role currently rendered by the UI.
+// The target role must already be in their user_profiles.roles array.
+app.patch('/api/auth/active-role', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  try {
+    const { activeRole } = req.body || {};
+    if (!activeRole) return res.status(400).json({ error: 'activeRole is required' });
+    const updated = await userMgmt.switchActiveRole({ userId: user.id, nextActiveRole: activeRole });
+    // Invalidate cache so the next request sees the new activeRole immediately.
+    _invalidateProfileCache(user.id);
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        role: updated.active_role,
+        roles: updated.roles,
+        activeRole: updated.active_role,
+        name: updated.full_name || user.email,
+      },
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// ── REQ-08: User Management (admin-only CRUD) ─────────────────────
+app.use('/api/users', createUsersRouter({
+  verifyToken,
+  getUserRole,
+  SUPABASE_URL,
+  SERVICE_KEY,
+  invalidateProfileCache: _invalidateProfileCache,
+}));
+
+// ── REQ-01: OMS ingest + SSE stream ───────────────────────────────
+// POST /api/ingest/oms-orders  — middleware pushes OMS orders
+// GET  /api/events/orders      — SSE stream of live order events
+// Both routes live in routes/ingest.js.
+app.use('/api/ingest', ingestRouter);
+app.use('/api', ingestRouter); // exposes /api/events/orders via the same router
 
 // ── POST /api/tender/email — notify carrier when a shipment is tendered ──
 function getSmtpTransport() {
@@ -467,6 +606,11 @@ async function verifySmtpOnStartup() {
 app.post('/api/tender/email', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
+  // REQ-04: only admin + planner can tender shipments to carriers.
+  const roleT = getUserRole(user);
+  if (!['admin', 'planner'].includes(roleT)) {
+    return res.status(403).json({ error: `Role '${roleT}' cannot tender shipments. Required: admin, planner.` });
+  }
   const b = req.body || {};
   const toRaw = String(b.to || '').trim();
   if (!toRaw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toRaw)) {
@@ -745,6 +889,49 @@ app.post('/api/tender/email', async (req, res) => {
       headers: override ? { 'X-Original-To': toRaw } : undefined,
     });
     console.log('[tender/email] SENT ok | to=' + actualTo + (override ? ' (orig ' + toRaw + ')' : '') + ' | messageId=' + (info.messageId || 'n/a'));
+
+    // REQ-02: after the tender email is successfully dispatched, flip the
+    // shipment status to 'Tendered' (if not already) and record a 'tender'
+    // event in change_history. Failures here must NOT fail the email
+    // response — the email already went out.
+    if (shipmentId) {
+      try {
+        const beforeRows = await dbSelect('shipments', `select=id,status&id=eq.${encodeURIComponent(shipmentId)}&limit=1`, null);
+        const shipBefore = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
+        if (shipBefore && shipBefore.status !== 'Tendered') {
+          await dbUpdate('shipments', shipmentId, { status: 'Tendered' }, null).catch((e) => {
+            console.warn('[tender/email] status update failed:', e.message);
+          });
+          await history.recordChange({
+            entityType: 'shipment',
+            entityId:   shipmentId,
+            action:     'status',
+            field:      'status',
+            before:     shipBefore.status,
+            after:      'Tendered',
+            user,
+            metadata:   { via: 'tender-email', carrier: carrierName || null, to: actualTo },
+          });
+        }
+        await history.recordChange({
+          entityType: 'shipment',
+          entityId:   shipmentId,
+          action:     'tender',
+          user,
+          metadata:   {
+            carrier: carrierName || null,
+            to: actualTo,
+            originalTo: override ? toRaw : null,
+            messageId: info.messageId || null,
+            refNum: refNum || null,
+            origin, dest,
+          },
+        });
+      } catch (auditErr) {
+        console.error('[tender/email] history write failed:', auditErr.message);
+      }
+    }
+
     res.json({
       sent: true,
       messageId: info.messageId || null,
@@ -893,8 +1080,16 @@ app.patch('/api/db/:table/:id', async (req, res) => {
     return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot edit ${req.params.table}` });
   }
   try {
+    // ── Workaround: DB constraint chk_shipments_status_controlled does not yet include
+    // 'Confirmed'. The UI display function already renders Tendered+notes.action=accept
+    // as "Confirmed", so we keep status as 'Tendered' and let notes carry the acceptance.
+    let body = req.body;
+    if (req.params.table === 'shipments' && body.status === 'Confirmed') {
+      body = { ...body, status: 'Tendered' };
+      console.log('[PATCH shipments] Mapping status Confirmed → Tendered (constraint workaround)');
+    }
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
-    const row = await dbUpdate(req.params.table, req.params.id, req.body, null);
+    const row = await dbUpdate(req.params.table, req.params.id, body, null);
     if (req.params.table === 'rates') invalidateLaneRateCaches();
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1061,6 +1256,11 @@ app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,
 app.patch('/api/orders/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // REQ-04: only admin + planner can edit orders.
+  const rolePP = getUserRole(u);
+  if (!['admin', 'planner'].includes(rolePP)) {
+    return res.status(403).json({ error: `Role '${rolePP}' cannot edit orders. Required: admin, planner.` });
+  }
   try {
     const beforeRows = await dbSelect('orders', `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`, null);
     const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
@@ -1082,6 +1282,32 @@ app.patch('/api/orders/:id', async (req, res) => {
       });
     }
 
+    // REQ-02: capture per-field diffs for this edit. If the edit
+    // unassigned the order from a shipment, log a dedicated 'unassign'
+    // event in addition to the field diff (so reports can filter).
+    if (before) {
+      await history.recordFieldDiffs({
+        entityType: 'order',
+        entityId:   row.id,
+        before,
+        after:      row,
+        user:       u,
+        fields:     ORDER_HISTORY_FIELDS,
+      });
+      if (prevShipmentId && !nowShipmentId) {
+        await history.recordChange({
+          entityType: 'order',
+          entityId:   row.id,
+          action:     'unassign',
+          user:       u,
+          metadata:   { previousShipmentId: prevShipmentId },
+        });
+      }
+    }
+
+    // REQ-01: broadcast update to SSE subscribers.
+    bus.emit(EVENTS.ORDER_UPDATED, { id: row.id, status: row.status, shipment_id: row.shipment_id });
+
     res.json(dbToOrderApi(row));
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1091,9 +1317,34 @@ app.patch('/api/orders/:id', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // REQ-04: only admin + planner can create orders.
+  const roleC = getUserRole(u);
+  if (!['admin', 'planner'].includes(roleC)) {
+    return res.status(403).json({ error: `Role '${roleC}' cannot create orders. Required: admin, planner.` });
+  }
   try {
     const id = req.body?.id || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const row = await dbUpsert('orders', { id, ...apiOrderToDbPatch(req.body || {}) }, null);
+    // REQ-01: broadcast to SSE subscribers so orders appear in TMS
+    // without any manual refresh, regardless of which path created them.
+    bus.emit(EVENTS.ORDER_CREATED, {
+      id: row.id,
+      customer: row.customer,
+      origin: row.origin,
+      dest: row.dest,
+      weight: row.weight,
+      sync_source: row.sync_source || 'manual',
+      auto_synced_at: row.auto_synced_at || null,
+      oms_order_ref: row.oms_order_ref || null,
+    });
+    // REQ-02: record creation event.
+    await history.recordChange({
+      entityType: 'order',
+      entityId:   row.id,
+      action:     'create',
+      user:       u,
+      metadata:   { sync_source: row.sync_source || 'manual' },
+    });
     res.status(201).json(dbToOrderApi(row));
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1103,11 +1354,82 @@ app.post('/api/orders', async (req, res) => {
 app.delete('/api/orders/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // REQ-04: only admin can delete orders.
+  const roleD = getUserRole(u);
+  if (roleD !== 'admin') {
+    return res.status(403).json({ error: `Role '${roleD}' cannot delete orders. Required: admin.` });
+  }
   try {
+    // Read the row first so we can keep a tombstone for history.
+    const beforeRows = await dbSelect('orders', `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`, null);
+    const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
     await dbDelete('orders', req.params.id, null);
+    // REQ-02: record deletion.
+    await history.recordChange({
+      entityType: 'order',
+      entityId:   req.params.id,
+      action:     'delete',
+      before,
+      user:       u,
+    });
+    bus.emit(EVENTS.ORDER_DELETED, { id: req.params.id });
     res.json({ deleted: true, id: req.params.id });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// REQ-02: history read endpoints ─────────────────────────────────
+app.get('/api/orders/:id/history', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 200, 1000);
+    const rows = await history.getHistory('order', req.params.id, { limit });
+    res.json({ entity: 'order', id: req.params.id, rows, total: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/shipments/:id/history', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 200, 1000);
+    const rows = await history.getHistory('shipment', req.params.id, { limit });
+    res.json({ entity: 'shipment', id: req.params.id, rows, total: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// REQ-03: Manually add an order to a shipment — recalculates shipment
+// weight, pieces, and total_cost (proportional to weight) and plants
+// the right REQ-02 history rows on both entities.
+//   body: { orderId }
+app.post('/api/shipments/:id/add-order', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  // REQ-04: only admin + planner can manually attach orders to a shipment.
+  const roleS = getUserRole(u);
+  if (!['admin', 'planner'].includes(roleS)) {
+    return res.status(403).json({ error: `Role '${roleS}' cannot add orders to a shipment. Required: admin, planner.` });
+  }
+  try {
+    const orderId = String(req.body?.orderId || '').trim();
+    if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+    const result = await shipmentMutations.addOrderToShipment({
+      shipmentId: req.params.id,
+      orderId,
+      user: u,
+    });
+    // Emit an ORDER_UPDATED so open TMS tabs refresh instantly (REQ-01 SSE).
+    bus.emit(EVENTS.ORDER_UPDATED, { id: orderId, status: 'Planned', shipment_id: req.params.id });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    const status = e.status || 500;
+    res.status(status).json({ ok: false, error: e.message });
   }
 });
 
@@ -2248,6 +2570,11 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
 // ── POST /api/bulk-plan/execute — Create shipments + update orders ───────────
 app.post('/api/bulk-plan/execute', async (req, res) => {
   const user = await verifyToken(req, res); if (!user) return;
+  // REQ-04: only admin + planner can execute bulk planning.
+  const roleB = getUserRole(user);
+  if (!['admin', 'planner'].includes(roleB)) {
+    return res.status(403).json({ error: `Role '${roleB}' cannot execute bulk plans. Required: admin, planner.` });
+  }
   try {
     const { plans } = req.body;
     if (!plans || !plans.length) return res.status(400).json({ error: 'plans[] required' });
@@ -2257,6 +2584,36 @@ app.post('/api/bulk-plan/execute', async (req, res) => {
       dbSelect,
       fetchImpl: fetch,
     });
+
+    // REQ-02: record 'plan' events, one per order assigned to a shipment,
+    // plus a 'create' event per new shipment. Batched for efficiency.
+    try {
+      const rows = [];
+      for (const ship of shipments || []) {
+        rows.push(history.buildRow({
+          entityType: 'shipment',
+          entityId:   ship.id,
+          action:     'create',
+          after:      { status: ship.status, carrier: ship.carrier, total_cost: ship.total_cost },
+          user,
+          metadata:   { mode: ship.mode, orderIds: ship.order_ids || [], totalCost: ship.total_cost },
+        }));
+        for (const oid of ship.order_ids || []) {
+          rows.push(history.buildRow({
+            entityType: 'order',
+            entityId:   oid,
+            action:     'plan',
+            after:      { status: 'Planned', shipment_id: ship.id },
+            user,
+            metadata:   { shipmentId: ship.id, carrier: ship.carrier, mode: ship.mode },
+          }));
+        }
+      }
+      if (rows.length) await history.recordChangeBatch(rows);
+    } catch (auditErr) {
+      console.error('[BulkPlan/execute] history write failed:', auditErr.message);
+    }
+
     res.json({ shipments, ordersUpdated, errors });
 
   } catch (e) {

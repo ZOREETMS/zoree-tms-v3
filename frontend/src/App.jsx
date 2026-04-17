@@ -35,46 +35,49 @@ import EquipmentMasterPage from "./pages/EquipmentMasterPage";
 import PlanningParametersPage from "./pages/PlanningParametersPage";
 import HomePage from "./pages/HomePage";
 import UserRolesPage from "./pages/UserRolesPage";
+import UserManagementPage from "./pages/UserManagementPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
+import RoleGuard from "./components/RoleGuard";
 
 function PrivateRoutes({ data }) {
   return (
     <Routes>
       <Route path="/" element={<Layout data={data} />}>
-        <Route index element={<HomePage />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="orders" element={<OrdersPage />} />
-        <Route path="shipments" element={<ShipmentsPage />} />
-        <Route path="carriers" element={<CarriersPage />} />
-        <Route path="bulk-plan" element={<BulkPlanPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="user-roles" element={<UserRolesPage />} />
+        <Route index element={<RoleGuard><HomePage /></RoleGuard>} />
+        <Route path="dashboard" element={<RoleGuard><DashboardPage /></RoleGuard>} />
+        <Route path="orders" element={<RoleGuard><OrdersPage /></RoleGuard>} />
+        <Route path="shipments" element={<RoleGuard><ShipmentsPage /></RoleGuard>} />
+        <Route path="carriers" element={<RoleGuard><CarriersPage /></RoleGuard>} />
+        <Route path="bulk-plan" element={<RoleGuard><BulkPlanPage /></RoleGuard>} />
+        <Route path="settings" element={<RoleGuard><SettingsPage /></RoleGuard>} />
+        <Route path="user-roles" element={<RoleGuard><UserRolesPage /></RoleGuard>} />
+        <Route path="user-management" element={<RoleGuard><UserManagementPage /></RoleGuard>} />
         {/* Placeholder pages */}
-        <Route path="item-master" element={<ItemMasterPage />} />
-        <Route path="location-master" element={<LocationMasterPage />} />
-        <Route path="route-optimizer" element={<RouteOptimizerPage />} />
-        <Route path="live-tracking" element={<LiveTrackingPage />} />
-        <Route path="carrier-portal" element={<CarrierPortalPage />} />
-        <Route path="dock-scheduling" element={<DockSchedulingPage />} />
-        <Route path="fleet-management" element={<FleetManagementPage />} />
-        <Route path="compliance" element={<CompliancePage />} />
-        <Route path="freight-invoices" element={<FreightInvoicesPage />} />
-        <Route path="rate-management" element={<RateManagementPage />} />
-        <Route path="lane-preferences" element={<LanePreferencesPage />} />
-        <Route path="carrier-bids" element={<CarrierBidsPage />} />
-        <Route path="freight-audit" element={<FreightAuditPage />} />
-        <Route path="documents" element={<DocumentsPage />} />
-        <Route path="customer-portal" element={<CustomerPortalPage />} />
-        <Route path="analytics" element={<AnalyticsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="alerts" element={<AlertsPage />} />
-        <Route path="messaging" element={<MessagingHubPage />} />
-        <Route path="network-modeling" element={<NetworkModelingPage />} />
-        <Route path="db-explorer" element={<DbExplorerPage />} />
-        <Route path="multi-stop-routes" element={<MultiStopRoutesPage />} />
-        <Route path="equipment-master" element={<EquipmentMasterPage />} />
-        <Route path="planning-parameters" element={<PlanningParametersPage />} />
+        <Route path="item-master" element={<RoleGuard><ItemMasterPage /></RoleGuard>} />
+        <Route path="location-master" element={<RoleGuard><LocationMasterPage /></RoleGuard>} />
+        <Route path="route-optimizer" element={<RoleGuard><RouteOptimizerPage /></RoleGuard>} />
+        <Route path="live-tracking" element={<RoleGuard><LiveTrackingPage /></RoleGuard>} />
+        <Route path="carrier-portal" element={<RoleGuard><CarrierPortalPage /></RoleGuard>} />
+        <Route path="dock-scheduling" element={<RoleGuard><DockSchedulingPage /></RoleGuard>} />
+        <Route path="fleet-management" element={<RoleGuard><FleetManagementPage /></RoleGuard>} />
+        <Route path="compliance" element={<RoleGuard><CompliancePage /></RoleGuard>} />
+        <Route path="freight-invoices" element={<RoleGuard><FreightInvoicesPage /></RoleGuard>} />
+        <Route path="rate-management" element={<RoleGuard><RateManagementPage /></RoleGuard>} />
+        <Route path="lane-preferences" element={<RoleGuard><LanePreferencesPage /></RoleGuard>} />
+        <Route path="carrier-bids" element={<RoleGuard><CarrierBidsPage /></RoleGuard>} />
+        <Route path="freight-audit" element={<RoleGuard><FreightAuditPage /></RoleGuard>} />
+        <Route path="documents" element={<RoleGuard><DocumentsPage /></RoleGuard>} />
+        <Route path="customer-portal" element={<RoleGuard><CustomerPortalPage /></RoleGuard>} />
+        <Route path="analytics" element={<RoleGuard><AnalyticsPage /></RoleGuard>} />
+        <Route path="reports" element={<RoleGuard><ReportsPage /></RoleGuard>} />
+        <Route path="alerts" element={<RoleGuard><AlertsPage /></RoleGuard>} />
+        <Route path="messaging" element={<RoleGuard><MessagingHubPage /></RoleGuard>} />
+        <Route path="network-modeling" element={<RoleGuard><NetworkModelingPage /></RoleGuard>} />
+        <Route path="db-explorer" element={<RoleGuard><DbExplorerPage /></RoleGuard>} />
+        <Route path="multi-stop-routes" element={<RoleGuard><MultiStopRoutesPage /></RoleGuard>} />
+        <Route path="equipment-master" element={<RoleGuard><EquipmentMasterPage /></RoleGuard>} />
+        <Route path="planning-parameters" element={<RoleGuard><PlanningParametersPage /></RoleGuard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

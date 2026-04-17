@@ -1,6 +1,19 @@
-import { DbApi } from "../lib/api";
+import { DbApi, ShipmentsApi } from "../lib/api";
 import { unassignOrderFromShipment, updateOrderStatus } from "./orderWriteService";
 import { deleteShipmentById } from "./shipmentService";
+
+/**
+ * REQ-03: manually add an order to an existing shipment.
+ * Returns the backend response: { ok, shipment, order, recalc, before }.
+ * Throws with a descriptive error for 4xx/5xx so the UI can show it.
+ *
+ * @param {string} orderId
+ * @param {string} shipmentId
+ */
+export async function addOrderToShipment(orderId, shipmentId) {
+  if (!orderId || !shipmentId) throw new Error("orderId and shipmentId are both required");
+  return ShipmentsApi.addOrder(shipmentId, orderId);
+}
 
 export async function unassignOrderAndCleanupShipment(orderId, shipmentId, orders, shipments) {
   await unassignOrderFromShipment(orderId);

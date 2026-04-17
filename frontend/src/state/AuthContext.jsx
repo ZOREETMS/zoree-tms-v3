@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { AuthApi } from "../lib/api";
+import { AuthApi, AuthApiExt } from "../lib/api";
 
 const AuthContext = createContext(null);
 
@@ -50,6 +50,18 @@ export function AuthProvider({ children }) {
         localStorage.removeItem("zoree_token");
         localStorage.removeItem("zoree_user");
         setUser(null);
+      },
+      // REQ-08: switch the currently-active role without re-login.
+      async switchRole(nextRole) {
+        if (!user) throw new Error("Not signed in");
+        if (!Array.isArray(user.roles) || !user.roles.includes(nextRole)) {
+          throw new Error(`Role '${nextRole}' not assigned to this user`);
+        }
+        const res = await AuthApiExt.setActiveRole(nextRole);
+        const next = res?.user || { ...user, role: nextRole, activeRole: nextRole };
+        localStorage.setItem("zoree_user", JSON.stringify(next));
+        setUser(next);
+        return next;
       },
     }),
     [user, booting]
