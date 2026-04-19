@@ -6,6 +6,13 @@
 <title>Zoree Middleware Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- ─── OMS↔TMS sync services (modular, per CLAUDE_RULES.md §1/§4) ─── -->
+<!-- Load order matters: tracking → push* → index -->
+<script src="./services/omsSync/omsSyncTracking.js"></script>
+<script src="./services/omsSync/pushOrderService.js"></script>
+<script src="./services/omsSync/pushShipService.js"></script>
+<script src="./services/omsSync/pushPodService.js"></script>
+<script src="./services/omsSync/index.js"></script>
 <style>
 /* ── CSS Variables ─────────────────────────────── */
 :root {
@@ -1123,201 +1130,24 @@ async function runFullSync(){
 }
 
 // ── Flow implementations (call OMS/TMS directly via portal clients) ──
+// Shared deps object for OMS↔TMS sync services. Built once per call so the
+// service modules stay stateless and testable (see ZoreeMW.services.omsSync.*).
+function _omsSyncDeps(){
+  var svc = (window.ZoreeMW && window.ZoreeMW.services && window.ZoreeMW.services.omsSync);
+  if(!svc) throw new Error('OMS sync services not loaded — check <script> tags.');
+  return {
+    omsDb:        omsDb,
+    tmsDb:        tmsDb,
+    logEvent:     logEvent,
+    payloadBytes: payloadBytes,
+    notifyTMS:    svc.buildDefaultNotify('http://localhost:3001/api/notify'),
+  };
+}
+
+// Thin wrapper — delegates to pushOrderService.
+// Full implementation: frontend/services/omsSync/pushOrderService.js
 async function runPushOrderFlow(){
-  // ── Read stage 3 OR 4 orders (stage 4 = already Released to TMS) ─
-  var { data, error } = await omsDb().from('oms_orders')
-    .select('*, oms_order_lines(*)')
-    .in('stage', [3, 4])
-    .limit(50);
-  if(error) throw error;
-  if(!data.length){
-    logEvent('info','push-order','No stage 3/4 orders pending TMS push');
-    return '0 orders';
-  }
-
-  // ── Lookup maps: customer UUID → name, location ID → city/state ──
-  var { data: custs } = await omsDb().from('oms_customers').select('id,name');
-  var custMap = {};
-  (custs||[]).forEach(c => custMap[c.id] = c.name);
-
-  var { data: locs } = await omsDb().from('oms_locations').select('id,name,city,state,address,zip');
-  var locMap = {};
-  (locs||[]).forEach(l => {
-    locMap[l.id] = {
-      id:      l.id,
-      name:    l.name,
-      display: (l.city && l.state) ? l.city + ', ' + l.state + (l.zip ? ' ' + l.zip : '') : (l.name || l.id),
-      address: l.address || null,
-      zip:     l.zip     || null,
-    };
-  });
-
-  logEvent('info','← OMS','Read '+data.length+' stage 3/4 order(s) from OMS for TMS push', {
-    srcSystem:'OMS', dstSystem:'TMS',
-    rowCount: data.length,
-    bytes: payloadBytes(data),
-    fields: ['id','customer_id','origin_location','destination','ship_mode','incoterms','oms_order_lines'],
-    payload: data.map(o=>({
-      id: o.id,
-      customer_id: o.customer_id,
-      origin_location: o.origin_location,
-      destination: o.destination,
-      ship_mode: o.ship_mode,
-      line_count: (o.oms_order_lines||[]).length,
-    })),
-  });
-
-  var pushed = 0;
-  for(var o of data){
-    var lines = o.oms_order_lines || [];
-    var wt  = lines.reduce((s,l)=>s+((l.qty_ordered||0)*(parseFloat(l.unit_weight)||0)),0);
-    var pcs = Math.round(lines.reduce((s,l)=>s+(l.qty_ordered||0),0));
-
-    // ── Resolve origin location ────────────────────────────────────
-    var originLoc    = locMap[o.origin_location] || null;
-    var originDisplay = originLoc ? originLoc.display : (o.origin_location || '');
-
-    // ── MAPPED TMS ROW: full location IDs + all new fields ─────────
-    var tmsRow = {
-      id:                 o.id,
-      customer:           custMap[o.customer_id] || o.customer_id,
-      // Human-readable origin/dest (for display in TMS)
-      origin:             originDisplay,
-      dest:               o.destination,
-      // Location IDs (new — for reverse lookup and reporting)
-      origin_location_id: o.origin_location || null,
-      dest_location_id:   (function(){
-        // Match destination to a known location — strict matching only
-        var destStr = (o.destination || '').toLowerCase().trim();
-        if (!destStr) return null;
-        // Priority 1: exact location ID match
-        var byId = Object.values(locMap).find(function(l) { return destStr === l.id.toLowerCase(); });
-        if (byId) return byId.id;
-        // Priority 2: exact name match
-        var byName = Object.values(locMap).find(function(l) { return destStr === (l.name||'').toLowerCase(); });
-        if (byName) return byName.id;
-        // Priority 3: city+state both present in destination string
-        var byCity = Object.values(locMap).find(function(l) {
-          var city  = (l.city  || '').toLowerCase();
-          var state = (l.state || '').toLowerCase();
-          return city && state && destStr.includes(city) && destStr.includes(state);
-        });
-        return byCity ? byCity.id : null;
-      })(),
-      ship_from_name:     originLoc ? originLoc.name : null,
-      ship_to_name:       (function(){
-        var destStr = (o.destination || '').toLowerCase().trim();
-        if (!destStr) return null;
-        var byId   = Object.values(locMap).find(function(l) { return destStr === l.id.toLowerCase(); });
-        if (byId) return byId.name;
-        var byName = Object.values(locMap).find(function(l) { return destStr === (l.name||'').toLowerCase(); });
-        if (byName) return byName.name;
-        var byCity = Object.values(locMap).find(function(l) {
-          var city  = (l.city  || '').toLowerCase();
-          var state = (l.state || '').toLowerCase();
-          return city && state && destStr.includes(city) && destStr.includes(state);
-        });
-        return byCity ? byCity.name : null;
-      })(),
-      ship_to_address:    o.destination || null,
-      // Order details
-      weight:             wt,
-      pieces:             pcs,
-      commodity:          o.commodity        || 'General',
-      ready:              o.ready_date       || null,   // ship-ready date (separate from delivery due)
-      due:                o.required_date    || null,   // required delivery date
-      status:             'Unplanned',
-      notes:              o.special_instructions || null,
-      incoterms:          o.incoterms        || null,
-      ship_mode:          o.ship_mode        || null,
-      po_number:          o.po_number        || null,
-      hazmat:             false,
-      line_count:         lines.length,
-      origin_zip:         originLoc ? originLoc.zip : (o.origin_zip || null),
-      dest_zip:           o.dest_zip || (o.destination || '').match(/(\d{5})/)?.[1] || null,
-    };
-
-    // ── Push order header to TMS ───────────────────────────────────
-    var { error:we } = await tmsDb().from('orders').upsert(tmsRow, {onConflict:'id'});
-
-    if(we){
-      logEvent('err','→ TMS','PUSH FAILED order '+o.id+': '+we.message,
-        { srcSystem:'OMS', dstSystem:'TMS', recordId:o.id,
-          payload:{ attemptedRow:tmsRow, error:we.message } });
-      continue;
-    }
-
-    // ── Push all line items to TMS order_lines ─────────────────────
-    var lineErrors = [];
-    for(var i=0; i<lines.length; i++){
-      var l = lines[i];
-      var lineQty = l.qty_ordered || 0;
-      var lineUW  = parseFloat(l.unit_weight) || 0;
-      var tmsLine = {
-        id:           o.id + '-L' + (l.line_num || (i+1)),
-        order_id:     o.id,
-        line_num:     l.line_num  || (i+1),
-        item_id:      l.item_id   || null,
-        description:  l.description || null,
-        qty_ordered:  lineQty,
-        unit_weight:  lineUW,
-        total_weight: Math.round(lineQty * lineUW * 1000) / 1000,
-        unit_value:   parseFloat(l.unit_value)  || 0,
-        total_value:  parseFloat(l.total_value) || 0,
-      };
-      var { error:le } = await tmsDb().from('order_lines').upsert(tmsLine, {onConflict:'id'});
-      if(le) lineErrors.push('L'+(l.line_num||i+1)+': '+le.message);
-    }
-
-    pushed++;
-    var lineStatus = lineErrors.length ? ' ⚠️ '+lineErrors.length+' line error(s)' : ' | '+lines.length+' lines pushed';
-    logEvent('ok','→ TMS',
-      'PUSH order '+o.id+' → TMS | "'+tmsRow.customer+'" | '+originDisplay+' → '+o.destination+' | '+wt.toLocaleString()+' lbs / '+pcs+' pcs'+lineStatus,
-      {
-        srcSystem: 'OMS', dstSystem: 'TMS',
-        recordId:  o.id,
-        rowCount:  1 + lines.length,
-        bytes:     payloadBytes(tmsRow) + payloadBytes(lines),
-        fields:    Object.keys(tmsRow).concat(['order_lines']),
-        payload: {
-          _meta: {
-            flow:     'push-order',
-            omsStage: o.stage,
-            pushedAt: new Date().toISOString(),
-            lineErrors: lineErrors,
-          },
-          _orderHeader: tmsRow,
-          _lines: lines.map(l=>({
-            id:           o.id+'-L'+(l.line_num||'?'),
-            line_num:     l.line_num,
-            item_id:      l.item_id,
-            description:  l.description,
-            qty_ordered:  l.qty_ordered,
-            unit_weight:  l.unit_weight,
-            total_weight: (l.qty_ordered||0)*(parseFloat(l.unit_weight)||0),
-            unit_value:   l.unit_value,
-            total_value:  l.total_value,
-          })),
-          _locationResolved: {
-            origin_id:      o.origin_location,
-            origin_display: originDisplay,
-            origin_name:    originLoc ? originLoc.name : null,
-          },
-        }
-      }
-    );
-  }
-  // Notify TMS frontend via WebSocket so it refreshes instantly
-  if (pushed > 0) {
-    try {
-      fetch('http://localhost:3001/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'orders_updated', data: { source: 'middleware', count: pushed } })
-      }).catch(function(){});
-    } catch(e) { /* non-blocking */ }
-  }
-  return pushed + ' order(s) pushed with full lines';
+  return window.ZoreeMW.services.omsSync.pushOrder.run(_omsSyncDeps());
 }
 
 async function runPullPlanningFlow(){
@@ -1390,131 +1220,16 @@ async function runPullPlanningFlow(){
   return promoted + ' stage promotion(s)';
 }
 
+// Thin wrapper — delegates to pushShipService.
+// Full implementation: frontend/services/omsSync/pushShipService.js
 async function runPushShipFlow(){
-  var { data, error } = await omsDb().from('oms_orders')
-    .select('id,tms_shipment_id,shipped_at,ship_date,seal_number,carrier')
-    .eq('stage',10).not('tms_shipment_id','is',null);
-  if(error) throw error;
-  if(!data.length){ logEvent('info','push-ship','No stage-10 shipments pending TMS status push'); return '0'; }
-
-  logEvent('info','← OMS','Read '+data.length+' stage-10 shipped order(s) to notify TMS', {
-    srcSystem:'OMS', dstSystem:'TMS',
-    rowCount:data.length,
-    bytes:payloadBytes(data),
-    fields:['id','tms_shipment_id','shipped_at','carrier'],
-    payload:data,
-  });
-
-  var pushed=0;
-  for(var o of data){
-    // Build shipment update — include shipped_at only if column exists (post-migration)
-    // TMS shipments table has no shipped_at column — only update status
-    var shipUpd = { status:'In Transit' };
-
-    // 1. Update TMS shipments table
-    var { error:we1 } = await tmsDb().from('shipments').update(shipUpd).eq('id',o.tms_shipment_id);
-    // 2. Also update TMS orders.status so TMS orders list stays in sync
-    var { error:we2 } = await tmsDb().from('orders').update({status:'In Transit'}).eq('id',o.id);
-
-    var err = we1 || we2;
-    if(!err){
-      pushed++;
-      logEvent('ok','→ TMS',
-        'PUSH In Transit: shipment '+o.tms_shipment_id+' + order '+o.id,
-        {
-          srcSystem:'OMS', dstSystem:'TMS',
-          recordId: o.tms_shipment_id,
-          rowCount: 1,
-          bytes: payloadBytes(shipUpd),
-          fields: Object.keys(shipUpd),
-          payload:{
-            _meta:{ flow:'push-ship', omsOrderId:o.id, pushedAt:new Date().toISOString() },
-            _writtenToTMS:{ shipments:{ id:o.tms_shipment_id, update:shipUpd }, orders:{ id:o.id, status:'In Transit' } },
-            _sourceOMS:{ id:o.id, shipped_at:o.shipped_at, carrier:o.carrier },
-          }
-        }
-      );
-    } else {
-      logEvent('err','→ TMS',
-        'PUSH FAILED In Transit for '+o.tms_shipment_id+': '+(err.message||'unknown'),
-        { srcSystem:'OMS', dstSystem:'TMS', recordId:o.tms_shipment_id, payload:{ error:err.message, attempted:shipUpd } }
-      );
-    }
-  }
-  // Notify TMS frontend so shipment status updates instantly
-  if (pushed > 0) {
-    try {
-      fetch('http://localhost:3001/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'shipment_status_updated', data: { source: 'oms', count: pushed } })
-      }).catch(function(){});
-    } catch(e) { /* non-blocking */ }
-  }
-  return pushed + ' status push(es)';
+  return window.ZoreeMW.services.omsSync.pushShip.run(_omsSyncDeps());
 }
 
+// Thin wrapper — delegates to pushPodService.
+// Full implementation: frontend/services/omsSync/pushPodService.js
 async function runPushPODFlow(){
-  var { data, error } = await omsDb().from('oms_orders')
-    .select('id,tms_shipment_id,delivered_at,pod_received_by,pod_condition,pod_notes')
-    .eq('stage',11).not('tms_shipment_id','is',null);
-  if(error) throw error;
-  if(!data.length){ logEvent('info','push-pod','No stage-11 PODs pending TMS delivery push'); return '0'; }
-
-  logEvent('info','← OMS','Read '+data.length+' stage-11 POD record(s) to notify TMS', {
-    srcSystem:'OMS', dstSystem:'TMS',
-    rowCount:data.length,
-    bytes:payloadBytes(data),
-    fields:['id','tms_shipment_id','delivered_at','pod_received_by','pod_condition'],
-    payload:data,
-  });
-
-  var pushed=0;
-  for(var o of data){
-    // TMS shipments table has no delivered_at column — only update status
-    var shipUpd = { status:'Delivered' };
-
-    // 1. Update TMS shipments table
-    var { error:we1 } = await tmsDb().from('shipments').update(shipUpd).eq('id',o.tms_shipment_id);
-    // 2. Also update TMS orders.status
-    var { error:we2 } = await tmsDb().from('orders').update({status:'Delivered'}).eq('id',o.id);
-
-    var err = we1 || we2;
-    if(!err){
-      pushed++;
-      logEvent('ok','→ TMS',
-        'PUSH Delivered: shipment '+o.tms_shipment_id+' | POD by: '+(o.pod_received_by||'?')+' | condition: '+(o.pod_condition||'?'),
-        {
-          srcSystem:'OMS', dstSystem:'TMS',
-          recordId: o.tms_shipment_id,
-          rowCount: 1,
-          bytes: payloadBytes(shipUpd),
-          fields: Object.keys(shipUpd),
-          payload:{
-            _meta:{ flow:'push-pod', omsOrderId:o.id, pushedAt:new Date().toISOString() },
-            _writtenToTMS:{ shipments:{ id:o.tms_shipment_id, update:shipUpd }, orders:{ id:o.id, status:'Delivered' } },
-            _sourceOMS:{ id:o.id, delivered_at:o.delivered_at, pod_received_by:o.pod_received_by, pod_condition:o.pod_condition, pod_notes:o.pod_notes },
-          }
-        }
-      );
-    } else {
-      logEvent('err','→ TMS',
-        'PUSH FAILED Delivered for '+o.tms_shipment_id+': '+(err.message||'unknown'),
-        { srcSystem:'OMS', dstSystem:'TMS', recordId:o.tms_shipment_id, payload:{ error:err.message, attempted:shipUpd } }
-      );
-    }
-  }
-  // Notify TMS frontend so delivery status updates instantly
-  if (pushed > 0) {
-    try {
-      fetch('http://localhost:3001/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'shipment_delivered', data: { source: 'oms', count: pushed } })
-      }).catch(function(){});
-    } catch(e) { /* non-blocking */ }
-  }
-  return pushed + ' delivery confirmation(s)';
+  return window.ZoreeMW.services.omsSync.pushPod.run(_omsSyncDeps());
 }
 
 async function runPullItemsFlow(){

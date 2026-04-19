@@ -8,6 +8,8 @@ function apiOrderToDbPatch(body) {
   if ("weight" in b) patch.weight = Number(b.weight) || 0;
   if ("pieces" in b) patch.pieces = parseInt(b.pieces, 10) || 0;
   if ("shipMode" in b || "ship_mode" in b) patch.ship_mode = b.shipMode || b.ship_mode || null;
+  // REQ-10: service level acts as a planning constraint similar to ship_mode.
+  if ("serviceLevel" in b || "service_level" in b) patch.service_level = b.serviceLevel || b.service_level || null;
   if ("commodity" in b) patch.commodity = b.commodity || null;
   if ("incoterms" in b) patch.incoterms = b.incoterms || null;
   if ("refNum" in b || "ref_num" in b) patch.ref_num = b.refNum || b.ref_num || null;

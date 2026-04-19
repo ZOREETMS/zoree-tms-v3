@@ -48,8 +48,11 @@ export async function confirmOrdersForShipment(row, shipments, orders) {
       : []),
   ];
   const linkedOrders = orders.filter((o) => allShipmentIds.includes(String(o.shipment_id || "")));
-  // Keep order status within DB-controlled values; accepted tender is tracked on shipment notes/status.
-  await Promise.all(linkedOrders.map((o) => updateOrderStatus(o.id, "Tendered")));
+  // REQ-13: propagate the shipment's accepted-tender state to the underlying
+  // order(s). The orders table has no status CHECK constraint, so we can
+  // use the explicit "Tender Accepted" label (which lights up the green
+  // badge in the order list).
+  await Promise.all(linkedOrders.map((o) => updateOrderStatus(o.id, "Tender Accepted")));
   return linkedOrders;
 }
 

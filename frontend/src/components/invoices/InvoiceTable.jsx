@@ -53,7 +53,7 @@ function SortHeader({ label, col, sortCol, sortAsc, onSort }) {
 
 export default function InvoiceTable({
   invoices, sortCol, sortAsc, onSort,
-  onApprove, onDispute,
+  onApprove, onDispute, onSendToAp,
 }) {
   const columns = [
     { label: "Invoice #", col: "num" },
@@ -102,28 +102,50 @@ export default function InvoiceTable({
                   </span>
                 </td>
                 <td>{inv.carrier}</td>
-                <td className="mono">{inv.shipId}</td>
+                <td className="mono">
+                  {Array.isArray(inv.shipIds) && inv.shipIds.length > 1 ? (
+                    <span title={inv.shipIds.join(", ")} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <span>{inv.shipId || inv.shipIds[0]}</span>
+                      <span style={{ padding: "1px 6px", fontSize: 9, fontWeight: 700, borderRadius: 999, background: "#e0e7ff", color: "#3730a3", border: "1px solid #a5b4fc" }}>
+                        +{inv.shipIds.length - 1} (consolidated)
+                      </span>
+                    </span>
+                  ) : (inv.shipId || "—")}
+                </td>
                 <td className="mono">{inv.date}</td>
                 <td className="mono">{inv.due}</td>
                 <td className="mono">${(inv.agreed || 0).toLocaleString()}</td>
                 <td className="mono">${(inv.amount || 0).toLocaleString()}</td>
                 <VarianceCell variance={inv.variance} />
-                <td><Badge status={inv.status} /></td>
                 <td>
-                  {inv.status === "Pending" && (
-                    <button
-                      className="btn btn-success btn-sm"
-                      onClick={() => onApprove(inv.num)}
-                    >
+                  <Badge status={inv.status} />
+                  {inv.sentToApAt && (
+                    <span title={`Sent to AP at ${inv.sentToApAt}`}
+                      style={{ marginLeft: 6, padding: "1px 6px", fontSize: 9, fontWeight: 700, borderRadius: 999, background: "#dcfce7", color: "#166534", border: "1px solid #86efac" }}>
+                      AP ✓
+                    </span>
+                  )}
+                  {inv.decisionReason && (
+                    <div title={inv.decisionReason} style={{ fontSize: 10, color: "var(--text3)", marginTop: 2, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {inv.decisionReason}
+                    </div>
+                  )}
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {/* REQ-06: manual override is always available to admin/finance */}
+                  {inv.status !== "Approved" && (
+                    <button className="btn btn-success btn-sm" onClick={() => onApprove(inv.num)} style={{ marginRight: 4 }}>
                       Approve
                     </button>
                   )}
-                  {inv.status === "Disputed" && (
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => onDispute(inv.num)}
-                    >
-                      Dispute
+                  {inv.status !== "Rejected" && inv.status !== "Disputed" && (
+                    <button className="btn btn-danger btn-sm" onClick={() => onDispute(inv.num)} style={{ marginRight: 4 }}>
+                      Reject
+                    </button>
+                  )}
+                  {inv.status === "Approved" && !inv.sentToApAt && onSendToAp && (
+                    <button className="btn btn-primary btn-sm" onClick={() => onSendToAp(inv.num)} style={{ background: "#059669", borderColor: "#059669" }}>
+                      Send to AP
                     </button>
                   )}
                 </td>

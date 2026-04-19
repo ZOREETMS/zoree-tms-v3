@@ -40,8 +40,13 @@ export default function FreightInvoicesPage() {
     setLoading(true);
     try {
       const data = await InvoicesApi.list();
-      if (Array.isArray(data)) {
-        setInvoices(data.map(mapDbInvoice));
+      // REQ-06: the domain endpoint returns { invoices: [...], total }.
+      // Fall back to the legacy array shape if something else responded.
+      const rows = Array.isArray(data?.invoices) ? data.invoices
+                 : Array.isArray(data) ? data
+                 : null;
+      if (rows && rows.length) {
+        setInvoices(rows.map(mapDbInvoice));
       } else {
         setInvoices(getSeedInvoices());
       }
@@ -60,29 +65,74 @@ export default function FreightInvoicesPage() {
   async function handleSave(form) {
     setBusy(true);
     try {
-      await InvoicesApi.save({
-        invoice_number: form.num,
-        carrier: form.carrier,
-        shipment_id: form.shipId,
-        invoice_date: form.date,
-        due_date: form.due,
-        agreed_rate: form.agreed,
-        invoiced_amount: form.amount,
-        status: form.status,
-        payment_terms: form.paymentTerms,
-        notes: form.notes,
-      });
-      showToast(`Invoice ${form.num} saved`, "success");
+      // REQ-06: for new invoices, submit through the tolerance-decision
+      // endpoint. Server runs the decide() logic and returns the Approved
+      // or Rejected outcome inline, including sentToAp status.
+      if (!editInvoice) {
+        // REQ-07: build the full shipment ID list from the primary select
+        // + the comma-separated extras field. Duplicates removed, blanks
+        // dropped; when there's only one, we still send as a single-element
+        // array so the server can trust the input shape.
+        const primary = (form.shipId || "").trim();
+        const extras = (form.extraShipIds || "")
+          .split(/[,\s]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const ids = [...new Set([primary, ...extras].filter(Boolean))];
+        const res = await InvoicesApi.submit({
+          invoiceNumber: form.num,
+          carrier: form.carrier,
+          shipmentIds: ids.length ? ids : undefined,
+          shipmentId: ids.length === 0 ? null : undefined,
+          invoicedAmount: Number(form.amount) || 0,
+          invoiceDate: form.date,
+          paymentTerms: form.paymentTerms,
+          notes: form.notes,
+        });
+        const d = res?.decision || {};
+        // REQ-07: make the toast message surface which shipments were matched
+        const consolidated = d.consolidated;
+        const shipList = Array.isArray(d.shipmentsIdentified) ? d.shipmentsIdentified : [];
+        const missing = Array.isArray(d.missingShipments) ? d.missingShipments : [];
+        let coveragePrefix = "";
+        if (consolidated) {
+          coveragePrefix = `${shipList.length} shipments identified (${shipList.join(", ")})` +
+            (missing.length ? ` — ${missing.length} missing: ${missing.join(", ")}` : "") + ". ";
+        }
+        const statusMsg = d.status === "Approved"
+          ? (d.sentToAp
+              ? `${coveragePrefix}Approved & sent to AP — ${d.reason || ""}`
+              : `${coveragePrefix}Approved — ${d.reason || ""}`)
+          : `${coveragePrefix}Rejected — ${d.reason || ""}`;
+        showToast(`Invoice ${form.num}: ${statusMsg}`,
+          d.status === "Approved" ? "success" : "warning");
+      } else {
+        // Editing an existing invoice — keep the legacy save path
+        await InvoicesApi.save({
+          id: editInvoice.id,
+          invoice_number: form.num,
+          carrier: form.carrier,
+          shipment_id: form.shipId,
+          invoice_date: form.date,
+          due_date: form.due,
+          agreed_rate: form.agreed,
+          invoiced_amount: form.amount,
+          status: form.status,
+          payment_terms: form.paymentTerms,
+          notes: form.notes,
+        });
+        showToast(`Invoice ${form.num} updated`, "success");
+      }
       setModalOpen(false);
       loadInvoices();
-    } catch {
+    } catch (e) {
       // Fallback: update local state
       setInvoices((prev) => {
         const exists = prev.find((i) => i.num === form.num);
         if (exists) return prev.map((i) => (i.num === form.num ? form : i));
         return [form, ...prev];
       });
-      showToast(`Invoice ${form.num} saved locally`, "success");
+      showToast(`Invoice ${form.num} saved locally (server error: ${e?.message || "unknown"})`, "warning");
       setModalOpen(false);
     } finally {
       setBusy(false);
@@ -93,24 +143,50 @@ export default function FreightInvoicesPage() {
     const inv = invoices.find((i) => i.num === num);
     if (!inv) return;
     try {
-      if (inv.id) await InvoicesApi.approve(inv.id);
-    } catch { /* fallback to local */ }
-    setInvoices((prev) =>
-      prev.map((i) => (i.num === num ? { ...i, status: "Approved" } : i))
-    );
-    showToast(`Invoice ${num} approved`, "success");
+      if (inv.id) {
+        const updated = await InvoicesApi.approve(inv.id, "Manual override by reviewer");
+        setInvoices((prev) => prev.map((i) => (i.num === num ? { ...i, ...mapDbInvoice(updated) } : i)));
+        showToast(`Invoice ${num} approved & sent to AP`, "success");
+        return;
+      }
+    } catch (e) {
+      showToast(`Server rejected approval: ${e?.message || "unknown"}`, "warning");
+    }
+    // local-only fallback
+    setInvoices((prev) => prev.map((i) => (i.num === num ? { ...i, status: "Approved" } : i)));
+    showToast(`Invoice ${num} approved (local)`, "success");
   }
 
   async function handleDispute(num) {
     const inv = invoices.find((i) => i.num === num);
     if (!inv) return;
     try {
-      if (inv.id) await InvoicesApi.dispute(inv.id);
-    } catch { /* fallback to local */ }
-    setInvoices((prev) =>
-      prev.map((i) => (i.num === num ? { ...i, status: "Disputed" } : i))
-    );
-    showToast(`Invoice ${num} disputed`, "warning");
+      if (inv.id) {
+        const updated = await InvoicesApi.reject(inv.id, "Manual reject by reviewer");
+        setInvoices((prev) => prev.map((i) => (i.num === num ? { ...i, ...mapDbInvoice(updated) } : i)));
+        showToast(`Invoice ${num} rejected`, "warning");
+        return;
+      }
+    } catch (e) {
+      showToast(`Server rejected: ${e?.message || "unknown"}`, "warning");
+    }
+    setInvoices((prev) => prev.map((i) => (i.num === num ? { ...i, status: "Disputed" } : i)));
+    showToast(`Invoice ${num} disputed (local)`, "warning");
+  }
+
+  // REQ-06: send an Approved invoice to AP (for the case where tolerance
+  // auto-decided Approved but sending was deferred, or after a manual
+  // approve override).
+  async function handleSendToAp(num) {
+    const inv = invoices.find((i) => i.num === num);
+    if (!inv || !inv.id) return;
+    try {
+      const updated = await InvoicesApi.sendToAp(inv.id);
+      setInvoices((prev) => prev.map((i) => (i.num === num ? { ...i, ...mapDbInvoice(updated) } : i)));
+      showToast(`Invoice ${num} sent to AP`, "success");
+    } catch (e) {
+      showToast(`Send-to-AP failed: ${e?.message || "unknown"}`, "warning");
+    }
   }
 
   if (loading) {
@@ -156,6 +232,7 @@ export default function FreightInvoicesPage() {
           onSort={toggleSort}
           onApprove={handleApprove}
           onDispute={handleDispute}
+          onSendToAp={handleSendToAp}
         />
       </div>
 
@@ -188,13 +265,26 @@ function mapDbInvoice(row) {
     num: row.invoice_number || row.num || "",
     carrier: row.carrier || "",
     shipId: row.shipment_id || row.shipId || "",
+    // REQ-07: the full list (consolidated invoices have >1 id)
+    shipIds: Array.isArray(row.shipment_ids) ? row.shipment_ids
+            : (row.shipment_id ? [row.shipment_id] : []),
     date: row.invoice_date || row.date || "",
     due: row.due_date || row.due || "",
-    agreed: parseFloat(row.agreed_rate || row.agreed) || 0,
-    amount: parseFloat(row.invoiced_amount || row.amount) || 0,
+    agreed: parseFloat(row.agreed_cost ?? row.agreed_rate ?? row.agreed) || 0,
+    amount: parseFloat(row.invoiced_amount ?? row.amount) || 0,
     status: row.status || "Pending",
     paymentTerms: row.payment_terms || "NET30",
     notes: row.notes || "",
+    // REQ-06 audit fields
+    variance: row.variance != null ? parseFloat(row.variance) : null,
+    variancePct: row.variance_pct != null ? parseFloat(row.variance_pct) : null,
+    tolerancePct: row.tolerance_pct != null ? parseFloat(row.tolerance_pct) : null,
+    toleranceAbs: row.tolerance_abs_usd != null ? parseFloat(row.tolerance_abs_usd) : null,
+    decisionReason: row.decision_reason || "",
+    decidedAt: row.decided_at || null,
+    decidedBy: row.decided_by || null,
+    sentToApAt: row.sent_to_ap_at || null,
+    sentToApBy: row.sent_to_ap_by || null,
   };
 }
 

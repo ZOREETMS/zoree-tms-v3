@@ -4,6 +4,7 @@ import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-
 import { DbApi, TenderApi, OrdersApi, OmsApi, BulkPlanApi } from "../lib/api";
 import { sendTenderEmailIfAvailable, gatherOrderDetails } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
+import { getShipmentHistory } from "../services/historyService";
 import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
@@ -126,6 +127,10 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   const [carrierQuotes, setCarrierQuotes] = useState([]);
   const [carrierLoading, setCarrierLoading] = useState(false);
   const [selectedCarrierIdx, setSelectedCarrierIdx] = useState(0);
+  // REQ-20: real change_history rows for this shipment (edit / tender /
+  // add-order / unassign / invoice / status). Fetched on open.
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   // Load line items for all linked orders
   useEffect(() => {
@@ -140,10 +145,24 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
       setLinesLoading(false);
     }).catch(() => setLinesLoading(false));
   }, [ds.id]);
+
+  // REQ-20: pull shipment change history whenever the modal opens for a new id.
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    getShipmentHistory(ds.id, { limit: 200 })
+      .then((rows) => { if (!cancelled) { setHistoryRows(rows || []); setHistoryLoading(false); } })
+      .catch(() => { if (!cancelled) { setHistoryRows([]); setHistoryLoading(false); } });
+    return () => { cancelled = true; };
+  }, [ds.id]);
   const consolidated = linked.length > 1;
   const pct = displayStatus === "Delivered" ? 100 : displayStatus === "In Transit" ? 62 : displayStatus === "Confirmed" ? 32 : displayStatus === "Tendered" ? 20 : displayStatus === "Exception" ? 55 : 5;
   const barCol = displayStatus === "Exception" ? "var(--red)" : displayStatus === "Delivered" ? "var(--green)" : "var(--accent)";
   const isTendered = displayStatus !== "Planned" && displayStatus !== "Tender Rejected";
+  // REQ-19: separate "tender accepted" from "tendered" so the timeline can
+  // show both rungs. The effective display status flips to "Confirmed"
+  // (or "Tender Accepted") once the carrier portal records the accept.
+  const isTenderAccepted = ["Confirmed", "Tender Accepted", "In Transit", "Delivered"].includes(displayStatus);
   const isPickedUp = ["In Transit", "Delivered", "Exception"].includes(ds.status);
   const isInTransit = ["In Transit", "Delivered"].includes(ds.status);
   const isDelivered = ds.status === "Delivered";
@@ -202,6 +221,10 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   const timelineEvents = [
     { icon: "📋", label: "Order Created & Rate Confirmed", done: true },
     { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? (ds.pickup_date || "—") : "Pending" },
+    // REQ-19: surface the tender-accepted event in the shipment timeline.
+    // Previously the timeline jumped straight from "Tendered" to "Picked Up",
+    // leaving the accept step invisible to the planner.
+    { icon: "🤝", label: "Tender Accepted", done: isTenderAccepted, time: isTenderAccepted ? (ds.pickup_date || "Confirmed") : "Pending" },
     { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? (ds.pickup_date || "—") : "Pending" },
     { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? "En route" : "Pending" },
     { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? (ds.delivery_date || "—") : "Pending" },
@@ -298,6 +321,8 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <InfoBox icon="🚚" label="Transit Days" value={transitDays} />
             <InfoBox icon="🔖" label="PRO Number" value={ds.pro_number || "—"} />
             <InfoBox icon="📋" label="BOL / Carrier Ref" value={ds.bol_number || "—"} />
+            {/* REQ-22: trailer seal number captured at tender acceptance */}
+            <InfoBox icon="🔒" label="Seal Number" value={ds.seal_number || "—"} />
             <InfoBox icon="⭐" label="Service Level" value={ds.service_level || "—"} />
             <InfoBox icon="🚪" label="Dock Door" value={ds.dock_door || ds.dock_assigned || "—"} />
             <InfoBox icon="🕐" label="Dock Time" value={ds.dock_time || "—"} />
@@ -428,6 +453,70 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
               </div>
             ))}
           </div>
+
+          {/* REQ-20: Shipment Change History — surfaces every audit row from
+              change_history (edit / tender / status / add-order / unassign /
+              invoice) so planners and finance can see exactly what happened
+              and when, similar to the order history drawer. */}
+          <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1 }}>Shipment Change History</span>
+              <span style={{ fontSize: 10, color: "var(--text3)" }}>{historyLoading ? "loading…" : `${historyRows.length} event${historyRows.length === 1 ? "" : "s"}`}</span>
+            </div>
+            {!historyLoading && historyRows.length === 0 && (
+              <div style={{ fontSize: 12, color: "var(--text3)", fontStyle: "italic", padding: "8px 0" }}>No history recorded yet.</div>
+            )}
+            {historyRows.map((row, i) => {
+              // historyService.shapeHistoryRows already produced: { type, action,
+              // user, userRole, ts, tsRaw, changes: [{field, before, after}],
+              // metadata }. Edits are bucketed so multiple field changes in
+              // the same request become a single entry.
+              const action = (row.action || row.type || "").toLowerCase();
+              const icon =
+                action === "tender" ? "📤"
+                : action === "status" ? "🔁"
+                : action === "plan" || action === "add" || action === "add-order" ? "➕"
+                : action === "unassign" || action === "remove" ? "➖"
+                : action === "invoice" || action === "invoice_approve" || action === "invoice_reject" ? "🧾"
+                : action === "edit" ? "✏️"
+                : action === "create" ? "📋"
+                : action === "delete" ? "🗑️"
+                : "📌";
+              const color =
+                action === "tender" ? "#7c3aed"
+                : action === "unassign" || action === "remove" || action === "delete" ? "#dc2626"
+                : action === "plan" || action === "add" || action === "add-order" ? "#059669"
+                : action === "status" ? "#2563eb"
+                : action === "invoice" ? "#d97706"
+                : "#475569";
+              const changes = Array.isArray(row.changes) ? row.changes : [];
+              const changeSummary = changes
+                .map((c) => c.field ? `${c.field}: ${c.before ?? "—"} → ${c.after ?? "—"}` : null)
+                .filter(Boolean)
+                .join(" · ");
+              const meta = row.metadata && typeof row.metadata === "object"
+                ? Object.entries(row.metadata)
+                  .filter(([, v]) => v !== null && v !== undefined && v !== "")
+                  .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+                  .join(" · ")
+                : "";
+              return (
+                <div key={`hist-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i === historyRows.length - 1 ? "none" : "1px dashed var(--border)" }}>
+                  <span style={{ fontSize: 16, lineHeight: 1, marginTop: 1 }}>{icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>
+                      <span style={{ color, textTransform: "uppercase", letterSpacing: 0.4 }}>{action || "event"}</span>
+                      {changeSummary && <span style={{ color: "var(--text3)", fontWeight: 400 }}> · {changeSummary}</span>}
+                    </div>
+                    {meta && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2, wordBreak: "break-word" }}>{meta}</div>}
+                    <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
+                      {row.ts || (row.tsRaw ? new Date(row.tsRaw).toLocaleString() : "")}{row.user ? ` · ${row.user}` : ""}{row.userRole ? ` (${row.userRole})` : ""}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Action Footer */}
@@ -444,7 +533,13 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/dock-scheduling"); }}>🚪 Dock schedule</button>
           <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onNavigate(`/documents?shipmentId=${encodeURIComponent(ds.id)}`); onClose(); }}>📄 Documents</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/messaging`); }}>📧 Contact Carrier</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/messaging"); }}>📨 Send to WMS</button>
+          {/* REQ-18: Send-to-WMS is only meaningful after the carrier has
+             accepted the tender. Pre-accept, the button is hidden. The
+             effective display status flips to "Confirmed" (or beyond) once
+             the carrier portal records an accept response. */}
+          {["Confirmed", "Tender Accepted", "In Transit", "Delivered"].includes(displayStatus) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/messaging"); }}>📨 Send to WMS</button>
+          )}
         </div>
       </div>
 
@@ -775,13 +870,16 @@ export default function ShipmentsPage() {
       dock: row.dock_assigned || "",
       dockLoadStart: row.dock_load_start || "",
       dockLoadEnd: row.dock_load_end || "",
+      // REQ-22: capture the carrier-supplied trailer seal number at
+      // tender-accept time and persist it on the shipment row.
+      seal: row.seal_number || "",
       notes: "",
     });
   }
 
   async function confirmAcceptTender() {
     if (!acceptModal) return;
-    const { shipment: row, pro, pickup, delivery, service, bol, dock, dockLoadStart, dockLoadEnd, notes } = acceptModal;
+    const { shipment: row, pro, pickup, delivery, service, bol, dock, dockLoadStart, dockLoadEnd, seal, notes } = acceptModal;
     if (!pickup) { toast("Pickup date is required", "warning"); return; }
     setBusyId(row.id);
     try {
@@ -794,6 +892,9 @@ export default function ShipmentsPage() {
         dockDoor: dock || "",
         dockLoadStart: dockLoadStart || "",
         dockLoadEnd: dockLoadEnd || "",
+        // REQ-22: persist seal in the carrier response audit metadata too,
+        // so the carrier-portal "what did the carrier reply" view shows it.
+        sealNumber: seal || "",
         notes: notes || "",
         respondedAtIso: new Date().toISOString(),
       };
@@ -807,6 +908,8 @@ export default function ShipmentsPage() {
         bol_number: bol || null,
         dock_assigned: dock || null,
         dock_time: dockLoadStart || null,
+        // REQ-22: persist trailer seal on the shipment row.
+        seal_number: seal || null,
         notes: withCarrierResponseNotes(row.notes, responseMeta),
       });
       // 1b. If MBOL, cascade Confirmed to child CBOLs
@@ -827,6 +930,9 @@ export default function ShipmentsPage() {
           deliveryDate: delivery || "",
           proNumber: pro || "",
           bolNumber: bol || "",
+          // REQ-22: include trailer seal in the OMS push so REQ-21's
+          // OMS "TMS Plan" tab can surface it without a second round-trip.
+          sealNumber: seal || "",
           dockNumber: dock || "",
           dockLoadStart: dockLoadStart || "",
           dockLoadEnd: dockLoadEnd || "",
@@ -1337,6 +1443,14 @@ export default function ShipmentsPage() {
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Loading End</label>
                   <input type="time" value={acceptModal.dockLoadEnd} onChange={(e) => setAcceptModal({ ...acceptModal, dockLoadEnd: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              {/* REQ-22: seal number captured at tender acceptance */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Seal Number <span style={{ color: "var(--accent)", fontSize: 10 }}>(trailer seal from carrier)</span></label>
+                  <input value={acceptModal.seal || ""} onChange={(e) => setAcceptModal({ ...acceptModal, seal: e.target.value })} placeholder="e.g. SEAL-998877" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", fontFamily: "monospace", boxSizing: "border-box" }} />
                 </div>
               </div>
 

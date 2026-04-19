@@ -3,6 +3,7 @@
 // No external route files needed — everything is here.
 // Supabase credentials stay server-side — never reach the browser.
 // ═══════════════════════════════════════════════════════════════════
+// (touch 2026-04-19 to nudge nodemon after DEFECT-001 fix in api/routes/invoices.js)
 
 require('dotenv').config();
 const http    = require('http');
@@ -22,6 +23,7 @@ const history = require('./services/changeHistory');
 const shipmentMutations = require('./services/shipmentMutations');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
+const createInvoicesRouter = require('./routes/invoices');
 
 // Fields on orders we record diffs for (label used in change_history.field).
 const ORDER_HISTORY_FIELDS = {
@@ -207,8 +209,8 @@ function hasAnyRole(user, ...allowedRoles) {
 const ALLOWED = [
   // Core TMS
   'orders','shipments','carriers','rates','items','drivers','locations',
-  'order_lines','lane_preferences','order_history','route_templates','change_history',
-  'equipment_types','planning_parameters','documents','vehicles',
+  'order_lines','lane_preferences','order_history','route_templates','change_history','invoices',
+  'equipment_types','planning_parameters','dock_loading_durations','documents','vehicles',
   // Dock & scheduling
   'dock_appointments','dock_schedules','crossdock_hubs','warehouse_dock_config',
   // Events & messaging
@@ -560,6 +562,12 @@ app.use('/api/users', createUsersRouter({
   SUPABASE_URL,
   SERVICE_KEY,
   invalidateProfileCache: _invalidateProfileCache,
+}));
+
+// ── REQ-06: Freight Invoice CRUD + auto-approval on tolerance ─────
+app.use('/api/invoices', createInvoicesRouter({
+  verifyToken,
+  hasAnyRole,
 }));
 
 // ── REQ-01: OMS ingest + SSE stream ───────────────────────────────
@@ -958,6 +966,9 @@ app.post('/api/oms/push', async (req, res) => {
     deliveryDate:    String(b.deliveryDate || ''),
     proNumber:       String(b.proNumber || ''),
     bolNumber:       String(b.bolNumber || ''),
+    // REQ-22 / REQ-24: carry the trailer seal through the push so the
+    // OMS oms_orders mirror captures it automatically too.
+    sealNumber:      String(b.sealNumber || ''),
     dockNumber:      String(b.dockNumber || ''),
     dockLoadStart:   String(b.dockLoadStart || ''),
     dockLoadEnd:     String(b.dockLoadEnd || ''),
@@ -973,17 +984,37 @@ app.post('/api/oms/push', async (req, res) => {
     source:          'ZoreeTMS',
   };
 
-  // Check if OMS endpoint is configured
+  // REQ-24: run the MW auto-sync job. This mirrors the tender-accept
+  // onto every linked oms_orders row (carrier / BOL / PRO / seal /
+  // dock / pickup / delivery / service level + tendered_at timestamp)
+  // so the OMS sees the accept immediately, without OMS_API_URL or
+  // any operator push. This runs even when the external OMS endpoint
+  // is not configured, because both tables share the same Supabase
+  // project and a direct UPSERT is the most reliable path.
+  const omsSync = require('./services/omsSync');
+  let syncResult = null;
+  try {
+    syncResult = await omsSync.syncTenderAcceptToOms(payload, user);
+    console.log(`[OMS Push] MW auto-sync complete → ${syncResult.updated.length} updated, ${syncResult.skipped.length} skipped`);
+  } catch (syncErr) {
+    console.error('[OMS Push] MW auto-sync failed:', syncErr.message);
+  }
+
+  // Check if an external OMS endpoint is configured (legacy
+  // pass-through for tenants that run OMS as a separate service).
   const omsUrl = process.env.OMS_API_URL || '';
   const omsApiKey = process.env.OMS_API_KEY || '';
 
   if (!omsUrl) {
-    console.log('[OMS Push] No OMS_API_URL configured. Payload logged:');
-    console.log(JSON.stringify(payload, null, 2));
+    // The inline MW sync above has already kept OMS current. Respond
+    // with its summary so the caller can show a meaningful toast.
     return res.json({
-      sent: false,
-      skipped: 'no_oms_url',
-      message: 'OMS_API_URL not configured. Set OMS_API_URL and OMS_API_KEY env vars to enable OMS integration.',
+      sent: !!syncResult,
+      via: 'mw-auto-sync',
+      message: syncResult
+        ? `MW auto-sync updated ${syncResult.updated.length} oms_orders row(s).`
+        : 'MW auto-sync failed — see server logs.',
+      omsSync: syncResult,
       payload,
     });
   }
@@ -1000,13 +1031,17 @@ app.post('/api/oms/push', async (req, res) => {
     const omsText = await omsRes.text();
     console.log(`[OMS Push] ${omsRes.status} | ${omsText.slice(0, 300)}`);
     if (omsRes.ok) {
-      res.json({ sent: true, status: omsRes.status, payload });
+      // REQ-24: external forward succeeded AND the inline MW sync ran.
+      res.json({ sent: true, via: 'external+mw-auto-sync', status: omsRes.status, omsSync: syncResult, payload });
     } else {
-      res.status(502).json({ sent: false, error: `OMS returned ${omsRes.status}`, detail: omsText.slice(0, 500), payload });
+      res.status(502).json({ sent: false, via: 'mw-auto-sync-only', error: `OMS returned ${omsRes.status}`, detail: omsText.slice(0, 500), omsSync: syncResult, payload });
     }
   } catch (err) {
-    console.error('[OMS Push] FAILED:', err.message);
-    res.status(502).json({ sent: false, error: err.message, payload });
+    console.error('[OMS Push] external forward FAILED:', err.message);
+    // Inline sync still succeeded (payload mirrored into oms_orders), so
+    // return 200 with a "partial" marker rather than 502 — the OMS db
+    // view is current even if the external endpoint was unreachable.
+    res.json({ sent: !!syncResult, via: 'mw-auto-sync-only', warning: err.message, omsSync: syncResult, payload });
   }
 });
 
@@ -1302,6 +1337,15 @@ app.patch('/api/orders/:id', async (req, res) => {
           user:       u,
           metadata:   { previousShipmentId: prevShipmentId },
         });
+        // REQ-20: also log the unassign on the shipment side so planners
+        // can see "Order X was removed" in the shipment's history drawer.
+        await history.recordChange({
+          entityType: 'shipment',
+          entityId:   prevShipmentId,
+          action:     'unassign',
+          user:       u,
+          metadata:   { orderId: row.id, previousShipmentId: prevShipmentId },
+        });
       }
     }
 
@@ -1433,7 +1477,23 @@ app.post('/api/shipments/:id/add-order', async (req, res) => {
   }
 });
 
-app.get('/api/shipments', async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('shipments','select=*&order=created_at.desc&limit=500',u._token); res.json({ shipments: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+app.get('/api/shipments', async (req, res) => {
+  const u = await verifyToken(req,res); if(!u) return;
+  try {
+    // REQ-21: allow filtering by a single shipment id so the OMS middleware
+    // pull can fetch one shipment's tender-accept details without pulling
+    // the full list. Accept both PostgREST-style `?id=eq.FOO` and plain
+    // `?id=FOO`. Falls through to the existing "latest 500" list view.
+    let qs = 'select=*&order=created_at.desc&limit=500';
+    const rawId = typeof req.query.id === 'string' ? req.query.id : '';
+    const idMatch = rawId.replace(/^eq\./, '').trim();
+    if (idMatch) {
+      qs = `select=*&id=eq.${encodeURIComponent(idMatch)}&limit=1`;
+    }
+    const rows = await dbSelect('shipments', qs, u._token);
+    res.json({ shipments: rows, total: rows.length });
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
 app.delete('/api/shipments/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
@@ -2402,9 +2462,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
           const oLike = `%25${encodeURIComponent(oCity)}%25`;
           const dLike = `%25${encodeURIComponent(dCity)}%25`;
           const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&origin=ilike.${oLike}&dest=ilike.${dLike}&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles`;
-          const tlRes = await fetch(tlUrl, {
-            headers: { 'apikey': SERVICE_KEY, 'Content-Type': 'application/json' },
-          });
+          const tlRes = await fetch(tlUrl, { headers: sbHeaders(null) });
           const tlRates = await tlRes.json();
 
           if (Array.isArray(tlRates)) {

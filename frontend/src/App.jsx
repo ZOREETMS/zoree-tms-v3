@@ -38,6 +38,7 @@ import UserRolesPage from "./pages/UserRolesPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
+import { fetchDurations as fetchDockLoadingDurations } from "./services/dockLoadingDurationsService";
 import RoleGuard from "./components/RoleGuard";
 
 function PrivateRoutes({ data }) {
@@ -146,6 +147,9 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshData();
+    // Warm the dock loading durations cache so bulk planning picks up
+    // admin edits before anyone visits the Planning Parameters page.
+    fetchDockLoadingDurations().catch(() => { /* falls back to constants */ });
     // Real-time updates via WebSocket — instant notification from OMS/Middleware
     import("./lib/wsClient.js").then(({ connect, onMessage, disconnect }) => {
       connect();

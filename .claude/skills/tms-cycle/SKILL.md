@@ -44,8 +44,15 @@ REQ-07: Consolidated invoice - single invoice covers multiple shipments, identif
     NO direct API calls, NO Supabase client calls — browser UI only
 
   Defects found?
-    YES -> show user one line per defect -> Developer fixes -> Tester retests (max 3 cycles)
+    YES -> log to C:\Zoree\Requirements\Defects.xlsx (Status=Open) -> Developer fixes Open defects only
+        -> Tester retests -> update Status to Fixed/Closed in Defects.xlsx
+        -> NEVER re-fix defects with Status=Fixed, Closed, or Retest
     NO  -> REQ-0N DONE, move to next requirement
+
+  When reading Defects.xlsx before a fix cycle:
+    - Filter Defects sheet by REQ ID and Status = "Open" ONLY
+    - Skip any row where Status is Fixed, Closed, or Retest
+    - If no Open defects remain -> requirement is DONE
 
 ## Step 3 - Keep user informed
   Loading requirements from C:\Zoree\Requirements\requirements.xlsx... 7 found

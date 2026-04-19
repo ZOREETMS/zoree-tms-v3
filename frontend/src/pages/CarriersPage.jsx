@@ -171,6 +171,21 @@ export default function CarriersPage() {
                   <input type="number" value={editCarrier.cost_per_mile || ""} onChange={(e) => editField("cost_per_mile", e.target.value)} /></div>
               </div>
 
+              {/* REQ-06: invoice tolerance config */}
+              <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 700, fontSize: 11, color: "var(--text3)", letterSpacing: 1 }}>INVOICE AUDIT TOLERANCE</div>
+              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
+                Invoices from this carrier are auto-approved when the variance vs agreed shipment cost is within <strong>either</strong> the %-limit or the $-limit. Leave blank to fall back to the system default (5% / $100).
+              </div>
+              <div className="form-row-3">
+                <div className="form-group"><label className="form-label">Tolerance (%)</label>
+                  <input type="number" step="0.1" placeholder="default 5.0" value={editCarrier.invoice_tolerance_pct ?? ""} onChange={(e) => editField("invoice_tolerance_pct", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Tolerance ($)</label>
+                  <input type="number" step="1" placeholder="default 100" value={editCarrier.invoice_tolerance_abs_usd ?? ""} onChange={(e) => editField("invoice_tolerance_abs_usd", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">&nbsp;</label>
+                  <div style={{ fontSize: 10, color: "var(--text3)", fontStyle: "italic" }}>Preview: an invoice within either bound auto-approves + sends to AP.</div>
+                </div>
+              </div>
+
               <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 700, fontSize: 11, color: "var(--text3)", letterSpacing: 1 }}>CONTACT INFO</div>
               <div className="form-row-3">
                 <div className="form-group"><label className="form-label">Contact Name</label>

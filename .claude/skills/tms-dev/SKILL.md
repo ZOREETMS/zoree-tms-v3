@@ -20,6 +20,15 @@ This is a development task. You must write actual code and make real file change
 
 Implement specs or fix defects. Follow ALL rules below strictly before writing any code.
 
+## DEFECT HANDLING RULES
+
+When given defects to fix:
+1. Read C:\Zoree\Requirements\Defects.xlsx — Defects sheet
+2. Filter by the current REQ ID and Status = "Open" ONLY
+3. SKIP any defect where Status is "Fixed", "Closed", or "Retest" — do not touch those
+4. Fix ONLY the Open defects
+5. After fixing, update the Status column to "Fixed" and fill in "Fixed In" with the file(s) changed
+
 ## Project layout (C:\Zoree\zoree-tms-v3\zoree-tms-v3)
 
   api/server.js            - Express API (all routes in one file)

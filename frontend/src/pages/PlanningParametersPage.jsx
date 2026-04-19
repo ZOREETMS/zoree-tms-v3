@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import { fetchParameters, updateParameter } from "../services/planningParametersService";
+import DockDurationsSection from "../components/planning-parameters/DockDurationsSection";
 
 export default function PlanningParametersPage() {
   const data = useOutletContext();
@@ -127,6 +128,8 @@ export default function PlanningParametersPage() {
           </table>
         </div>
       )}
+
+      <DockDurationsSection />
     </div>
   );
 }

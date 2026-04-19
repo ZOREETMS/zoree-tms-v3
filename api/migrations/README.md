@@ -19,4 +19,7 @@ Versioned, forward-only migration files for the ZoreeTMS Supabase database.
 | 004 | `004_add_dock_issue_to_shipments.sql` | dock_issue column on shipments | _pending_ | _pending_ |
 | 005 | `005_add_oms_sync_columns.sql` | REQ-01: sync_source, auto_synced_at, oms_order_ref on orders | 2026-04-16 | Sridhar (SQL Editor) |
 | 006 | `006_create_change_history.sql` | REQ-02: change_history table | 2026-04-16 | Sridhar (SQL Editor) |
-| 007 | `007_create_user_profiles.sql`  | REQ-08: multi-role user_profiles table | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |
+| 007 | `007_create_user_profiles.sql`  | REQ-08: multi-role user_profiles table | 2026-04-17 | Sridhar |
+| 008 | `008_create_invoices_and_carrier_tolerance.sql` | REQ-06: invoices table + carrier tolerance columns | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |
+| 009 | `009_change_history_add_invoice.sql` | REQ-06: allow 'invoice' in change_history.entity_type | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |
+| 010 | `010_invoices_add_shipment_ids.sql` | REQ-07: shipment_ids[] on invoices for consolidated invoicing | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |

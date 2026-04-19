@@ -9,6 +9,7 @@
 
 import { DOCK_DOORS, LOAD_DURATION_BY_MODE, DEFAULT_DOCK_START } from "../constants/docks";
 import { getDockConfigForWarehouse } from "./dockScheduleService";
+import { getLoadDuration } from "./dockLoadingDurationsService";
 
 /**
  * Extract just the "HH:mm" time portion from a value that may be:
@@ -105,7 +106,7 @@ export function buildDockFields({ door, startTime, duration, pickupDate }) {
 export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, groupIndex = 0, groupCount = 1, existingShipments = [], dockConfigs = [] } = {}) {
   const mode = (plan.mode || "TL").toUpperCase();
   const warehouseDoors = getDockConfigForWarehouse(dockConfigs, plan.origin).doors;
-  const dur = loadDuration || LOAD_DURATION_BY_MODE[mode] || 120;
+  const dur = loadDuration || getLoadDuration(mode);
 
   // If user explicitly chose a door, use it; otherwise auto-assign
   let door;
@@ -196,7 +197,7 @@ export function assignDocksToPlans(plans, existingShipments = [], dockConfigs = 
 
     const warehouseDoors = getDockConfigForWarehouse(dockConfigs, plan.origin).doors;
     const mode = (plan.mode || "TL").toUpperCase();
-    const dur = LOAD_DURATION_BY_MODE[mode] || 120;
+    const dur = getLoadDuration(mode);
 
     // Find the door with the least occupied time (best-fit instead of blind round-robin)
     let bestDoor = warehouseDoors[0];

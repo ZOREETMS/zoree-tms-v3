@@ -9,10 +9,29 @@ import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 // Browser opens an EventSource to /api/events/orders. Any order
 // created/updated/deleted on the server is pushed to us live, so the
 // Orders page updates without any button click or poll.
+//
+// Known trap: Cloudflare tunnels (and most reverse proxies that don't
+// explicitly forward SSE) BUFFER the stream, so the EventSource opens
+// but `order.created` events never arrive. If VITE_API_BASE points to
+// a tunnel, we prefer the direct API URL for the SSE stream whenever
+// the browser is running on localhost. A dedicated VITE_SSE_BASE env
+// var takes precedence for deployments that need a different host.
 const API_BASE =
   (import.meta && import.meta.env && import.meta.env.VITE_API_BASE) ||
   (typeof window !== "undefined" && window.ZOREE_API_URL) ||
-  "http://localhost:3001/api";
+  "http://localhost:3010/api";
+
+function resolveSseBase() {
+  const explicit = (import.meta && import.meta.env && import.meta.env.VITE_SSE_BASE)
+    || (typeof window !== "undefined" && window.ZOREE_SSE_URL);
+  if (explicit) return String(explicit).replace(/\/$/, "");
+  // When the browser is on localhost (dev or port-forwarded), always
+  // hit the API server directly — bypasses Cloudflare / nginx buffering.
+  if (typeof window !== "undefined" && /^localhost|^127\.0\.0\.1/.test(window.location.hostname)) {
+    return "http://localhost:3010/api";
+  }
+  return API_BASE;
+}
 
 /**
  * Subscribe to live order events from the TMS backend.
@@ -29,7 +48,7 @@ export function subscribeOrderChanges(handlers = {}) {
     // SSR / unsupported browser — noop unsubscribe.
     return () => {};
   }
-  const url = `${API_BASE}/events/orders`;
+  const url = `${resolveSseBase()}/events/orders`;
   const es = new EventSource(url, { withCredentials: false });
 
   if (handlers.onCreated) es.addEventListener("order.created", (e) => safeInvoke(handlers.onCreated, e));
@@ -59,11 +78,50 @@ function safeInvoke(cb, event) {
 import { addBusinessDays } from "../utils/orderUtils.jsx";
 import { assignDocksToPlans, buildDockFields } from "./dockService";
 import { DOCK_DOORS, LOAD_DURATION_BY_MODE } from "../constants/docks";
+import { getLoadDuration } from "./dockLoadingDurationsService";
 import { getDockConfigForWarehouse } from "./dockScheduleService";
 import { saveDocument } from "./documentService";
 
 const QUOTE_CACHE_TTL_MS = 2 * 60 * 1000;
 const quoteCache = new Map();
+
+// REQ-09: when an order explicitly picks a mode (TL / LTL / Parcel / …),
+// that mode acts as a constraint — the planner must only consider
+// carrier quotes for the same mode. Empty / null / "Any" means no
+// constraint and all quotes are eligible.
+export function normalizeMode(m) {
+  const s = String(m || "").trim().toUpperCase();
+  if (!s || s === "ANY" || s === "ALL") return "";
+  if (s === "FTL" || s === "TRUCKLOAD" || s === "FULL TRUCKLOAD") return "TL";
+  if (s === "LESS THAN TRUCKLOAD" || s === "LTL FREIGHT") return "LTL";
+  return s;
+}
+
+export function commonModeConstraint(orders) {
+  const modes = new Set((orders || []).map((o) => normalizeMode(o?.ship_mode || o?.shipMode)).filter(Boolean));
+  if (modes.size === 1) return [...modes][0];
+  return "";
+}
+
+// REQ-10: normalize service-level labels so "standard" / "STD" / "Standard"
+// all collapse to the same canonical bucket. "Any" means unconstrained.
+export function normalizeServiceLevel(sl) {
+  const s = String(sl || "").trim();
+  if (!s) return "";
+  const u = s.toUpperCase();
+  if (u === "ANY" || u === "ALL") return "";
+  if (u === "STD") return "Standard";
+  if (u === "EXP") return "Expedited";
+  if (u === "GTD") return "Guaranteed";
+  // Title-case the rest so comparisons are stable.
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+export function commonServiceLevelConstraint(orders) {
+  const lvls = new Set((orders || []).map((o) => normalizeServiceLevel(o?.service_level || o?.serviceLevel)).filter(Boolean));
+  if (lvls.size === 1) return [...lvls][0];
+  return "";
+}
 
 function quoteCacheKey(lane) {
   return JSON.stringify({
@@ -76,6 +134,11 @@ function quoteCacheKey(lane) {
     totalWeight: Number(lane?.totalWeight || 0),
     totalPieces: Number(lane?.totalPieces || 0),
     orderCount: Array.isArray(lane?.orderIds) ? lane.orderIds.length : 0,
+    // REQ-09: mode constraint participates in the cache key so TL and LTL
+    // quote sets for the same lane don't collide.
+    modeConstraint: normalizeMode(lane?.modeConstraint),
+    // REQ-10: same for service level.
+    serviceLevelConstraint: normalizeServiceLevel(lane?.serviceLevelConstraint),
   });
 }
 
@@ -283,7 +346,7 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
   const masterDock = buildDockFields({
     door: DOCK_DOORS[0],
     startTime: "06:00",
-    duration: LOAD_DURATION_BY_MODE[mode] || 120,
+    duration: getLoadDuration(mode),
     pickupDate,
   });
   const masterShipment = {
@@ -373,7 +436,7 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
     const cbolDock = buildDockFields({
       door: DOCK_DOORS[cbolIdx % DOCK_DOORS.length],
       startTime: `${String(6 + cbolIdx % DOCK_DOORS.length).padStart(2, "0")}:00`,
-      duration: LOAD_DURATION_BY_MODE[mode] || 120,
+      duration: getLoadDuration(mode),
       pickupDate,
     });
 
@@ -506,8 +569,34 @@ export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate, 
     quoteCache.set(key, { ts: now, rawQuotes, bestQuote });
   }
 
+  // REQ-09 + REQ-10: honour the order's mode AND service-level constraints.
+  // A lane carrying either constraint filters the quote list down before
+  // sorting, and bestQuote is recomputed from the constrained pool. A
+  // lane with no constraints keeps legacy behaviour.
+  const modeConstraint = normalizeMode(lane?.modeConstraint);
+  const slConstraint = normalizeServiceLevel(lane?.serviceLevelConstraint);
+  let workingQuotes = rawQuotes;
+  let workingBest = bestQuote;
+  if (modeConstraint || slConstraint) {
+    workingQuotes = rawQuotes.filter((q) => {
+      if (modeConstraint && normalizeMode(q?.mode) !== modeConstraint) return false;
+      if (slConstraint && normalizeServiceLevel(q?.serviceLevel) !== slConstraint) return false;
+      return true;
+    });
+    workingBest = workingQuotes[0] || null;
+    // If the legacy bestQuote already matches every constraint, keep it
+    // as the starting point so we don't unnecessarily change the choice.
+    if (
+      bestQuote &&
+      (!modeConstraint || normalizeMode(bestQuote.mode) === modeConstraint) &&
+      (!slConstraint || normalizeServiceLevel(bestQuote.serviceLevel) === slConstraint)
+    ) {
+      workingBest = bestQuote;
+    }
+  }
+
   // Sort: feasible (on-time) first, then by cost ascending
-  const sortedQuotes = [...rawQuotes].sort((a, b) => {
+  const sortedQuotes = [...workingQuotes].sort((a, b) => {
     if (calcDatesFn) {
       const datesA = calcDatesFn(a, dueDate, readyDate);
       const datesB = calcDatesFn(b, dueDate, readyDate);
@@ -518,7 +607,14 @@ export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate, 
     return (a.totalCharge || 0) - (b.totalCharge || 0); // then cheapest
   });
 
-  return { quotes: sortedQuotes, bestQuote };
+  // After sorting, the first on-time-and-cheapest quote is the "best"
+  // from the constrained pool. Recompute so bestQuote stays consistent
+  // with the filter.
+  if (modeConstraint || slConstraint) {
+    workingBest = sortedQuotes[0] || null;
+  }
+
+  return { quotes: sortedQuotes, bestQuote: workingBest };
 }
 
 /**
@@ -653,11 +749,17 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
   const { LTL_MAX_WEIGHT: LTL_MAX, TL_MAX_WEIGHT: TL_MAX } = await import("../constants/orders.js");
   const { calcDates } = await import("./bulkPlanService.js");
 
-  // Group by lane
+  // Group by lane + REQ-09 mode + REQ-10 service level constraints.
+  // Orders on the same lane but with different explicit ship_modes OR
+  // different service levels must NOT consolidate — otherwise the
+  // constraints get diluted. Orders without explicit values fall into
+  // a shared "any" bucket and behave as before.
   const normLane = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const laneMap = {};
   unplannedOrders.forEach((o) => {
-    const key = `${normLane(o.origin)}||${normLane(o.dest)}`;
+    const mc = normalizeMode(o.ship_mode || o.shipMode);
+    const sl = normalizeServiceLevel(o.service_level || o.serviceLevel);
+    const key = `${normLane(o.origin)}||${normLane(o.dest)}||${mc || "any"}||${sl || "any"}`;
     if (!laneMap[key]) laneMap[key] = [];
     laneMap[key].push(o);
   });
@@ -671,13 +773,30 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
     const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
     const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || "";
 
-    // Use equipment max weight (TL if over LTL) — same as Plan Group
-    const equipMaxWeight = totalWeight <= LTL_MAX ? LTL_MAX : TL_MAX;
+    // REQ-09 + REQ-10: because the lane map now splits by both mode and
+    // service level, every order in this bucket shares the same pair of
+    // constraints (possibly empty). Pin them on the lane so rating
+    // honours them.
+    const laneModeConstraint = commonModeConstraint(laneOrders);
+    const laneServiceLevelConstraint = commonServiceLevelConstraint(laneOrders);
+    // Use equipment max weight. If the mode constraint is explicitly LTL,
+    // force the LTL ceiling so we never build a TL group; if it's TL,
+    // always go to TL capacity. Without a constraint, fall back to the
+    // historical weight heuristic.
+    const equipMaxWeight = laneModeConstraint === "LTL"
+      ? LTL_MAX
+      : laneModeConstraint === "TL"
+        ? TL_MAX
+        : (totalWeight <= LTL_MAX ? LTL_MAX : TL_MAX);
     const groups = buildShipmentGroups(laneOrders, {
       laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70",
       totalWeight, totalPieces: laneOrders.reduce((s, x) => s + Number(x.pieces || 0), 0),
       orderIds: laneOrders.map((x) => x.id),
+      // REQ-09
+      modeConstraint: laneModeConstraint || "",
+      // REQ-10
+      serviceLevelConstraint: laneServiceLevelConstraint || "",
     }, equipMaxWeight);
 
     // REQ-05 perf: first-pass rating for every group in this lane runs

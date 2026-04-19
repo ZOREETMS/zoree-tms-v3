@@ -6,5 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // Allow any Host header (needed for Cloudflare Tunnel / ngrok domains)
+    allowedHosts: true,
   },
 });

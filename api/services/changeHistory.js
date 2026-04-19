@@ -24,9 +24,13 @@ const db = require('./supabase');
 
 const TABLE = 'change_history';
 
-const ALLOWED_ENTITIES = new Set(['order', 'shipment', 'rate', 'carrier']);
+const ALLOWED_ENTITIES = new Set(['order', 'shipment', 'rate', 'carrier', 'invoice']);
 const ALLOWED_ACTIONS  = new Set([
   'create', 'edit', 'delete', 'plan', 'unassign', 'tender', 'untender', 'status',
+  // REQ-20: allow 'invoice' rows against shipments so the shipment history
+  // drawer shows invoice approve/reject alongside the lifecycle events.
+  // DB check constraint broadened in parallel by migration 016.
+  'invoice',
 ]);
 
 // ── Display helpers ──────────────────────────────────────────────

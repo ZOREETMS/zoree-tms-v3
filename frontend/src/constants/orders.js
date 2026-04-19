@@ -7,6 +7,10 @@ export const STATUS_BADGES = {
   Planned: "badge badge-teal",
   Consolidated: "badge badge-blue",
   Tendered: "badge badge-purple",
+  // REQ-13: mirror the shipment's tender-accepted state on the order row.
+  "Tender Accepted": "badge badge-green",
+  // REQ-23: orders mirror the shipment's warehouse departure.
+  Shipped: "badge badge-blue",
   "In Transit": "badge badge-blue",
   Delivered: "badge badge-green",
   Cancelled: "badge badge-red",
@@ -18,6 +22,8 @@ export const STATUS_ROW_COLORS = {
   Planned:      { bg: "#f0fdf4", border: "#16a34a" },
   Consolidated: { bg: "#eff6ff", border: "#2563eb" },
   Tendered:     { bg: "#fffbeb", border: "#d97706" },
+  "Tender Accepted": { bg: "#ecfdf5", border: "#059669" },
+  Shipped:      { bg: "#eff6ff", border: "#1d4ed8" },
   "In Transit": { bg: "#f0f9ff", border: "#0284c7" },
   Delivered:    { bg: "#f0fdf4", border: "#059669" },
   Exception:        { bg: "#fef2f2", border: "#dc2626" },

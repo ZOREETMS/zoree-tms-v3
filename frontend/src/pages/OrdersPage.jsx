@@ -4,7 +4,7 @@ import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
-import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes, subscribeOrderChanges } from "../services/ordersService";
+import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes, subscribeOrderChanges, normalizeMode, commonModeConstraint, normalizeServiceLevel, commonServiceLevelConstraint } from "../services/ordersService";
 import { getOrderHistory } from "../services/historyService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
@@ -390,6 +390,8 @@ export default function OrdersPage() {
         originCity: op.city, originState: op.state, originZip: o.origin_zip || op.zip || cityZipLookup(o.origin) || "",
         destCity: dp.city, destState: dp.state, destZip: o.dest_zip || dp.zip || cityZipLookup(o.dest) || "",
         weight: o.weight || "", pieces: o.pieces || "", shipMode: o.ship_mode || o.shipMode || "",
+        // REQ-10: carry service level through the edit form.
+        serviceLevel: o.service_level || o.serviceLevel || "",
         commodity: o.commodity || "", incoterms: o.incoterms || "", equipment: o.equipment || "",
         ready: o.ready || "", due: o.due || "", notes: o.notes || "",
       });
@@ -448,6 +450,8 @@ export default function OrdersPage() {
     chk("weight", o.weight, f.weight, "Weight");
     chk("pieces", o.pieces, f.pieces, "Pieces");
     chk("ship_mode", o.ship_mode || o.shipMode || "", f.shipMode, "Ship Mode");
+    // REQ-10: capture service-level edits for change_history.
+    chk("service_level", o.service_level || o.serviceLevel || "", f.serviceLevel, "Service Level");
     chk("commodity", o.commodity, f.commodity, "Commodity");
     chk("ready", o.ready, f.ready, "Ready Date");
     chk("due", o.due, f.due, "Due Date");
@@ -467,6 +471,9 @@ export default function OrdersPage() {
         origin: newOrigin || null, dest: newDest || null,
         weight: parseFloat(f.weight) || 0, pieces: parseInt(f.pieces) || 0,
         ship_mode: (f.shipMode || "").trim() || null,
+        // REQ-10: persist the order's service-level selection so the planner
+        // can honour it.
+        service_level: (f.serviceLevel || "").trim() || null,
         commodity: f.commodity || null,
         incoterms: (f.incoterms || "").trim() || null,
         ready: f.ready || null, due: f.due || null,
@@ -672,17 +679,33 @@ export default function OrdersPage() {
     const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
     const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.dest);
 
+    // REQ-09 + REQ-10: carry the order's explicit mode AND service-level
+    // choices as constraints into rating. fetchCarrierQuotes filters on
+    // them and bestQuote is recomputed from the constrained pool.
+    const laneModeConstraint = commonModeConstraint(sibs);
+    const laneServiceLevelConstraint = commonServiceLevelConstraint(sibs);
+
     const baseLane = {
       laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70", totalWeight, totalPieces,
       orderIds: sibs.map((x) => x.id),
+      // REQ-09
+      modeConstraint: laneModeConstraint || "",
+      // REQ-10
+      serviceLevelConstraint: laneServiceLevelConstraint || "",
     };
 
-    // Split into shipment groups by equipment max weight (not LTL max).
-    // If total > LTL, use TL equipment max (44,000 lbs) so compatible orders consolidate as TL.
-    const equipMaxWeight = totalWeight <= LTL_MAX_WEIGHT
+    // Split into shipment groups by equipment max weight.
+    // REQ-09: when the mode constraint is LTL, stay on LTL capacity; when
+    // it's TL, go straight to TL. Otherwise fall back to the historical
+    // weight-based heuristic (LTL unless total exceeds LTL_MAX_WEIGHT).
+    const equipMaxWeight = laneModeConstraint === "LTL"
       ? LTL_MAX_WEIGHT
-      : EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight;
+      : laneModeConstraint === "TL"
+        ? EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight
+        : (totalWeight <= LTL_MAX_WEIGHT
+          ? LTL_MAX_WEIGHT
+          : EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight);
     const groups = buildShipmentGroups(sibs, baseLane, equipMaxWeight);
     const shipmentGroups = groups.map((g) => {
       const gWeight = g.lane.totalWeight;
@@ -1242,7 +1265,18 @@ export default function OrdersPage() {
                     <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.2)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer", marginLeft: 4 }} disabled={busyId === o.id} onClick={() => deleteOrder(o.id)} title="Delete">🗑️</button>
                   </>)}
                   {o.status === "Planned" && (<>
-                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(16,185,129,.08)", color: "#059669", borderColor: "rgba(16,185,129,.35)", fontSize: 11 }}>📤 Tender</button>{" "}
+                    {/* REQ-12: don't offer a Tender action on the order row when the
+                       corresponding shipment has already been tendered (or tender-accepted).
+                       The button only appears while the shipment is still in a pre-tender
+                       state ("Planned" / null), so planners don't re-tender by accident. */}
+                    {(() => {
+                      const ship = o.shipment_id ? shipments.find((s) => s.id === o.shipment_id) : null;
+                      const st = String(ship?.status || "").toLowerCase();
+                      const alreadyTendered = st === "tendered" || st === "tender accepted" || st === "confirmed" || st === "in transit" || st === "delivered";
+                      return alreadyTendered
+                        ? null
+                        : <><button className="btn btn-secondary btn-sm" style={{ background: "rgba(16,185,129,.08)", color: "#059669", borderColor: "rgba(16,185,129,.35)", fontSize: 11 }}>📤 Tender</button>{" "}</>;
+                    })()}
                     <button className="btn btn-secondary btn-sm" style={{ background: "rgba(245,158,11,.08)", color: "#b45309", borderColor: "rgba(245,158,11,.35)", fontSize: 11 }} onClick={() => unplanOrder(o.id)}>🔓 Unplan</button>
                   </>)}
                   {o.status === "Consolidated" && (

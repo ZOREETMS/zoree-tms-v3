@@ -69,7 +69,7 @@ export default function InvoiceModal({
               </div>
 
               <div className="form-group">
-                <label>Shipment</label>
+                <label>Primary Shipment</label>
                 <select
                   value={form.shipId}
                   onChange={(e) => handleField("shipId", e.target.value)}
@@ -79,6 +79,20 @@ export default function InvoiceModal({
                     <option key={s.id} value={s.id}>{s.id}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* REQ-07: consolidated invoice — additional shipment IDs */}
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                <label>Additional shipments (optional, consolidated invoice)</label>
+                <input
+                  type="text"
+                  placeholder="Comma-separated, e.g. SHP-2026-1234, SHP-2026-5678"
+                  value={form.extraShipIds || ""}
+                  onChange={(e) => handleField("extraShipIds", e.target.value)}
+                />
+                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
+                  Leave blank for a single-shipment invoice. For a consolidated invoice, list every additional shipment id — the server will sum their agreed costs and auto-decide approve/reject against the carrier tolerance.
+                </div>
               </div>
 
               <div className="form-group">

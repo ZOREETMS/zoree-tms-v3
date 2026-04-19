@@ -401,12 +401,50 @@ textarea{resize:vertical;min-height:60px;}
     <div class="kpi"><div class="kl">Shipped</div><div class="kv" id="k-sh" style="color:var(--green)">0</div></div>
     <div class="kpi"><div class="kl">On Hold</div><div class="kv" id="k-ho" style="color:var(--red)">0</div></div>
   </div>
-  <div class="tbar">
+  <!-- REQ-16: filter bar (mirrors TMS filters) -->
+  <div class="tbar" style="flex-wrap:wrap;gap:8px">
     <div class="search-wrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <input class="search-input" id="sq" placeholder="Search orders, customer, dest…" oninput="ro()">
     </div>
     <select class="fsel" id="fc" onchange="ro()"><option value="">All Customers</option></select>
+    <select class="fsel" id="f-stage" onchange="ro()" title="Stage filter">
+      <option value="">All Stages</option>
+      <option value="1">1 · Draft</option>
+      <option value="2">2 · Booked</option>
+      <option value="3">3 · Reserved</option>
+      <option value="4">4 · Sent to TMS</option>
+      <option value="5">5 · Planned in TMS</option>
+      <option value="6">6 · Tender Confirmed</option>
+      <option value="7">7 · Picked</option>
+      <option value="8">8 · Packed</option>
+      <option value="9">9 · Staged</option>
+      <option value="10">10 · Shipped</option>
+      <option value="11">11 · Delivered / Closed</option>
+    </select>
+    <select class="fsel" id="f-mode" onchange="ro()" title="Mode filter">
+      <option value="">All Modes</option>
+      <option value="TL">TL</option>
+      <option value="LTL">LTL</option>
+      <option value="Intermodal">Intermodal</option>
+      <option value="Flatbed">Flatbed</option>
+      <option value="Reefer">Reefer</option>
+      <option value="Partial">Partial</option>
+      <option value="Expedite">Expedite</option>
+      <option value="Air Freight">Air Freight</option>
+    </select>
+    <select class="fsel" id="f-svc" onchange="ro()" title="Service level">
+      <option value="">All Service Levels</option>
+      <option value="Standard">Standard</option>
+      <option value="Guaranteed">Guaranteed</option>
+      <option value="Expedited">Expedited</option>
+      <option value="Economy">Economy</option>
+      <option value="White Glove">White Glove</option>
+    </select>
+    <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">Due from <input type="date" id="f-due-from" oninput="ro()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px"></label>
+    <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">to <input type="date" id="f-due-to" oninput="ro()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px"></label>
+    <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-hold" onchange="ro()" style="margin:0">Hold only</label>
+    <button class="btn btn-secondary btn-sm" onclick="resetOmsFilters()" title="Clear all filters">✕ Clear</button>
     <div class="tbar-sp"></div>
     <span style="font-size:12px;color:var(--text3)" id="o-count"></span>
   </div>
@@ -718,6 +756,16 @@ textarea{resize:vertical;min-height:60px;}
     <div class="fr f2">
       <div class="fg"><label>Commodity</label><input id="ocm" placeholder="Electronics, Machinery…"></div>
       <div class="fg"><label>Special Instructions</label><input id="ont" placeholder="Hazmat, temperature, fragile…"></div>
+    </div>
+    <!-- REQ-21: TMS Plan details — populated when the TMS has tendered and the
+         carrier has accepted. These fields are pulled live from tms_shipments.
+         The section stays hidden until a TMS shipment is linked. -->
+    <div id="om-tms-plan" style="display:none;margin-top:14px;padding:14px;border-radius:12px;border:1px solid #bfdbfe;background:linear-gradient(180deg,#eff6ff 0%,#f8faff 100%)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:800;color:#1e40af;letter-spacing:.6px;text-transform:uppercase">📦 TMS Plan — Tender Accepted</div>
+        <span id="om-tms-plan-status" style="font-size:10px;color:#1e3a8a;background:#dbeafe;padding:3px 8px;border-radius:10px;font-weight:700"></span>
+      </div>
+      <div id="om-tms-plan-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:12px"></div>
     </div>
   </div>
   <div class="modal-footer">
@@ -1171,10 +1219,36 @@ var ZoreeMiddleware = {
         return { mapped, ships };
       }
       case 'PUSH_SHIP_STATUS': {
-        var { error } = await this._tmsDb().from('shipments')
-          .update({status:'In Transit', shipped_at: payload.shippedAt}).eq('id', payload.tmsShipmentId);
-        if (error) throw error;
-        return {};
+        // REQ-23: the warehouse ship-confirm must flow through the
+        // middleware-exposed TMS ingest endpoint, not a direct DB
+        // write. The endpoint flips shipment → In Transit, each linked
+        // order → Shipped, records change_history on both sides, and
+        // emits SSE so the TMS Orders / Shipments pages refresh live.
+        // Direct-DB is kept as an offline fallback only.
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        var body = {
+          shipmentId: payload.tmsShipmentId,
+          orderIds: payload.orderIds || null,
+          shippedAt: payload.shippedAt,
+          sealNumber: payload.sealNumber || null,
+          source: 'oms-wms',
+        };
+        try {
+          var resp = await fetch(tmsApi + '/ingest/oms-ship-confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          var respBody = await resp.json().catch(function(){return {};});
+          if (!resp.ok) throw new Error(respBody.error || ('TMS ingest returned ' + resp.status));
+          return { via: 'tms-ingest', result: respBody };
+        } catch (ingestErr) {
+          console.warn('[PUSH_SHIP_STATUS] ingest endpoint unavailable, falling back to direct DB:', ingestErr.message);
+          var { error } = await this._tmsDb().from('shipments')
+            .update({status:'In Transit', shipped_at: payload.shippedAt}).eq('id', payload.tmsShipmentId);
+          if (error) throw error;
+          return { via: 'direct-db' };
+        }
       }
       case 'PUSH_POD_STATUS': {
         var { error } = await this._tmsDb().from('shipments')
@@ -1190,6 +1264,37 @@ var ZoreeMiddleware = {
           val:parseFloat(t.value_unit)||parseFloat(t.value)||0,
           fc:t.freight_class||null, nmfc:t.nmfc||null, hazmat:t.hazmat||false}));
         return { items };
+      }
+      // REQ-21: fetch a single TMS shipment's full tender-accept details
+      // (BOL / PRO / Seal / dock fields / service level / dates) so the
+      // OMS order's "TMS Plan" tab can show them. Goes through the TMS
+      // HTTP API (the middleware-exposed endpoint) first; falls back to
+      // the direct Supabase client only if the TMS API is unreachable.
+      case 'PULL_TMS_SHIPMENT_DETAILS': {
+        var sid = payload && payload.shipmentId;
+        if (!sid) return { shipment: null };
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        try {
+          var resp = await fetch(tmsApi + '/shipments?id=eq.' + encodeURIComponent(sid) + '&limit=1', {
+            method: 'GET', headers: { 'Content-Type': 'application/json' },
+          });
+          if (resp.ok) {
+            var body = await resp.json().catch(function(){return {};});
+            var arr = Array.isArray(body) ? body : (body.shipments || body.data || []);
+            var found = arr.find(function(s){ return s.id === sid; }) || arr[0] || null;
+            if (found) return { shipment: found, via: 'tms-api' };
+          }
+          // API reachable but shipment not found — still return the absence signal
+          if (resp.status === 200) return { shipment: null, via: 'tms-api' };
+        } catch (apiErr) {
+          console.warn('[PULL_TMS_SHIPMENT_DETAILS] TMS API unreachable, falling back to direct DB:', apiErr.message);
+        }
+        // Fallback: direct Supabase client (used only when the MW-exposed API is offline)
+        var { data, error } = await this._tmsDb().from('shipments')
+          .select('id,status,carrier,mode,service_level,pickup_date,delivery_date,dock_assigned,dock_door,dock_time,dock_load_start,dock_load_end,bol_number,pro_number,seal_number,notes')
+          .eq('id', sid).maybeSingle();
+        if (error) throw error;
+        return { shipment: data || null, via: 'direct-db' };
       }
       default: throw new Error('Unknown cmd: ' + cmd);
     }
@@ -1236,10 +1341,42 @@ var ZoreeMiddleware = {
       var pcs = (omsLines||[]).reduce((s,l) => s + l.qty, 0);
       var notes = omsOrder.notes || null;
       if (omsOrder.mode) notes = (notes ? notes + ' | ' : '') + 'MODE_CONSTRAINT:' + omsOrder.mode;
+      // REQ-17: resolve the origin location id into the real city/state/zip
+      // string. Previously we sent the raw LOC-... id, which meant the TMS
+      // order's "Ship From" ended up showing a location key instead of
+      // "College Park, GA 30337" etc. `locs` is the OMS locations cache
+      // populated at boot; fall back to the raw value if we can't resolve.
+      var locMatch = (typeof locs !== 'undefined' && Array.isArray(locs))
+        ? locs.find(function(l){ return l.id === omsOrder.orig; })
+        : null;
+      var originStr = null;
+      var originZipStr = null;
+      if (locMatch) {
+        var parts = [locMatch.city, locMatch.state].filter(Boolean).join(', ');
+        originStr = locMatch.zip ? (parts + ' ' + locMatch.zip) : parts;
+        originZipStr = locMatch.zip || null;
+      } else if (typeof omsOrder.orig === 'string' && omsOrder.orig) {
+        // If the caller already handed us a city/state string, keep it.
+        originStr = omsOrder.orig;
+        var zipMatch = omsOrder.orig.match(/\b(\d{5})\b/);
+        originZipStr = zipMatch ? zipMatch[1] : null;
+      }
+      // REQ-17: extract dest zip similarly so the TMS side gets both halves
+      // of the mapping populated.
+      var destZipStr = null;
+      if (typeof omsOrder.dest === 'string') {
+        var dzMatch = omsOrder.dest.match(/\b(\d{5})\b/);
+        destZipStr = dzMatch ? dzMatch[1] : null;
+      }
       var payload = {
         id: omsOrder.id, customer: custName || omsOrder.customer_id,
-        origin: omsOrder.orig || null, dest: omsOrder.dest,
+        origin: originStr, dest: omsOrder.dest,
+        originZip: originZipStr, destZip: destZipStr,
         weight: wt, pieces: pcs, commodity: omsOrder.comm || 'General',
+        // REQ-11: carry mode + service level across so the TMS planner can
+        // honour them (see REQ-09 / REQ-10).
+        shipMode: omsOrder.mode || null,
+        serviceLevel: omsOrder.priority || omsOrder.serviceLevel || null,
         ready: omsOrder.due || null, due: omsOrder.due || null,
         status: 'Unplanned', notes: notes, incoterms: omsOrder.inco || null, hazmat: false,
       };
@@ -1279,11 +1416,21 @@ var ZoreeMiddleware = {
   },
 
   // ─── 3. OMS → TMS: Ship confirmation (Stage 9→10) ──────────────────────
-  async pushShipStatus(tmsShipmentId) {
+  // REQ-23: called from confirmShip(). Sends the full ship-out payload
+  // through middleware so the TMS ingest endpoint can transition the
+  // shipment (→ In Transit, which lights the Picked Up rung) and every
+  // linked order (→ Shipped), and record change_history on both sides.
+  async pushShipStatus(tmsShipmentId, opts) {
     if (!tmsShipmentId) return { error: null };
+    opts = opts || {};
     try {
-      var { error: pollErr } = await this._dispatch('PUSH_SHIP_STATUS',
-        { tmsShipmentId, status: 'In Transit', shippedAt: new Date().toISOString() }, null).then(r=>({error:r.error})).catch(e=>({error:e}));
+      var { error: pollErr } = await this._dispatch('PUSH_SHIP_STATUS', {
+        tmsShipmentId,
+        status: 'In Transit',
+        shippedAt: opts.shippedAt || new Date().toISOString(),
+        sealNumber: opts.sealNumber || null,
+        orderIds:   opts.orderIds   || null,
+      }, null).then(r=>({error:r.error})).catch(e=>({error:e}));
       if (pollErr) throw pollErr;
       return { error: null };
     } catch(e) { return { error: e }; }
@@ -1743,12 +1890,29 @@ function updatePipelineCounts(){
 function ro(){
   var q=(document.getElementById('sq').value||'').toLowerCase();
   var cf=document.getElementById('fc').value;
+  // REQ-16: read the extra filter selectors. Defensive lookups so the
+  // function still works if the DOM hasn't caught up (e.g. first paint).
+  var fStage=(document.getElementById('f-stage')||{}).value||'';
+  var fMode =(document.getElementById('f-mode') ||{}).value||'';
+  var fSvc  =(document.getElementById('f-svc')  ||{}).value||'';
+  var fDueFrom=(document.getElementById('f-due-from')||{}).value||'';
+  var fDueTo  =(document.getElementById('f-due-to')  ||{}).value||'';
+  var fHold = !!((document.getElementById('f-hold')||{}).checked);
   // Populate customer filter
   var sel=document.getElementById('fc');
   if(sel.options.length<=1)custs.forEach(c=>{var o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
   var rows=orders.filter(o=>{
+    // Legacy KPI-driven stage filter (_sf) still wins if set.
     if(_sf>0&&o.stage!==_sf)return false;
     if(cf&&o.cust!==cf)return false;
+    // REQ-16: new filters. String equality for mode/svc/stage; inclusive
+    // range for due date; boolean for Hold.
+    if(fStage && String(o.stage||'')!==fStage)return false;
+    if(fMode && (o.mode||'')!==fMode)return false;
+    if(fSvc && (o.priority||o.serviceLevel||'')!==fSvc)return false;
+    if(fDueFrom && (o.due||'')<fDueFrom)return false;
+    if(fDueTo   && (o.due||'')>fDueTo)return false;
+    if(fHold && !o.hold)return false;
     if(q&&!(o.id+o.cust+(o.dest||'')+o.stage).toLowerCase().includes(q))return false;
     return true;
   });
@@ -1770,6 +1934,11 @@ function ro(){
     var tref=o.tmsShipId?`<span class="mono" style="color:var(--cyan);font-size:10px">${o.tmsShipId}</span>`:o.stage>=4?`<span class="mono" style="color:var(--purple);font-size:10px">${o.id}</span>`:'—';
     // Action button based on stage
     var a=stageAction(o);
+    // REQ-15: always-available "Copy" button duplicates the order into
+    // a new draft, regardless of the source order's stage. The copy
+    // reuses the source customer / origin / destination / mode /
+    // service level / dates / commodity / lines and assigns a fresh id.
+    var copyBtn = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();copyOrder('${o.id}')" title="Copy this order into a new draft">\u{1F4CB} Copy</button>`;
     return `<tr onclick="openStageModal('${o.id}')">
       <td><span class="mono" style="color:var(--amber);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();openOM('${o.id}')" title="Click to edit order">${o.id}</span>${o.po?`<div style="font-size:10px;color:var(--text3)">PO: ${o.po}</div>`:''}</td>
       <td><strong>${custName(o.cust)}</strong><div style="font-size:10px;color:var(--text3)">${o.mode||'TL'} · ${o.priority||'Standard'}</div></td>
@@ -1780,7 +1949,7 @@ function ro(){
       <td>${stgBadge(o.stage)}${o.hold?`<span class="stg s-hold" style="margin-left:4px">Hold</span>`:''}</td>
       <td>${bol}${o.pro?`<div class="mono" style="color:var(--text3);font-size:10px">PRO: ${o.pro}</div>`:''}</td>
       <td>${tref}</td>
-      <td onclick="event.stopPropagation()"><div class="acts">${a}</div></td>
+      <td onclick="event.stopPropagation()"><div class="acts">${a} ${copyBtn}</div></td>
     </tr>`;
   }).join('');
 }
@@ -1847,7 +2016,59 @@ function openOM(id){
   shipToClear();
   if (o && o.dest) populateShipToDropdown(o.dest);
   rnLines(o?.lines||[{itemId:'',desc:'',qty:1,wt:0}]);
+  // REQ-21: if this order has an associated TMS shipment, surface the
+  // full tender-accepted plan (shipment id, carrier, service level,
+  // pickup/delivery dates, dock door, dock load start/end, BOL, PRO,
+  // Seal). Otherwise hide the panel entirely.
+  try { populateOmTmsPlan(o); } catch(e) { console.warn('[populateOmTmsPlan]', e.message); }
   openM('m-o');
+}
+
+// REQ-21: render the TMS plan section on the OMS order modal. Routes
+// through the middleware layer (ZoreeMiddleware._dispatch) rather than
+// talking to the TMS database directly, so OMS↔TMS integration stays
+// consistent with the rest of the order flow (push / pull / status).
+async function populateOmTmsPlan(o){
+  var panel = document.getElementById('om-tms-plan');
+  var grid  = document.getElementById('om-tms-plan-grid');
+  var status= document.getElementById('om-tms-plan-status');
+  if(!panel || !grid) return;
+  if(!o || !o.tmsShipId){ panel.style.display='none'; return; }
+  grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text3);font-size:11px">Loading via middleware…</div>';
+  status.textContent = o.tmsShipId;
+  panel.style.display = 'block';
+  var ship = null;
+  try {
+    var resp = await ZoreeMiddleware._execDirect('PULL_TMS_SHIPMENT_DETAILS', { shipmentId: o.tmsShipId });
+    ship = resp && resp.shipment;
+  } catch(e) {
+    grid.innerHTML = '<div style="grid-column:1/-1;color:var(--red);font-size:11px">Could not load TMS plan: '+(e.message||e)+'</div>';
+    return;
+  }
+  if(!ship){ grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text3);font-size:11px">No TMS shipment found for '+o.tmsShipId+'</div>'; return; }
+  status.textContent = ship.id + ' · ' + (ship.status || 'Pending');
+  function cell(label, value){
+    var v = (value===null||value===undefined||value==='') ? '—' : value;
+    return '<div>'
+      +'<div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px">'+label+'</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--text);margin-top:2px;font-family:monospace">'+v+'</div>'
+      +'</div>';
+  }
+  grid.innerHTML = [
+    cell('Shipment ID', ship.id),
+    cell('Carrier', ship.carrier),
+    cell('Mode', ship.mode),
+    cell('Service Level', ship.service_level),
+    cell('Pickup Date', ship.pickup_date),
+    cell('Delivery Date', ship.delivery_date),
+    cell('Dock Door', ship.dock_door || ship.dock_assigned),
+    cell('Dock Number', ship.dock_assigned),
+    cell('Dock Load Start', ship.dock_load_start || ship.dock_time),
+    cell('Dock Load End', ship.dock_load_end),
+    cell('BOL Number', ship.bol_number),
+    cell('PRO Number', ship.pro_number),
+    cell('Seal Number', ship.seal_number),
+  ].join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2085,8 +2306,10 @@ async function svO(action){
     if(_eo){var ix=orders.findIndex(x=>x.id===_eo);if(ix>-1)orders[ix]=ord;}
     else orders.push(ord);
     cl('m-o');ro();updateBadges();updatePipelineCounts();
-    if(action==='book'){toast('✅ Order booked — '+id+' · Stage 2','tok');openAvail(id);}
-    else toast('📝 Draft saved — '+id,'tin');
+    // REQ-14: always surface the generated order number on the confirmation
+    // toast so users see the ID they need to track / reference the order.
+    if(action==='book'){toast('✅ Order '+id+' has been booked successfully — Stage 2','tok');openAvail(id);}
+    else toast('✅ Order '+id+' has been created (Draft)','tin');
   }catch(e){toast('❌ '+e.message,'ter');console.error(e);}
 }
 
@@ -2340,10 +2563,16 @@ async function confirmShip(){
     }
     await saveOrder(o);
     await logStage(o.id,9,10);
-    // ── Middleware: push ship status to TMS DB ────────────────────────
-    var mwRes = await ZoreeMiddleware.pushShipStatus(o.tmsShipId);
+    // ── Middleware: push ship status to TMS (via MW ingest endpoint) ──
+    // REQ-23: forward the order id (and seal if captured here) so the
+    // TMS can also flip the order status to Shipped and record history.
+    var mwRes = await ZoreeMiddleware.pushShipStatus(o.tmsShipId, {
+      shippedAt: o.shippedAt,
+      sealNumber: o.sealNum || null,
+      orderIds: [o.id],
+    });
     if(mwRes.error) console.warn('[confirmShip] TMS status push failed:', mwRes.error.message);
-    mwLog(mwRes.error ? '⚠ pushShipStatus failed for ' + o.tmsShipId : '→ pushShipStatus: ' + o.tmsShipId + ' → In Transit', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','shipped_at'], payload:{tmsShipmentId:o.tmsShipId, status:'In Transit', shippedAt:o.shippedAt}});
+    mwLog(mwRes.error ? '⚠ pushShipStatus failed for ' + o.tmsShipId : '→ pushShipStatus: ' + o.tmsShipId + ' → In Transit', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','shipped_at'], payload:{tmsShipmentId:o.tmsShipId, status:'In Transit', shippedAt:o.shippedAt, sealNumber:o.sealNum, orderIds:[o.id]}});
     cl('m-ship');rd();ro();ri();updateBadges();updatePipelineCounts();
     toast('🚛 Shipped — '+o.id+(o.tmsShipId?' · TMS → In Transit':''),'tok');
   }catch(e){toast('❌ '+e.message,'ter');}
@@ -2578,6 +2807,46 @@ async function toggleHold(id){
   o.hold=!o.hold;
   try{await saveOrder(o);ro();toast(o.hold?'⚠ Order placed on hold':'▶ Hold released','twn');}
   catch(e){o.hold=!o.hold;toast('❌ '+e.message,'ter');}
+}
+
+// REQ-16: reset every filter control to its default and re-render.
+function resetOmsFilters(){
+  var ids=['sq','fc','f-stage','f-mode','f-svc','f-due-from','f-due-to'];
+  for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]); if(el) el.value='';}
+  var hold=document.getElementById('f-hold'); if(hold) hold.checked=false;
+  _sf=0;
+  ro();
+}
+
+// REQ-15: Copy an existing order into a brand-new draft.
+// The copy inherits customer / origin / destination / mode / service
+// level / dates / commodity / notes / lines but gets a fresh id and
+// starts at Stage 1 (Draft) with stage log cleared.
+async function copyOrder(id){
+  var src=orders.find(x=>x.id===id);
+  if(!src){toast('Order not found: '+id,'ter');return;}
+  var newId='ORD-'+Date.now().toString().slice(-6);
+  // Clone, strip state that must not carry over (stage, bol/pro, tms shipment ref, hold, etc.)
+  var copy=JSON.parse(JSON.stringify(src));
+  copy.id=newId;
+  copy.stage=1;
+  copy.hold=false;
+  copy.bol=null;
+  copy.pro=null;
+  copy.tmsShipId=null;
+  copy.stageLog=[];
+  copy.po=src.po?src.po+' (copy)':'';
+  // Re-key line ids so we don't collide in the order_lines table.
+  if(Array.isArray(copy.lines)){
+    copy.lines=copy.lines.map((l,idx)=>({ ...l, line_num: idx+1 }));
+  }
+  try{
+    await saveOrder(copy);
+    if(Array.isArray(copy.lines)&&copy.lines.length) await saveLines(newId, copy.lines);
+    orders.push(copy);
+    ro();updateBadges();updatePipelineCounts();
+    toast('\u{1F4CB} Copied to new order '+newId+' (Draft)','tok');
+  }catch(e){toast('\u274C Copy failed: '+e.message,'ter');console.error('[copyOrder]',e);}
 }
 
 // ─── HELPERS ────────────────────────────────────

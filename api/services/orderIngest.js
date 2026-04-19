@@ -65,6 +65,9 @@ function omsPayloadToDbRow(o) {
   setIf('origin_zip',        o.originZip || o.origin_zip);
   setIf('dest_zip',          o.destZip || o.dest_zip);
   setIf('ship_mode',         o.shipMode || o.ship_mode);
+  // REQ-10 / REQ-11: carry service level from OMS → TMS so planning
+  // honours the selection made at order creation time.
+  setIf('service_level',     o.serviceLevel || o.service_level);
   setIf('commodity',         o.commodity);
   setIf('incoterms',         o.incoterms);
   // NOTE: actual schema column is po_number (not po_num). ref_num is not in

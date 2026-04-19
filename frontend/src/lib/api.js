@@ -157,6 +157,9 @@ export const DbApi = {
   planningParameters() {
     return api("/db/planning_parameters?q=select=*%26order=category.asc%26limit=100");
   },
+  dockLoadingDurations() {
+    return api("/db/dock_loading_durations?q=select=*%26order=mode.asc%26limit=50");
+  },
   documents() {
     return api("/db/documents?q=select=*%26order=created_at.desc%26limit=500");
   },
@@ -267,22 +270,55 @@ export const OmsApi = {
   },
 };
 
+// REQ-06: invoices now go through domain endpoints that run the tolerance
+// decision server-side. The generic /db/invoices proxy is kept as a
+// fallback for list reads (admin) but writes should use the new routes.
 export const InvoicesApi = {
-  list() {
-    return api("/db/invoices?q=select=*%26order=created_at.desc%26limit=500");
+  // List via the domain endpoint (finance | admin gated)
+  list(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.status)   qs.set("status", params.status);
+    if (params.carrier)  qs.set("carrier", params.carrier);
+    if (params.shipment) qs.set("shipment", params.shipment);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return api(`/invoices${suffix}`);
   },
+  // Submit a new invoice. Server runs the tolerance decision and
+  // returns { invoice, decision: { status, sentToAp, reason, variance, variancePct, tolerance* } }
+  submit(payload) {
+    return api("/invoices", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  // Manual override — finance/admin can force Approved/Rejected regardless
+  // of tolerance decision (e.g. accessorials or disputed adjustments).
+  approve(id, reason) {
+    return api(`/invoices/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+  reject(id, reason) {
+    return api(`/invoices/${encodeURIComponent(id)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+  sendToAp(id) {
+    return api(`/invoices/${encodeURIComponent(id)}/send-to-ap`, { method: "POST" });
+  },
+  // Back-compat wrappers
+  dispute(id, reason) { return InvoicesApi.reject(id, reason || "Disputed"); },
   save(invoice) {
-    if (invoice.id) return api(`/db/invoices/${encodeURIComponent(invoice.id)}`, { method: "PATCH", body: JSON.stringify(invoice) });
-    return api("/db/invoices", { method: "POST", body: JSON.stringify(invoice) });
+    if (invoice.id) {
+      // Legacy patch path — kept for any editing UX that still uses it.
+      return api(`/db/invoices/${encodeURIComponent(invoice.id)}`, { method: "PATCH", body: JSON.stringify(invoice) });
+    }
+    return InvoicesApi.submit(invoice);
   },
   remove(id) {
     return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "DELETE" });
-  },
-  approve(id) {
-    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) });
-  },
-  dispute(id) {
-    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status: "Disputed" }) });
   },
 };
 

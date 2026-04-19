@@ -47,6 +47,28 @@ router.post('/oms-orders', requireIngestKey, async (req, res) => {
   }
 });
 
+// ── POST /api/ingest/oms-ship-confirm ────────────────────────────
+// REQ-23: when the OMS warehouse module ship-confirms an order, the
+// middleware POSTs here. We update the linked TMS shipment to
+// 'In Transit' (which lights up the Picked Up rung in the shipment
+// timeline automatically) and every linked order to 'Shipped'. The
+// 'status' transitions are written to change_history on both sides
+// so REQ-20's history drawers show the warehouse ship-out as a
+// distinct event. No background job needed.
+//
+// Body shape:
+//   { shipmentId, orderIds?: [...], shippedAt?, sealNumber?, source?: 'oms-wms' }
+router.post('/oms-ship-confirm', requireIngestKey, async (req, res) => {
+  try {
+    const shipConfirm = require('../services/shipConfirm');
+    const result = await shipConfirm.applyShipConfirm(req.body || {});
+    res.status(202).json({ ok: true, ...result });
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ ok: false, error: err.message });
+  }
+});
+
 // ── GET /api/events/orders — Server-Sent Events ──────────────────
 // Clients open an EventSource here. Every ORDER_CREATED /
 // ORDER_UPDATED / ORDER_DELETED / OMS_SYNC_BATCH event on the in-
