@@ -1307,15 +1307,38 @@ var ZoreeMiddleware = {
   async _dispatch(cmd, payload, omsOrderId) {
     var hasQueue = await this._checkQueue();
     if (hasQueue) {
-      // Fire-and-forget — enqueue and return immediately
+      // Enqueue to mw_requests for audit / retry. Historically we
+      // returned here and let a background poller process the row,
+      // but that poller only runs every ~30–60 s, so a user who
+      // booked an order had to wait up to a minute before the TMS
+      // Orders page received the SSE event. The queue row is still
+      // written, but we ALSO fire _execDirect() immediately so the
+      // TMS sees the request inside ~1 s. If the direct path fails,
+      // the queue row survives for the poller to retry — no data
+      // loss, just a belt-and-suspenders hot path.
       var { requestId, error } = await this._enqueue(cmd, payload, omsOrderId);
       if (error) throw error;
       mwLog('📤 Queued → Middleware: ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
         flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
-        src: 'OMS', dst: 'MW', recordId: omsOrderId, rowCount: 1, payload
+        src: 'OMS', dst: 'MW', recordId: omsOrderId, rowCount: 1, payload, requestId
       });
-      // Return a stub result — Middleware will update OMS orders table when done
-      return { result: { queued: true, requestId }, error: null };
+      // Inline hot-path execution (fire-and-forget from the caller's POV).
+      try {
+        var inlineResult = await this._execDirect(cmd, payload);
+        mwLog('⚡ Inline → ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
+          flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
+          src: cmd.startsWith('PULL') ? 'TMS' : 'OMS',
+          dst: cmd.startsWith('PULL') ? 'OMS' : 'TMS',
+          recordId: omsOrderId, rowCount: 1, payload, requestId
+        });
+        return { result: { queued: true, inline: true, requestId, ...inlineResult }, error: null };
+      } catch (inlineErr) {
+        // Direct path failed — queued row stays behind so the
+        // background poller can retry. Caller still sees success.
+        console.warn('[_dispatch] inline ' + cmd + ' failed, falling back to queue poll:', inlineErr.message);
+        mwLog('⏳ Inline failed, will retry via queue: ' + inlineErr.message, false, { requestId });
+        return { result: { queued: true, inline: false, requestId }, error: null };
+      }
     } else {
       // No queue table — execute directly (legacy/setup mode)
       try {
@@ -1377,7 +1400,12 @@ var ZoreeMiddleware = {
         // honour them (see REQ-09 / REQ-10).
         shipMode: omsOrder.mode || null,
         serviceLevel: omsOrder.priority || omsOrder.serviceLevel || null,
-        ready: omsOrder.due || null, due: omsOrder.due || null,
+        // Fix: the ready-to-ship date was being populated from the due
+        // date, so TMS saw ready==due every time. Use the OMS "Ready to
+        // Ship Date" field (o.ready) as the primary source and fall
+        // back to the due date only when ready is blank.
+        ready: omsOrder.ready || omsOrder.due || null,
+        due:   omsOrder.due   || null,
         status: 'Unplanned', notes: notes, incoterms: omsOrder.inco || null, hazmat: false,
       };
       var { error: pollErr } = await this._dispatch('PUSH_ORDER_TO_TMS', payload, omsOrder.id).then(r=>({error:r.error})).catch(e=>({error:e}));
