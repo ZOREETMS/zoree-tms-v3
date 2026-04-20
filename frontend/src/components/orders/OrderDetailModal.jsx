@@ -1,5 +1,6 @@
 import React from "react";
 import OrderLinesEditor from "../OrderLinesEditor";
+import LocationFieldsEditor from "../LocationFieldsEditor";
 // API calls handled via props from parent (services layer)
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEMO_USERS } from "../../constants/orders";
 import { fmt$, constraintBadges, SdField, cityZipLookup } from "../../utils/orderUtils.jsx";
@@ -83,16 +84,25 @@ export default function OrderDetailModal({
               {o.shipment_id && <a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono" style={{ fontSize: 12, color: "var(--accent)", background: "var(--accent-glow)", padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(59,130,246,.2)", textDecoration: "none", cursor: "pointer" }}>{"\u2192"} {o.shipment_id}</a>}
             </div>
 
-            {/* Lane visual */}
+            {/* Lane visual — REQ-24: render the location Name on its own line
+                above the city/state/zip string when present. */}
             <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>Origin</div><div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{o.origin || "\u2014"}</div></div>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>Ship From</div>
+                  {o.ship_from_name && <div style={{ fontWeight: 700, fontSize: 14, marginTop: 4 }}>{o.ship_from_name}</div>}
+                  <div style={{ fontWeight: o.ship_from_name ? 500 : 700, fontSize: o.ship_from_name ? 13 : 15, marginTop: 2, color: o.ship_from_name ? "var(--text2)" : "inherit" }}>{o.origin || "\u2014"}</div>
+                </div>
                 <div style={{ flex: 1, display: "flex", alignItems: "center", padding: "0 10px" }}>
                   <div style={{ flex: 1, height: 3, background: "linear-gradient(90deg,var(--accent),var(--accent2))", borderRadius: 2 }} />
                   <div style={{ margin: "0 8px", fontSize: 18 }}>{"\ud83d\ude9b"}</div>
                   <div style={{ flex: 1, height: 3, background: "linear-gradient(90deg,var(--accent2),var(--accent))", borderRadius: 2 }} />
                 </div>
-                <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>Destination</div><div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{o.dest || "\u2014"}</div></div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>Ship To</div>
+                  {o.ship_to_name && <div style={{ fontWeight: 700, fontSize: 14, marginTop: 4 }}>{o.ship_to_name}</div>}
+                  <div style={{ fontWeight: o.ship_to_name ? 500 : 700, fontSize: o.ship_to_name ? 13 : 15, marginTop: 2, color: o.ship_to_name ? "var(--text2)" : "inherit" }}>{o.dest || "\u2014"}</div>
+                </div>
               </div>
             </div>
 
@@ -192,19 +202,26 @@ export default function OrderDetailModal({
                 </div>
               </div>
 
-              {/* Lane */}
+              {/* Lane — shared editor bound directly to the canonical
+                  shipFrom / shipTo shape held by OrdersPage's editForm. */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>{"\ud83d\uddfa\ufe0f"} Lane</div>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Origin City</label><input value={editForm.originCity || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, originCity: e.target.value }))} placeholder="e.g. Chicago" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>State</label><input value={editForm.originState || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, originState: e.target.value }))} placeholder="IL" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>ZIP</label><input value={editForm.originZip || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, originZip: e.target.value }))} placeholder="60601" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <LocationFieldsEditor
+                    label="Ship From"
+                    value={editForm.shipFrom}
+                    onChange={(next) => onEditFormChange((f) => ({ ...f, shipFrom: next }))}
+                    namePlaceholder="e.g. Chicago DC"
+                  />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Dest City</label><input value={editForm.destCity || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, destCity: e.target.value }))} placeholder="e.g. Dallas" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>State</label><input value={editForm.destState || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, destState: e.target.value }))} placeholder="TX" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>ZIP</label><input value={editForm.destZip || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, destZip: e.target.value }))} placeholder="75201" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                </div>
+
+                <LocationFieldsEditor
+                  label="Ship To"
+                  value={editForm.shipTo}
+                  onChange={(next) => onEditFormChange((f) => ({ ...f, shipTo: next }))}
+                  namePlaceholder="e.g. Dallas Warehouse"
+                />
               </div>
 
               {/* Freight Details */}

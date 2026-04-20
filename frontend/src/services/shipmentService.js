@@ -1,4 +1,5 @@
 import { DbApi, ShipmentsApi } from "../lib/api";
+import { emptyLocation, locationsToShipmentPatch } from "../types/location";
 
 /**
  * Generate a unique shipment ID.
@@ -11,9 +12,13 @@ export function generateShipmentId() {
  * Build a blank shipment object with defaults.
  */
 export function buildBlankShipment() {
+  // REQ-24 refactor — UI form state uses the canonical `shipFrom` /
+  // `shipTo` Location shape. The submit boundary (NewShipmentModal →
+  // createShipment) is responsible for mapping these to the DB columns
+  // via `locationsToShipmentPatch` so the form state stays UI-shaped.
   return {
-    origin: "",
-    dest: "",
+    shipFrom: emptyLocation(),
+    shipTo:   emptyLocation(),
     mode: "LTL",
     carrier: "",
     weight: 0,
@@ -81,4 +86,23 @@ export async function copyShipment(sourceShipment) {
 
 export async function deleteShipmentById(shipmentId) {
   return ShipmentsApi.remove(shipmentId);
+}
+
+/**
+ * REQ-24 — Persist ship-from / ship-to fields for a shipment.
+ *
+ * Takes two canonical Location objects ({name, city, state, zip}) and
+ * writes the composed origin/dest strings, zip columns, and name
+ * columns in a single PATCH. UI components MUST go through this
+ * function — they must not call DbApi.patch("shipments", ...) directly
+ * (CLAUDE_RULES #3 / #4 — no API calls from components).
+ *
+ * @param {string} shipmentId
+ * @param {{name:string,city:string,state:string,zip:string}} fromLoc
+ * @param {{name:string,city:string,state:string,zip:string}} toLoc
+ */
+export async function updateShipmentLocations(shipmentId, fromLoc, toLoc) {
+  if (!shipmentId) throw new Error("updateShipmentLocations: shipmentId is required");
+  const patch = locationsToShipmentPatch(fromLoc, toLoc);
+  return DbApi.patch("shipments", shipmentId, patch);
 }

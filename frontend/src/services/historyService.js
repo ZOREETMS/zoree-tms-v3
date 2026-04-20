@@ -36,6 +36,9 @@ const FIELD_LABELS = {
   shipment_id: "Shipment",
   origin_zip: "Origin ZIP",
   dest_zip: "Destination ZIP",
+  // REQ-24: human-friendly labels for the dedicated Location Name columns.
+  ship_from_name: "Ship From Name",
+  ship_to_name: "Ship To Name",
   hazmat: "Hazmat",
   preferred_carrier: "Preferred Carrier",
   excluded_carrier: "Excluded Carrier",
@@ -43,11 +46,19 @@ const FIELD_LABELS = {
   dedicated_equip: "Dedicated Equipment",
   no_contract_rate: "Spot Rate",
   notes: "Notes",
+  // REQ-02: line-item edits go through the dedicated /orders/:id/lines
+  // endpoint and are recorded with field='line_<N>' and the cascading
+  // parent-order totals as line_count.
+  line_count: "Line Count",
 };
 
 function prettyLabel(field) {
   if (!field) return "—";
-  return FIELD_LABELS[field] || field
+  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+  // REQ-02: 'line_<N>' → 'Line <N>' for the line-items audit rows.
+  const lineMatch = /^line_(\d+)$/.exec(field);
+  if (lineMatch) return `Line ${lineMatch[1]}`;
+  return field
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");

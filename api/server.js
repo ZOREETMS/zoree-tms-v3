@@ -20,6 +20,7 @@ const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
+const orderLinesAudit = require('./services/orderLinesAudit');
 const shipmentMutations = require('./services/shipmentMutations');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
@@ -1168,6 +1169,13 @@ app.post('/api/orders/:id/lines', async (req, res) => {
     const orderId = req.params.id;
     const lines = Array.isArray(req.body) ? req.body : (req.body ? [req.body] : []);
 
+    // REQ-02: snapshot current state BEFORE we mutate so we can write
+    // per-line diffs to change_history after the replace. Audit logic
+    // lives in services/orderLinesAudit.js per CLAUDE_RULES §1/§6.
+    const { beforeLines, beforeOrder } = await orderLinesAudit.snapshotBeforeLinesEdit({
+      dbSelect, orderId,
+    });
+
     // Step 1: Delete all existing lines for this order (service role to bypass RLS)
     await fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${encodeURIComponent(orderId)}`, {
       method: 'DELETE', headers: sbHeaders(null)
@@ -1175,24 +1183,24 @@ app.post('/api/orders/:id/lines', async (req, res) => {
 
     // Step 2: Insert new lines
     let results = [];
-    if (lines.length > 0) {
-      const rows = lines.map((line, i) => ({
-        id:           `${orderId}-L${(line.line_num || i + 1).toString().padStart(3,'0')}`,
-        order_id:     orderId,
-        line_num:     line.line_num || (i + 1),
-        item_id:      line.item_id || line.itemId || null,
-        description:  line.description || '',
-        qty_ordered:  parseInt(line.qty_ordered ?? line.qty) || 0,
-        unit_weight:  parseFloat(line.unit_weight ?? line.unitWt) || 0,
-        total_weight: parseFloat(line.total_weight ?? line.totalWt) || 0,
-        unit_value:   parseFloat(line.unit_weight ?? line.unitWt) || 0,   // actual DB column
-        total_value:  parseFloat(line.total_weight ?? line.totalWt) || 0, // actual DB column
-      }));
-      console.log('[Lines] Inserting rows:', JSON.stringify(rows));
+    const normalizedLines = lines.map((line, i) => ({
+      id:           `${orderId}-L${(line.line_num || i + 1).toString().padStart(3,'0')}`,
+      order_id:     orderId,
+      line_num:     line.line_num || (i + 1),
+      item_id:      line.item_id || line.itemId || null,
+      description:  line.description || '',
+      qty_ordered:  parseInt(line.qty_ordered ?? line.qty) || 0,
+      unit_weight:  parseFloat(line.unit_weight ?? line.unitWt) || 0,
+      total_weight: parseFloat(line.total_weight ?? line.totalWt) || 0,
+      unit_value:   parseFloat(line.unit_weight ?? line.unitWt) || 0,   // actual DB column
+      total_value:  parseFloat(line.total_weight ?? line.totalWt) || 0, // actual DB column
+    }));
+    if (normalizedLines.length > 0) {
+      console.log('[Lines] Inserting rows:', JSON.stringify(normalizedLines));
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/order_lines`, {
         method: 'POST',
         headers: { ...sbHeaders(null), 'Prefer': 'return=representation' },
-        body: JSON.stringify(rows)
+        body: JSON.stringify(normalizedLines)
       });
       const insText = await insRes.text();
       console.log('[Lines] Insert status:', insRes.status, '| response:', insText.slice(0,300));
@@ -1201,20 +1209,37 @@ app.post('/api/orders/:id/lines', async (req, res) => {
     }
 
     // Step 3: Update weight, pieces and line_count on parent order
-    const totalWeight = lines.reduce((s, l) => s + (parseFloat(l.total_weight ?? l.totalWt) || 0), 0);
-    const totalPieces = lines.reduce((s, l) => s + (parseInt(l.qty_ordered ?? l.qty) || 0), 0);
+    const totalWeight = normalizedLines.reduce((s, l) => s + (l.total_weight || 0), 0);
+    const totalPieces = normalizedLines.reduce((s, l) => s + (l.qty_ordered || 0), 0);
     const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
       method: 'PATCH',
       headers: sbHeaders(null),
-      body: JSON.stringify({ line_count: lines.length, weight: totalWeight, pieces: totalPieces })
+      body: JSON.stringify({ line_count: normalizedLines.length, weight: totalWeight, pieces: totalPieces })
     });
     if (!patchRes.ok) {
       const patchErr = await patchRes.text();
       console.error('[Lines] Order PATCH failed:', patchRes.status, patchErr);
     }
 
-    console.log(`[Lines] Order ${orderId}: replaced ${lines.length} lines, weight=${totalWeight}lbs, pieces=${totalPieces}`);
-    res.status(201).json({ lines: results, line_count: lines.length, weight: totalWeight, pieces: totalPieces });
+    // REQ-02: write change_history rows for the lines replace + the
+    // cascading parent-order totals. Delegated to orderLinesAudit so
+    // the route handler stays small (CLAUDE_RULES §6/§9).
+    await orderLinesAudit.recordLinesEdit({
+      history,
+      orderId,
+      beforeLines,
+      afterLines:  normalizedLines,
+      beforeOrder,
+      afterOrder:  beforeOrder ? {
+        weight:     totalWeight,
+        pieces:     totalPieces,
+        line_count: normalizedLines.length,
+      } : null,
+      user,
+    });
+
+    console.log(`[Lines] Order ${orderId}: replaced ${normalizedLines.length} lines, weight=${totalWeight}lbs, pieces=${totalPieces}`);
+    res.status(201).json({ lines: results, line_count: normalizedLines.length, weight: totalWeight, pieces: totalPieces });
   } catch (e) { console.error('[Lines] Error:', e.message); res.status(500).json({ error: e.message }); }
 });
 

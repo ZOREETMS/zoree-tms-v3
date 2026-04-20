@@ -9,7 +9,9 @@ import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/h
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
 import NewShipmentModal from "../components/shipments/NewShipmentModal";
-import { createShipment, copyShipment, deleteShipmentById } from "../services/shipmentService";
+import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations } from "../services/shipmentService";
+import LocationFieldsEditor from "../components/LocationFieldsEditor";
+import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
 import { confirmOrdersForShipment, unassignOrderAndCleanupShipment, unplanOrdersForShipmentRemoval } from "../services/shipmentOrderService";
 
@@ -131,6 +133,38 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   // add-order / unassign / invoice / status). Fetched on open.
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+
+  // REQ-24: inline edit state for the ship-from / ship-to blocks. The
+  // canonical {name, city, state, zip} shape lives in types/location.js;
+  // we hydrate it from the shipment row on every render so reopening
+  // the modal after an external refresh picks up the latest values.
+  const [locEdit, setLocEdit] = useState(false);
+  const [locSaving, setLocSaving] = useState(false);
+  const [fromLoc, setFromLoc] = useState(() => locationFromShipmentOrigin(ds));
+  const [toLoc,   setToLoc]   = useState(() => locationFromShipmentDest(ds));
+
+  async function saveLocations() {
+    setLocSaving(true);
+    try {
+      // Service layer owns the DB call — components don't touch DbApi
+      // directly (CLAUDE_RULES #3 / #4).
+      await updateShipmentLocations(ds.id, fromLoc, toLoc);
+      setLocEdit(false);
+      // Reuse the change-carrier refresh callback so the list reflects
+      // the new values. Falls through gracefully if not wired.
+      if (typeof onChangeCarrier === "function") { onClose(); onChangeCarrier(); }
+    } catch (err) {
+      alert("Failed to save locations: " + err.message);
+    } finally {
+      setLocSaving(false);
+    }
+  }
+
+  function cancelLocationEdit() {
+    setFromLoc(locationFromShipmentOrigin(ds));
+    setToLoc(locationFromShipmentDest(ds));
+    setLocEdit(false);
+  }
 
   // Load line items for all linked orders
   useEffect(() => {
@@ -274,20 +308,51 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                 </div>
               ) : null;
             })()}
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>ORIGIN</div>
-                <div style={{ fontWeight: 700, fontSize: 14, marginTop: 3 }}>{ds.origin || "—"}</div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Pickup: {ds.pickup_date || "—"}</div>
+            {/* REQ-24: ship-from / ship-to. Read-only view renders the
+                Name on its own line above the address; clicking ✏️ Edit
+                swaps in the shared LocationFieldsEditor and persists via
+                the service layer. */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>SHIP FROM</div>
+                  {!locEdit && (
+                    <button onClick={() => setLocEdit(true)} title="Edit ship-from and ship-to" style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 6, fontSize: 10, color: "var(--text3)", cursor: "pointer", padding: "2px 8px", fontFamily: "inherit" }}>✏️ Edit</button>
+                  )}
+                </div>
+                {locEdit ? (
+                  <div style={{ marginTop: 4 }}>
+                    <LocationFieldsEditor value={fromLoc} onChange={setFromLoc} layout="compact" />
+                  </div>
+                ) : (
+                  <>
+                    {ds.ship_from_name && <div style={{ fontWeight: 700, fontSize: 13, marginTop: 3 }}>{ds.ship_from_name}</div>}
+                    <div style={{ fontWeight: ds.ship_from_name ? 500 : 700, fontSize: ds.ship_from_name ? 12 : 14, marginTop: 2, color: ds.ship_from_name ? "var(--text2)" : "inherit" }}>{ds.origin || "—"}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Pickup: {ds.pickup_date || "—"}</div>
+                  </>
+                )}
               </div>
               <div style={{ textAlign: "center", paddingTop: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)" }}>{(ds.miles || 750).toLocaleString()} mi</div>
                 <span style={{ fontSize: 12, color: "var(--text3)" }}>{pct}% complete</span>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>DESTINATION</div>
-                <div style={{ fontWeight: 700, fontSize: 14, marginTop: 3 }}>{ds.dest || "—"}</div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Delivery: {ds.delivery_date || "—"}</div>
+              <div style={{ flex: 1, textAlign: locEdit ? "left" : "right" }}>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>SHIP TO</div>
+                {locEdit ? (
+                  <div style={{ marginTop: 4 }}>
+                    <LocationFieldsEditor value={toLoc} onChange={setToLoc} layout="compact" />
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      <button onClick={cancelLocationEdit} disabled={locSaving} style={{ flex: 1, padding: "5px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11, fontWeight: 600, color: "var(--text2)", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      <button onClick={saveLocations} disabled={locSaving} style={{ flex: 1, padding: "5px 10px", background: "#2563eb", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", opacity: locSaving ? 0.6 : 1 }}>{locSaving ? "Saving…" : "Save"}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {ds.ship_to_name && <div style={{ fontWeight: 700, fontSize: 13, marginTop: 3 }}>{ds.ship_to_name}</div>}
+                    <div style={{ fontWeight: ds.ship_to_name ? 500 : 700, fontSize: ds.ship_to_name ? 12 : 14, marginTop: 2, color: ds.ship_to_name ? "var(--text2)" : "inherit" }}>{ds.dest || "—"}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Delivery: {ds.delivery_date || "—"}</div>
+                  </>
+                )}
               </div>
             </div>
             <div style={{ height: 10, background: "var(--bg3)", borderRadius: 8 }}>
@@ -1172,8 +1237,18 @@ export default function ShipmentsPage() {
                   </a>
                 </div>
               </td>
-              <td className="text-sm">{s.origin || "—"}</td>
-              <td className="text-sm">{s.dest || "—"}</td>
+              <td className="text-sm">
+                {s.ship_from_name && (
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>{s.ship_from_name}</div>
+                )}
+                <div style={{ color: s.ship_from_name ? "var(--text3)" : "inherit" }}>{s.origin || "—"}</div>
+              </td>
+              <td className="text-sm">
+                {s.ship_to_name && (
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>{s.ship_to_name}</div>
+                )}
+                <div style={{ color: s.ship_to_name ? "var(--text3)" : "inherit" }}>{s.dest || "—"}</div>
+              </td>
               <td>
                 <span className={`badge ${s.mode === "LTL" ? "badge-blue" : "badge-green"}`}>
                   {s.mode || "—"}

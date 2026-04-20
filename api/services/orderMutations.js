@@ -1,10 +1,20 @@
+// Normalize free-text location strings (origin/dest) so trivial whitespace
+// or casing differences from different input paths (manual edit vs OMS push
+// vs middleware) don't produce phantom change_history rows where old/new
+// render identical. Returns null for empty input so the column nulls cleanly.
+function normalizeLocation(s) {
+  if (s === null || s === undefined) return null;
+  const cleaned = String(s).replace(/\s+/g, " ").trim().toUpperCase();
+  return cleaned || null;
+}
+
 function apiOrderToDbPatch(body) {
   const b = body || {};
   const patch = {};
 
   if ("customer" in b) patch.customer = b.customer || null;
-  if ("origin" in b) patch.origin = b.origin || null;
-  if ("destination" in b || "dest" in b) patch.dest = b.destination || b.dest || null;
+  if ("origin" in b) patch.origin = normalizeLocation(b.origin);
+  if ("destination" in b || "dest" in b) patch.dest = normalizeLocation(b.destination || b.dest);
   if ("weight" in b) patch.weight = Number(b.weight) || 0;
   if ("pieces" in b) patch.pieces = parseInt(b.pieces, 10) || 0;
   if ("shipMode" in b || "ship_mode" in b) patch.ship_mode = b.shipMode || b.ship_mode || null;

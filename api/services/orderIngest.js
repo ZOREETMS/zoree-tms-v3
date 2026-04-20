@@ -22,6 +22,45 @@
 const db = require('./supabase');
 const { bus, EVENTS } = require('./eventBus');
 
+// REQ-24: helpers for upserting line items alongside the order header.
+// Kept local — lines are only ever pushed in through the OMS ingest path,
+// so there's no shared service worth factoring out yet (CLAUDE_RULES §6).
+function normalizeOmsLine(orderId, line, idx) {
+  const lineNum = line.line_num || line.lineNum || (idx + 1);
+  const qty = Number(line.qty_ordered ?? line.qty) || 0;
+  const unitWt = Number(line.unit_weight ?? line.unitWt ?? line.wt) || 0;
+  const unitVal = Number(line.unit_value ?? line.unitValue ?? line.val) || 0;
+  return {
+    id:           `${orderId}-L${String(lineNum).padStart(3, '0')}`,
+    order_id:     orderId,
+    line_num:     lineNum,
+    item_id:      line.item_id || line.itemId || null,
+    description:  line.description || line.desc || line.itemId || '',
+    qty_ordered:  qty,
+    unit_weight:  unitWt,
+    total_weight: Number(line.total_weight ?? line.totalWt) || (qty * unitWt),
+    unit_value:   unitVal,
+    total_value:  Number(line.total_value ?? line.totalVal) || (qty * unitVal),
+  };
+}
+
+async function replaceOrderLines(orderId, rawLines, tenantConfig) {
+  const normalized = (rawLines || []).map((l, i) => normalizeOmsLine(orderId, l, i));
+  const client = db.getClient(tenantConfig);
+  // Replace-in-place: delete prior lines, then insert the new set. This
+  // mirrors the POST /api/orders/:id/lines handler in api/server.js so
+  // OMS-pushed orders and UI-edited orders end up with identical
+  // line_count / weight / pieces semantics.
+  const { error: delErr } = await client.from('order_lines').delete().eq('order_id', orderId);
+  if (delErr) throw new Error(`[DB] order_lines delete failed: ${delErr.message}`);
+  if (normalized.length === 0) return { count: 0, totalWeight: 0, totalPieces: 0 };
+  const { error: insErr } = await client.from('order_lines').insert(normalized);
+  if (insErr) throw new Error(`[DB] order_lines insert failed: ${insErr.message}`);
+  const totalWeight = normalized.reduce((s, l) => s + (l.total_weight || 0), 0);
+  const totalPieces = normalized.reduce((s, l) => s + (l.qty_ordered || 0), 0);
+  return { count: normalized.length, totalWeight, totalPieces };
+}
+
 // ── Validation ────────────────────────────────────────────────────
 function validateOmsOrder(o, idx) {
   const errs = [];
@@ -119,6 +158,31 @@ async function ingestOmsBatch(batch, tenantConfig = null) {
   for (const o of batch.orders) {
     const row = omsPayloadToDbRow(o);
     const saved = await db.dbUpsert('orders', row, 'id', tenantConfig);
+
+    // REQ-24: if the OMS payload includes line items, replace the TMS
+    // order_lines for this id. Recalc weight / pieces / line_count on
+    // the header from the actual line totals so the OMS-submitted
+    // values don't silently drift from what's in order_lines.
+    let lineSummary = null;
+    if (Array.isArray(o.lines) && o.lines.length > 0) {
+      try {
+        lineSummary = await replaceOrderLines(saved.id, o.lines, tenantConfig);
+        await db.dbUpdate('orders', saved.id, {
+          line_count: lineSummary.count,
+          weight:     lineSummary.totalWeight,
+          pieces:     lineSummary.totalPieces,
+        }, tenantConfig);
+        saved.line_count = lineSummary.count;
+        saved.weight     = lineSummary.totalWeight;
+        saved.pieces     = lineSummary.totalPieces;
+      } catch (lineErr) {
+        // Don't fail the whole ingest on a line-upsert error — the
+        // header is already saved and we want the push to proceed.
+        // Caller sees the error via the SSE event metadata.
+        console.error('[orderIngest] line upsert failed for', saved.id, lineErr.message);
+      }
+    }
+
     results.push(saved);
     bus.emit(EVENTS.ORDER_CREATED, {
       id: saved.id,
@@ -129,6 +193,7 @@ async function ingestOmsBatch(batch, tenantConfig = null) {
       sync_source: saved.sync_source || 'oms',
       auto_synced_at: saved.auto_synced_at,
       oms_order_ref: saved.oms_order_ref,
+      line_count: lineSummary ? lineSummary.count : null,
     });
   }
 

@@ -37,6 +37,13 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
     mode: plan.mode || 'LTL',
     origin: plan.origin,
     dest: plan.destination,
+    // REQ-24: carry the human-friendly ship-from / ship-to name (and the
+    // matching ZIPs) onto the shipment row. Legacy plans may not send
+    // these fields yet, so default to null.
+    origin_zip:     plan.originZip    || null,
+    dest_zip:       plan.destZip      || null,
+    ship_from_name: plan.shipFromName || null,
+    ship_to_name:   plan.shipToName   || null,
     weight: plan.totalWeight || 0,
     pieces: plan.totalPieces || 0,
     status: 'Planned',

@@ -61,6 +61,20 @@ function stringify(v) {
   try { return JSON.stringify(v); } catch (_) { return String(v); }
 }
 
+// Equality check used to decide whether a field actually changed. Normalizes
+// strings (collapse internal whitespace, trim, upper-case) so that trivial
+// representation differences between two writers (e.g. the OMS push path vs
+// the manual edit form) don't produce a phantom diff row where old and new
+// render identically in the History tab.
+function valuesEqualForDiff(a, b) {
+  const sa = stringify(a);
+  const sb = stringify(b);
+  if (sa === sb) return true;
+  if (sa === null || sb === null) return false;
+  const norm = (s) => s.replace(/\s+/g, ' ').trim().toUpperCase();
+  return norm(sa) === norm(sb);
+}
+
 function ensureEntity(t)  { if (!ALLOWED_ENTITIES.has(t)) throw new Error(`Invalid entityType '${t}'`); }
 function ensureAction(a)  { if (!ALLOWED_ACTIONS.has(a)) throw new Error(`Invalid action '${a}'`); }
 
@@ -118,7 +132,7 @@ async function recordFieldDiffs({ entityType, entityId, before, after, user, fie
   for (const key of keys) {
     const b = before[key];
     const a = after[key];
-    if (stringify(b) === stringify(a)) continue;
+    if (valuesEqualForDiff(b, a)) continue;
     rows.push(buildRow({
       entityType,
       entityId,

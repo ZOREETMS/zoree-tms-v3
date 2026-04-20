@@ -14,6 +14,14 @@ function dbToOrder(r) {
     destination:     r.dest,
     originZip:       r.origin_zip || null,
     destZip:         r.dest_zip || null,
+    // REQ-24: surface the dedicated ship-from / ship-to name columns so the
+    // frontend can render them as their own field. `ship_from_name` is
+    // preserved as a snake_case alias for code paths (like the OMS push)
+    // that already key off that shape.
+    shipFromName:    r.ship_from_name || null,
+    shipToName:      r.ship_to_name   || null,
+    ship_from_name:  r.ship_from_name || null,
+    ship_to_name:    r.ship_to_name   || null,
     weight:          r.weight,
     pieces:          r.pieces,
     shipMode:        r.ship_mode || null,
@@ -46,6 +54,12 @@ function orderToDb(o) {
     dest:              o.destination,
     origin_zip:        o.originZip || null,
     dest_zip:          o.destZip || null,
+    // REQ-24: accept either casing — the frontend sends snake_case on
+    // patches and camelCase in some create flows, and we shouldn't drop
+    // the value either way. `undefined` means "caller didn't touch this
+    // field" so we preserve it; an explicit empty string becomes null.
+    ship_from_name:    (o.ship_from_name !== undefined ? o.ship_from_name : o.shipFromName) ?? null,
+    ship_to_name:      (o.ship_to_name   !== undefined ? o.ship_to_name   : o.shipToName)   ?? null,
     weight:            parseInt(String(o.weight || 0).replace(/,/g, '')) || 0,
     pieces:            parseInt(o.pieces) || 0,
     ship_mode:         o.shipMode || null,

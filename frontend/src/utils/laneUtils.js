@@ -34,6 +34,11 @@ export function buildLaneGroups(selectedOrders) {
         destination: o.dest || "",
         originZip: normalizeZip(o.origin_zip || o.origin),
         destZip: normalizeZip(o.dest_zip || o.dest),
+        // REQ-24: carry the ship-from / ship-to Location Name through lane
+        // aggregation so shipments created by the bulk planner inherit the
+        // same name that lives on the OMS order.
+        shipFromName: o.ship_from_name || o.shipFromName || "",
+        shipToName:   o.ship_to_name   || o.shipToName   || "",
         freightClass: o.freight_class || "70",
         totalWeight: 0,
         totalPieces: 0,
@@ -59,6 +64,9 @@ export function buildSingleOrderLane(order) {
     destination: order.dest || "",
     originZip: normalizeZip(order.origin_zip || order.origin),
     destZip: normalizeZip(order.dest_zip || order.dest),
+    // REQ-24: keep the Location Name on single-order lanes too.
+    shipFromName: order.ship_from_name || order.shipFromName || "",
+    shipToName:   order.ship_to_name   || order.shipToName   || "",
     freightClass: order.freight_class || "70",
     totalWeight: Number(order.weight || 0),
     totalPieces: Number(order.pieces || 0),

@@ -4,6 +4,16 @@
  */
 
 import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
+import { buildAddressString } from "../types/location";
+// REQ-28: per-order planning failure reasons. Enum lives in types/; the
+// collector module owns the "how we accumulate + attribute failures"
+// plumbing so bulkPlanOrders doesn't have to hold it inline.
+import { FAILURE_CODES } from "../types/planningFailure";
+import {
+  createFailureCollector,
+  dropReasonForLane,
+  mapBackendErrorsToOrders,
+} from "./bulkPlanFailureCollector";
 
 // ── REQ-01: Auto order sync — SSE subscription ─────────────────────
 // Browser opens an EventSource to /api/events/orders. Any order
@@ -149,14 +159,19 @@ export function invalidateQuoteCache() {
 /**
  * Normalize an origin/destination string from city, state, zip parts.
  * Uppercases city and state to ensure consistent data storage.
+ *
+ * REQ-24 refactor: this is now a thin wrapper around the canonical
+ * `buildAddressString` in types/location.js. Kept in place so existing
+ * callers (OrdersPage.jsx) don't need to change. Prefer importing
+ * `buildAddressString` directly from `src/types/location` in new code.
+ *
  * @param {string} city
  * @param {string} state
  * @param {string} zip
  * @returns {string} e.g. "ATLANTA, GA 30350"
  */
 export function buildLocationString(city, state, zip) {
-  const parts = [city?.toUpperCase(), state?.toUpperCase()].filter(Boolean).join(", ");
-  return zip ? `${parts} ${zip}` : parts;
+  return buildAddressString({ city, state, zip });
 }
 
 /**
@@ -743,8 +758,14 @@ export function buildShipmentGroups(orders, baseLane, maxWeight = 15000) {
  */
 export async function bulkPlanOrders(unplannedOrders, existingShipments = [], dockEnabled = true, dockConfigs = []) {
   if (!unplannedOrders.length) {
-    return { created: 0, updated: 0, cost: 0, noQuotes: true };
+    return { created: 0, updated: 0, cost: 0, noQuotes: true, failures: [] };
   }
+
+  // REQ-28: accumulate per-order failure reasons. See
+  // services/bulkPlanFailureCollector.js — every drop point below calls
+  // `failures.add(orderId, code, details?)` (or `.addMany(orders, code)`
+  // for shipment-group-level drops) instead of silently returning null.
+  const failures = createFailureCollector();
 
   const { LTL_MAX_WEIGHT: LTL_MAX, TL_MAX_WEIGHT: TL_MAX } = await import("../constants/orders.js");
   const { calcDates } = await import("./bulkPlanService.js");
@@ -811,7 +832,17 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
     // Handle each rated group sequentially — the subset-rerating code path
     // is rare and keeps nicer flow when serial, avoiding over-parallelism.
     for (const { sg, readyD, dueD, bestQuote } of initialRates) {
-      if (!bestQuote) continue;
+      if (!bestQuote) {
+        // REQ-28: no carrier returned a quote for this shipment-group lane.
+        // `dropReasonForLane` picks MODE/SERVICE_LEVEL/NO_QUOTE based on the
+        // constraints the group was carrying, so the UI shows the most
+        // specific reason available.
+        failures.addMany(
+          sg.orders,
+          dropReasonForLane(laneModeConstraint, laneServiceLevelConstraint),
+        );
+        continue;
+      }
 
       const transit = bestQuote.transitDays;
 
@@ -841,9 +872,14 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
           const subReadyD = bestSubset.map(s => s.ready).filter(Boolean).sort().reverse()[0] || "";
           const subDueD = bestSubset.map(s => s.due).filter(Boolean).sort()[0] || "";
           const { bestQuote: subBest } = await fetchCarrierQuotes(subsetLane, calcDates, subDueD, subReadyD);
-          if (subBest) {
+          if (!subBest) {
+            // REQ-28: subset couldn't be rated — mark each order as no quote.
+            failures.addMany(bestSubset, FAILURE_CODES.NO_CARRIER_QUOTE);
+          } else {
             const dates = calcDates(subBest, subDueD, subReadyD);
-            if (!dates.error) {
+            if (dates.error) {
+              failures.addMany(bestSubset, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+            } else {
               lanePlans.push({
                 laneKey: subsetLane.laneKey, origin: subsetLane.origin, destination: subsetLane.destination,
                 originZip: subsetLane.originZip, destZip: subsetLane.destZip,
@@ -862,9 +898,16 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
           const remainderResults = await Promise.all(remainder.map(async (order) => {
             const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
             const { bestQuote: indBest } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
-            if (!indBest) return null;
+            if (!indBest) {
+              // REQ-28: the individual re-rate returned no usable carrier.
+              failures.add(order.id, FAILURE_CODES.NO_CARRIER_QUOTE);
+              return null;
+            }
             const dates = calcDates(indBest, order.due || "", order.ready || "");
-            if (dates.error) return null;
+            if (dates.error) {
+              failures.add(order.id, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+              return null;
+            }
             return {
               laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
               originZip: singleLane.originZip, destZip: singleLane.destZip,
@@ -881,9 +924,15 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
           const indivResults = await Promise.all(sg.orders.map(async (order) => {
             const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
             const { bestQuote: indBest } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "");
-            if (!indBest) return null;
+            if (!indBest) {
+              failures.add(order.id, FAILURE_CODES.NO_CARRIER_QUOTE);
+              return null;
+            }
             const dates = calcDates(indBest, order.due || "", order.ready || "");
-            if (dates.error) return null;
+            if (dates.error) {
+              failures.add(order.id, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+              return null;
+            }
             return {
               laneKey: singleLane.laneKey, origin: singleLane.origin, destination: singleLane.destination,
               originZip: singleLane.originZip, destZip: singleLane.destZip,
@@ -899,7 +948,10 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
       } else {
         // Dates compatible or single order — plan as-is
         const dates = calcDates(bestQuote, dueD, readyD);
-        if (!dates.error) {
+        if (dates.error) {
+          // REQ-28: the single best quote's transit doesn't honour ready/due.
+          failures.addMany(sg.orders, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+        } else {
           lanePlans.push({
             laneKey: sg.lane.laneKey, origin: sg.lane.origin, destination: sg.lane.destination,
             originZip: sg.lane.originZip, destZip: sg.lane.destZip,
@@ -920,7 +972,9 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
   const allPlans = laneResults.flat();
 
   if (!allPlans.length) {
-    return { created: 0, updated: 0, cost: 0, noQuotes: true };
+    // REQ-28: even with zero shipments created, hand every failure back so
+    // the UI can render reasons and the Excel export has data.
+    return { created: 0, updated: 0, cost: 0, noQuotes: true, failures: failures.list() };
   }
 
   // Auto-assign dock doors to all plans via dock service
@@ -938,11 +992,30 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
   try {
     const execRes = await BulkPlanApi.execute(allPlans);
     const shipments = execRes?.shipments || [];
+    const backendErrors = Array.isArray(execRes?.errors) ? execRes.errors : [];
+
+    // REQ-28: correlate backend errors back to orders via the collector.
+    // mapBackendErrorsToOrders handles the laneKey → orderIds lookup and
+    // skips orders that survived on a different shipment.
+    const plannedOrderIds = new Set(
+      shipments.flatMap((sh) => Array.isArray(sh.order_ids) ? sh.order_ids : [])
+    );
+    const backendFailures = mapBackendErrorsToOrders({
+      backendErrors,
+      plans: allPlans,
+      plannedOrderIds,
+    });
+    for (const f of backendFailures) failures.add(f.orderId, f.code, f.details);
+
     return {
       created: shipments.length,
       updated: execRes?.ordersUpdated || 0,
       cost: shipments.reduce((s, sh) => s + Number(sh.total_cost || 0), 0),
-      shipments, plans: allPlans, noQuotes: false,
+      shipments,
+      plans: allPlans,
+      failures: failures.list(),
+      backendErrors,
+      noQuotes: false,
     };
   } catch (err) {
     throw err;

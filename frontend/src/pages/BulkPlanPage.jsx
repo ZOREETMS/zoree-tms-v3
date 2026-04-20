@@ -6,6 +6,11 @@ import { createShipmentsFromRoute, findMatchingRoute, bulkPlanOrders } from "../
 import { isFeatureEnabled } from "../services/planningParametersService";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import OrderEditModal from "../components/bulk-plan/OrderEditModal";
+// REQ-27 / REQ-28 shared primitives
+import Toast from "../components/ui/Toast";
+import useToast from "../hooks/useToast";
+import BulkPlanResultsPanel from "../components/bulk-plan/BulkPlanResultsPanel";
+import { buildBulkPlanResults } from "../services/bulkPlanResultsService";
 
 /* ── helpers ── */
 function fmt$(n) {
@@ -17,8 +22,10 @@ export default function BulkPlanPage() {
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState({ text: "", type: "" });
-  const [results, setResults] = useState(null);
+  // REQ-27: toast state owned by useToast (configurable duration + dismiss).
+  const { message, toast: toastEmit, dismiss: dismissMessage } = useToast();
+  const [results, setResults] = useState(null);       // legacy success banner
+  const [planResults, setPlanResults] = useState(null); // REQ-28 pass/fail rollup
   const [planSummary, setPlanSummary] = useState(null);
   const [editOrder, setEditOrder] = useState(null);
 
@@ -26,11 +33,12 @@ export default function BulkPlanPage() {
   const [q, setQ] = useState("");
   const [customerFilter, setCustomerFilter] = useState("All");
 
+  // Backward-compatible wrapper. Existing call sites pass (text, type,
+  // autoClose:boolean). autoClose=true collapses to an 8s auto-dismiss,
+  // autoClose=false means the toast stays until the user clicks ×.
   function toast(text, type = "info", autoClose = false) {
-    setMessage({ text, type });
-    if (autoClose) setTimeout(() => setMessage({ text: "", type: "" }), 8000);
+    toastEmit(text, type, { durationMs: autoClose ? 8000 : 0 });
   }
-  function dismissMessage() { setMessage({ text: "", type: "" }); }
 
   /* ── unplanned orders ── */
   const unplanned = useMemo(() => {
@@ -111,8 +119,9 @@ export default function BulkPlanPage() {
     if (!selected.length) { toast("No orders selected.", "warning"); return; }
 
     setBusy(true);
-    setMessage({ text: "", type: "" });
+    dismissMessage();
     setResults(null);
+    setPlanResults(null); // REQ-28: clear previous pass/fail panel
     const planStartTime = Date.now();
 
     try {
@@ -156,11 +165,9 @@ export default function BulkPlanPage() {
         toast(`Planning ${remaining.length} order(s)...`, "info", true);
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
         bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs);
-        if (bulkResult.noQuotes && routePlanned.length === 0) {
-          toast("No carrier quotes available for selected orders.", "error");
-          setBusy(false);
-          return;
-        }
+        // REQ-28: do NOT bail out on noQuotes — we want to render the pass/fail
+        // panel even when 0 shipments got created, so the user sees WHY. The
+        // panel's downloadable .xlsx includes the per-order reasons.
       }
 
       // ── Step 3: Build unified summary (same format as OrdersPage) ──
@@ -178,6 +185,17 @@ export default function BulkPlanPage() {
       setSelectedIds(new Set());
       await refreshData();
 
+      // REQ-28: always build the pass/fail rollup so the user can download
+      // a results file — even when 0 shipments were created.
+      const rollup = buildBulkPlanResults({
+        selectedOrders: selected,
+        plans: bulkPlans,
+        shipments: allShipments,
+        failures: bulkResult?.failures || [],
+        backendErrors: bulkResult?.backendErrors || [],
+      });
+      setPlanResults({ ...rollup, _elapsedMs: Date.now() - planStartTime });
+
       if (allShipments.length > 0) {
         setPlanSummary({
           isCombined: true,
@@ -190,7 +208,12 @@ export default function BulkPlanPage() {
           siblings: selected,
           elapsedMs: Date.now() - planStartTime,
         });
-        setMessage({ text: "", type: "" });
+        dismissMessage();
+      } else if (rollup.failedCount > 0) {
+        toast(
+          `Planning failed for ${rollup.failedCount} order(s). See reasons below and download the results file.`,
+          "error",
+        );
       } else {
         toast("Planning completed but no shipments were created. Check API logs.", "error");
       }
@@ -225,19 +248,19 @@ export default function BulkPlanPage() {
       </div>
 
       <div className="page-content">
-        {/* Toast */}
-        {message.text && (
-          <div
-            style={{
-              padding: "10px 16px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8,
-              background: message.type === "error" ? "#fee2e2" : message.type === "success" ? "#dcfce7" : message.type === "warning" ? "#fef9c3" : "#dbeafe",
-              color: message.type === "error" ? "#991b1b" : message.type === "success" ? "#14532d" : message.type === "warning" ? "#854d0e" : "#1e3a8a",
-              border: `1px solid ${message.type === "error" ? "#fca5a5" : message.type === "success" ? "#86efac" : message.type === "warning" ? "#fde047" : "#93c5fd"}`,
-            }}
-          >
-            <span style={{ flex: 1 }}>{message.text}</span>
-            <button onClick={dismissMessage} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "inherit", opacity: 0.6, padding: "0 4px", lineHeight: 1 }} title="Dismiss">✕</button>
-          </div>
+        {/* REQ-27: reusable Toast component owned by useToast. */}
+        <Toast
+          text={message.text}
+          type={message.type}
+          dismissible={message.dismissible}
+          onClose={dismissMessage}
+        />
+
+        {/* REQ-28: pass/fail rollup with Download Results (.xlsx). Rendered
+            whether or not shipments were created, so "0 shipments created"
+            is replaced by a real reason breakdown. */}
+        {planResults && (
+          <BulkPlanResultsPanel results={planResults} elapsedMs={planResults._elapsedMs} />
         )}
 
         {/* Results banner */}

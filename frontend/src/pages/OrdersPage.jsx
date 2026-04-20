@@ -5,6 +5,7 @@ import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
 import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes, subscribeOrderChanges, normalizeMode, commonModeConstraint, normalizeServiceLevel, commonServiceLevelConstraint } from "../services/ordersService";
+import { emptyLocation, locationFromOrderOrigin, locationFromOrderDest, locationsToShipmentPatch } from "../types/location";
 import { getOrderHistory } from "../services/historyService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
@@ -15,6 +16,13 @@ import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 import AddToShipmentModal from "../components/orders/AddToShipmentModal";
 import { addOrderToShipment as addOrderToShipmentSvc } from "../services/shipmentOrderService";
+// REQ-27 / REQ-28 shared primitives
+import Toast from "../components/ui/Toast";
+import useToast from "../hooks/useToast";
+import { TOAST_DURATIONS } from "../constants/toast";
+import BulkPlanResultsPanel from "../components/bulk-plan/BulkPlanResultsPanel";
+import { buildBulkPlanResults } from "../services/bulkPlanResultsService";
+import { describeFailure } from "../services/planningFailureCatalog";
 
 export default function OrdersPage() {
   const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
@@ -29,7 +37,10 @@ export default function OrdersPage() {
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [busyId, setBusyId] = useState("");
-  const [message, setMessage] = useState({ text: "", type: "" });
+  // REQ-27: toast state is now owned by the useToast hook, which supports
+  // configurable auto-dismiss durations and manual close via the × button.
+  const { message, toast: toastEmit, dismiss: dismissToast } = useToast();
+  const [planResults, setPlanResults] = useState(null); // REQ-28: bulk-plan pass/fail rollup for inline panel
   const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [sortCol, setSortCol] = useState("id");
   const [sortAsc, setSortAsc] = useState(false);
@@ -153,8 +164,12 @@ export default function OrdersPage() {
     }
   }
   const [newOrderForm, setNewOrderForm] = useState({
-    customer: "", originCity: "", originState: "", originZip: "",
-    destCity: "", destState: "", destZip: "", commodity: "", incoterms: "",
+    customer: "",
+    // REQ-24: ship-from / ship-to use the canonical Location shape
+    // `{ name, city, state, zip }` from src/types/location.js.
+    shipFrom: emptyLocation(),
+    shipTo: emptyLocation(),
+    commodity: "", incoterms: "",
     ready: "", due: "", preferredCarrier: "", excludedCarrier: "",
     noConsolidate: false, dedicatedEquip: false, hazmat: false,
   });
@@ -164,9 +179,11 @@ export default function OrdersPage() {
   const [planModal, setPlanModal] = useState(null);
   const [planSummary, setPlanSummary] = useState(null); // after shipment creation
 
-  function toast(text, type = "info") {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: "", type: "" }), 5000);
+  // Thin wrapper so existing call sites stay backward-compatible. Pass
+  // `opts = { durationMs, dismissible }` for custom behaviour. REQ-27
+  // callers (order created) pass TOAST_DURATIONS.ORDER_CREATED.
+  function toast(text, type = "info", opts = {}) {
+    toastEmit(text, type, opts);
   }
 
   /* ── Customer list ── */
@@ -370,6 +387,22 @@ export default function OrdersPage() {
     finally { setBusyId(""); }
   }
 
+  // REQ-02: single entry point for refreshing the History tab cache from
+  // the backend. Used by openDetail (initial load), saveLines, and
+  // saveOrderEdit so any mutation that writes change_history rows shows
+  // up in the modal without a page refresh, and so we don't maintain a
+  // second locally-synthesized copy alongside the backend rows
+  // (CLAUDE_RULES §10 / DB rules: avoid duplicate sources of truth).
+  const reloadOrderHistory = useCallback(async (orderId) => {
+    if (!orderId) return;
+    try {
+      const rows = await getOrderHistory(orderId);
+      setOrderChangeLog((prev) => ({ ...prev, [orderId]: rows }));
+    } catch (e) {
+      console.warn('[reloadOrderHistory] failed:', e.message);
+    }
+  }, []);
+
   /* ── Open Order Detail Modal ── */
   async function openDetail(orderId) {
     const o = orders.find((x) => x.id === orderId);
@@ -378,31 +411,21 @@ export default function OrdersPage() {
     setEditStatus("");
     // Pre-populate edit form
     if (o) {
-      // parseCity: tolerant splitter for address strings that may include
-      // a leading location-name prefix like "Dallas Warehouse, Dallas, TX 75207".
-      // Pulls the zip (5 digits) first, then treats the LAST two
-      // comma-separated parts as city + state so the location name
-      // doesn't shift city into the state slot.
-      const parseCity = (str) => {
-        if (!str) return { city: "", state: "", zip: "" };
-        let s = str; let zip = "";
-        const m = s.match(/(\d{5})/);
-        if (m) { zip = m[1]; s = s.replace(m[1], "").replace(/,?\s*$/, "").trim(); }
-        const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
-        if (parts.length === 0) return { city: "", state: "", zip };
-        if (parts.length === 1) return { city: parts[0], state: "", zip };
-        // Take the last two parts as city / state; anything earlier is the
-        // location-name prefix and belongs in ship_to_name, not here.
-        const state = parts[parts.length - 1];
-        const city  = parts[parts.length - 2];
-        return { city, state, zip };
-      };
-      const op = parseCity(o.origin || ""); const dp = parseCity(o.dest || "");
+      // REQ-24: hydrate ship-from / ship-to as canonical Location
+      // objects via the shared helpers in types/location.js. They fall
+      // back to parsing the free-text origin/dest string for legacy
+      // rows that don't have ship_from_name / origin_zip populated.
+      const shipFrom = locationFromOrderOrigin(o);
+      const shipTo   = locationFromOrderDest(o);
+      // cityZipLookup is a demo-only ZIP enrichment used when the row
+      // has no ZIP column AND the address string had no ZIP embedded.
+      if (!shipFrom.zip) shipFrom.zip = cityZipLookup(o.origin) || "";
+      if (!shipTo.zip)   shipTo.zip   = cityZipLookup(o.dest)   || "";
       setEditForm({
         customer: o.customer || "", status: o.status || "Unplanned",
         refNum: o.ref_num || o.refNum || "", poNum: o.po_num || o.poNum || "",
-        originCity: op.city, originState: op.state, originZip: o.origin_zip || op.zip || cityZipLookup(o.origin) || "",
-        destCity: dp.city, destState: dp.state, destZip: o.dest_zip || dp.zip || cityZipLookup(o.dest) || "",
+        shipFrom,
+        shipTo,
         weight: o.weight || "", pieces: o.pieces || "", shipMode: o.ship_mode || o.shipMode || "",
         // REQ-10: carry service level through the edit form.
         serviceLevel: o.service_level || o.serviceLevel || "",
@@ -417,15 +440,8 @@ export default function OrdersPage() {
     } catch { setDetailLines([]); }
     finally { setDetailBusy(false); }
 
-    // REQ-02: fetch real change_history from the backend into the modal's
-    // History tab. The existing state `orderChangeLog` keeps the legacy
-    // cached format; we overwrite this order's entry with fresh rows.
-    try {
-      const rows = await getOrderHistory(orderId);
-      setOrderChangeLog((prev) => ({ ...prev, [orderId]: rows }));
-    } catch (e) {
-      console.warn('[openDetail] history fetch failed:', e.message);
-    }
+    // REQ-02: populate the History tab from the backend.
+    await reloadOrderHistory(orderId);
   }
 
   async function saveLines() {
@@ -441,6 +457,10 @@ export default function OrdersPage() {
         setDetailOrder(full);
         setDetailLines(Array.isArray(full.lines) ? full.lines : []);
       }
+      // REQ-02: backend just wrote change_history rows for the line edit +
+      // cascading parent-order totals; pull them so the History tab badge
+      // and rows update without a manual refresh.
+      await reloadOrderHistory(detailOrder.id);
     } finally { setDetailBusy(false); }
   }
 
@@ -448,19 +468,27 @@ export default function OrdersPage() {
   async function saveOrderEdit() {
     if (!detailOrder) return;
     const o = detailOrder;
-    const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+    // `changes` is used for the optimistic setDetailOrder update below;
+    // history rows themselves come from the backend via reloadOrderHistory.
     const changes = [];
     function chk(field, oldVal, newVal, label) {
       const ov = String(oldVal || "").trim(); const nv = String(newVal || "").trim();
       if (ov !== nv) changes.push({ field, label, old: ov, new: nv });
     }
     const f = editForm;
-    const newOrigin = buildLocationString(f.originCity, f.originState, f.originZip);
-    const newDest = buildLocationString(f.destCity, f.destState, f.destZip);
+    // REQ-24: compose the DB-shape patch for the ship-from / ship-to
+    // columns in one place. Returns { origin, dest, origin_zip,
+    // dest_zip, ship_from_name, ship_to_name } with nulls for cleared
+    // fields.
+    const addrPatch = locationsToShipmentPatch(f.shipFrom, f.shipTo);
     chk("customer", o.customer, f.customer, "Customer");
     chk("status", o.status, f.status, "Status");
-    chk("origin", o.origin, newOrigin, "Origin");
-    chk("dest", o.dest, newDest, "Destination");
+    chk("origin", o.origin, addrPatch.origin || "", "Origin");
+    chk("dest",   o.dest,   addrPatch.dest   || "", "Destination");
+    // Location Name edits land in change_history with the same shape
+    // as the address fields.
+    chk("ship_from_name", o.ship_from_name || o.shipFromName || "", addrPatch.ship_from_name || "", "Ship From Name");
+    chk("ship_to_name",   o.ship_to_name   || o.shipToName   || "", addrPatch.ship_to_name   || "", "Ship To Name");
     chk("weight", o.weight, f.weight, "Weight");
     chk("pieces", o.pieces, f.pieces, "Pieces");
     chk("ship_mode", o.ship_mode || o.shipMode || "", f.shipMode, "Ship Mode");
@@ -479,10 +507,14 @@ export default function OrdersPage() {
         await unplanOrderFromShipment(o.id, orders, shipments);
       }
 
-      // Build patch with all editable fields
+      // Build patch with all editable fields. `addrPatch` already
+      // carries origin / dest / origin_zip / dest_zip /
+      // ship_from_name / ship_to_name with proper null-on-clear
+      // semantics, so spread it in rather than re-assembling
+      // piecewise.
       const patch = {
         customer: f.customer || null, status: f.status || null,
-        origin: newOrigin || null, dest: newDest || null,
+        ...addrPatch,
         weight: parseFloat(f.weight) || 0, pieces: parseInt(f.pieces) || 0,
         ship_mode: (f.shipMode || "").trim() || null,
         // REQ-10: persist the order's service-level selection so the planner
@@ -491,25 +523,20 @@ export default function OrdersPage() {
         commodity: f.commodity || null,
         incoterms: (f.incoterms || "").trim() || null,
         ready: f.ready || null, due: f.due || null,
+        notes: f.notes || null,
       };
       // If unplanning, ensure shipment_id is cleared
       if (isPlannable({ status: f.status })) patch.shipment_id = null;
-      // Conditionally add optional columns (may not exist in all schemas)
-      if (f.originZip) patch.origin_zip = f.originZip;
-      if (f.destZip) patch.dest_zip = f.destZip;
-      patch.notes = f.notes || null;
       // Weight and pieces are taken directly from the form — user's input always wins.
       // Line items display their own totals separately for reference.
       await saveOrderService(o.id, patch);
-      // Log to history (only if changes detected)
-      if (changes.length > 0) {
-        setOrderChangeLog((prev) => ({
-          ...prev,
-          [o.id]: [{ ts: now, user: editUser, changes, orderId: o.id }, ...(prev[o.id] || [])],
-        }));
-      }
       toast(`Saved changes to ${o.id}`, "success");
       await refreshData();
+      // REQ-02: the backend's PATCH /api/orders/:id already wrote
+      // per-field change_history rows via recordFieldDiffs — reload from
+      // there instead of synthesizing a local change-set, so we have a
+      // single source of truth for history (CLAUDE_RULES §10 / DB rules).
+      await reloadOrderHistory(o.id);
       // Update detailOrder with new data
       const updated = orders.find((x) => x.id === o.id);
       if (updated) { setDetailOrder({ ...updated, ...Object.fromEntries(changes.map((c) => [c.field, c.new])) }); }
@@ -523,15 +550,18 @@ export default function OrdersPage() {
     const f = newOrderForm;
     const ts = Date.now().toString().slice(-6);
     const newId = `ORD-${new Date().getFullYear()}-${ts}`;
-    const origin = buildLocationString(f.originCity, f.originState, f.originZip);
-    const dest = buildLocationString(f.destCity, f.destState, f.destZip);
+    // REQ-24: one mapper composes origin / dest / *_zip / ship_*_name.
+    const addrPatch = locationsToShipmentPatch(f.shipFrom, f.shipTo);
     // Auto-compute weight/pieces from lines
     const autoWeight = newOrderLines.reduce((s, l) => s + (l.total_weight || 0), 0);
     const autoPieces = newOrderLines.reduce((s, l) => s + (l.qty_ordered || l.qty || 0), 0);
     const orderData = {
       id: newId, customer: f.customer || "Customer",
-      origin: origin || "Chicago, IL", dest: dest || "Dallas, TX",
-      origin_zip: f.originZip || null, dest_zip: f.destZip || null,
+      ...addrPatch,
+      // Fall back to the historical demo defaults when the form was
+      // submitted blank, so the Unplanned row still has a lane.
+      origin: addrPatch.origin || "Chicago, IL",
+      dest:   addrPatch.dest   || "Dallas, TX",
       weight: parseFloat(f.weight) || autoWeight || 0, pieces: parseInt(f.pieces) || autoPieces || 0,
       commodity: f.commodity || "General", ready: f.ready || null, due: f.due || null,
       status: "Unplanned",
@@ -556,11 +586,17 @@ export default function OrdersPage() {
         });
         await OrdersApi.saveLines(newId, linePayload);
       }
-      toast(`Created order ${newId}`, "success");
+      // REQ-27: order-creation confirmation must stay visible for 60 seconds
+      // (or until the user clicks the × on the toast) so the operator has
+      // time to copy / reference the generated order number.
+      toast(`Created order ${newId}`, "success", { durationMs: TOAST_DURATIONS.ORDER_CREATED });
       setShowNewOrder(false);
       setNewOrderForm({
-        customer: "", originCity: "", originState: "", originZip: "",
-        destCity: "", destState: "", destZip: "", commodity: "", incoterms: "",
+        customer: "",
+        // REQ-24: reset ship-from / ship-to to blank canonical Locations.
+        shipFrom: emptyLocation(),
+        shipTo: emptyLocation(),
+        commodity: "", incoterms: "",
         ready: "", due: "", preferredCarrier: "", excludedCarrier: "",
         noConsolidate: false, dedicatedEquip: false, hazmat: false,
       });
@@ -616,6 +652,7 @@ export default function OrdersPage() {
 
     const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
     setBusyId("plan-selected");
+    setPlanResults(null); // REQ-28: clear any previous pass/fail panel
     const planStartTime = Date.now();
     try {
       // 1. Check for multi-stop route matches
@@ -637,9 +674,38 @@ export default function OrdersPage() {
       if (remaining.length > 0) {
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
         bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs);
-        if (bulkResult.noQuotes && routePlanned.length === 0) {
-          toast("No carrier quotes available for selected orders.", "warning");
+
+        // REQ-28: stop showing a generic "0 shipments / no quotes" message
+        // when we have a specific per-order reason. If a single order
+        // dropped we surface its reason; if many, point the user to the
+        // results panel rendered above the table.
+        const failures = Array.isArray(bulkResult?.failures) ? bulkResult.failures : [];
+        if (bulkResult?.noQuotes && routePlanned.length === 0) {
+          if (failures.length === 1) {
+            toast(`Planning failed: ${describeFailure(failures[0])}`, "error", { durationMs: 0 });
+          } else if (failures.length > 1) {
+            toast(`Planning failed for ${failures.length} order(s). See details below.`, "error", { durationMs: 0 });
+          } else {
+            toast("No carrier quotes available for selected orders.", "warning");
+          }
         }
+      }
+
+      // REQ-28: build the pass/fail rollup (even when some orders succeeded
+      // via multi-stop) so the user can see which ones dropped and why.
+      const rollupInput = {
+        selectedOrders: plannable,
+        plans: bulkResult?.plans || [],
+        shipments: [
+          ...(multiStopSummary?.masterShipment ? [multiStopSummary.masterShipment] : []),
+          ...(bulkResult?.shipments || []),
+        ],
+        failures: bulkResult?.failures || [],
+        backendErrors: bulkResult?.backendErrors || [],
+      };
+      const rollup = buildBulkPlanResults(rollupInput);
+      if (rollup.failedCount > 0 || rollup.passedCount > 0) {
+        setPlanResults({ ...rollup, _elapsedMs: Date.now() - planStartTime });
       }
 
       // 3. Build unified summary combining multi-stop + bulk results
@@ -1180,14 +1246,19 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Toast */}
-      {message.text && (
-        <div style={{
-          padding: "10px 16px", borderRadius: 10, marginBottom: 12, fontSize: 13, fontWeight: 600,
-          background: message.type === "error" ? "#fee2e2" : message.type === "success" ? "#dcfce7" : "#dbeafe",
-          color: message.type === "error" ? "#991b1b" : message.type === "success" ? "#14532d" : "#1e3a8a",
-          border: `1px solid ${message.type === "error" ? "#fca5a5" : message.type === "success" ? "#86efac" : "#93c5fd"}`,
-        }}>{message.text}</div>
+      {/* REQ-27: reusable Toast. The 60-second order-created banner is
+          dismissible via the × button; state is owned by useToast(). */}
+      <Toast
+        text={message.text}
+        type={message.type}
+        dismissible={message.dismissible}
+        onClose={dismissToast}
+      />
+
+      {/* REQ-28: inline pass/fail rollup for the most recent Plan Selected run.
+          Includes a "Download Results (.xlsx)" button. */}
+      {planResults && (
+        <BulkPlanResultsPanel results={planResults} elapsedMs={planResults._elapsedMs} />
       )}
 
       {/* ═══ ORDERS TABLE ═══ */}

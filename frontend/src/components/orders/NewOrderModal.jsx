@@ -1,5 +1,6 @@
 import React from "react";
 import OrderLinesEditor from "../OrderLinesEditor";
+import LocationFieldsEditor from "../LocationFieldsEditor";
 
 export default function NewOrderModal({ show, form, onFormChange, lines, onLinesChange, onSubmit, onClose, carriers, busy, itemMaster }) {
   if (!show) return null;
@@ -22,23 +23,26 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
             <label style={labelSt}>Customer</label>
             <input value={form.customer} onChange={(e) => upd("customer", e.target.value)} placeholder="Cisco Systems" style={inputSt} />
           </div>
-          {/* Origin */}
+          {/* Ship From / Ship To — shared editor, canonical shipFrom /
+              shipTo shape. No adapter needed — the parent
+              (OrdersPage) owns the same shape. */}
           <div style={{ marginBottom: 14 }}>
-            <label style={labelSt}>Origin</label>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
-              <input value={form.originCity} onChange={(e) => upd("originCity", e.target.value)} placeholder="City (e.g. Chicago)" style={inputSt} />
-              <input value={form.originState} onChange={(e) => upd("originState", e.target.value)} placeholder="ST" maxLength={2} style={{ ...inputSt, textTransform: "uppercase" }} />
-              <input value={form.originZip} onChange={(e) => upd("originZip", e.target.value)} placeholder="ZIP" maxLength={5} style={inputSt} />
-            </div>
+            <LocationFieldsEditor
+              label="Ship From"
+              value={form.shipFrom}
+              onChange={(next) => onFormChange((f) => ({ ...f, shipFrom: next }))}
+              namePlaceholder="Location Name (e.g. Chicago DC)"
+              cityPlaceholder="City (e.g. Chicago)"
+            />
           </div>
-          {/* Destination */}
           <div style={{ marginBottom: 14 }}>
-            <label style={labelSt}>Destination</label>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
-              <input value={form.destCity} onChange={(e) => upd("destCity", e.target.value)} placeholder="City (e.g. Dallas)" style={inputSt} />
-              <input value={form.destState} onChange={(e) => upd("destState", e.target.value)} placeholder="ST" maxLength={2} style={{ ...inputSt, textTransform: "uppercase" }} />
-              <input value={form.destZip} onChange={(e) => upd("destZip", e.target.value)} placeholder="ZIP" maxLength={5} style={inputSt} />
-            </div>
+            <LocationFieldsEditor
+              label="Ship To"
+              value={form.shipTo}
+              onChange={(next) => onFormChange((f) => ({ ...f, shipTo: next }))}
+              namePlaceholder="Location Name (e.g. Dallas Warehouse)"
+              cityPlaceholder="City (e.g. Dallas)"
+            />
           </div>
           {/* Commodity + Incoterms */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>

@@ -76,23 +76,55 @@
     return { wt: wt, pcs: pcs };
   }
 
+  // REQ-24: compose a "CITY, ST ZIP" string from the typed parts.
+  // Mirrors the helper in types/location.js so both sides of the OMS →
+  // TMS boundary produce identical canonical strings.
+  function composeAddress(city, state, zip) {
+    var head = [String(city || '').toUpperCase(), String(state || '').toUpperCase()]
+      .filter(Boolean)
+      .join(', ');
+    return zip ? (head + ' ' + zip).trim() : head;
+  }
+
   function mapOmsOrderToTmsRow(o, custMap, locMap) {
     var lines = o.oms_order_lines || [];
     var totals = totalsFromLines(lines);
-    var originLoc = locMap[o.origin_location] || null;
-    var originDisplay = originLoc ? originLoc.display : (o.origin_location || '');
-    var destLoc = resolveDestinationLocation(o.destination, locMap);
+
+    // REQ-24: ship-from / ship-to now come from the dedicated typed
+    // columns on oms_orders (migration 019). Falls back to the legacy
+    // locs-table lookup for orders created before the migration so the
+    // sync doesn't silently drop data on historical rows.
+    var legacyOriginLoc = locMap[o.origin_location] || null;
+    var shipFromName  = o.ship_from_name  || (legacyOriginLoc ? legacyOriginLoc.name  : null);
+    var shipFromCity  = o.ship_from_city  || (legacyOriginLoc ? legacyOriginLoc.city  : '');
+    var shipFromState = o.ship_from_state || (legacyOriginLoc ? legacyOriginLoc.state : '');
+    var shipFromZip   = o.origin_zip      || (legacyOriginLoc ? legacyOriginLoc.zip   : null);
+    var originDisplay = (shipFromCity || shipFromState || shipFromZip)
+      ? composeAddress(shipFromCity, shipFromState, shipFromZip)
+      : (legacyOriginLoc ? legacyOriginLoc.display : (o.origin_location || ''));
+
+    // For ship-to, prefer the new typed fields. Fall back to resolving
+    // against the locations table only when the legacy `destination`
+    // string is all we have (pre-migration rows).
+    var legacyDestLoc = resolveDestinationLocation(o.destination, locMap);
+    var shipToName  = o.ship_to_name  || (legacyDestLoc ? legacyDestLoc.name  : null);
+    var shipToCity  = o.ship_to_city  || (legacyDestLoc ? legacyDestLoc.city  : '');
+    var shipToState = o.ship_to_state || (legacyDestLoc ? legacyDestLoc.state : '');
+    var shipToZip   = o.dest_zip || (o.destination || '').match(/\b(\d{5})\b/)?.[1] || null;
+    var destAddress = (shipToCity || shipToState || shipToZip)
+      ? composeAddress(shipToCity, shipToState, shipToZip)
+      : (o.destination || '');
 
     return {
       id:                 o.id,
       customer:           custMap[o.customer_id] || o.customer_id,
       origin:             originDisplay,
-      dest:               o.destination,
+      dest:               destAddress,
       origin_location_id: o.origin_location || null,
-      dest_location_id:   destLoc ? destLoc.id   : null,
-      ship_from_name:     originLoc ? originLoc.name : null,
-      ship_to_name:       destLoc   ? destLoc.name   : null,
-      ship_to_address:    o.destination || null,
+      dest_location_id:   legacyDestLoc ? legacyDestLoc.id : null,
+      ship_from_name:     shipFromName,
+      ship_to_name:       shipToName,
+      ship_to_address:    destAddress || o.destination || null,
       weight:             totals.wt,
       pieces:             totals.pcs,
       commodity:          o.commodity        || 'General',
@@ -105,14 +137,14 @@
       po_number:          o.po_number        || null,
       hazmat:             false,
       line_count:         lines.length,
-      origin_zip:         originLoc ? originLoc.zip : (o.origin_zip || null),
-      dest_zip:           o.dest_zip || (o.destination || '').match(/(\d{5})/)?.[1] || null,
+      origin_zip:         shipFromZip || null,
+      dest_zip:           shipToZip   || null,
       // Sync provenance (migration 005) — flags the row as OMS-origin so the
       // TMS UI can render the "OMS-synced" badge and filter on it.
       sync_source:        'oms',
       auto_synced_at:     new Date().toISOString(),
       oms_order_ref:      o.id,
-      _meta: { originDisplay: originDisplay, originLoc: originLoc, totals: totals },
+      _meta: { originDisplay: originDisplay, originLoc: legacyOriginLoc, totals: totals },
     };
   }
 

@@ -23,3 +23,6 @@ Versioned, forward-only migration files for the ZoreeTMS Supabase database.
 | 008 | `008_create_invoices_and_carrier_tolerance.sql` | REQ-06: invoices table + carrier tolerance columns | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |
 | 009 | `009_change_history_add_invoice.sql` | REQ-06: allow 'invoice' in change_history.entity_type | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |
 | 010 | `010_invoices_add_shipment_ids.sql` | REQ-07: shipment_ids[] on invoices for consolidated invoicing | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |
+| 018 | `018_req24_ship_from_to_name_columns.sql` | REQ-24: ship_from_name/ship_to_name on orders & shipments; origin_zip/dest_zip on shipments | 2026-04-20 | Sridhar |
+| 019 | `019_req24_oms_orders_ship_fields.sql` | REQ-24 (OMS): ship_from_name/city/state + ship_to_name/city/state on oms_orders | 2026-04-20 | Sridhar |
+| 020 | `020_req24_drop_origin_location_fk.sql` | REQ-24 (OMS): drop oms_orders_origin_location_fkey so origin_location can hold composed free-text addresses | _pending — apply via run-migration.js or SQL Editor_ | _pending_ |

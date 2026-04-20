@@ -401,52 +401,69 @@ textarea{resize:vertical;min-height:60px;}
     <div class="kpi"><div class="kl">Shipped</div><div class="kv" id="k-sh" style="color:var(--green)">0</div></div>
     <div class="kpi"><div class="kl">On Hold</div><div class="kv" id="k-ho" style="color:var(--red)">0</div></div>
   </div>
-  <!-- REQ-16: filter bar (mirrors TMS filters) -->
-  <div class="tbar" style="flex-wrap:wrap;gap:8px">
-    <div class="search-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input class="search-input" id="sq" placeholder="Search orders, customer, dest…" oninput="ro()">
+  <!-- REQ-16: filter bar (mirrors TMS filters — uppercase labels, grouped date ranges) -->
+  <style>
+    .oms-fgrp{display:flex;flex-direction:column;gap:3px;min-width:0;}
+    .oms-flbl{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--text3);text-transform:uppercase;white-space:nowrap;}
+    .oms-fdate{background:#fff;border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;outline:none;box-shadow:0 1px 4px rgba(30,45,107,0.06);}
+    .oms-fsel-wide{min-width:150px;}
+  </style>
+  <div class="tbar" style="flex-wrap:wrap;gap:10px 12px;padding:12px 20px;align-items:flex-end">
+    <div class="oms-fgrp" style="flex:1;min-width:240px">
+      <span class="oms-flbl">Search</span>
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="search-input" id="sq" placeholder="Search order#, PO, BOL, PRO, shipment ID, customer…" oninput="ro()">
+      </div>
     </div>
-    <select class="fsel" id="fc" onchange="ro()"><option value="">All Customers</option></select>
-    <select class="fsel" id="f-stage" onchange="ro()" title="Stage filter">
-      <option value="">All Stages</option>
-      <option value="1">1 · Draft</option>
-      <option value="2">2 · Booked</option>
-      <option value="3">3 · Reserved</option>
-      <option value="4">4 · Sent to TMS</option>
-      <option value="5">5 · Planned in TMS</option>
-      <option value="6">6 · Tender Confirmed</option>
-      <option value="7">7 · Picked</option>
-      <option value="8">8 · Packed</option>
-      <option value="9">9 · Staged</option>
-      <option value="10">10 · Shipped</option>
-      <option value="11">11 · Delivered / Closed</option>
-    </select>
-    <select class="fsel" id="f-mode" onchange="ro()" title="Mode filter">
-      <option value="">All Modes</option>
-      <option value="TL">TL</option>
-      <option value="LTL">LTL</option>
-      <option value="Intermodal">Intermodal</option>
-      <option value="Flatbed">Flatbed</option>
-      <option value="Reefer">Reefer</option>
-      <option value="Partial">Partial</option>
-      <option value="Expedite">Expedite</option>
-      <option value="Air Freight">Air Freight</option>
-    </select>
-    <select class="fsel" id="f-svc" onchange="ro()" title="Service level">
-      <option value="">All Service Levels</option>
-      <option value="Standard">Standard</option>
-      <option value="Guaranteed">Guaranteed</option>
-      <option value="Expedited">Expedited</option>
-      <option value="Economy">Economy</option>
-      <option value="White Glove">White Glove</option>
-    </select>
-    <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">Due from <input type="date" id="f-due-from" oninput="ro()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px"></label>
-    <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">to <input type="date" id="f-due-to" oninput="ro()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px"></label>
-    <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-hold" onchange="ro()" style="margin:0">Hold only</label>
-    <button class="btn btn-secondary btn-sm" onclick="resetOmsFilters()" title="Clear all filters">✕ Clear</button>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Customer</span>
+      <select class="fsel oms-fsel-wide" id="fc" onchange="ro()"><option value="">All Customers</option></select>
+    </div>
+    <!-- Status & Stage options populated from STATUS_BUCKETS / STAGES at init. -->
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Status</span>
+      <select class="fsel oms-fsel-wide" id="f-status" onchange="ro()" title="High-level status (rolls up stages)">
+        <option value="">All Statuses</option>
+      </select>
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Stage</span>
+      <select class="fsel oms-fsel-wide" id="f-stage" onchange="ro()" title="Stage filter">
+        <option value="">All Stages</option>
+      </select>
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Ship From</span>
+      <select class="fsel oms-fsel-wide" id="f-origin" onchange="ro()" title="Origin location"><option value="">All Origins</option></select>
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Ship To</span>
+      <select class="fsel oms-fsel-wide" id="f-dest" onchange="ro()" title="Destination city/state"><option value="">All Destinations</option></select>
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Shipment ID</span>
+      <input class="oms-fdate" id="f-shipid" oninput="ro()" placeholder="e.g. SHP-1234" style="min-width:140px">
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Created From</span>
+      <input type="date" class="oms-fdate" id="f-created-from" oninput="ro()">
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">To</span>
+      <input type="date" class="oms-fdate" id="f-created-to" oninput="ro()">
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">Due From</span>
+      <input type="date" class="oms-fdate" id="f-due-from" oninput="ro()">
+    </div>
+    <div class="oms-fgrp">
+      <span class="oms-flbl">To</span>
+      <input type="date" class="oms-fdate" id="f-due-to" oninput="ro()">
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="resetOmsFilters()" title="Clear all filters" style="align-self:flex-end">✕ Clear</button>
     <div class="tbar-sp"></div>
-    <span style="font-size:12px;color:var(--text3)" id="o-count"></span>
+    <span style="font-size:12px;color:var(--text3);align-self:flex-end" id="o-count"></span>
   </div>
   <div class="tw">
     <table>
@@ -699,40 +716,27 @@ textarea{resize:vertical;min-height:60px;}
       <div class="fg"><label>Customer *</label><select id="oc"></select></div>
       <div class="fg"><label>PO Number</label><input id="opo" placeholder="Customer PO#"></div>
     </div>
-    <div class="fr f3">
-      <div class="fg"><label>Ship From</label><select id="og" onchange="onShipFromChange(this.value)"></select><div id="og-zip" style="font-size:11px;color:var(--text3);margin-top:4px;font-family:monospace;min-height:16px"></div></div>
-      <div class="fg"><label>Ship To *</label>
-        <div style="position:relative" id="shipto-wrap">
-          <!-- Search input -->
-          <div style="position:relative;display:flex;align-items:center;gap:6px">
-            <div style="position:relative;flex:1">
-              <input id="odt-search" placeholder="🔍 Search locations or type address…"
-                autocomplete="off"
-                oninput="shipToSearch(this.value)"
-                onfocus="shipToSearch(this.value)"
-                style="width:100%;padding-right:28px"
-              >
-              <span id="odt-clear" onclick="shipToClear()" title="Clear"
-                style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:#94a3b8;font-size:14px;display:none">✕</span>
-            </div>
-          </div>
-          <!-- Selected badge -->
-          <div id="odt-badge" style="display:none;margin-top:5px;padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;display:none;align-items:center;justify-content:space-between">
-            <div>
-              <span id="odt-badge-name" style="font-weight:600;color:#1e40af"></span>
-              <span id="odt-badge-addr" style="color:#64748b;margin-left:6px"></span>
-            </div>
-            <span onclick="shipToClear()" style="cursor:pointer;color:#94a3b8;font-size:13px;margin-left:8px">✕</span>
-          </div>
-          <!-- Dropdown results -->
-          <div id="odt-results"
-            style="display:none;position:absolute;z-index:999;width:100%;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);margin-top:2px;left:0">
-          </div>
-          <!-- Hidden value fields -->
-          <input type="hidden" id="odt" value="">
-          <input type="hidden" id="odt-loc-id" value="">
-        </div>
+    <!-- REQ-24: Ship From as four editable fields (Name, City, State, ZIP). -->
+    <div class="fg" style="margin-bottom:12px">
+      <label>Ship From</label>
+      <div style="display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr;gap:8px">
+        <input id="ogn" placeholder="Location Name (e.g. Atlanta XDock)">
+        <input id="ogc" placeholder="City">
+        <input id="ogs" placeholder="ST" maxlength="2" style="text-transform:uppercase">
+        <input id="ogz" placeholder="ZIP" maxlength="5">
       </div>
+    </div>
+    <!-- REQ-24: Ship To as four editable fields. City + State required. -->
+    <div class="fg" style="margin-bottom:12px">
+      <label>Ship To *</label>
+      <div style="display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr;gap:8px">
+        <input id="odtn" placeholder="Location Name (e.g. Dallas Warehouse)">
+        <input id="odtc" placeholder="City *">
+        <input id="odts" placeholder="ST *" maxlength="2" style="text-transform:uppercase">
+        <input id="odtz" placeholder="ZIP" maxlength="5">
+      </div>
+    </div>
+    <div class="fr f2">
       <div class="fg"><label>Ready to Ship Date</label><input id="ords" type="date" title="Date goods are ready to ship from origin"></div>
       <div class="fg"><label>Required Delivery Date *</label><input id="odd" type="date"></div>
     </div>
@@ -1042,6 +1046,7 @@ function doSignOut(){
 
 async function boot(){
   setToday(); showLoading(true);
+  _initOmsFilterOptions();          // populate Stage/Status dropdowns from config
   await loadFromDB();
   showLoading(false);
   renderAll();
@@ -1364,59 +1369,58 @@ var ZoreeMiddleware = {
       var pcs = (omsLines||[]).reduce((s,l) => s + l.qty, 0);
       var notes = omsOrder.notes || null;
       if (omsOrder.mode) notes = (notes ? notes + ' | ' : '') + 'MODE_CONSTRAINT:' + omsOrder.mode;
-      // REQ-17: resolve the origin location id into the real city/state/zip
-      // string. Previously we sent the raw LOC-... id, which meant the TMS
-      // order's "Ship From" ended up showing a location key instead of
-      // "College Park, GA 30337" etc. `locs` is the OMS locations cache
-      // populated at boot; fall back to the raw value if we can't resolve.
-      var locMatch = (typeof locs !== 'undefined' && Array.isArray(locs))
-        ? locs.find(function(l){ return l.id === omsOrder.orig; })
-        : null;
-      var originStr = null;
-      var originZipStr = null;
+
+      // REQ-24: Ship-from / ship-to now come from four typed fields on
+      // the OMS order. Prefer those; fall back to the legacy locs-table
+      // lookup by id only for historical orders that were created under
+      // the old picker-based UX.
+      function composeAddr(city, state, zip) {
+        var head = [String(city||'').toUpperCase(), String(state||'').toUpperCase()].filter(Boolean).join(', ');
+        return zip ? (head + ' ' + zip).trim() : head;
+      }
+
+      var originStr       = null;
+      var originZipStr    = null;
       var shipFromNameStr = null;
-      if (locMatch) {
-        var parts = [locMatch.city, locMatch.state].filter(Boolean).join(', ');
-        originStr = locMatch.zip ? (parts + ' ' + locMatch.zip) : parts;
-        originZipStr = locMatch.zip || null;
-        shipFromNameStr = locMatch.name || null;
-      } else if (typeof omsOrder.orig === 'string' && omsOrder.orig) {
-        // If the caller already handed us a city/state string, keep it.
-        originStr = omsOrder.orig;
-        var zipMatch = omsOrder.orig.match(/\b(\d{5})\b/);
-        originZipStr = zipMatch ? zipMatch[1] : null;
+      if (omsOrder.shipFromName || omsOrder.shipFromCity || omsOrder.shipFromState || omsOrder.origZip) {
+        // New typed order.
+        shipFromNameStr = omsOrder.shipFromName || null;
+        originZipStr    = omsOrder.origZip     || null;
+        originStr       = composeAddr(omsOrder.shipFromCity, omsOrder.shipFromState, omsOrder.origZip) || (omsOrder.orig || null);
+      } else {
+        // Legacy: try to resolve orig as a location id, then as a
+        // composed "CITY, ST ZIP" string.
+        var locMatch = (typeof locs !== 'undefined' && Array.isArray(locs))
+          ? locs.find(function(l){ return l.id === omsOrder.orig; })
+          : null;
+        if (locMatch) {
+          var lparts = [locMatch.city, locMatch.state].filter(Boolean).join(', ');
+          originStr       = locMatch.zip ? (lparts + ' ' + locMatch.zip) : lparts;
+          originZipStr    = locMatch.zip || null;
+          shipFromNameStr = locMatch.name || null;
+        } else if (typeof omsOrder.orig === 'string' && omsOrder.orig) {
+          originStr    = omsOrder.orig;
+          var zipMatch = omsOrder.orig.match(/\b(\d{5})\b/);
+          originZipStr = zipMatch ? zipMatch[1] : null;
+        }
       }
-      // Ship-to mapping: the OMS may store `dest` as either:
-      //   • the full combined string "Dallas Warehouse, Dallas, TX 75207"
-      //   • just the "City, ST ZIP" half
-      // TMS expects a clean `dest` ("CITY, ST ZIP") plus a separate
-      // ship_to_name for the location label. Prefer the location record
-      // when we can resolve it; otherwise split the combined string on
-      // the last two comma-separated parts to extract city/state.
-      var destStr = null;
-      var destZipStr = null;
+
+      var destStr       = null;
+      var destZipStr    = null;
       var shipToNameStr = null;
-      var destLocId = omsOrder.destLocId || omsOrder.dest_location_id || null;
-      var destLocMatch = null;
-      if (destLocId && typeof locs !== 'undefined' && Array.isArray(locs)) {
-        destLocMatch = locs.find(function(l){ return l.id === destLocId; }) || null;
-      }
-      if (destLocMatch) {
-        var dparts = [destLocMatch.city, destLocMatch.state].filter(Boolean).join(', ');
-        destStr = destLocMatch.zip ? (dparts + ' ' + destLocMatch.zip) : dparts;
-        destZipStr = destLocMatch.zip || null;
-        shipToNameStr = destLocMatch.name || null;
-      } else if (typeof omsOrder.dest === 'string') {
+      if (omsOrder.shipToName || omsOrder.shipToCity || omsOrder.shipToState || omsOrder.destZip) {
+        shipToNameStr = omsOrder.shipToName || null;
+        destZipStr    = omsOrder.destZip    || null;
+        destStr       = composeAddr(omsOrder.shipToCity, omsOrder.shipToState, omsOrder.destZip) || (omsOrder.dest || null);
+      } else if (typeof omsOrder.dest === 'string' && omsOrder.dest) {
         var dzMatch = omsOrder.dest.match(/\b(\d{5})\b/);
-        destZipStr = dzMatch ? dzMatch[1] : null;
-        // Split the OMS dest on commas and parse out the location-name
-        // prefix when present: "Location Name, City, ST ZIP" → name + clean dest.
-        var raw = omsOrder.dest.trim();
+        destZipStr  = dzMatch ? dzMatch[1] : null;
+        var raw      = omsOrder.dest.trim();
         var rawNoZip = dzMatch ? raw.replace(dzMatch[1], '').replace(/,?\s*$/, '').trim() : raw;
         var commaParts = rawNoZip.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
         if (commaParts.length >= 3) {
-          // Last two parts are city/state; everything before is the location name.
-          var city = commaParts[commaParts.length - 2];
+          // Legacy "Name, City, ST ZIP" — peel off the name.
+          var city  = commaParts[commaParts.length - 2];
           var state = commaParts[commaParts.length - 1];
           shipToNameStr = commaParts.slice(0, commaParts.length - 2).join(', ');
           destStr = destZipStr ? (city + ', ' + state + ' ' + destZipStr) : (city + ', ' + state);
@@ -1424,14 +1428,29 @@ var ZoreeMiddleware = {
           destStr = omsOrder.dest;
         }
       }
+
+      // REQ-24: forward line items so the ingest endpoint can persist
+      // them into the TMS `order_lines` table. Without this the TMS
+      // Orders detail view shows "NO ITEMS ADDED".
+      var lineList = (omsLines || []).map(function (l, i) {
+        var qty = Number(l.qty) || 0;
+        var uw  = Number(l.wt)  || 0;
+        return {
+          line_num:    l.lineNum || (i + 1),
+          item_id:     l.itemId  || null,
+          description: l.desc    || l.itemId || null,
+          qty_ordered: qty,
+          unit_weight: uw,
+          total_weight: Math.round(qty * uw * 1000) / 1000,
+          unit_value:  Number(l.val) || 0,
+          total_value: Math.round(qty * (Number(l.val) || 0) * 100) / 100,
+        };
+      });
+
       var payload = {
         id: omsOrder.id, customer: custName || omsOrder.customer_id,
         origin: originStr, dest: destStr,
         originZip: originZipStr, destZip: destZipStr,
-        // Bug fix: the TMS was storing ship_to_name as null even when
-        // the OMS user had picked a named location. Forward the
-        // resolved location label on both sides so the TMS edit form
-        // can display it without a fresh lookup.
         shipFromName: shipFromNameStr,
         shipToName:   shipToNameStr,
         weight: wt, pieces: pcs, commodity: omsOrder.comm || 'General',
@@ -1446,6 +1465,9 @@ var ZoreeMiddleware = {
         ready: omsOrder.ready || omsOrder.due || null,
         due:   omsOrder.due   || null,
         status: 'Unplanned', notes: notes, incoterms: omsOrder.inco || null, hazmat: false,
+        // REQ-24: line items (the ingest endpoint upserts these into
+        // order_lines). Empty array is fine — caller may book header-only.
+        lines: lineList,
       };
       var { error: pollErr } = await this._dispatch('PUSH_ORDER_TO_TMS', payload, omsOrder.id).then(r=>({error:r.error})).catch(e=>({error:e}));
       if (pollErr) throw pollErr;
@@ -1540,6 +1562,25 @@ var STAGES = {
   11: {lbl:'Delivered/POD',   cls:'s11', page:'delivery'},
 };
 
+// ─── STATUS BUCKETS (single source of truth) ─────────────────────────────
+// High-level rollup of stages used by BOTH the KPI tiles on the Sales Orders
+// page and the Status dropdown in the filter bar. Keeping this in one place
+// avoids drift between the two (ref: db-rules "avoid duplicate sources of
+// truth" / claude-rules "no hardcoded values scattered in UI").
+//
+// Changing a bucket (e.g. moving stage 9 from Warehouse → With TMS) takes
+// one edit here and propagates to the filter dropdown, the filter predicate,
+// and the KPI counts. A new bucket would also need a matching KPI tile
+// (kpi id in the page header) — that's the only coupling left.
+var STATUS_BUCKETS = [
+  { key:'draft',      lbl:'Draft',       kpiId:'k-d',  match:function(o){ return o.stage<=1; } },
+  { key:'inprogress', lbl:'In Progress', kpiId:'k-ip', match:function(o){ return o.stage>=2 && o.stage<=3; } },
+  { key:'withtms',    lbl:'With TMS',    kpiId:'k-tms',match:function(o){ return o.stage>=4 && o.stage<=5; } },
+  { key:'warehouse',  lbl:'Warehouse',   kpiId:'k-wh', match:function(o){ return o.stage>=6 && o.stage<=9; } },
+  { key:'shipped',    lbl:'Shipped',     kpiId:'k-sh', match:function(o){ return o.stage>=10; } },
+  { key:'hold',       lbl:'On Hold',     kpiId:'k-ho', match:function(o){ return !!o.hold; } },
+];
+
 // ─── IN-MEMORY STATE (loaded from DB) ───────────
 var orders=[],inv=[],custs=[],locs=[],tmsO=[],tmsS=[];
 var _sf=0;
@@ -1549,11 +1590,9 @@ var _loading=false;
 // ─── BOOT ─────────────────────────────────────────
 function custName(id){var c=custs.find(x=>x.id===id);return c?c.name:id||'—';}
 function locName(id){var l=locs.find(x=>x.id===id);return l?l.name+' ('+l.city+', '+l.state+')':id||'—';};
-function onShipFromChange(locId){
-  var l=locs.find(x=>x.id===locId);
-  var el=document.getElementById('og-zip');
-  if(el) el.textContent = l && l.zip ? '📍 ZIP: '+l.zip+(l.city?'  '+l.city+', '+l.state:'') : '';
-}
+// REQ-24: onShipFromChange removed — Ship From is no longer a <select>
+// bound to the locations table. The four typed inputs (ogn/ogc/ogs/ogz)
+// don't need an onChange hook since svO reads them on submit.
 
 function setToday(){
   var t=new Date().toISOString().slice(0,10);
@@ -1599,6 +1638,17 @@ function dbOrder(r){
   var lines=(r.oms_order_lines||[]).map(l=>({itemId:l.item_id||'',desc:l.description,qty:l.qty_ordered,wt:parseFloat(l.unit_weight)||0,val:parseFloat(l.unit_value)||0,lineNum:l.line_num})).sort((a,b)=>a.lineNum-b.lineNum);
   return{
     id:r.id, cust:r.customer_id, po:r.po_number||'', orig:r.origin_location||'', dest:r.destination,
+    // REQ-24 (migration 019): carry the typed ship-from / ship-to
+    // parts off the DB row so openOM can hydrate the four inputs
+    // without re-parsing origin_location / destination.
+    shipFromName:  r.ship_from_name  || '',
+    shipFromCity:  r.ship_from_city  || '',
+    shipFromState: r.ship_from_state || '',
+    origZip:       r.origin_zip      || '',
+    shipToName:  r.ship_to_name  || '',
+    shipToCity:  r.ship_to_city  || '',
+    shipToState: r.ship_to_state || '',
+    destZip:     r.dest_zip      || '',
     ready:r.ready_date||'', due:r.required_date||'', mode:r.ship_mode||'', inco:r.incoterms||'FOB Origin',
     priority:(r.priority==='Standard'?'':r.priority)||'', comm:r.commodity||'', notes:r.special_instructions||'',
     stage:r.stage||1, hold:r.on_hold||false, holdReason:r.hold_reason||'',
@@ -1622,9 +1672,18 @@ function dbOrder(r){
 async function saveOrder(o){
   var row={
     id:o.id, customer_id:o.cust, po_number:o.po||null,
+    // REQ-24: origin_location and destination hold the composed
+    // "CITY, ST ZIP" strings for back-compat; ship_from_* and
+    // ship_to_* are the typed user inputs (migration 019).
     origin_location:o.orig||null, destination:o.dest,
-    origin_zip:(function(){ var l=locs.find(x=>x.id===o.orig); return l&&l.zip?l.zip:null; })(),
-    dest_zip:(o.dest||('')).match(/(\d{5})/)?((o.dest||'').match(/(\d{5})/))[1]:null,
+    origin_zip: o.origZip || ((o.orig||'').match(/\b(\d{5})\b/)?.[1]) || null,
+    dest_zip:   o.destZip || ((o.dest||'').match(/\b(\d{5})\b/)?.[1]) || null,
+    ship_from_name:  o.shipFromName  || null,
+    ship_from_city:  o.shipFromCity  || null,
+    ship_from_state: o.shipFromState || null,
+    ship_to_name:  o.shipToName  || null,
+    ship_to_city:  o.shipToCity  || null,
+    ship_to_state: o.shipToState || null,
     required_date:o.due||null,
     ready_date:   o.ready||null, ship_mode:o.mode||null,
     incoterms:o.inco||'FOB Origin', priority:o.priority||'Standard',
@@ -1953,44 +2012,144 @@ function updatePipelineCounts(){
   for(var i=1;i<=11;i++){var el=document.getElementById('ps'+i);if(el)el.textContent=orders.filter(o=>o.stage===i).length;}
 }
 
+// ═══ SALES ORDERS — FILTER + RENDER MODULE ═══════════════════════════════
+// This section would ideally live in its own module (`services/omsFilters.js`
+// + a React component), but zoree-oms.html is a standalone single-file demo
+// app. The functions below are namespaced with a leading `_oms` prefix and
+// kept pure where possible so they can be lifted into a module later with
+// minimal rewrites. See audit notes in the commit message.
+
+// Normalize a free-text destination string ("Chicago, IL, 60632" → "chicago, il")
+// so Ship-To dropdown options collapse zip variations into a single entry.
+function _omsDestKey(s){
+  if(!s) return '';
+  var parts = String(s).split(',').map(function(p){return p.trim();}).filter(Boolean);
+  // Drop trailing zip-ish tokens so "Chicago, IL, 60632" and "Chicago, IL" match.
+  parts = parts.filter(function(p){ return !/^\d{5}(-\d{4})?$/.test(p); });
+  return parts.slice(0,2).join(', ').toLowerCase();
+}
+
+// Read the current state of the filter bar into a plain object.
+// Defensive DOM lookups so this still works if called before first paint.
+function _readOmsFilterState(){
+  function v(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  return {
+    q:           v('sq').toLowerCase().trim(),
+    cust:        v('fc'),
+    stage:       v('f-stage'),
+    status:      v('f-status'),
+    origin:      v('f-origin'),
+    dest:        v('f-dest'),
+    shipId:      v('f-shipid').toLowerCase().trim(),
+    dueFrom:     v('f-due-from'),
+    dueTo:       v('f-due-to'),
+    createdFrom: v('f-created-from'),
+    createdTo:   v('f-created-to'),
+  };
+}
+
+// Pure predicate — true if order `o` passes every active filter in state `f`.
+// No DOM reads, no side effects → trivially unit-testable.
+function _omsOrderMatches(o, f){
+  // Legacy KPI-driven stage filter (_sf) still wins if set.
+  if(_sf>0 && o.stage!==_sf) return false;
+  if(f.cust   && o.cust!==f.cust) return false;
+  if(f.stage  && String(o.stage||'')!==f.stage) return false;
+  if(f.status){
+    var bucket = STATUS_BUCKETS.find(function(b){ return b.key===f.status; });
+    if(bucket && !bucket.match(o)) return false;
+  }
+  if(f.origin && (o.orig||'')!==f.origin) return false;
+  if(f.dest   && _omsDestKey(o.dest)!==f.dest) return false;
+  if(f.shipId && !String(o.tmsShipId||'').toLowerCase().includes(f.shipId)) return false;
+  if(f.dueFrom && (o.due||'')<f.dueFrom) return false;
+  if(f.dueTo   && (o.due||'')>f.dueTo)   return false;
+  if(f.createdFrom && (o.createdAt||'').slice(0,10)<f.createdFrom) return false;
+  if(f.createdTo   && (o.createdAt||'').slice(0,10)>f.createdTo)   return false;
+  if(f.q){
+    var hay = [o.id, o.po, o.cust, custName(o.cust), o.dest,
+               o.tmsShipId, o.bol, o.pro, o.stage]
+      .map(function(x){ return (x==null?'':String(x)); }).join(' ').toLowerCase();
+    if(!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+
+// Populate static dropdowns (Stage, Status) from config. Called once, on boot.
+function _initOmsFilterOptions(){
+  var ssel=document.getElementById('f-stage');
+  if(ssel && ssel.options.length<=1){
+    Object.keys(STAGES).forEach(function(k){
+      var opt=document.createElement('option');
+      opt.value=k;
+      opt.textContent=k+' · '+STAGES[k].lbl;
+      ssel.appendChild(opt);
+    });
+  }
+  var stsel=document.getElementById('f-status');
+  if(stsel && stsel.options.length<=1){
+    STATUS_BUCKETS.forEach(function(b){
+      var opt=document.createElement('option');
+      opt.value=b.key;
+      opt.textContent=b.lbl;
+      stsel.appendChild(opt);
+    });
+  }
+}
+
+// Populate data-dependent dropdowns (Customer, Origin, Destination).
+// Called from ro() because `custs`/`locs`/`orders` are loaded async.
+function _populateOmsFilterDropdowns(){
+  var csel=document.getElementById('fc');
+  if(csel && csel.options.length<=1){
+    custs.forEach(function(c){
+      var o=document.createElement('option'); o.value=c.id; o.textContent=c.name; csel.appendChild(o);
+    });
+  }
+  var osel=document.getElementById('f-origin');
+  if(osel && osel.options.length<=1){
+    locs.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).forEach(function(l){
+      var opt=document.createElement('option');
+      opt.value=l.id;
+      var cityState=[l.city,l.state].filter(Boolean).join(', ');
+      opt.textContent=(l.name||l.id)+(cityState?' — '+cityState:'');
+      osel.appendChild(opt);
+    });
+  }
+  var dsel=document.getElementById('f-dest');
+  if(dsel){
+    var seen={};
+    orders.forEach(function(o){ var k=_omsDestKey(o.dest); if(k) seen[k]=true; });
+    var keys=Object.keys(seen).sort();
+    if(dsel.options.length !== keys.length+1){
+      var cur=dsel.value;
+      dsel.innerHTML='<option value="">All Destinations</option>';
+      keys.forEach(function(k){
+        var opt=document.createElement('option');
+        opt.value=k;
+        opt.textContent=k.split(', ').map(function(p){ return p.replace(/\b\w/g,function(c){return c.toUpperCase();}); }).join(', ');
+        dsel.appendChild(opt);
+      });
+      if(cur) dsel.value=cur;
+    }
+  }
+}
+
+// Update the KPI tile counts from STATUS_BUCKETS (single source of truth).
+function _updateOmsKpis(){
+  var totEl=document.getElementById('k-tot'); if(totEl) totEl.textContent=orders.length;
+  STATUS_BUCKETS.forEach(function(b){
+    var el=document.getElementById(b.kpiId);
+    if(el) el.textContent=orders.filter(b.match).length;
+  });
+}
+
 // ─── RENDER ORDERS ──────────────────────────────
 function ro(){
-  var q=(document.getElementById('sq').value||'').toLowerCase();
-  var cf=document.getElementById('fc').value;
-  // REQ-16: read the extra filter selectors. Defensive lookups so the
-  // function still works if the DOM hasn't caught up (e.g. first paint).
-  var fStage=(document.getElementById('f-stage')||{}).value||'';
-  var fMode =(document.getElementById('f-mode') ||{}).value||'';
-  var fSvc  =(document.getElementById('f-svc')  ||{}).value||'';
-  var fDueFrom=(document.getElementById('f-due-from')||{}).value||'';
-  var fDueTo  =(document.getElementById('f-due-to')  ||{}).value||'';
-  var fHold = !!((document.getElementById('f-hold')||{}).checked);
-  // Populate customer filter
-  var sel=document.getElementById('fc');
-  if(sel.options.length<=1)custs.forEach(c=>{var o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
-  var rows=orders.filter(o=>{
-    // Legacy KPI-driven stage filter (_sf) still wins if set.
-    if(_sf>0&&o.stage!==_sf)return false;
-    if(cf&&o.cust!==cf)return false;
-    // REQ-16: new filters. String equality for mode/svc/stage; inclusive
-    // range for due date; boolean for Hold.
-    if(fStage && String(o.stage||'')!==fStage)return false;
-    if(fMode && (o.mode||'')!==fMode)return false;
-    if(fSvc && (o.priority||o.serviceLevel||'')!==fSvc)return false;
-    if(fDueFrom && (o.due||'')<fDueFrom)return false;
-    if(fDueTo   && (o.due||'')>fDueTo)return false;
-    if(fHold && !o.hold)return false;
-    if(q&&!(o.id+o.cust+(o.dest||'')+o.stage).toLowerCase().includes(q))return false;
-    return true;
-  });
-  // KPI counts
-  document.getElementById('k-tot').textContent=orders.length;
-  document.getElementById('k-d').textContent=orders.filter(o=>o.stage<=1).length;
-  document.getElementById('k-ip').textContent=orders.filter(o=>o.stage>=2&&o.stage<=3).length;
-  document.getElementById('k-tms').textContent=orders.filter(o=>o.stage>=4&&o.stage<=5).length;
-  document.getElementById('k-wh').textContent=orders.filter(o=>o.stage>=6&&o.stage<=9).length;
-  document.getElementById('k-sh').textContent=orders.filter(o=>o.stage>=10).length;
-  document.getElementById('k-ho').textContent=orders.filter(o=>o.hold).length;
+  _populateOmsFilterDropdowns();
+  var f=_readOmsFilterState();
+  var rows=orders.filter(function(o){ return _omsOrderMatches(o, f); });
+  _updateOmsKpis();
 
   var tb=document.getElementById('otb');
   document.getElementById('oe').style.display=rows.length?'none':'flex';
@@ -2056,6 +2215,20 @@ function openStageModal(id){
 }
 
 // ─── ORDER ENTRY (Stage 1) ───────────────────────
+// REQ-24: parseCityStateZip splits a legacy composed address string
+// ("ATLANTA, GA 30337") back into parts so editing an existing order
+// populates the four typed inputs. New orders get blank fields.
+function parseCityStateZip(str){
+  if(!str) return {city:'',state:'',zip:''};
+  var s=String(str), zip='';
+  var m=s.match(/\b(\d{5})\b/);
+  if(m){ zip=m[1]; s=s.replace(m[1],'').replace(/,?\s*$/,'').trim(); }
+  var parts=s.split(',').map(function(p){return p.trim();}).filter(Boolean);
+  if(parts.length===0) return {city:'',state:'',zip:zip};
+  if(parts.length===1) return {city:parts[0],state:'',zip:zip};
+  return {city:parts[parts.length-2],state:parts[parts.length-1],zip:zip};
+}
+
 function openOM(id){
   _eo=id;
   var o=id?orders.find(x=>x.id===id):null;
@@ -2063,7 +2236,6 @@ function openOM(id){
   var nid='ORD-'+Date.now().toString().slice(-6);
   document.getElementById('oi').value=o?.id||nid;
   document.getElementById('opo').value=o?.po||'';
-  document.getElementById('odt').value=o?.dest||'';
   document.getElementById('ords') && (document.getElementById('ords').value=o?.ready||'');
   document.getElementById('odd').value=o?.due||'';
   document.getElementById('omd').value=o?.mode||'';
@@ -2073,15 +2245,57 @@ function openOM(id){
   document.getElementById('ont').value=o?.notes||'';
   var cs=document.getElementById('oc');
   cs.innerHTML=custs.map(c=>`<option value="${c.id}"${o?.cust===c.id?' selected':''}>${c.name}</option>`).join('');
-  var og=document.getElementById('og');
-  og.innerHTML=locs.map(l=>{var v=l.city+', '+l.state;return`<option value="${l.id}"${o?.orig===l.id?' selected':''}>${l.name} (${v})</option>`;}).join('');
-  // Show zip for selected location
-  var selLoc = o ? locs.find(x=>x.id===o.orig) : locs[0];
-  var zipEl = document.getElementById('og-zip');
-  if(zipEl && selLoc) zipEl.textContent = selLoc.zip ? '📍 ZIP: '+selLoc.zip+'  '+selLoc.city+', '+selLoc.state : '';
-  // Reset Ship To picker, then populate if editing existing order
-  shipToClear();
-  if (o && o.dest) populateShipToDropdown(o.dest);
+
+  // REQ-24: hydrate the four Ship From inputs. Prefer dedicated
+  // columns (shipFromName / shipFromCity / shipFromState / origin_zip
+  // via o.origZip) when present; fall back to parsing the legacy
+  // composed origin_location string + looking up the old locs row so
+  // orders created before migration 019 still open sensibly.
+  var sfName='', sfCity='', sfState='', sfZip='';
+  if(o){
+    if(o.shipFromName || o.shipFromCity || o.shipFromState){
+      sfName = o.shipFromName || '';
+      sfCity = o.shipFromCity || '';
+      sfState = o.shipFromState || '';
+      sfZip  = o.origZip || '';
+    } else {
+      // Legacy order: orig may hold a location id; look it up.
+      var legacyLoc = locs.find(function(l){ return l.id === o.orig; });
+      if(legacyLoc){
+        sfName = legacyLoc.name || '';
+        sfCity = legacyLoc.city || '';
+        sfState = legacyLoc.state || '';
+        sfZip  = legacyLoc.zip || '';
+      } else {
+        // Or a composed "CITY, ST ZIP" string.
+        var parsed = parseCityStateZip(o.orig);
+        sfCity = parsed.city; sfState = parsed.state; sfZip = parsed.zip;
+      }
+    }
+  }
+  document.getElementById('ogn').value = sfName;
+  document.getElementById('ogc').value = sfCity;
+  document.getElementById('ogs').value = sfState;
+  document.getElementById('ogz').value = sfZip;
+
+  // REQ-24: hydrate Ship To the same way.
+  var stName='', stCity='', stState='', stZip='';
+  if(o){
+    if(o.shipToName || o.shipToCity || o.shipToState){
+      stName = o.shipToName || '';
+      stCity = o.shipToCity || '';
+      stState = o.shipToState || '';
+      stZip  = o.destZip || '';
+    } else {
+      var destParsed = parseCityStateZip(o.dest);
+      stCity = destParsed.city; stState = destParsed.state; stZip = destParsed.zip;
+    }
+  }
+  document.getElementById('odtn').value = stName;
+  document.getElementById('odtc').value = stCity;
+  document.getElementById('odts').value = stState;
+  document.getElementById('odtz').value = stZip;
+
   rnLines(o?.lines||[{itemId:'',desc:'',qty:1,wt:0}]);
   // REQ-21: if this order has an associated TMS shipment, surface the
   // full tender-accepted plan (shipment id, carrier, service level,
@@ -2138,158 +2352,11 @@ async function populateOmTmsPlan(o){
   ].join('');
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SHIP TO — Searchable Location Picker
-// Works with 1000s of locations: type to filter, click to select
-// ═══════════════════════════════════════════════════════════════
-
-var _shipToSelected = null; // { id, name, display, addr }
-
-function shipToSearch(q) {
-  var results = document.getElementById('odt-results');
-  var clearBtn = document.getElementById('odt-clear');
-  if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
-
-  var query = (q || '').toLowerCase().trim();
-
-  // Build filtered list — show all if empty query, filter if typed
-  var filtered = query
-    ? locs.filter(function(l) {
-        return (l.name  || '').toLowerCase().includes(query) ||
-               (l.city  || '').toLowerCase().includes(query) ||
-               (l.state || '').toLowerCase().includes(query) ||
-               (l.id    || '').toLowerCase().includes(query) ||
-               (l.zip   || '').toLowerCase().includes(query) ||
-               (l.type  || '').toLowerCase().includes(query);
-      })
-    : locs.slice(0, 50); // show first 50 when no query
-
-  if (!results) return;
-
-  if (!filtered.length && query) {
-    results.style.display = 'block';
-    results.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:#94a3b8;text-align:center">' +
-      'No locations match "<strong>' + q + '</strong>"' +
-      '<br><span style="font-size:11px">This will be saved as a custom address</span></div>';
-    return;
-  }
-
-  if (!filtered.length) {
-    results.style.display = 'none';
-    return;
-  }
-
-  results.style.display = 'block';
-  results.innerHTML = filtered.slice(0, 100).map(function(l) {
-    var addr = [l.address, l.city, l.state, l.zip].filter(Boolean).join(', ');
-    var highlight = function(text) {
-      if (!query || !text) return text || '';
-      var re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-      return text.replace(re, '<mark style="background:#fef08a;padding:0 1px;border-radius:2px">$1</mark>');
-    };
-    return '<div class="shipto-opt" onclick="shipToSelect(' + "'" + l.id + "'" + ')" ' +
-      'onmouseenter="this.style.background=\"#f8fafc\"" onmouseleave="this.style.background=\"\"" ' +
-      'style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .1s">' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-        '<div style="width:28px;height:28px;border-radius:6px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">📍</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:13px;font-weight:600;color:#1e293b">' + highlight(l.name) + ' ' +
-            '<span style="font-size:10px;font-weight:500;background:#f1f5f9;color:#64748b;padding:1px 5px;border-radius:4px">' + (l.type || '') + '</span>' +
-          '</div>' +
-          '<div style="font-size:11px;color:#94a3b8;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + highlight(addr) + '</div>' +
-          '<div style="font-size:10px;color:#cbd5e1;font-family:monospace;margin-top:1px">' + highlight(l.id) + '</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('') +
-  (filtered.length > 100 ? '<div style="padding:8px 14px;font-size:11px;color:#94a3b8;text-align:center">Showing 100 of ' + filtered.length + ' — type to narrow results</div>' : '');
-}
-
-function shipToSelect(locId) {
-  var loc = locs.find(function(l) { return l.id === locId; });
-  if (!loc) return;
-
-  var addr = [loc.city, loc.state, loc.zip].filter(Boolean).join(', ');
-  var display = addr || loc.name;
-
-  _shipToSelected = { id: loc.id, name: loc.name, display: display, addr: addr };
-
-  // Set hidden value fields
-  var odtInput = document.getElementById('odt');
-  var odtLocId = document.getElementById('odt-loc-id');
-  if (odtInput)  odtInput.value  = display;
-  if (odtLocId)  odtLocId.value  = loc.id;
-
-  // Update search input
-  var search = document.getElementById('odt-search');
-  if (search) search.value = loc.name + ' — ' + addr;
-
-  // Show badge
-  var badge    = document.getElementById('odt-badge');
-  var badgeName = document.getElementById('odt-badge-name');
-  var badgeAddr = document.getElementById('odt-badge-addr');
-  if (badge)     { badge.style.display = 'flex'; }
-  if (badgeName) badgeName.textContent = loc.name;
-  if (badgeAddr) badgeAddr.textContent = addr;
-
-  // Hide results
-  var results = document.getElementById('odt-results');
-  if (results) results.style.display = 'none';
-
-  var clearBtn = document.getElementById('odt-clear');
-  if (clearBtn) clearBtn.style.display = 'block';
-}
-
-function shipToClear() {
-  _shipToSelected = null;
-  var odtInput  = document.getElementById('odt');
-  var odtLocId  = document.getElementById('odt-loc-id');
-  var search    = document.getElementById('odt-search');
-  var badge     = document.getElementById('odt-badge');
-  var results   = document.getElementById('odt-results');
-  var clearBtn  = document.getElementById('odt-clear');
-  if (odtInput)  odtInput.value  = '';
-  if (odtLocId)  odtLocId.value  = '';
-  if (search)    { search.value = ''; search.focus(); }
-  if (badge)     badge.style.display = 'none';
-  if (results)   results.style.display = 'none';
-  if (clearBtn)  clearBtn.style.display = 'none';
-}
-
-function populateShipToDropdown(selectedDest) {
-  // Pre-select if editing existing order
-  if (!selectedDest) return;
-  var loc = locs.find(function(l) {
-    var addr = [l.city, l.state].filter(Boolean).join(', ').toLowerCase();
-    return l.id === selectedDest ||
-           selectedDest.toLowerCase().includes((l.city||'').toLowerCase()) ||
-           selectedDest.toLowerCase() === l.name.toLowerCase();
-  });
-  if (loc) {
-    shipToSelect(loc.id);
-  } else {
-    // Custom address
-    var odtInput = document.getElementById('odt');
-    var search   = document.getElementById('odt-search');
-    if (odtInput) odtInput.value  = selectedDest;
-    if (search)   search.value = selectedDest;
-  }
-}
-
-// Close picker when clicking outside
-document.addEventListener('click', function(e) {
-  var wrap = document.getElementById('shipto-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    var results = document.getElementById('odt-results');
-    if (results) results.style.display = 'none';
-    // If nothing selected and text typed — save as custom address
-    var search  = document.getElementById('odt-search');
-    var odtInput = document.getElementById('odt');
-    if (search && odtInput && !_shipToSelected && search.value.trim()) {
-      odtInput.value = search.value.trim();
-    }
-  }
-});
+// REQ-24: Ship-To searchable location picker removed (shipToSearch /
+// shipToSelect / shipToClear / populateShipToDropdown / the outside-
+// click handler / the _shipToSelected state). Users now type the four
+// Ship To fields (odtn / odtc / odts / odtz) directly; svO reads them
+// and composes the `dest` string at submit time.
 
 function rnLines(ls){
   var opts=inv.map(it=>`<option value="${it.id}">${it.id} — ${it.desc}</option>`).join('');
@@ -2327,25 +2394,43 @@ function gLines(){
 async function svO(action){
   var id=document.getElementById('oi').value.trim();
   var cust=document.getElementById('oc').value;
-  var og=document.getElementById('og');var orig=og.options[og.selectedIndex]?.value||'';
-  // Ship To: read from hidden input (set by searchable picker) + capture location ID
-  var destText  = (document.getElementById('odt') || {}).value || '';
-  var destLocId = (document.getElementById('odt-loc-id') || {}).value || '';
-  // If nothing selected in picker, use search input as custom address
-  if (!destText) {
-    var searchInput = document.getElementById('odt-search');
-    destText = searchInput ? searchInput.value.trim() : '';
+
+  // REQ-24: read the four Ship From + four Ship To inputs. Compose
+  // the legacy `orig` / `dest` strings at the boundary so downstream
+  // code (planner, TMS push, BOL) that reads "CITY, ST ZIP" still
+  // works. The dedicated name/city/state/zip fields are the source
+  // of truth; the composed strings are derived.
+  var sfName = document.getElementById('ogn').value.trim();
+  var sfCity = document.getElementById('ogc').value.trim();
+  var sfState = document.getElementById('ogs').value.trim().toUpperCase();
+  var sfZip  = document.getElementById('ogz').value.trim();
+  var stName = document.getElementById('odtn').value.trim();
+  var stCity = document.getElementById('odtc').value.trim();
+  var stState = document.getElementById('odts').value.trim().toUpperCase();
+  var stZip  = document.getElementById('odtz').value.trim();
+  function composeAddr(city, state, zip){
+    var head = [city.toUpperCase(), state].filter(Boolean).join(', ');
+    return zip ? (head + ' ' + zip).trim() : head;
   }
-  var dest = destText;
+  var orig = composeAddr(sfCity, sfState, sfZip);
+  var dest = composeAddr(stCity, stState, stZip);
+
   var lines=gLines();
-  if(!cust||!dest){toast('Customer and destination required','twn');return;}
+  if(!cust || !stCity || !stState){ toast('Customer and Ship To city/state required','twn'); return; }
   var existing=_eo?orders.find(x=>x.id===_eo):null;
   var ord={
     id, cust, orig, dest,
-    // Preserve the ship-to location id so pushOrderToTMS can resolve
-    // the canonical location record (name + city/state/zip) rather
-    // than parsing the combined `dest` string on the TMS side.
-    destLocId: destLocId || null,
+    // REQ-24: dedicated ship-from / ship-to parts. `orig`/`dest` above
+    // are derived composed strings kept for back-compat with legacy
+    // consumers; these fields are what the user actually typed.
+    shipFromName: sfName || null,
+    shipFromCity: sfCity || null,
+    shipFromState: sfState || null,
+    origZip: sfZip || null,
+    shipToName: stName || null,
+    shipToCity: stCity || null,
+    shipToState: stState || null,
+    destZip: stZip || null,
     po:   document.getElementById('opo').value,
     ready: document.getElementById('ords') ? document.getElementById('ords').value : '',
     due:  document.getElementById('odd').value,
@@ -2379,8 +2464,14 @@ async function svO(action){
     cl('m-o');ro();updateBadges();updatePipelineCounts();
     // REQ-14: always surface the generated order number on the confirmation
     // toast so users see the ID they need to track / reference the order.
-    if(action==='book'){toast('✅ Order '+id+' has been booked successfully — Stage 2','tok');openAvail(id);}
-    else toast('✅ Order '+id+' has been created (Draft)','tin');
+    // REQ-27: order-creation toasts must stay visible for 60 seconds unless
+    // the user dismisses them manually via the × button.
+    if(action==='book'){
+      toast('✅ Order '+id+' has been booked successfully — Stage 2','tok',{ durationMs: 60000, dismissible: true });
+      openAvail(id);
+    } else {
+      toast('✅ Order '+id+' has been created (Draft)','tin',{ durationMs: 60000, dismissible: true });
+    }
   }catch(e){toast('❌ '+e.message,'ter');console.error(e);}
 }
 
@@ -2882,9 +2973,9 @@ async function toggleHold(id){
 
 // REQ-16: reset every filter control to its default and re-render.
 function resetOmsFilters(){
-  var ids=['sq','fc','f-stage','f-mode','f-svc','f-due-from','f-due-to'];
+  var ids=['sq','fc','f-stage','f-status','f-origin','f-dest','f-shipid',
+           'f-due-from','f-due-to','f-created-from','f-created-to'];
   for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]); if(el) el.value='';}
-  var hold=document.getElementById('f-hold'); if(hold) hold.checked=false;
   _sf=0;
   ro();
 }
@@ -2935,10 +3026,51 @@ function stgBadge(stageOrKey,inv){
   return`<span class="stg ${s?s.cls:'s1'}">${s?s.lbl:stageOrKey}</span>`;
 }
 function ifc(l,v){return`<div class="ifc"><div class="ifl">${l}</div><div class="ifv">${v}</div></div>`;}
-function toast(msg,cls){
-  var w=document.getElementById('twr');var t=document.createElement('div');
-  t.className='toast '+(cls||'tin');t.textContent=msg;w.appendChild(t);
-  setTimeout(()=>{t.style.cssText='opacity:0;transition:opacity .3s';setTimeout(()=>t.remove(),300);},3500);
+// REQ-27: OMS toast now supports a per-call duration and a close button.
+// Signature kept backward compatible: toast(msg, cls) still works with the
+// original 3.5s auto-dismiss. Pass an options object to override:
+//   toast('Order ORD-1 created', 'tok', { durationMs: 60000, dismissible: true })
+// durationMs === 0 makes the toast sticky until the user clicks ×.
+function toast(msg, cls, opts){
+  var o = opts || {};
+  var durationMs = (typeof o.durationMs === 'number') ? o.durationMs : 3500;
+  var dismissible = (o.dismissible !== false);
+  var w = document.getElementById('twr');
+  if (!w) return;
+  var t = document.createElement('div');
+  t.className = 'toast ' + (cls || 'tin');
+  t.style.display = 'flex';
+  t.style.alignItems = 'center';
+  t.style.gap = '8px';
+
+  var textSpan = document.createElement('span');
+  textSpan.style.flex = '1';
+  textSpan.textContent = msg;
+  t.appendChild(textSpan);
+
+  var removed = false;
+  function remove(){
+    if (removed) return;
+    removed = true;
+    t.style.cssText = 'opacity:0;transition:opacity .3s';
+    setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+  }
+
+  if (dismissible) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Dismiss notification');
+    btn.textContent = '✕';
+    btn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:14px;color:inherit;opacity:0.6;padding:0 4px;line-height:1;';
+    btn.onclick = remove;
+    t.appendChild(btn);
+  }
+
+  w.appendChild(t);
+
+  if (durationMs > 0) {
+    setTimeout(remove, durationMs);
+  }
 }
 
 // ─── ORDER DETAIL DRAWER ──────────────────────────────────────────

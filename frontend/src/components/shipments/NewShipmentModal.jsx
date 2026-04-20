@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { buildBlankShipment } from "../../services/shipmentService";
+import LocationFieldsEditor from "../LocationFieldsEditor";
+import { locationsToShipmentPatch } from "../../types/location";
 
 const MODES = ["LTL", "TL"];
 const SERVICE_LEVELS = ["Standard", "Expedited", "Economy", "White Glove", "Time-Critical"];
@@ -12,12 +14,21 @@ export default function NewShipmentModal({ carriers, onSave, onClose }) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  // REQ-24: form state holds shipFrom / shipTo as canonical Location
+  // objects. At submit time we flatten both into the DB column shape
+  // (origin / dest / origin_zip / dest_zip / ship_from_name /
+  // ship_to_name) via the shared `locationsToShipmentPatch` mapper.
+  const addrPatch = locationsToShipmentPatch(form.shipFrom, form.shipTo);
+
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.origin || !form.dest) return;
+    if (!addrPatch.origin || !addrPatch.dest) return;
     setSaving(true);
     try {
-      await onSave(form);
+      // Strip the UI-only shipFrom / shipTo keys before they reach the
+      // DB — otherwise PostgREST rejects unknown columns.
+      const { shipFrom, shipTo, ...rest } = form;
+      await onSave({ ...rest, ...addrPatch });
     } finally {
       setSaving(false);
     }
@@ -67,16 +78,24 @@ export default function NewShipmentModal({ carriers, onSave, onClose }) {
               Shipment Details
             </div>
 
-            {/* Origin / Destination */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-              <div>
-                <label style={labelStyle}>Origin *</label>
-                <input value={form.origin} onChange={(e) => set("origin", e.target.value)} placeholder="e.g. Dallas, TX" style={inputStyle} required />
-              </div>
-              <div>
-                <label style={labelStyle}>Destination *</label>
-                <input value={form.dest} onChange={(e) => set("dest", e.target.value)} placeholder="e.g. Chicago, IL" style={inputStyle} required />
-              </div>
+            {/* Ship From / Ship To — shared editor; no adapter needed. */}
+            <div style={{ marginBottom: 14 }}>
+              <LocationFieldsEditor
+                label="Ship From"
+                required
+                value={form.shipFrom}
+                onChange={(next) => set("shipFrom", next)}
+                namePlaceholder="Location Name (e.g. Dallas DC)"
+              />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <LocationFieldsEditor
+                label="Ship To"
+                required
+                value={form.shipTo}
+                onChange={(next) => set("shipTo", next)}
+                namePlaceholder="Location Name (e.g. Chicago Warehouse)"
+              />
             </div>
 
             {/* Mode / Carrier */}
@@ -157,10 +176,10 @@ export default function NewShipmentModal({ carriers, onSave, onClose }) {
             }}>
               Cancel
             </button>
-            <button type="submit" disabled={saving || !form.origin || !form.dest} style={{
+            <button type="submit" disabled={saving || !addrPatch.origin || !addrPatch.dest} style={{
               padding: "10px 24px", background: "#2563eb", border: "none", borderRadius: 8,
               fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit",
-              opacity: saving || !form.origin || !form.dest ? 0.5 : 1,
+              opacity: saving || !addrPatch.origin || !addrPatch.dest ? 0.5 : 1,
             }}>
               {saving ? "Creating..." : "Create Shipment"}
             </button>

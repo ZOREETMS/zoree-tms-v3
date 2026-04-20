@@ -84,6 +84,10 @@ export function buildPlan(lane, bestQuote, laneOrders) {
     destination: lane.destination,
     originZip: lane.originZip,
     destZip: lane.destZip,
+    // REQ-24: forward the lane's ship-from / ship-to Location Name into the
+    // plan so `executePlan` can persist it on the new shipment row.
+    shipFromName: lane.shipFromName || "",
+    shipToName:   lane.shipToName   || "",
     totalWeight: lane.totalWeight,
     totalPieces: lane.totalPieces,
     orderIds: lane.orderIds,
