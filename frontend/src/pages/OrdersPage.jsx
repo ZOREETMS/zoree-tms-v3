@@ -378,10 +378,24 @@ export default function OrdersPage() {
     setEditStatus("");
     // Pre-populate edit form
     if (o) {
+      // parseCity: tolerant splitter for address strings that may include
+      // a leading location-name prefix like "Dallas Warehouse, Dallas, TX 75207".
+      // Pulls the zip (5 digits) first, then treats the LAST two
+      // comma-separated parts as city + state so the location name
+      // doesn't shift city into the state slot.
       const parseCity = (str) => {
         if (!str) return { city: "", state: "", zip: "" };
-        let s = str; let zip = ""; const m = s.match(/(\d{5})/); if (m) { zip = m[1]; s = s.replace(m[1], "").replace(/,?\s*$/, "").trim(); }
-        const parts = s.split(","); return { city: (parts[0] || "").trim(), state: (parts[1] || "").trim(), zip };
+        let s = str; let zip = "";
+        const m = s.match(/(\d{5})/);
+        if (m) { zip = m[1]; s = s.replace(m[1], "").replace(/,?\s*$/, "").trim(); }
+        const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+        if (parts.length === 0) return { city: "", state: "", zip };
+        if (parts.length === 1) return { city: parts[0], state: "", zip };
+        // Take the last two parts as city / state; anything earlier is the
+        // location-name prefix and belongs in ship_to_name, not here.
+        const state = parts[parts.length - 1];
+        const city  = parts[parts.length - 2];
+        return { city, state, zip };
       };
       const op = parseCity(o.origin || ""); const dp = parseCity(o.dest || "");
       setEditForm({

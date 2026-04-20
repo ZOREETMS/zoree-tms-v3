@@ -79,6 +79,15 @@ function omsPayloadToDbRow(o) {
   setIf('excluded_carrier',  o.excludedCarrier || o.excluded_carrier);
   setIf('notes',             o.notes);
   setIf('oms_order_ref',     o.omsOrderRef || o.oms_order_ref || o.id);
+  // Ship-to / ship-from labels supplied by OMS when the user picks a
+  // named location. Keeping these on the TMS row lets the Orders page
+  // show "Dallas Warehouse" next to the city/state/zip instead of
+  // forcing a lookup or losing the label entirely.
+  setIf('ship_to_name',      o.shipToName || o.ship_to_name);
+  setIf('ship_from_name',    o.shipFromName || o.ship_from_name);
+  // Canonical destination address string ("CITY, ST ZIP") stripped of
+  // any location-name prefix the OMS may have carried in `dest`.
+  setIf('ship_to_address',   o.shipToAddress || o.ship_to_address || o.dest || o.destination);
 
   return row;
 }

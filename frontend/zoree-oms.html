@@ -1374,27 +1374,66 @@ var ZoreeMiddleware = {
         : null;
       var originStr = null;
       var originZipStr = null;
+      var shipFromNameStr = null;
       if (locMatch) {
         var parts = [locMatch.city, locMatch.state].filter(Boolean).join(', ');
         originStr = locMatch.zip ? (parts + ' ' + locMatch.zip) : parts;
         originZipStr = locMatch.zip || null;
+        shipFromNameStr = locMatch.name || null;
       } else if (typeof omsOrder.orig === 'string' && omsOrder.orig) {
         // If the caller already handed us a city/state string, keep it.
         originStr = omsOrder.orig;
         var zipMatch = omsOrder.orig.match(/\b(\d{5})\b/);
         originZipStr = zipMatch ? zipMatch[1] : null;
       }
-      // REQ-17: extract dest zip similarly so the TMS side gets both halves
-      // of the mapping populated.
+      // Ship-to mapping: the OMS may store `dest` as either:
+      //   • the full combined string "Dallas Warehouse, Dallas, TX 75207"
+      //   • just the "City, ST ZIP" half
+      // TMS expects a clean `dest` ("CITY, ST ZIP") plus a separate
+      // ship_to_name for the location label. Prefer the location record
+      // when we can resolve it; otherwise split the combined string on
+      // the last two comma-separated parts to extract city/state.
+      var destStr = null;
       var destZipStr = null;
-      if (typeof omsOrder.dest === 'string') {
+      var shipToNameStr = null;
+      var destLocId = omsOrder.destLocId || omsOrder.dest_location_id || null;
+      var destLocMatch = null;
+      if (destLocId && typeof locs !== 'undefined' && Array.isArray(locs)) {
+        destLocMatch = locs.find(function(l){ return l.id === destLocId; }) || null;
+      }
+      if (destLocMatch) {
+        var dparts = [destLocMatch.city, destLocMatch.state].filter(Boolean).join(', ');
+        destStr = destLocMatch.zip ? (dparts + ' ' + destLocMatch.zip) : dparts;
+        destZipStr = destLocMatch.zip || null;
+        shipToNameStr = destLocMatch.name || null;
+      } else if (typeof omsOrder.dest === 'string') {
         var dzMatch = omsOrder.dest.match(/\b(\d{5})\b/);
         destZipStr = dzMatch ? dzMatch[1] : null;
+        // Split the OMS dest on commas and parse out the location-name
+        // prefix when present: "Location Name, City, ST ZIP" → name + clean dest.
+        var raw = omsOrder.dest.trim();
+        var rawNoZip = dzMatch ? raw.replace(dzMatch[1], '').replace(/,?\s*$/, '').trim() : raw;
+        var commaParts = rawNoZip.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+        if (commaParts.length >= 3) {
+          // Last two parts are city/state; everything before is the location name.
+          var city = commaParts[commaParts.length - 2];
+          var state = commaParts[commaParts.length - 1];
+          shipToNameStr = commaParts.slice(0, commaParts.length - 2).join(', ');
+          destStr = destZipStr ? (city + ', ' + state + ' ' + destZipStr) : (city + ', ' + state);
+        } else {
+          destStr = omsOrder.dest;
+        }
       }
       var payload = {
         id: omsOrder.id, customer: custName || omsOrder.customer_id,
-        origin: originStr, dest: omsOrder.dest,
+        origin: originStr, dest: destStr,
         originZip: originZipStr, destZip: destZipStr,
+        // Bug fix: the TMS was storing ship_to_name as null even when
+        // the OMS user had picked a named location. Forward the
+        // resolved location label on both sides so the TMS edit form
+        // can display it without a fresh lookup.
+        shipFromName: shipFromNameStr,
+        shipToName:   shipToNameStr,
         weight: wt, pieces: pcs, commodity: omsOrder.comm || 'General',
         // REQ-11: carry mode + service level across so the TMS planner can
         // honour them (see REQ-09 / REQ-10).
@@ -2303,6 +2342,10 @@ async function svO(action){
   var existing=_eo?orders.find(x=>x.id===_eo):null;
   var ord={
     id, cust, orig, dest,
+    // Preserve the ship-to location id so pushOrderToTMS can resolve
+    // the canonical location record (name + city/state/zip) rather
+    // than parsing the combined `dest` string on the TMS side.
+    destLocId: destLocId || null,
     po:   document.getElementById('opo').value,
     ready: document.getElementById('ords') ? document.getElementById('ords').value : '',
     due:  document.getElementById('odd').value,
