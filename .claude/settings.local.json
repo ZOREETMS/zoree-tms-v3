@@ -805,7 +805,9 @@
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__execute_sql",
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_migrations",
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__apply_migration",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5175/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5175/)",
+      "Bash(curl -sS -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3001/api/locations/search?q=ATLANTA&source=oms&limit=5\")",
+      "Bash(curl -sS -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3001/api/locations/search?q=ATLANTA&source=tms&limit=5\")"
     ]
   }
 }

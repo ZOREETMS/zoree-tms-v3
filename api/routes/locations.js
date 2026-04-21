@@ -18,6 +18,23 @@
 const router = require('express').Router();
 const { getClient, dbUpsert } = require('../services/supabase');
 
+// ── Column lists differ by source because each master table carries
+// a different "enabled" flag:
+//   • oms_locations.active  → boolean
+//   • public.locations.status → text ('Active' | 'Inactive')
+// The view layer (rowToView) normalizes both to `active:boolean`.
+// Selecting the wrong column errors the whole search out — we hit
+// exactly that before this split (search returned 500).
+const COMMON_COLS = 'id,name,type,address,city,state,zip,country,dock_doors';
+const SELECT_COLS = {
+  oms: `${COMMON_COLS},active`,
+  tms: `${COMMON_COLS},status`,
+};
+
+function selectColumnsFor(source) {
+  return SELECT_COLS[source] || SELECT_COLS.oms;
+}
+
 function rowToView(r, source) {
   return {
     id:        r.id,
@@ -46,11 +63,13 @@ router.get('/search', async (req, res, next) => {
     const table  = source === 'tms' ? 'locations' : 'oms_locations';
 
     // pg_trgm-backed ILIKE on name OR city (indexes added via
-    // req29_enable_location_search migration).
+    // req29_enable_location_search migration). Column list is
+    // per-source because oms_locations and public.locations don't
+    // share an "enabled" column — see selectColumnsFor() above.
     const db = getClient(req.tenant);
     let sel = db
       .from(table)
-      .select('id,name,type,address,city,state,zip,country,dock_doors,active,status')
+      .select(selectColumnsFor(source))
       .limit(limit);
 
     if (q) {
