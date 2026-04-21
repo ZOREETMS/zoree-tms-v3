@@ -800,7 +800,12 @@
       "Bash(awk '{sum+=$1; lines[NR]=$1; files[NR]=$2} END {for\\(i=1; i<=NR; i++\\) if\\(lines[i]>300\\) print lines[i], files[i]}')",
       "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/frontend/src -name \"*.jsx\" -exec wc -l {} +)",
       "Bash(awk '{sum+=$1; lines[NR]=$1; files[NR]=$2} END {for\\(i=1; i<=NR; i++\\) if\\(lines[i]>400\\) print lines[i], files[i]}')",
-      "Bash(git -C /c/Zoree/zoree-tms-v3/zoree-tms-v3 status --short)"
+      "Bash(git -C /c/Zoree/zoree-tms-v3/zoree-tms-v3 status --short)",
+      "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_projects",
+      "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__execute_sql",
+      "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_migrations",
+      "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__apply_migration",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5175/)"
     ]
   }
 }

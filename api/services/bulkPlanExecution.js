@@ -44,6 +44,11 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
     dest_zip:       plan.destZip      || null,
     ship_from_name: plan.shipFromName || null,
     ship_to_name:   plan.shipToName   || null,
+    // Migration 021: persist country codes on the shipment so future
+    // re-quoting can honor rates with match_type='country_to_country'.
+    // Defaults to 'USA' when the plan omits them — matches DB default.
+    origin_country: plan.originCountry || 'USA',
+    dest_country:   plan.destCountry   || 'USA',
     weight: plan.totalWeight || 0,
     pieces: plan.totalPieces || 0,
     status: 'Planned',

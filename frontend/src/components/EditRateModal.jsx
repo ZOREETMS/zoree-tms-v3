@@ -1,4 +1,9 @@
 import { useState, useEffect } from "react";
+import {
+  MATCH_TYPE_OPTIONS,
+  MATCH_TYPE_VALUES,
+  normalizeMatchType,
+} from "../services/rateService";
 
 const MODE_OPTIONS = ["TL", "LTL", "Intermodal", "Flatbed", "Reefer", "Air Freight"];
 const STATUS_OPTIONS = ["Active", "Expiring", "Expired"];
@@ -50,14 +55,20 @@ function buildInitialForm(rate) {
   return {
     lane: rate.lane || "",
     mode: rate.mode || "TL",
+    // Migration 021: controls how this rate is matched to shipments.
+    matchType: normalizeMatchType(rate.match_type || rate.matchType),
     origin: rate.origin || "",
     originCity: rate.originCity || oLoc.city,
     originState: rate.originState || oLoc.state,
-    originZip: rate.originZip || oLoc.zip,
+    // Prefer the structured origin_zip column; fall back to parsing the
+    // legacy origin free-text so pre-migration-021 rows still edit cleanly.
+    originZip: rate.origin_zip || rate.originZip || oLoc.zip,
+    originCountry: rate.origin_country || rate.originCountry || "USA",
     dest: rate.dest || "",
     destCity: rate.destCity || dLoc.city,
     destState: rate.destState || dLoc.state,
-    destZip: rate.destZip || dLoc.zip,
+    destZip: rate.dest_zip || rate.destZip || dLoc.zip,
+    destCountry: rate.dest_country || rate.destCountry || "USA",
     carrier: rate.carrier || "",
     status: rate.status || "Active",
     rate: String(getField(rate, "rate", "rate_per_mile")).replace(/[$]/g, ""),
@@ -78,7 +89,8 @@ function buildInitialForm(rate) {
 }
 
 function buildPayload(form) {
-  // Combine city/state/zip into origin/dest strings
+  // Combine city/state/zip into origin/dest strings (kept for legacy
+  // display / CSV export — the matcher reads the structured columns).
   const origin = [form.originCity, form.originState?.toUpperCase()].filter(Boolean).join(", ") + (form.originZip ? " " + form.originZip : "");
   const dest = [form.destCity, form.destState?.toUpperCase()].filter(Boolean).join(", ") + (form.destZip ? " " + form.destZip : "");
   // Format rate as "$X.XX" and FSC as "X.X%" to match DB convention
@@ -87,6 +99,14 @@ function buildPayload(form) {
   return {
     lane: form.lane,
     mode: form.mode,
+    // Migration 021 columns — promoted from the free-text origin/dest
+    // so the LTL matcher can compare structured values (see
+    // api/services/ltlRateMatcher.js).
+    match_type:     normalizeMatchType(form.matchType),
+    origin_zip:     form.originZip     || null,
+    dest_zip:       form.destZip       || null,
+    origin_country: (form.originCountry || "USA").toUpperCase(),
+    dest_country:   (form.destCountry   || "USA").toUpperCase(),
     origin: origin || form.origin,
     dest: dest || form.dest,
     carrier: form.carrier,
@@ -184,22 +204,40 @@ export default function EditRateModal({ rate, onClose, onSave, isNew, carriers =
             </div>
           </div>
 
+          {/* Match Type — controls how this rate is paired with shipments */}
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">MATCH TYPE *</label>
+            <select
+              value={form.matchType || MATCH_TYPE_VALUES.CITY}
+              onChange={(e) => setField("matchType", e.target.value)}
+            >
+              {MATCH_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label.toUpperCase()}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
+              {(MATCH_TYPE_OPTIONS.find((o) => o.value === (form.matchType || MATCH_TYPE_VALUES.CITY)) || {}).hint}
+            </span>
+          </div>
+
           {/* Origin */}
           <div style={{ marginBottom: 12 }}>
             <label className="form-label">ORIGIN *</label>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 8 }}>
               <input value={form.originCity || ""} onChange={(e) => setField("originCity", e.target.value)} placeholder="City (e.g. Chicago)" />
               <input value={form.originState || ""} onChange={(e) => setField("originState", e.target.value)} placeholder="ST" maxLength={2} style={{ textTransform: "uppercase" }} />
               <input value={form.originZip || ""} onChange={(e) => setField("originZip", e.target.value)} placeholder="ZIP (opt)" maxLength={5} />
+              <input value={form.originCountry || ""} onChange={(e) => setField("originCountry", e.target.value)} placeholder="USA" maxLength={3} style={{ textTransform: "uppercase" }} />
             </div>
           </div>
           {/* Destination */}
           <div style={{ marginBottom: 12 }}>
             <label className="form-label">DESTINATION *</label>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 8 }}>
               <input value={form.destCity || ""} onChange={(e) => setField("destCity", e.target.value)} placeholder="City (e.g. Dallas)" />
               <input value={form.destState || ""} onChange={(e) => setField("destState", e.target.value)} placeholder="ST" maxLength={2} style={{ textTransform: "uppercase" }} />
               <input value={form.destZip || ""} onChange={(e) => setField("destZip", e.target.value)} placeholder="ZIP (opt)" maxLength={5} />
+              <input value={form.destCountry || ""} onChange={(e) => setField("destCountry", e.target.value)} placeholder="USA" maxLength={3} style={{ textTransform: "uppercase" }} />
             </div>
           </div>
 

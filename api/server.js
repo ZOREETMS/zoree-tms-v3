@@ -17,6 +17,7 @@ const { createRolesRouter } = require('./routes/roles');
 const ingestRouter = require('./routes/ingest');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
+const { matchRate } = require('./services/rateMatcher');
 const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
@@ -1858,8 +1859,17 @@ app.get('/api/ccxl/carriers', async (req, res) => {
 app.post('/api/ltl/quote', async (req, res) => {
   const user = await verifyTokenSoft(req);
 
-  const { originZip, destZip, weight, freightClass, originCity, destCity } = req.body;
+  const {
+    originZip, destZip, weight, freightClass, originCity, destCity,
+    // Optional country context for match_type='country_to_country' rates.
+    // Defaults to 'USA' if caller omits — preserves behavior for existing
+    // planning surfaces that don't yet pass country codes.
+    originCountry: rawOriginCountry,
+    destCountry:   rawDestCountry,
+  } = req.body;
   if (!originZip || !destZip) return res.status(400).json({ error: 'originZip + destZip required' });
+  const originCountry = (rawOriginCountry || 'USA').toUpperCase();
+  const destCountry   = (rawDestCountry   || 'USA').toUpperCase();
 
   const wt = Math.round(weight || 1000);
   const fc = freightClass || 70;
@@ -1975,8 +1985,18 @@ app.post('/api/ltl/quote', async (req, res) => {
   const dCity = destCityName.toLowerCase().split(',')[0].trim();
   let adderRates = [];
   try {
+    // Pull candidate rates for this lane. We don't pre-filter on city
+    // here (beyond mode+status) because the matcher evaluates each
+    // rate's match_type — a 'zip_to_zip' or 'country_to_country' rate
+    // may have origin/dest strings that don't contain the shipment's
+    // city. Filtering client-side (in the matcher) is fine: the
+    // rates table is small (tens to hundreds of rows per carrier).
     const rr = await fetch(
-      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&origin=ilike.*${encodeURIComponent(oCity)}*&dest=ilike.*${encodeURIComponent(dCity)}*&select=carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,czarlite_min_wt,czarlite_max_wt,transit_days`,
+      `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&select=` +
+        'carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,' +
+        'czarlite_min_wt,czarlite_max_wt,transit_days,' +
+        // New columns from migration 021 — match_type + structured geo.
+        'match_type,origin_zip,dest_zip,origin_country,dest_country',
       { headers: sbHeaders(null) }
     );
     if (rr.ok) adderRates = await rr.json();
@@ -1986,33 +2006,37 @@ app.post('/api/ltl/quote', async (req, res) => {
     console.log('[LTL/quote] Lane rates found:', adderRates.length, adderRates.map(r=>r.carrier+'|disc='+r.discount));
   } catch(e) { console.error('[LTL/quote] rates error:', e.message); }
 
-  // Step 4: One quote per carrier
-  // Match rate record: lane-specific first, then carrier-only (blank origin/dest)
-  // Formula: CzarLite base × (1 - discount%) + FSC% on discounted base = Total
+  // Step 4: One quote per carrier.
+  // Rate matching is delegated to api/services/ltlRateMatcher — see
+  // that module for match_type semantics (city_to_city / zip_to_zip /
+  // country_to_country) and the carrier-level fallback rule.
+  // Pricing formula: CzarLite base × (1 - discount%) + FSC% on
+  // discounted base = total.
   const quotes = [];
+
+  const shipmentCtx = {
+    originCity:    oCity,
+    destCity:      dCity,
+    originZip:     effectiveOriginZip,
+    destZip:       effectiveDestZip,
+    originCountry,
+    destCountry,
+    weight:        wt,
+  };
 
   czCarriers.forEach(carrier => {
     const carrierRates = adderRates.filter(r => r.carrier === carrier.name);
+    const match = matchRate(shipmentCtx, carrierRates);
 
-    // 1. Lane-specific match
-    let r = carrierRates.find(rt => {
-      const ro = (rt.origin || '').toLowerCase();
-      const rd = (rt.dest   || '').toLowerCase();
-      return ro && rd && ro.includes(oCity) && rd.includes(dCity);
-    });
-    // 2. Carrier-level fallback (blank origin+dest = all lanes)
-    if (!r) r = carrierRates.find(rt => !rt.origin && !rt.dest) || null;
-
-    // Enforce weight limits from rate record
-    if (r) {
-      const minWt = r.czarlite_min_wt || 0;
-      const maxWt = r.czarlite_max_wt || Infinity;
-      if (wt < minWt || wt > maxWt) {
-        console.log(`[LTL/quote] ${carrier.name}: SKIPPED — weight ${wt}lbs outside range ${minWt}–${maxWt}lbs`);
-        return; // skip this carrier
-      }
+    if (match.reason === 'weight-out-of-range') {
+      const offending = match.offending || {};
+      const minWt = offending.czarlite_min_wt || 0;
+      const maxWt = offending.czarlite_max_wt || 'Inf';
+      console.log(`[LTL/quote] ${carrier.name}: SKIPPED — weight ${wt}lbs outside range ${minWt}–${maxWt}lbs (rate ${offending.lane || '?'})`);
+      return; // skip this carrier — mirrors pre-refactor behavior
     }
 
+    const r = match.rate; // may be null → carrier priced CzarLite-only
     const discountPct  = r ? (parseFloat(r.discount)      || 0) : 0;
     const discountFlat = r ? (parseFloat(r.discount_flat) || 0) : 0;
     const discountAmt  = Math.round(baseTotal * discountPct / 100) + discountFlat;
@@ -2024,7 +2048,7 @@ app.post('/api/ltl/quote', async (req, res) => {
       : Math.round(czarBase.surchargeAmount || 0);
     const total = Math.round(discountedBase + fscCharge);
 
-    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'}`);
+    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'} reason=${match.reason}`);
     quotes.push({
       rateId:       r ? (r.lane || r.id) : null,
       carrier:      carrier.name,
@@ -2437,6 +2461,15 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
             },
             body: JSON.stringify({
               originZip, destZip, weight: wt, freightClass: fc,
+              // Forward the lane's full origin / destination strings so
+              // the downstream /api/ltl/quote can run its city_to_city
+              // rate match. Without these, ctx.originCity falls back to
+              // the ZIP, normCity() strips digits to '', and every
+              // city_to_city rate silently misses.
+              originCity:    lane.origin,
+              destCity:      lane.destination,
+              originCountry: lane.originCountry || 'USA',
+              destCountry:   lane.destCountry   || 'USA',
             }),
           });
           const ltlData = await ltlRes.json();
@@ -2483,38 +2516,76 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       // Haversine fallback — approximate road miles from zip codes
       const haversineMiles = estimateMilesByZip(lane.originZip, lane.destZip);
 
-      // Always fetch TL rates from DB (for all weight classes)
+      // Always fetch TL rates from DB (for all weight classes).
+      // REQ-31: TL matching now honors rates.match_type via the
+      // shared matcher at api/services/rateMatcher.js. The same
+      // matcher is used for LTL inside /api/ltl/quote, so a TL
+      // zip_to_zip rate and an LTL city_to_city rate on the same
+      // lane will both produce quotes and the cheapest wins in
+      // the downstream sort.
       if (wantsTl) {
         try {
           const oCity = extractCity(lane.origin);
           const dCity = extractCity(lane.destination);
-          const oLike = `%25${encodeURIComponent(oCity)}%25`;
-          const dLike = `%25${encodeURIComponent(dCity)}%25`;
-          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&origin=ilike.${oLike}&dest=ilike.${dLike}&select=carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles`;
+          // No server-side city ilike pre-filter: a zip_to_zip or
+          // country_to_country rate may have an origin/dest string
+          // that doesn't contain the lane's city, and pre-filtering
+          // would exclude it before the matcher sees it. Rates table
+          // is small enough that client-side filtering in the
+          // matcher is fine.
+          const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=` +
+            'carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles,' +
+            'czarlite_min_wt,czarlite_max_wt,' +
+            // Migration 021 structured columns.
+            'match_type,origin_zip,dest_zip,origin_country,dest_country';
           const tlRes = await fetch(tlUrl, { headers: sbHeaders(null) });
           const tlRates = await tlRes.json();
 
           if (Array.isArray(tlRates)) {
-            tlRates.forEach((rate) => {
-              // Filter: only rates matching this lane's origin and dest (city name)
-              const rateO = extractCity(rate.origin);
-              const rateD = extractCity(rate.dest);
-              if (!rateO.includes(oCity) && !oCity.includes(rateO)) return;
-              if (!rateD.includes(dCity) && !dCity.includes(rateD)) return;
+            // Shipment context for the matcher — built once per lane.
+            const tlShipmentCtx = {
+              originCity:    oCity,
+              destCity:      dCity,
+              originZip:     lane.originZip || originZip,
+              destZip:       lane.destZip   || destZip,
+              originCountry: (lane.originCountry || 'USA').toUpperCase(),
+              destCountry:   (lane.destCountry   || 'USA').toUpperCase(),
+              weight:        wt,
+            };
+
+            // Group candidate rates by carrier — the matcher is
+            // per-carrier so each carrier can only produce one
+            // quote on this lane / mode.
+            const tlRatesByCarrier = tlRates.reduce((acc, rt) => {
+              const key = rt.carrier || '';
+              (acc[key] = acc[key] || []).push(rt);
+              return acc;
+            }, {});
+
+            let tlMatched = 0;
+            Object.entries(tlRatesByCarrier).forEach(([carrierName, carrierTlRates]) => {
+              const tlMatch = matchRate(tlShipmentCtx, carrierTlRates);
+              if (!tlMatch.rate) {
+                // 'weight-out-of-range' / 'no-match' — skip this
+                // carrier on TL. LTL branch above may still quote.
+                return;
+              }
+              const rate = tlMatch.rate;
+              tlMatched += 1;
 
               // Parse rate string like "$2.15" → 2.15
               const rpm = parseFloat((rate.rate || '').replace(/[^0-9.]/g, '')) || 0;
               if (!rpm) return;
               // Parse FSC string like "22.5%" → 22.5
               const fscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
-              // Use PC*MILER miles if carrier has pcmiler_enabled, else rate.miles from DB, else fallback
+              // Miles: PC*MILER if carrier has pcmiler_enabled, else rate.miles, else haversine.
               const carrierKey = (rate.carrier || '').toUpperCase();
               const cFlags = carrierFlags[carrierKey] || {};
               const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || haversineMiles || 500);
               const baseCost = Math.round(rpm * miles);
               const fscCharge = Math.round(baseCost * (fscPct / 100));
               quotes.push({
-                carrier: rate.carrier || 'Unknown',
+                carrier: rate.carrier || carrierName || 'Unknown',
                 scac: '',
                 rateId: rate.lane || rate.id || null,
                 totalCharge: baseCost + fscCharge,
@@ -2529,10 +2600,11 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 serviceLevel: rate.service_level || '',
                 miles,
                 pcmilerMiles: (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : null,
+                matchReason: tlMatch.reason,
               });
             });
+            console.log(`[BulkPlan/rate] TL rates for ${oCity}→${dCity}: ${tlMatched} matched from ${tlRates.length} candidates`);
           }
-          console.log(`[BulkPlan/rate] TL rates for ${oCity}→${dCity}: ${quotes.filter(q=>q.mode==='TL').length} matched from ${Array.isArray(tlRates)?tlRates.length:0} filtered`);
         } catch (tlErr) {
           console.error('[BulkPlan/rate] TL rates error:', tlErr.message);
         }

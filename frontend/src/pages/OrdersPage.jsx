@@ -1006,12 +1006,17 @@ export default function OrdersPage() {
     const confirmStartTime = Date.now();
     try {
       const execRes = await executeSinglePlan(plans);
+      if (!execRes.ok) {
+        toast(`Planning failed: ${execRes.errorMessage}`, 'error', { durationMs: 0 });
+        setPlanModal((prev) => prev ? { ...prev, busy: false, error: execRes.errorMessage } : null);
+        return;
+      }
       setPlanModal(null);
       const firstChosen = groups[0]?.quotes[groups[0]?.selectedIdx] || groups[0]?.bestQuote || {};
       const firstDates = calcDates(firstChosen, siblings?.[0]?.due || "", siblings?.[0]?.ready || "");
       setPlanSummary({
-        shipments: execRes?.shipments || [],
-        ordersUpdated: execRes?.ordersUpdated || 0,
+        shipments: execRes.shipments,
+        ordersUpdated: execRes.ordersUpdated,
         totalCost,
         carrier: firstChosen.carrier || "",
         mode: firstChosen.mode || "TL",

@@ -94,6 +94,18 @@ export function buildPlan(lane, bestQuote, laneOrders) {
     carrier: bestQuote.carrier || "",
     mode: bestQuote.mode || "LTL",
     totalCost: bestQuote.totalCharge || 0,
+    // Bug fix paired with REQ-31: without these three lines, shipments
+    // created via Plan Group / Plan Selected landed with rate=0,
+    // fuel_surcharge=0, accessorials=0 on the row even when the chosen
+    // quote had non-zero components. OrdersPage.jsx confirmPlan already
+    // forwarded these; buildPlan now matches so every planning surface
+    // writes consistent values to the shipment row.
+    //   - czarBaseGross = undiscounted CzarLite base (LTL) or rpm*miles (TL)
+    //   - czarBase      = discounted base; fall back if Gross missing
+    //   - fscCharge / accessorialCharge default to 0 when absent
+    rate:          bestQuote.czarBaseGross || bestQuote.czarBase || 0,
+    fuelSurcharge: bestQuote.fscCharge || 0,
+    accessorials:  bestQuote.accessorialCharge || 0,
     pickupDate: dates.pickup,
     deliveryDate: dates.delivery,
     transitDays: dates.transit,

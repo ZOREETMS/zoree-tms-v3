@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
-import { downloadRateTemplate } from "../services/rateService";
+import {
+  downloadRateTemplate,
+  getMatchTypeBadge,
+  getMatchTypeLabel,
+} from "../services/rateService";
 import { invalidateQuoteCache } from "../services/ordersService";
 
 const STATUS_BADGES = {
@@ -516,6 +520,7 @@ export default function RateManagementPage() {
                   <th onClick={() => toggleSort("dest")} style={{ cursor: "pointer" }}>DESTINATION <SortIcon col="dest" /></th>
                   <th onClick={() => toggleSort("carrier")} style={{ cursor: "pointer" }}>CARRIER <SortIcon col="carrier" /></th>
                   <th onClick={() => toggleSort("mode")} style={{ cursor: "pointer" }}>MODE <SortIcon col="mode" /></th>
+                  <th onClick={() => toggleSort("match_type")} style={{ cursor: "pointer" }}>MATCH TYPE <SortIcon col="match_type" /></th>
                   <th onClick={() => toggleSort("rate")} style={{ cursor: "pointer" }}>RATE <SortIcon col="rate" /></th>
                   <th onClick={() => toggleSort("unit")} style={{ cursor: "pointer" }}>UNIT <SortIcon col="unit" /></th>
                   <th onClick={() => toggleSort("fsc")} style={{ cursor: "pointer" }}>FSC <SortIcon col="fsc" /></th>
@@ -533,7 +538,7 @@ export default function RateManagementPage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={18} className="empty-state">No rates found</td></tr>
+                  <tr><td colSpan={19} className="empty-state">No rates found</td></tr>
                 ) : rows.map((r, idx) => (
                   <tr
                     key={r.id || idx}
@@ -549,6 +554,23 @@ export default function RateManagementPage() {
                     <td className="text-sm">{(r.carrier || "\u2014").toUpperCase()}</td>
                     <td>
                       <span className={MODE_BADGES[r.mode] || "badge badge-blue"}>{(r.mode || "\u2014").toUpperCase()}</span>
+                    </td>
+                    <td title={getMatchTypeLabel(r.match_type)} style={{ textAlign: "center" }}>
+                      <span
+                        className="badge"
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          background: "rgba(99,102,241,.1)",
+                          color: "#4f46e5",
+                          border: "1px solid rgba(99,102,241,.25)",
+                          padding: "2px 8px",
+                          borderRadius: 20,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {getMatchTypeBadge(r.match_type)}
+                      </span>
                     </td>
                     <td className="mono fw-700" style={r.czarlite ? { color: "#6366f1" } : { color: "var(--green)" }}>
                       {formatRate(r)}

@@ -553,10 +553,31 @@ export async function unplanOrderFromShipment(id, orders, shipments) {
 }
 
 /**
- * Execute a set of plans via the BulkPlanApi.
+ * Execute a set of plans via the BulkPlanApi and normalize the response
+ * into a UI-friendly result.
+ *
+ * The backend `/bulk-plan/execute` endpoint returns
+ *   { shipments: [...], ordersUpdated: N, errors: [...] }
+ * and can come back with errors populated but shipments empty when a row
+ * insert is rejected (e.g. missing column, constraint violation). Rather
+ * than leak that interpretation into every caller, we collapse the
+ * response here into:
+ *   { ok, errorMessage, shipments, ordersUpdated, rawErrors }
+ *
+ * Callers can render `errorMessage` directly when `!ok`, and trust
+ * `shipments` / `ordersUpdated` only when `ok` is true.
  */
 export async function executeSinglePlan(plans) {
-  return await BulkPlanApi.execute(plans);
+  const raw = await BulkPlanApi.execute(plans);
+  const shipments = Array.isArray(raw?.shipments) ? raw.shipments : [];
+  const rawErrors = Array.isArray(raw?.errors) ? raw.errors : [];
+  const ordersUpdated = Number(raw?.ordersUpdated) || 0;
+  const hasErrors = rawErrors.length > 0;
+  const ok = shipments.length > 0 && !hasErrors;
+  const errorMessage = ok
+    ? ""
+    : (rawErrors[0]?.error || (shipments.length === 0 ? "No shipments created" : "Planning completed with errors"));
+  return { ok, errorMessage, shipments, ordersUpdated, rawErrors };
 }
 
 /**

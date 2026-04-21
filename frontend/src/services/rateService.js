@@ -1,16 +1,78 @@
 /**
  * Rate Management Service
  * Handles rate template generation, export, and related utilities.
+ *
+ * Also owns the MATCH_TYPE enum constants that back the rate
+ * record's `match_type` column (introduced in migration 021). All UI
+ * components that show / edit match_type MUST import from here —
+ * never hard-code the enum strings (Rule 10 §no hardcoded values).
  */
+
+/* ── match_type: single source of truth for the UI layer ─────────
+ * Mirrors api/services/ltlRateMatcher.js MATCH_TYPES. Kept in sync
+ * manually; a future shared/types package could own both.
+ */
+export const MATCH_TYPE_VALUES = Object.freeze({
+  CITY:    "city_to_city",
+  ZIP:     "zip_to_zip",
+  COUNTRY: "country_to_country",
+});
+
+export const MATCH_TYPE_OPTIONS = [
+  {
+    value: MATCH_TYPE_VALUES.CITY,
+    label: "City to City",
+    hint:  "Match origin & destination city names (case-insensitive)",
+  },
+  {
+    value: MATCH_TYPE_VALUES.ZIP,
+    label: "Zip to Zip",
+    hint:  "Match origin & destination 5-digit ZIP codes exactly",
+  },
+  {
+    value: MATCH_TYPE_VALUES.COUNTRY,
+    label: "Country to Country",
+    hint:  "Match origin & destination country codes only (city/zip ignored)",
+  },
+];
+
+/** Normalize an arbitrary match_type value to a canonical enum member. */
+export function normalizeMatchType(value) {
+  if (!value) return MATCH_TYPE_VALUES.CITY;
+  const v = String(value).trim().toLowerCase().replace(/-/g, "_");
+  if (v === MATCH_TYPE_VALUES.ZIP)     return MATCH_TYPE_VALUES.ZIP;
+  if (v === MATCH_TYPE_VALUES.COUNTRY) return MATCH_TYPE_VALUES.COUNTRY;
+  return MATCH_TYPE_VALUES.CITY;
+}
+
+/** Human-readable label for a match_type (for chips, columns, etc). */
+export function getMatchTypeLabel(value) {
+  const norm = normalizeMatchType(value);
+  const opt  = MATCH_TYPE_OPTIONS.find((o) => o.value === norm);
+  return opt ? opt.label : "City to City";
+}
+
+/** Short badge text (≤4 chars) for dense table rendering. */
+export function getMatchTypeBadge(value) {
+  const norm = normalizeMatchType(value);
+  if (norm === MATCH_TYPE_VALUES.ZIP)     return "ZIP";
+  if (norm === MATCH_TYPE_VALUES.COUNTRY) return "CTRY";
+  return "CITY";
+}
+
+/* ── CSV template / export ──────────────────────────────────── */
 
 const RATE_TEMPLATE_COLUMNS = [
   { header: "Lane ID", example: "CHI-LAX-001" },
+  { header: "Match Type", example: "city_to_city" },
   { header: "Origin City", example: "Chicago" },
   { header: "Origin State", example: "IL" },
   { header: "Origin ZIP", example: "60601" },
+  { header: "Origin Country", example: "USA" },
   { header: "Destination City", example: "Los Angeles" },
   { header: "Destination State", example: "CA" },
   { header: "Destination ZIP", example: "90001" },
+  { header: "Destination Country", example: "USA" },
   { header: "Carrier", example: "XPO Logistics" },
   { header: "Mode", example: "TL" },
   { header: "Rate", example: "2500.00" },
@@ -67,15 +129,23 @@ export function exportRatesCSV(rates) {
   const csvRows = [headers.join(",")];
 
   rates.forEach((r) => {
+    // Prefer structured columns (origin_zip / origin_country) added in
+    // migration 021; fall back to the legacy free-text parsing so older
+    // rows without structured fields still export sanely.
+    const originParts = (r.origin || "").split(",");
+    const destParts   = (r.dest   || "").split(",");
     csvRows.push(
       [
         r.lane,
-        r.origin?.split(",")[0]?.trim() || "",
-        r.origin?.split(",")[1]?.trim() || "",
-        r.origin?.split(",")[2]?.trim() || "",
-        r.dest?.split(",")[0]?.trim() || "",
-        r.dest?.split(",")[1]?.trim() || "",
-        r.dest?.split(",")[2]?.trim() || "",
+        normalizeMatchType(r.match_type),
+        originParts[0]?.trim() || "",
+        originParts[1]?.trim() || "",
+        r.origin_zip || originParts[2]?.trim() || "",
+        r.origin_country || "USA",
+        destParts[0]?.trim() || "",
+        destParts[1]?.trim() || "",
+        r.dest_zip || destParts[2]?.trim() || "",
+        r.dest_country || "USA",
         r.carrier,
         r.mode,
         r.rate,
