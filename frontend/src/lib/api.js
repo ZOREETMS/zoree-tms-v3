@@ -375,3 +375,32 @@ export const BulkPlanApi = {
   },
 };
 
+// REQ-29 / REQ-30 — location master search + create from order screens.
+// All writes land on `oms_locations` (source of truth). The DB trigger
+// propagates the row to TMS `locations` and records an audit entry in
+// `mw_requests` (cmd='PUSH_LOCATION_TO_TMS').
+export const LocationsApi = {
+  /**
+   * @param {string} q          — partial name or city
+   * @param {"oms"|"tms"} source — which table to search
+   * @param {number} [limit=20]
+   * @returns {Promise<{locations: Array}>}
+   */
+  search(q, source = "oms", limit = 20) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    params.set("source", source);
+    params.set("limit", String(limit));
+    return api(`/locations/search?${params.toString()}`);
+  },
+
+  /**
+   * Body: { id, name, type, address, city, state, zip, country, dockDoors, active }
+   */
+  create(input) {
+    return api("/locations", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+};

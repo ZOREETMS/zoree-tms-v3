@@ -86,6 +86,8 @@ export default function NewShipmentModal({ carriers, onSave, onClose }) {
                 value={form.shipFrom}
                 onChange={(next) => set("shipFrom", next)}
                 namePlaceholder="Location Name (e.g. Dallas DC)"
+                enableSearch
+                searchSource="tms"
               />
             </div>
             <div style={{ marginBottom: 14 }}>
@@ -95,6 +97,8 @@ export default function NewShipmentModal({ carriers, onSave, onClose }) {
                 value={form.shipTo}
                 onChange={(next) => set("shipTo", next)}
                 namePlaceholder="Location Name (e.g. Chicago Warehouse)"
+                enableSearch
+                searchSource="tms"
               />
             </div>
 

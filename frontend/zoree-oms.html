@@ -3033,7 +3033,12 @@ function ifc(l,v){return`<div class="ifc"><div class="ifl">${l}</div><div class=
 // durationMs === 0 makes the toast sticky until the user clicks ×.
 function toast(msg, cls, opts){
   var o = opts || {};
-  var durationMs = (typeof o.durationMs === 'number') ? o.durationMs : 3500;
+  // Default 30 000 ms so stage-progression toasts (Stock reserved,
+  // Auto-released, Tendered, Picked, Packed, …) stay on screen long
+  // enough to be read. Callers that want a shorter display can still
+  // pass an explicit { durationMs }. All toasts are dismissible via the
+  // ✕ button so a long duration never blocks the user.
+  var durationMs = (typeof o.durationMs === 'number') ? o.durationMs : 30000;
   var dismissible = (o.dismissible !== false);
   var w = document.getElementById('twr');
   if (!w) return;
@@ -3189,6 +3194,297 @@ function closeOrderDetail() {
 
 // Data is loaded from Supabase — no local defaults needed
 
+
+// ═══════════════════════════════════════════════════════════════════
+// REQ-29 / REQ-30 — Location search + create on the New Sales Order
+// modal. Turns the plain Location Name input into a searchable
+// combobox backed by the already-loaded `locs` array (oms_locations).
+// On select, City / ST / ZIP fields auto-populate.
+// On "+ Create new location" we insert into oms_locations via the
+// Supabase client — the DB trigger fans the row out to TMS locations
+// and enqueues mw_requests (cmd='PUSH_LOCATION_TO_TMS').
+// ═══════════════════════════════════════════════════════════════════
+(function initLocationSearchUI(){
+  if (window.__locSearchInit) return; window.__locSearchInit = true;
+
+  // ---- styles --------------------------------------------------------
+  var css = document.createElement('style');
+  css.textContent = [
+    '.loc-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:5000;',
+    '  background:#fff;border:1px solid var(--border);border-radius:8px;',
+    '  box-shadow:0 10px 24px rgba(16,24,40,.12);max-height:280px;overflow-y:auto;',
+    '  padding:4px 0;font-size:13px}',
+    '.loc-dd button{display:block;width:100%;text-align:left;padding:7px 12px;',
+    '  background:transparent;border:0;cursor:pointer;font:inherit;color:var(--text)}',
+    '.loc-dd button:hover,.loc-dd button.act{background:#eef4ff}',
+    '.loc-dd .cr{color:var(--accent,#2563eb);font-weight:600;',
+    '  border-bottom:1px solid var(--border)}',
+    '.loc-dd .mt{padding:7px 12px;color:var(--text3);font-size:12px}',
+    '.loc-cmodal{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:5500;',
+    '  display:none;align-items:center;justify-content:center}',
+    '.loc-cmodal.on{display:flex}',
+    '.loc-cmodal .card{background:#fff;border-radius:12px;width:520px;max-width:92vw;',
+    '  max-height:92vh;overflow:auto;box-shadow:0 24px 60px rgba(0,0,0,.25)}',
+    '.loc-cmodal .hd{padding:14px 18px;border-bottom:1px solid var(--border);',
+    '  display:flex;justify-content:space-between;align-items:center}',
+    '.loc-cmodal .hd h3{margin:0;font-size:16px}',
+    '.loc-cmodal .bd{padding:16px 18px}',
+    '.loc-cmodal .ft{padding:12px 18px;border-top:1px solid var(--border);',
+    '  display:flex;justify-content:flex-end;gap:8px}',
+    '.loc-cmodal label{display:block;font-size:11px;font-weight:700;',
+    '  color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}',
+    '.loc-cmodal input,.loc-cmodal select{width:100%;padding:7px 10px;',
+    '  border:1.5px solid var(--border);border-radius:7px;font-size:13px;',
+    '  font-family:inherit;box-sizing:border-box}',
+    '.loc-cmodal .gr{display:grid;gap:10px;margin-bottom:10px}',
+    '.loc-cmodal .g2{grid-template-columns:1fr 2fr}',
+    '.loc-cmodal .g4{grid-template-columns:2fr 1fr 1fr 1fr}',
+    '.loc-cmodal .err{padding:8px 10px;background:#fef2f2;color:#b91c1c;',
+    '  border-radius:6px;font-size:12px;margin-top:8px}',
+  ].join('');
+  document.head.appendChild(css);
+
+  // ---- create-new modal (built once, reused) -------------------------
+  var modal = document.createElement('div');
+  modal.className = 'loc-cmodal';
+  modal.innerHTML =
+    '<div class="card">' +
+      '<div class="hd"><h3>Create New Location</h3><button type="button" id="lc-x" class="btn btn-secondary btn-sm">✕</button></div>' +
+      '<form id="lc-form"><div class="bd">' +
+        '<div class="gr g2"><div><label>ID *</label><input id="lc-id" required placeholder="WH-MIA-001"></div>' +
+                         '<div><label>Name *</label><input id="lc-name" required></div></div>' +
+        // Must stay in sync with the oms_locations_type_check constraint.
+        '<div class="gr"><div><label>Type *</label><select id="lc-type">' +
+          '<option>Warehouse</option><option>Distribution Center</option>' +
+          '<option>Cross-Dock</option><option>Plant</option><option>Store</option>' +
+          '<option>Shipper</option><option>Consignee</option><option>Customer</option>' +
+          '<option>Supplier</option><option>Port</option><option>Rail Yard</option>' +
+          '<option>Generic</option></select></div></div>' +
+        '<div class="gr"><div><label>Address</label><input id="lc-addr"></div></div>' +
+        '<div class="gr g4">' +
+          '<div><label>City *</label><input id="lc-city" required></div>' +
+          '<div><label>State *</label><input id="lc-state" maxlength="2" required style="text-transform:uppercase"></div>' +
+          '<div><label>ZIP *</label><input id="lc-zip" maxlength="10" required></div>' +
+          '<div><label>Country</label><input id="lc-country" value="US" maxlength="2" style="text-transform:uppercase"></div>' +
+        '</div>' +
+        '<div class="gr g2"><div><label>Dock Doors</label><input id="lc-docks" type="number" min="0" value="4"></div>' +
+                         '<div style="display:flex;align-items:flex-end;padding-bottom:4px"><label style="display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;font-weight:500;color:var(--text)"><input id="lc-active" type="checkbox" checked style="width:auto">Active</label></div></div>' +
+        '<div id="lc-err" class="err" style="display:none"></div>' +
+      '</div>' +
+      '<div class="ft">' +
+        '<button type="button" id="lc-cancel" class="btn btn-secondary">Cancel</button>' +
+        '<button type="submit" id="lc-save" class="btn btn-primary">Save Location</button>' +
+      '</div></form>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  var $ = function(id){ return document.getElementById(id); };
+  function close(){ modal.classList.remove('on'); }
+  $('lc-x').onclick = close;
+  $('lc-cancel').onclick = close;
+  modal.addEventListener('click', function(e){ if (e.target === modal) close(); });
+
+  // Suggest a sensible ID from the name the user was typing.
+  function suggestId(name){
+    return String(name || '').trim().toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+  }
+
+  // ---- enhance one {name,city,state,zip} row -------------------------
+  var openOnCreate = null; // onCreatedCallback stashed during modal usage
+
+  function enhance(nameId, cityId, stateId, zipId){
+    var name = $(nameId);
+    if (!name) return;
+    // Ensure the input's parent is a positioning context for the dropdown.
+    var host = name.parentElement;
+    var prevPos = window.getComputedStyle(host).position;
+    if (prevPos === 'static' || !prevPos) host.style.position = 'relative';
+
+    var dd = document.createElement('div');
+    dd.className = 'loc-dd';
+    dd.style.display = 'none';
+    host.appendChild(dd);
+
+    var highlight = -1;
+    var settingFromPick = false;   // suppress the auto-clear input handler
+
+    function setFields(l){
+      settingFromPick = true;
+      name.value       = l.name  || '';
+      $(cityId).value  = l.city  || '';
+      $(stateId).value = l.state || '';
+      $(zipId).value   = l.zip   || '';
+      // Fire input events so any existing listeners on the fields run.
+      [name, $(cityId), $(stateId), $(zipId)].forEach(function(el){
+        el.dispatchEvent(new Event('input', { bubbles:true }));
+      });
+      settingFromPick = false;
+    }
+
+    function render(){
+      var q = name.value.trim().toLowerCase();
+      var list = Array.isArray(locs) ? locs.slice() : [];
+      if (q) {
+        list = list.filter(function(l){
+          return (l.name && l.name.toLowerCase().indexOf(q) >= 0) ||
+                 (l.city && l.city.toLowerCase().indexOf(q) >= 0);
+        });
+      }
+      list = list.slice(0, 20);
+
+      var html = '<button type="button" class="cr" data-act="create">+ Create new location' +
+                 (q ? ' “' + q.replace(/"/g,'&quot;') + '”' : '') + '</button>';
+      if (list.length === 0 && q) {
+        html += '<div class="mt">No matches for “' + q.replace(/</g,'&lt;') + '”.</div>';
+      }
+      list.forEach(function(l, i){
+        var sub = [l.city, l.state, l.zip].filter(Boolean).join(', ');
+        html += '<button type="button" data-idx="' + i + '"' +
+                (i === highlight ? ' class="act"' : '') + '>' +
+                '<strong>' + (l.name||'').replace(/</g,'&lt;') + '</strong>' +
+                '<span style="color:var(--text3);font-weight:400"> — ' +
+                sub.replace(/</g,'&lt;') + '</span></button>';
+      });
+      dd.innerHTML = html;
+      dd.style.display = 'block';
+
+      // Delegate clicks
+      dd.onclick = function(e){
+        var btn = e.target.closest('button');
+        if (!btn) return;
+        if (btn.getAttribute('data-act') === 'create') {
+          openCreate(name.value.trim());
+        } else {
+          var idx = Number(btn.getAttribute('data-idx'));
+          if (!Number.isNaN(idx) && list[idx]) {
+            setFields(list[idx]);
+            dd.style.display = 'none';
+          }
+        }
+      };
+    }
+
+    name.addEventListener('focus', render);
+    name.addEventListener('input', function(){
+      // Skip when this input event was triggered by setFields() itself,
+      // otherwise we'd wipe the City/ST/ZIP we just populated.
+      if (settingFromPick) return;
+      highlight = -1;
+      // If user is editing away from a previously-selected location,
+      // clear City/ST/ZIP so a stale address never persists.
+      if ($(cityId).value || $(stateId).value || $(zipId).value) {
+        $(cityId).value = ''; $(stateId).value = ''; $(zipId).value = '';
+      }
+      render();
+    });
+
+    // REQ-29: auto-populate when the typed name exactly matches an
+    // existing location — covers browser autocomplete, paste, and
+    // typing the full name without clicking the dropdown entry.
+    function tryAutoPopulate(){
+      var typed = (name.value || '').trim().toLowerCase();
+      if (!typed) return;
+      if ($(cityId).value || $(stateId).value || $(zipId).value) return; // already populated
+      var exact = (Array.isArray(locs) ? locs : []).find(function(l){
+        return l && l.name && l.name.trim().toLowerCase() === typed;
+      });
+      if (exact) setFields(exact);
+    }
+    name.addEventListener('blur', tryAutoPopulate);
+    name.addEventListener('change', tryAutoPopulate);
+    name.addEventListener('keydown', function(e){
+      if (dd.style.display === 'none') return;
+      var items = dd.querySelectorAll('button[data-idx]');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        highlight = Math.min(highlight + 1, items.length - 1);
+        render();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        highlight = Math.max(highlight - 1, 0);
+        render();
+      } else if (e.key === 'Escape') {
+        dd.style.display = 'none';
+      } else if (e.key === 'Enter' && highlight >= 0) {
+        e.preventDefault();
+        items[highlight] && items[highlight].click();
+      }
+    });
+
+    // Close on outside click
+    document.addEventListener('mousedown', function(e){
+      if (!host.contains(e.target)) dd.style.display = 'none';
+    });
+
+    // Stash callback hook used by the shared create modal.
+    name.__locOnCreated = function(l){ setFields(l); };
+
+    function openCreate(seed){
+      $('lc-id').value      = suggestId(seed);
+      $('lc-name').value    = seed || '';
+      $('lc-type').value    = 'Warehouse';
+      $('lc-addr').value    = '';
+      $('lc-city').value    = '';
+      $('lc-state').value   = '';
+      $('lc-zip').value     = '';
+      $('lc-country').value = 'US';
+      $('lc-docks').value   = '4';
+      $('lc-active').checked= true;
+      $('lc-err').style.display = 'none';
+      openOnCreate = name.__locOnCreated;
+      modal.classList.add('on');
+      setTimeout(function(){ $('lc-name').focus(); }, 0);
+    }
+  }
+
+  enhance('ogn',  'ogc',  'ogs',  'ogz');
+  enhance('odtn', 'odtc', 'odts', 'odtz');
+
+  // ---- form submit → INSERT oms_locations ----------------------------
+  $('lc-form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var err = $('lc-err'); err.style.display = 'none';
+    var btn = $('lc-save'); btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      var row = {
+        id:         $('lc-id').value.trim().toUpperCase(),
+        name:       $('lc-name').value.trim(),
+        type:       $('lc-type').value,
+        address:    $('lc-addr').value.trim() || null,
+        city:       $('lc-city').value.trim(),
+        state:      $('lc-state').value.trim().toUpperCase(),
+        zip:        $('lc-zip').value.trim(),
+        country:    ($('lc-country').value.trim() || 'US').toUpperCase(),
+        dock_doors: Number($('lc-docks').value) || 4,
+        active:     $('lc-active').checked,
+      };
+      // INSERT — the DB trigger (req30_sync_locations_oms_to_tms) handles
+      // the sync to TMS locations and writes a PUSH_LOCATION_TO_TMS audit
+      // row to mw_requests. No extra code required here.
+      var res = await db().from('oms_locations').insert(row).select().single();
+      if (res.error) throw res.error;
+
+      // Mirror into the in-memory global so the autocomplete picks it up.
+      var mapped = (typeof dbLoc === 'function') ? dbLoc(res.data) : {
+        id: res.data.id, name: res.data.name, type: res.data.type,
+        addr: res.data.address || '', city: res.data.city || '',
+        state: res.data.state || '', zip: res.data.zip || '',
+        docks: res.data.dock_doors || 8,
+      };
+      if (Array.isArray(locs)) locs.push(mapped);
+
+      close();
+      if (openOnCreate) openOnCreate(mapped);
+      if (typeof toast === 'function') toast('✓ Location created — synced to TMS', 'tok');
+    } catch (ex) {
+      err.textContent = (ex && ex.message) || 'Failed to save location';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Location';
+    }
+  });
+})();
 
 </script>
 <!-- ORDER DETAIL DRAWER -->

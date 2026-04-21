@@ -213,6 +213,8 @@ export default function OrderDetailModal({
                     value={editForm.shipFrom}
                     onChange={(next) => onEditFormChange((f) => ({ ...f, shipFrom: next }))}
                     namePlaceholder="e.g. Chicago DC"
+                    enableSearch
+                    searchSource="oms"
                   />
                 </div>
 
@@ -221,6 +223,8 @@ export default function OrderDetailModal({
                   value={editForm.shipTo}
                   onChange={(next) => onEditFormChange((f) => ({ ...f, shipTo: next }))}
                   namePlaceholder="e.g. Dallas Warehouse"
+                  enableSearch
+                  searchSource="oms"
                 />
               </div>
 

@@ -33,6 +33,8 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
               onChange={(next) => onFormChange((f) => ({ ...f, shipFrom: next }))}
               namePlaceholder="Location Name (e.g. Chicago DC)"
               cityPlaceholder="City (e.g. Chicago)"
+              enableSearch
+              searchSource="oms"
             />
           </div>
           <div style={{ marginBottom: 14 }}>
@@ -42,6 +44,8 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
               onChange={(next) => onFormChange((f) => ({ ...f, shipTo: next }))}
               namePlaceholder="Location Name (e.g. Dallas Warehouse)"
               cityPlaceholder="City (e.g. Dallas)"
+              enableSearch
+              searchSource="oms"
             />
           </div>
           {/* Commodity + Incoterms */}

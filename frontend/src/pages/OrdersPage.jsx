@@ -10,6 +10,7 @@ import { getOrderHistory } from "../services/historyService";
 import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
+import { useRealtimeOrders } from "../hooks/useRealtimeOrders";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
@@ -128,6 +129,27 @@ export default function OrdersPage() {
     // Only subscribe once on mount — refreshData is stable from the outlet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Supabase Realtime backup. SSE on /api/events/orders is the primary
+  // signal but it can miss events when:
+  //   • The OMS falls back to a direct Supabase upsert because the TMS
+  //     /api/ingest/oms-orders endpoint is unreachable (no SSE emitted).
+  //   • The browser tab was backgrounded and the EventSource socket
+  //     dropped mid-event (auto-reconnect doesn't replay missed events).
+  // Realtime listens on the `orders` table directly — any INSERT /
+  // UPDATE / DELETE triggers refreshData regardless of producer path.
+  // Debounced internally; stacking with the SSE-driven refresh above
+  // is harmless.
+  useRealtimeOrders(
+    () => { try { refreshData?.(); } catch (_) { /* noop */ } },
+    {
+      onEvent: (evt) => {
+        if (evt === "INSERT" || evt === "UPDATE") setAutoSyncLive(true);
+        setLastSyncAt(new Date().toISOString());
+      },
+    },
+  );
+
   const [editUser, setEditUser] = useState("Sridhar (Dispatcher)");
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}

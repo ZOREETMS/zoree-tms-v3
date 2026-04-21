@@ -25,6 +25,7 @@ const shipmentMutations = require('./services/shipmentMutations');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
+const locationsRouter = require('./routes/locations');  // REQ-29 / REQ-30
 
 // Fields on orders we record diffs for (label used in change_history.field).
 const ORDER_HISTORY_FIELDS = {
@@ -577,6 +578,9 @@ app.use('/api/invoices', createInvoicesRouter({
 // Both routes live in routes/ingest.js.
 app.use('/api/ingest', ingestRouter);
 app.use('/api', ingestRouter); // exposes /api/events/orders via the same router
+
+// REQ-29 / REQ-30 — location master search + create
+app.use('/api/locations', locationsRouter);
 
 // ── POST /api/tender/email — notify carrier when a shipment is tendered ──
 function getSmtpTransport() {

@@ -1,4 +1,5 @@
 import React from "react";
+import LocationSearchDropdown from "./LocationSearchDropdown"; // REQ-29
 
 // ═══════════════════════════════════════════════════════════════════
 // REQ-24 — Shared Ship-From / Ship-To editor
@@ -61,6 +62,14 @@ const STACKED_LABEL = {
  * @param {string}  [props.nameLabel="Location Name"]
  * @param {string}  [props.namePlaceholder]
  * @param {string}  [props.cityPlaceholder="City"]
+ * @param {boolean} [props.enableSearch=false]     — REQ-29: when true,
+ *                   the Name field becomes a searchable combobox with
+ *                   inline "Create new location" affordance. Selecting
+ *                   a result auto-populates City/State/ZIP so the
+ *                   caller's three sibling inputs fill in automatically.
+ * @param {"oms"|"tms"} [props.searchSource="oms"] — which master table
+ *                   backs the search. OMS screens → oms_locations,
+ *                   TMS screens → locations.
  */
 export default function LocationFieldsEditor({
   label,
@@ -71,6 +80,8 @@ export default function LocationFieldsEditor({
   nameLabel = "Location Name",
   namePlaceholder = "Location Name",
   cityPlaceholder = "City",
+  enableSearch = false,
+  searchSource = "oms",
 }) {
   const v = value || { name: "", city: "", state: "", zip: "" };
   const set = (field, next) => onChange({ ...v, [field]: next });
@@ -126,6 +137,7 @@ export default function LocationFieldsEditor({
   }
 
   // default: stacked
+  const locked = enableSearch && !!v.name && !!v.city && !!v.state;
   return (
     <div>
       {label && (
@@ -134,20 +146,40 @@ export default function LocationFieldsEditor({
           {required ? " *" : ""}
         </label>
       )}
-      <input
-        value={v.name}
-        onChange={(e) => set("name", e.target.value)}
-        placeholder={`${nameLabel} (e.g. Dallas DC)`}
-        style={{ ...STACKED_INPUT, marginBottom: 8 }}
-        aria-label={nameLabel}
-      />
+
+      {enableSearch ? (
+        // REQ-29: search + create combobox. Replaces the plain Name
+        // input. Selecting a location calls onChange with the full
+        // {name, city, state, zip} so sibling fields auto-populate.
+        <div style={{ marginBottom: 8 }}>
+          <LocationSearchDropdown
+            source={searchSource}
+            value={v}
+            onSelect={(picked) => onChange({ ...v, ...picked })}
+            placeholder={`${nameLabel} (e.g. Dallas DC)`}
+          />
+        </div>
+      ) : (
+        <input
+          value={v.name}
+          onChange={(e) => set("name", e.target.value)}
+          placeholder={`${nameLabel} (e.g. Dallas DC)`}
+          style={{ ...STACKED_INPUT, marginBottom: 8 }}
+          aria-label={nameLabel}
+        />
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
         <input
           value={v.city}
           onChange={(e) => set("city", e.target.value)}
           placeholder={required ? "City *" : cityPlaceholder}
-          style={STACKED_INPUT}
+          style={{
+            ...STACKED_INPUT,
+            background: locked ? "#f2f4f7" : undefined,
+          }}
           required={required}
+          readOnly={locked}
           aria-label="City"
         />
         <input
@@ -155,16 +187,25 @@ export default function LocationFieldsEditor({
           onChange={(e) => set("state", e.target.value)}
           placeholder={required ? "ST *" : "ST"}
           maxLength={2}
-          style={{ ...STACKED_INPUT, textTransform: "uppercase" }}
+          style={{
+            ...STACKED_INPUT,
+            textTransform: "uppercase",
+            background: locked ? "#f2f4f7" : undefined,
+          }}
           required={required}
+          readOnly={locked}
           aria-label="State"
         />
         <input
           value={v.zip}
           onChange={(e) => set("zip", e.target.value)}
           placeholder="ZIP"
-          maxLength={5}
-          style={STACKED_INPUT}
+          maxLength={10}
+          style={{
+            ...STACKED_INPUT,
+            background: locked ? "#f2f4f7" : undefined,
+          }}
+          readOnly={locked}
           aria-label="ZIP"
         />
       </div>
