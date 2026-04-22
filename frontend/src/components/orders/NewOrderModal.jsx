@@ -18,10 +18,20 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ overflowY: "auto", flex: 1 }}>
-          {/* Customer */}
+          {/* Order Identity — customer + references (parity with Edit tab) */}
           <div style={{ marginBottom: 14 }}>
             <label style={labelSt}>Customer</label>
             <input value={form.customer} onChange={(e) => upd("customer", e.target.value)} placeholder="Cisco Systems" style={inputSt} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={labelSt}>Reference # <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400 }}>(optional)</span></label>
+              <input value={form.refNum || ""} onChange={(e) => upd("refNum", e.target.value)} placeholder="e.g. PO-2026-001" style={inputSt} />
+            </div>
+            <div>
+              <label style={labelSt}>PO Number <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400 }}>(optional)</span></label>
+              <input value={form.poNum || ""} onChange={(e) => upd("poNum", e.target.value)} placeholder="e.g. 4500123456" style={inputSt} />
+            </div>
           </div>
           {/* Ship From / Ship To — shared editor, canonical shipFrom /
               shipTo shape. No adapter needed — the parent
@@ -48,6 +58,31 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
               searchSource="oms"
             />
           </div>
+          {/* Freight Details — parity with Edit tab */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={labelSt}>Weight (lbs)</label>
+              <input type="number" value={form.weight || ""} onChange={(e) => upd("weight", e.target.value)} placeholder="Auto" style={inputSt} />
+            </div>
+            <div>
+              <label style={labelSt}>Pieces</label>
+              <input type="number" value={form.pieces || ""} onChange={(e) => upd("pieces", e.target.value)} placeholder="Auto" style={inputSt} />
+            </div>
+            <div>
+              <label style={labelSt}>Mode</label>
+              <select value={form.shipMode || ""} onChange={(e) => upd("shipMode", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
+                <option value="">— TMS selects —</option>
+                {["TL","LTL","Intermodal","Flatbed","Reefer","Partial","Expedite","Air Freight"].map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelSt}>Service Level</label>
+              <select value={form.serviceLevel || ""} onChange={(e) => upd("serviceLevel", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
+                <option value="">— TMS selects —</option>
+                {["Standard","Guaranteed","Expedited","Economy","White Glove"].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
           {/* Commodity + Incoterms */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div><label style={labelSt}>Commodity</label><input value={form.commodity} onChange={(e) => upd("commodity", e.target.value)} placeholder="Network Equipment" style={inputSt} /></div>
@@ -59,9 +94,14 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
             </div>
           </div>
           {/* Dates */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div><label style={labelSt}>Ready Date</label><input type="date" value={form.ready} onChange={(e) => upd("ready", e.target.value)} style={inputSt} /></div>
             <div><label style={labelSt}>Due Date</label><input type="date" value={form.due} onChange={(e) => upd("due", e.target.value)} style={inputSt} /></div>
+          </div>
+          {/* Notes */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelSt}>Notes <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400 }}>(optional)</span></label>
+            <textarea value={form.notes || ""} onChange={(e) => upd("notes", e.target.value)} rows={3} placeholder="Special instructions, references, internal notes..." style={{ ...inputSt, resize: "vertical", fontFamily: "inherit" }} />
           </div>
           {/* Line Items */}
           <OrderLinesEditor orderId="new" lines={lines} onChange={onLinesChange} onSave={() => {}} onClear={() => onLinesChange([])} busy={false} items={itemMaster} showSaveButtons={false} />

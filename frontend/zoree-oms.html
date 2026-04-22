@@ -1454,6 +1454,9 @@ var ZoreeMiddleware = {
         shipFromName: shipFromNameStr,
         shipToName:   shipToNameStr,
         weight: wt, pieces: pcs, commodity: omsOrder.comm || 'General',
+        // Customer PO typed on the OMS order form — must flow through to
+        // the TMS order so users see it in the Orders detail view.
+        poNumber: omsOrder.po || null,
         // REQ-11: carry mode + service level across so the TMS planner can
         // honour them (see REQ-09 / REQ-10).
         shipMode: omsOrder.mode || null,

@@ -169,9 +169,13 @@ async function patchTableWithFallback(table, id, payload) {
   return DbApi.patch(table, id, patch);
 }
 
-async function patchOrderConfirmed(orderId, pickupVal) {
-  // Some environments enforce controlled order status values without "Confirmed".
-  const p = { status: "Tendered" };
+// Mirrors the in-TMS "Accept" flow (shipmentOrderService.confirmOrdersForShipment):
+// when a carrier accepts a tender, the linked orders move to "Tender Accepted"
+// — the value whitelisted by migration 014_orders_status_add_tender_accepted.
+// Keeps order status in sync with the shipment's effective "Confirmed" state
+// so the Orders list does not show a stale "Tendered" badge.
+async function patchOrderTenderAccepted(orderId, pickupVal) {
+  const p = { status: "Tender Accepted" };
   if (pickupVal) {
     p.pickup = pickupVal;
     p.ready = pickupVal;
@@ -216,7 +220,7 @@ export async function saveTenderResponse(shipment, responseData, extra = {}) {
       normalized.carrierPickupDate || shipment.pickup_date || shipment.pickup || "";
     const list = extra.orders.filter((o) => o && o.id);
     await Promise.allSettled(
-      list.map((o) => patchOrderConfirmed(o.id, pickupVal))
+      list.map((o) => patchOrderTenderAccepted(o.id, pickupVal))
     );
   }
 

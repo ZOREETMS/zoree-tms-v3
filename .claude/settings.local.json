@@ -807,7 +807,28 @@
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__apply_migration",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5175/)",
       "Bash(curl -sS -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3001/api/locations/search?q=ATLANTA&source=oms&limit=5\")",
-      "Bash(curl -sS -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3001/api/locations/search?q=ATLANTA&source=tms&limit=5\")"
+      "Bash(curl -sS -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3001/api/locations/search?q=ATLANTA&source=tms&limit=5\")",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:64981/)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5174/)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5175/)",
+      "Bash(curl -sS http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5175/)",
+      "Bash(curl -sS -o /dev/null -w \"OrdersPage: %{http_code}\\\\n\" \"http://localhost:5173/src/pages/OrdersPage.jsx\")",
+      "Bash(curl -sS -o /dev/null -w \"ShipmentsPage: %{http_code}\\\\n\" \"http://localhost:5173/src/pages/ShipmentsPage.jsx\")",
+      "Bash(curl -sS -o /dev/null -w \"LocationFilter: %{http_code}\\\\n\" \"http://localhost:5173/src/components/ui/LocationFilter.jsx\")",
+      "Bash(curl -sS -o /dev/null -w \"locationFilter util: %{http_code}\\\\n\" \"http://localhost:5173/src/utils/locationFilter.js\")",
+      "Bash(curl -s -o /dev/null -w \"53742: %{http_code}\\\\n\" http://localhost:53742/)",
+      "Bash(curl -s http://localhost:53742/)",
+      "Bash(ls C:\\\\\\\\Zoree\\\\\\\\zoree-tms-v3\\\\\\\\zoree-tms-v3\\\\\\\\api\\\\\\\\migrations/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:53742/)",
+      "Bash(curl -s -o /dev/null -w \"5175: %{http_code}\\\\n\" http://localhost:5175/)",
+      "Bash(curl -s -X POST http://localhost:3001/api/tender/email -H \"Content-Type: application/json\" -d '{\"to\":\"invalid\"}' -w \"\\\\nHTTP:%{http_code} time:%{time_total}s\\\\n\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:54774/)",
+      "Bash(node -c api/services/orderMutations.js)",
+      "Bash(curl -s http://localhost:5175/src/components/orders/NewOrderModal.jsx)",
+      "Bash(curl -s http://localhost:5175/src/pages/OrdersPage.jsx)",
+      "Bash(node -e \"const { apiOrderToDbPatch } = require\\('./api/services/orderMutations'\\); console.log\\(JSON.stringify\\(apiOrderToDbPatch\\({ shipFromName: 'Chicago DC', shipToName: 'Dallas WH', origin: 'Chicago, IL', dest: 'Dallas, TX' }\\), null, 2\\)\\); console.log\\('---snake case---'\\); console.log\\(JSON.stringify\\(apiOrderToDbPatch\\({ ship_from_name: 'SFO HUB', ship_to_name: 'LAX HUB' }\\), null, 2\\)\\);\")"
     ]
   }
 }

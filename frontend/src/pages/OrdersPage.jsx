@@ -24,6 +24,8 @@ import { TOAST_DURATIONS } from "../constants/toast";
 import BulkPlanResultsPanel from "../components/bulk-plan/BulkPlanResultsPanel";
 import { buildBulkPlanResults } from "../services/bulkPlanResultsService";
 import { describeFailure } from "../services/planningFailureCatalog";
+import LocationFilter from "../components/ui/LocationFilter";
+import { matchesLocation } from "../utils/locationFilter";
 
 export default function OrdersPage() {
   const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
@@ -31,6 +33,8 @@ export default function OrdersPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [customerFilter, setCustomerFilter] = useState("All");
+  const [shipFromFilter, setShipFromFilter] = useState("");
+  const [shipToFilter, setShipToFilter] = useState("");
   const [readyFrom, setReadyFrom] = useState("");
   const [readyTo, setReadyTo] = useState("");
   const [dueFrom, setDueFrom] = useState("");
@@ -191,9 +195,14 @@ export default function OrdersPage() {
     // `{ name, city, state, zip }` from src/types/location.js.
     shipFrom: emptyLocation(),
     shipTo: emptyLocation(),
+    // Parity with OrderDetailModal edit tab — Create and Edit render
+    // the same field set (CLAUDE_RULES §2 — avoid duplicate/diverging UI).
+    refNum: "", poNum: "",
+    weight: "", pieces: "", shipMode: "", serviceLevel: "",
     commodity: "", incoterms: "",
     ready: "", due: "", preferredCarrier: "", excludedCarrier: "",
     noConsolidate: false, dedicatedEquip: false, hazmat: false,
+    notes: "",
   });
   const [newOrderLines, setNewOrderLines] = useState([]);
 
@@ -223,6 +232,8 @@ export default function OrdersPage() {
     let filtered = orders;
     if (statusFilter !== "All") filtered = filtered.filter((o) => o.status === statusFilter);
     if (customerFilter !== "All") filtered = filtered.filter((o) => o.customer === customerFilter);
+    if (shipFromFilter) filtered = filtered.filter((o) => matchesLocation(o, "from", shipFromFilter));
+    if (shipToFilter) filtered = filtered.filter((o) => matchesLocation(o, "to", shipToFilter));
     if (readyFrom) filtered = filtered.filter((o) => (o.ready || "") >= readyFrom);
     if (readyTo) filtered = filtered.filter((o) => (o.ready || "") <= readyTo);
     if (dueFrom) filtered = filtered.filter((o) => (o.due || "") >= dueFrom);
@@ -264,7 +275,7 @@ export default function OrdersPage() {
       const cmp = (!isNaN(an) && !isNaN(bn)) ? (an - bn) : av.toLowerCase().localeCompare(bv.toLowerCase(), undefined, { numeric: true, sensitivity: "base" });
       return sortAsc ? cmp : -cmp;
     });
-  }, [orders, q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
+  }, [orders, q, statusFilter, customerFilter, shipFromFilter, shipToFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
   const pagedRows = useMemo(() => {
@@ -274,7 +285,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [q, statusFilter, customerFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
+  }, [q, statusFilter, customerFilter, shipFromFilter, shipToFilter, readyFrom, readyTo, dueFrom, dueTo, createdFrom, createdTo, sortCol, sortAsc]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -354,10 +365,11 @@ export default function OrdersPage() {
 
   function clearFilters() {
     setStatusFilter("All"); setCustomerFilter("All"); setQ("");
+    setShipFromFilter(""); setShipToFilter("");
     setReadyFrom(""); setReadyTo(""); setDueFrom(""); setDueTo("");
     setCreatedFrom(""); setCreatedTo("");
   }
-  const hasFilters = statusFilter !== "All" || customerFilter !== "All" || q || readyFrom || readyTo || dueFrom || dueTo || createdFrom || createdTo;
+  const hasFilters = statusFilter !== "All" || customerFilter !== "All" || shipFromFilter || shipToFilter || q || readyFrom || readyTo || dueFrom || dueTo || createdFrom || createdTo;
 
   /* ── Actions ── */
   async function cancelOrder(id) {
@@ -585,7 +597,14 @@ export default function OrdersPage() {
       origin: addrPatch.origin || "Chicago, IL",
       dest:   addrPatch.dest   || "Dallas, TX",
       weight: parseFloat(f.weight) || autoWeight || 0, pieces: parseInt(f.pieces) || autoPieces || 0,
-      commodity: f.commodity || "General", ready: f.ready || null, due: f.due || null,
+      commodity: f.commodity || "General",
+      incoterms: (f.incoterms || "").trim() || null,
+      ref_num: (f.refNum || "").trim() || null,
+      po_num:  (f.poNum  || "").trim() || null,
+      ship_mode:     (f.shipMode     || "").trim() || null,
+      service_level: (f.serviceLevel || "").trim() || null,
+      notes: (f.notes || "").trim() || null,
+      ready: f.ready || null, due: f.due || null,
       status: "Unplanned",
       preferred_carrier: f.preferredCarrier || null,
       excluded_carrier: f.excludedCarrier || null,
@@ -618,9 +637,12 @@ export default function OrdersPage() {
         // REQ-24: reset ship-from / ship-to to blank canonical Locations.
         shipFrom: emptyLocation(),
         shipTo: emptyLocation(),
+        refNum: "", poNum: "",
+        weight: "", pieces: "", shipMode: "", serviceLevel: "",
         commodity: "", incoterms: "",
         ready: "", due: "", preferredCarrier: "", excludedCarrier: "",
         noConsolidate: false, dedicatedEquip: false, hazmat: false,
+        notes: "",
       });
       setNewOrderLines([]);
       await refreshData();
@@ -1233,6 +1255,8 @@ export default function OrdersPage() {
           <option value="All">All Customers</option>
           {customers.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        <LocationFilter side="from" value={shipFromFilter} onChange={setShipFromFilter} />
+        <LocationFilter side="to"   value={shipToFilter}   onChange={setShipToFilter} />
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text3)" }}>Ready From</span>
         <input type="date" value={readyFrom} onChange={(e) => setReadyFrom(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
         <span style={{ fontSize: 12, color: "var(--text3)" }}>To</span>

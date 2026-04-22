@@ -14,6 +14,8 @@ import LocationFieldsEditor from "../components/LocationFieldsEditor";
 import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
 import { confirmOrdersForShipment, unassignOrderAndCleanupShipment, unplanOrdersForShipmentRemoval } from "../services/shipmentOrderService";
+import LocationFilter from "../components/ui/LocationFilter";
+import { matchesLocation } from "../utils/locationFilter";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -678,12 +680,17 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
 }
 
 export default function ShipmentsPage() {
-  const { shipments, orders, carriers, setData, refreshData } = useOutletContext();
+  const { shipments, orders, carriers, setData, refreshData, refreshShipmentsAndOrders } = useOutletContext();
+  // Lightweight refresh for tender-path mutations (shipments + orders only).
+  // Falls back to full refresh if the lighter helper isn't provided.
+  const refreshTender = refreshShipmentsAndOrders || refreshData;
   const navigate = useNavigate();
   const [shipView, setShipView] = useState("list");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [modeFilter, setModeFilter] = useState("All");
+  const [shipFromFilter, setShipFromFilter] = useState("");
+  const [shipToFilter, setShipToFilter] = useState("");
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [idsFilter, setIdsFilter] = useState(null); // Set from ?ids= URL param for bulk plan filtering
@@ -762,6 +769,8 @@ export default function ShipmentsPage() {
     if (idsFilter) list = list.filter((s) => idsFilter.has(s.id));
     if (statusFilter !== "All") list = list.filter((s) => s._displayStatus === statusFilter);
     if (modeFilter !== "All") list = list.filter((s) => (s.mode || "").toUpperCase() === modeFilter);
+    if (shipFromFilter) list = list.filter((s) => matchesLocation(s, "from", shipFromFilter));
+    if (shipToFilter) list = list.filter((s) => matchesLocation(s, "to", shipToFilter));
     if (createdFrom) list = list.filter((s) => (s.created_at || "") >= createdFrom);
     if (createdTo) list = list.filter((s) => (s.created_at || "") <= createdTo + "T23:59:59");
     if (q.trim()) {
@@ -780,7 +789,8 @@ export default function ShipmentsPage() {
       const bv = String((sortCol === "status" ? b._displayStatus : b[sortCol]) || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [shipments, orders, q, statusFilter, modeFilter, createdFrom, createdTo, idsFilter, sortCol, sortAsc]);
+  }, [shipments, orders, q, statusFilter, modeFilter, shipFromFilter, shipToFilter, createdFrom, createdTo, idsFilter, sortCol, sortAsc]);
+
 
   const laneRoutes = useMemo(() => {
     const lanes = new Map();
@@ -836,17 +846,29 @@ export default function ShipmentsPage() {
     setTenderResult({ shipment: row, result: null }); // show "sending" phase
     setBusyId(row.id);
     try {
-      await DbApi.patch("shipments", row.id, { status: "Tendered", carrier: carrierName });
-
-      // If MBOL, cascade status to child CBOLs
       const isMbol = row.bol_type === "MBOL";
-      let children = [];
-      if (isMbol) {
-        children = shipments
-          .filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL")
-          .sort((a, b) => (a.stop_to || 0) - (b.stop_to || 0));
-        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Tendered", carrier: carrierName })));
-      }
+      const children = isMbol
+        ? shipments
+            .filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL")
+            .sort((a, b) => (a.stop_to || 0) - (b.stop_to || 0))
+        : [];
+
+      const allLinkedOrders = [
+        ...(row._linkedOrders || []),
+        ...children.flatMap((c) =>
+          orders.filter((o) => String(o.shipment_id || "") === String(c.id))
+        ),
+      ];
+
+      // Perf: run independent work in parallel — master PATCH, child PATCHes,
+      // and the best-effort order-details fetch don't depend on each other.
+      const [, , orderDetails] = await Promise.all([
+        DbApi.patch("shipments", row.id, { status: "Tendered", carrier: carrierName }),
+        isMbol
+          ? Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Tendered", carrier: carrierName })))
+          : Promise.resolve(),
+        gatherOrderDetails(allLinkedOrders),
+      ]);
 
       const origin = row.origin || "";
       const dest = row.dest || "";
@@ -859,16 +881,6 @@ export default function ShipmentsPage() {
         const stops = [origin, ...children.map((c) => (c.dest || "").split(",")[0].trim()).filter(Boolean)];
         routeDisplay = stops.join(" → ");
       }
-
-      // Gather order details from master + all children
-      const allLinkedOrders = [
-        ...(row._linkedOrders || []),
-        ...children.flatMap((c) => {
-          const childLinked = orders.filter((o) => String(o.shipment_id || "") === String(c.id));
-          return childLinked;
-        }),
-      ];
-      const orderDetails = await gatherOrderDetails(allLinkedOrders);
 
       const tenderPayload = {
         shipmentId: row.id,
@@ -897,6 +909,9 @@ export default function ShipmentsPage() {
           pieces: c.pieces || "",
         })) : [],
       };
+      // Perf: fire-and-forget the email. Backend responds 202 after queueing;
+      // we don't block the UI on SMTP. Result modal shows "queued" success;
+      // a background failure is recorded in change_history (tender_failed).
       let emailSent = false;
       let emailTo = "";
       try {
@@ -910,7 +925,9 @@ export default function ShipmentsPage() {
       } catch (emailErr) {
         console.warn("Tender email failed:", emailErr);
       }
-      await refreshData();
+      // Perf: refresh only shipments + orders (the tables this flow mutates),
+      // not the full 14-table data set.
+      await refreshTender();
       setTenderResult({ shipment: row, result: { refNum, emailSent, to: emailTo } });
     } catch (err) {
       setTenderResult({ shipment: row, result: { error: true, errorMessage: err.message } });
@@ -1190,12 +1207,14 @@ export default function ShipmentsPage() {
           <option value="LTL">LTL</option>
           <option value="TL">TL</option>
         </select>
+        <LocationFilter side="from" value={shipFromFilter} onChange={setShipFromFilter} />
+        <LocationFilter side="to"   value={shipToFilter}   onChange={setShipToFilter} />
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text3)" }}>Created From</span>
         <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
         <span style={{ fontSize: 12, color: "var(--text3)" }}>To</span>
         <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
-        {(createdFrom || createdTo) && (
-          <button onClick={() => { setCreatedFrom(""); setCreatedTo(""); }} style={{ fontSize: 11, color: "#dc2626", background: "rgba(220,38,38,.06)", border: "1px solid rgba(220,38,38,.2)", borderRadius: 16, padding: "3px 10px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>✕ Clear Dates</button>
+        {(createdFrom || createdTo || shipFromFilter || shipToFilter) && (
+          <button onClick={() => { setCreatedFrom(""); setCreatedTo(""); setShipFromFilter(""); setShipToFilter(""); }} style={{ fontSize: 11, color: "#dc2626", background: "rgba(220,38,38,.06)", border: "1px solid rgba(220,38,38,.2)", borderRadius: 16, padding: "3px 10px", cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>✕ Clear Filters</button>
         )}
       </div>
 

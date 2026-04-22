@@ -109,9 +109,10 @@ function omsPayloadToDbRow(o) {
   setIf('service_level',     o.serviceLevel || o.service_level);
   setIf('commodity',         o.commodity);
   setIf('incoterms',         o.incoterms);
-  // NOTE: actual schema column is po_number (not po_num). ref_num is not in
-  // the schema at all — drop it silently if supplied.
-  setIf('po_number',         o.poNumber || o.po_number || o.poNum || o.po_num);
+  // NOTE: actual schema column is po_num (matches api/services/orders.js and
+  // orderMutations.js). ref_num is not in the schema at all — drop it silently
+  // if supplied.
+  setIf('po_num',            o.poNumber || o.po_number || o.poNum || o.po_num);
   setIf('ready',             o.readyDate || o.ready);
   setIf('due',               o.dueDate   || o.due);
   setIf('preferred_carrier', o.preferredCarrier || o.preferred_carrier);

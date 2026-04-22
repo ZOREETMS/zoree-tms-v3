@@ -104,6 +104,13 @@ export default function App() {
       .catch((e) => setError(e.message || "Failed loading data"));
   }
 
+  // Targeted refresh for tender / accept / withdraw flows — only the two
+  // tables those actions mutate. Avoids the 14-table full refresh that made
+  // the tender button feel slow.
+  async function refreshShipmentsAndOrders() {
+    return refreshCoreData();
+  }
+
   async function refreshData() {
     setError("");
     return Promise.all([
@@ -203,6 +210,7 @@ export default function App() {
         setData,
         refreshData,
         refreshCoreData,
+        refreshShipmentsAndOrders,
       }}
     />
   );

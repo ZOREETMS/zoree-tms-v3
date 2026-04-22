@@ -30,6 +30,14 @@ function apiOrderToDbPatch(body) {
   if ("shipmentId" in b || "shipment_id" in b) patch.shipment_id = b.shipmentId || b.shipment_id || null;
   if ("originZip" in b || "origin_zip" in b) patch.origin_zip = b.originZip || b.origin_zip || null;
   if ("destZip" in b || "dest_zip" in b) patch.dest_zip = b.destZip || b.dest_zip || null;
+  // Ship-from / ship-to location NAMES (the free-text "Dallas DC" label that
+  // sits above the city/state/zip). Without this, names submitted from
+  // NewOrderModal / OrderDetailModal were silently dropped, so the Edit tab
+  // always re-rendered blank. Accept both camelCase (from OrdersApi →
+  // mapDbOrderToApiOrder) and snake_case (from paths that spread a DB patch
+  // directly).
+  if ("shipFromName" in b || "ship_from_name" in b) patch.ship_from_name = b.shipFromName || b.ship_from_name || null;
+  if ("shipToName" in b || "ship_to_name" in b) patch.ship_to_name = b.shipToName || b.ship_to_name || null;
   if ("hazmat" in b) patch.hazmat = !!b.hazmat;
   if ("preferredCarrier" in b || "preferred_carrier" in b) patch.preferred_carrier = b.preferredCarrier || b.preferred_carrier || null;
   if ("excludedCarrier" in b || "excluded_carrier" in b) patch.excluded_carrier = b.excludedCarrier || b.excluded_carrier || null;

@@ -892,23 +892,31 @@ app.post('/api/tender/email', async (req, res) => {
     });
   }
 
-  try {
-    const info = await transport.sendMail({
-      from,
-      to: actualTo,
-      replyTo: process.env.SMTP_REPLY_TO || undefined,
-      subject,
-      text,
-      html,
-      headers: override ? { 'X-Original-To': toRaw } : undefined,
-    });
-    console.log('[tender/email] SENT ok | to=' + actualTo + (override ? ' (orig ' + toRaw + ')' : '') + ' | messageId=' + (info.messageId || 'n/a'));
+  // Perf: respond immediately (202 Accepted) so the UI doesn't block on SMTP
+  // handshake/TLS/relay. Email delivery + status flip + audit history run in
+  // the background. Failures land in the server log and in change_history
+  // (tender_failed) so they remain observable.
+  res.status(202).json({
+    sent: true,
+    queued: true,
+    to: actualTo,
+    originalTo: override ? toRaw : undefined,
+  });
 
-    // REQ-02: after the tender email is successfully dispatched, flip the
-    // shipment status to 'Tendered' (if not already) and record a 'tender'
-    // event in change_history. Failures here must NOT fail the email
-    // response — the email already went out.
-    if (shipmentId) {
+  setImmediate(async () => {
+    try {
+      const info = await transport.sendMail({
+        from,
+        to: actualTo,
+        replyTo: process.env.SMTP_REPLY_TO || undefined,
+        subject,
+        text,
+        html,
+        headers: override ? { 'X-Original-To': toRaw } : undefined,
+      });
+      console.log('[tender/email] SENT ok | to=' + actualTo + (override ? ' (orig ' + toRaw + ')' : '') + ' | messageId=' + (info.messageId || 'n/a'));
+
+      if (!shipmentId) return;
       try {
         const beforeRows = await dbSelect('shipments', `select=id,status&id=eq.${encodeURIComponent(shipmentId)}&limit=1`, null);
         const shipBefore = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
@@ -944,18 +952,25 @@ app.post('/api/tender/email', async (req, res) => {
       } catch (auditErr) {
         console.error('[tender/email] history write failed:', auditErr.message);
       }
+    } catch (e) {
+      console.error('[tender/email] SEND FAILED:', e.message);
+      if (shipmentId) {
+        try {
+          await history.recordChange({
+            entityType: 'shipment',
+            entityId:   shipmentId,
+            action:     'tender_failed',
+            user,
+            metadata:   {
+              carrier: carrierName || null,
+              to: actualTo,
+              error: e.message || String(e),
+            },
+          });
+        } catch (_histErr) { /* already logged above */ }
+      }
     }
-
-    res.json({
-      sent: true,
-      messageId: info.messageId || null,
-      to: actualTo,
-      originalTo: override ? toRaw : undefined,
-    });
-  } catch (e) {
-    console.error('[tender/email] SEND FAILED:', e.message);
-    res.status(502).json({ error: 'Failed to send email: ' + e.message });
-  }
+  });
 });
 
 // ── POST /api/oms/push — Send shipment details to OMS after tender acceptance ──
