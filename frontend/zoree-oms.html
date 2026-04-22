@@ -6,6 +6,10 @@
 <title>Zoree OMS — Order Management System</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Live-sync WS client: subscribes to ws://<api>:3001 so OMS reloads the order list
+     the moment TMS fires tender_accepted / shipment_status_updated / shipment_delivered.
+     Services-layer module — pure dispatcher, no DOM access. -->
+<script src="services/omsLive/omsWsClient.js"></script>
 <style>
 :root {
   --bg:#f0f4ff; --bg2:#ffffff; --bg3:#f5f7ff; --bg4:#eef1fa;
@@ -1052,6 +1056,58 @@ async function boot(){
   renderAll();
   mwInitConfigUI();
   await syncTMS();
+  startOmsLiveSync();               // subscribe to TMS WS for auto-refresh on tender-accept
+}
+
+// ── Live-sync bridge (WS → OMS render) ─────────────────────────────────────
+// Boots once per session. When TMS broadcasts a tender_accepted or related
+// shipment event (see api/server.js wsBroadcast), we re-read oms_orders and
+// re-render so the Sales Orders list never shows stale "Released to TMS"
+// rows after an upstream tender-accept. Idempotent — safe to fire on every
+// event because loadFromDB+ro just refreshes the view.
+var _omsLiveSyncRefreshInFlight = false;
+var RELEVANT_TMS_EVENTS = [
+  'tender_accepted',
+  'shipment_status_updated',
+  'shipment_delivered',
+  'orders_updated',
+];
+
+async function _omsLiveSyncRefresh(reason){
+  if (_omsLiveSyncRefreshInFlight) return;   // coalesce bursts
+  _omsLiveSyncRefreshInFlight = true;
+  try {
+    await loadFromDB();
+    if (typeof ro === 'function') ro();      // re-render Sales Orders list
+    try { toast('🔄 OMS refreshed — ' + reason, 'tok'); } catch(_) { /* toast optional */ }
+  } catch (e) {
+    console.warn('[OmsLive] refresh failed:', e && e.message);
+  } finally {
+    _omsLiveSyncRefreshInFlight = false;
+  }
+}
+
+function startOmsLiveSync(){
+  if (!window.OmsLive || typeof window.OmsLive.start !== 'function') {
+    console.warn('[OmsLive] client not loaded — live sync disabled');
+    return;
+  }
+  window.OmsLive.start({
+    onEvent: function(event, data){
+      if (RELEVANT_TMS_EVENTS.indexOf(event) === -1) return;
+      var label = event.replace(/_/g,' ');
+      if (event === 'tender_accepted' && data && data.shipmentId) {
+        label = 'tender accepted · ' + data.shipmentId;
+      }
+      _omsLiveSyncRefresh(label);
+    },
+    onStatusChange: function(status){
+      // Log-only: the existing TMS/OMS LEDs track HTTP health, not WS state,
+      // so we deliberately don't drive them from here. A separate pill is a
+      // future-nice but out of scope.
+      console.log('[OmsLive] status=' + status);
+    },
+  });
 }
 
 
