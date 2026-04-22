@@ -22,6 +22,7 @@ const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./ser
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
 const orderLinesAudit = require('./services/orderLinesAudit');
+const { buildOrderLineId } = require('./services/orderLineIds');
 const shipmentMutations = require('./services/shipmentMutations');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
@@ -1212,7 +1213,7 @@ app.post('/api/orders/:id/lines', async (req, res) => {
     // Step 2: Insert new lines
     let results = [];
     const normalizedLines = lines.map((line, i) => ({
-      id:           `${orderId}-L${(line.line_num || i + 1).toString().padStart(3,'0')}`,
+      id:           buildOrderLineId(orderId, line.line_num || (i + 1)),
       order_id:     orderId,
       line_num:     line.line_num || (i + 1),
       item_id:      line.item_id || line.itemId || null,

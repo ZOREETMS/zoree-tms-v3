@@ -3,7 +3,8 @@
 // OMS → TMS: push new Stage-3/4 orders with full line items.
 // Replaces the inline runPushOrderFlow() that previously lived in
 // zoree-middleware.html. Only selects rows where tms_order_pushed_at IS NULL
-// (migration 010) so the auto-sync cycle does not re-push the same orders.
+// (migration 023 — supersedes mistargeted 010) so the auto-sync cycle
+// does not re-push the same orders.
 // ---------------------------------------------------------------------------
 
 (function (global) {
@@ -148,13 +149,23 @@
     };
   }
 
+  // Canonical order_lines.id format — MUST stay in sync with
+  // api/services/orderLineIds.js (buildOrderLineId). Different format here
+  // means upsert(onConflict:'id') creates duplicate rows instead of updating,
+  // which is the defect fixed in the 20260421 dedupe migration.
+  function buildOrderLineId(orderId, lineNum) {
+    var n = Number(lineNum) || 1;
+    return orderId + '-L' + String(n).padStart(3, '0');
+  }
+
   function mapOmsLineToTmsLine(orderId, l, idx) {
     var qty = l.qty_ordered || 0;
     var uw  = parseFloat(l.unit_weight) || 0;
+    var lineNum = l.line_num || (idx + 1);
     return {
-      id:           orderId + '-L' + (l.line_num || (idx + 1)),
+      id:           buildOrderLineId(orderId, lineNum),
       order_id:     orderId,
-      line_num:     l.line_num  || (idx + 1),
+      line_num:     lineNum,
       item_id:      l.item_id   || null,
       description:  l.description || null,
       qty_ordered:  qty,
@@ -282,7 +293,7 @@
             _orderHeader: tmsRow,
             _lines: lines.map(function (l) {
               return {
-                id:           o.id + '-L' + (l.line_num || '?'),
+                id:           buildOrderLineId(o.id, l.line_num || 1),
                 line_num:     l.line_num,
                 item_id:      l.item_id,
                 description:  l.description,

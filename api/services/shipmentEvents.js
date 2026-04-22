@@ -153,6 +153,14 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
     shipmentId: id,
     eventType: type,
     shipmentStatus: shipPatch.status || ship.status,
+    // Full set of fields that moved on the shipment row so the UI can
+    // merge them into its local copy without a full re-fetch and without
+    // closing the detail modal.
+    shipmentPatch: {
+      status:        shipPatch.status        || ship.status,
+      pickup_date:   shipPatch.pickup_date   || ship.pickup_date   || null,
+      delivery_date: shipPatch.delivery_date || ship.delivery_date || null,
+    },
     ordersUpdated: transitioned,
     ordersSkipped: skipped,
   };

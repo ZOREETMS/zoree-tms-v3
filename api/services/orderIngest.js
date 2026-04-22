@@ -21,6 +21,7 @@
 
 const db = require('./supabase');
 const { bus, EVENTS } = require('./eventBus');
+const { buildOrderLineId } = require('./orderLineIds');
 
 // REQ-24: helpers for upserting line items alongside the order header.
 // Kept local — lines are only ever pushed in through the OMS ingest path,
@@ -31,7 +32,7 @@ function normalizeOmsLine(orderId, line, idx) {
   const unitWt = Number(line.unit_weight ?? line.unitWt ?? line.wt) || 0;
   const unitVal = Number(line.unit_value ?? line.unitValue ?? line.val) || 0;
   return {
-    id:           `${orderId}-L${String(lineNum).padStart(3, '0')}`,
+    id:           buildOrderLineId(orderId, lineNum),
     order_id:     orderId,
     line_num:     lineNum,
     item_id:      line.item_id || line.itemId || null,

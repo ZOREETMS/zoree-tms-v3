@@ -1,7 +1,11 @@
 // frontend/services/omsSync/omsSyncTracking.js
 // ---------------------------------------------------------------------------
 // Owns the three "last pushed to TMS" timestamp columns introduced in
-// migration 010_oms_add_tms_push_tracking.sql. The middleware auto-sync
+// migration 023_req24_oms_push_tracking_columns.sql (supersedes the
+// mistargeted 010_oms_add_tms_push_tracking.sql, which was never
+// applied — its header wrongly declared a separate "OMS Supabase
+// project" even though oms_orders and orders share one project per
+// migration 011). The middleware auto-sync
 // services call into these helpers instead of writing to oms_orders directly,
 // so there is a single, auditable place that touches push-tracking state.
 //

@@ -3,8 +3,8 @@
 // OMS → TMS: push Stage-10 "In Transit" status updates.
 // Replaces the inline runPushShipFlow() that previously lived in
 // zoree-middleware.html. Only selects rows where tms_ship_status_pushed_at
-// IS NULL (migration 010) so the auto-sync cycle does not re-push the same
-// shipment status every tick.
+// IS NULL (migration 023 — supersedes mistargeted 010) so the auto-sync
+// cycle does not re-push the same shipment status every tick.
 // ---------------------------------------------------------------------------
 
 (function (global) {

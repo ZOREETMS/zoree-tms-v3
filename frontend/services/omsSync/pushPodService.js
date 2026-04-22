@@ -3,8 +3,8 @@
 // OMS → TMS: push Stage-11 POD / "Delivered" status updates.
 // Replaces the inline runPushPODFlow() that previously lived in
 // zoree-middleware.html. Only selects rows where tms_pod_pushed_at IS NULL
-// (migration 010) so the auto-sync cycle does not re-push the same POD
-// every tick.
+// (migration 023 — supersedes mistargeted 010) so the auto-sync cycle
+// does not re-push the same POD every tick.
 // ---------------------------------------------------------------------------
 
 (function (global) {

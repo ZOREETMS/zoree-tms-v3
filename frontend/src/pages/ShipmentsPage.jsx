@@ -18,6 +18,9 @@ import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
 import { deriveShipmentCostBreakdown, formatUSD } from "../utils/shipmentCost";
 import { getRateByLane, summarizeDiscount } from "../services/rateService";
+import { fetchOmsSyncForShipmentIds } from "../services/omsSyncStatusService";
+import { deriveOmsSyncStatus } from "../utils/omsSyncStatus";
+import OmsSyncPill from "../components/shipments/OmsSyncPill";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -125,7 +128,7 @@ function InfoBox({ icon, label, value }) {
 }
 
 /* ── Shipment Detail Modal ── */
-function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier }) {
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier, onShipmentPatched }) {
   const linked = ds._linkedOrders || [];
   const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
@@ -535,7 +538,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                     if (!newEvent.type || eventSaving) return;
                     setEventSaving(true);
                     try {
-                      await recordShipmentEvent(ds.id, {
+                      const res = await recordShipmentEvent(ds.id, {
                         type: newEvent.type,
                         note: newEvent.note,
                         date: newEvent.date,
@@ -543,9 +546,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                       setEvents([...events, { type: newEvent.type, note: newEvent.note, date: newEvent.date, time: new Date().toLocaleTimeString() }]);
                       setNewEvent({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
                       setShowAddEvent(false);
-                      // Close modal and refresh parent list so the shipment + linked
-                      // orders reflect the new status (Delivered / In Transit / etc.).
-                      if (typeof onChangeCarrier === "function") { onClose(); onChangeCarrier(); }
+                      // Keep the modal open — merge the status/date patch from the
+                      // API response into the parent's detailShipment so the badge,
+                      // timeline rungs, and action footer reflect the new state
+                      // without tearing down the dialog.
+                      const patch = res?.shipmentPatch || {};
+                      if (typeof onShipmentPatched === "function" && Object.keys(patch).length) {
+                        onShipmentPatched(patch);
+                      }
                     } catch (err) {
                       alert("Failed to save event: " + err.message);
                     } finally {
@@ -766,6 +774,19 @@ export default function ShipmentsPage() {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState({ text: "", type: "" });
   const [detailShipment, setDetailShipment] = useState(null);
+
+  // REQ-24: per-shipment OMS-sync status. Populated by fetchOmsSyncForShipmentIds
+  // whenever the shipments list changes. Shape: Map<tmsShipmentId, oms_orders[]>.
+  const [omsSyncByShipment, setOmsSyncByShipment] = useState(() => new Map());
+  useEffect(() => {
+    let cancelled = false;
+    const ids = (shipments || []).map((s) => s.id).filter(Boolean);
+    if (ids.length === 0) { setOmsSyncByShipment(new Map()); return; }
+    fetchOmsSyncForShipmentIds(ids).then((m) => {
+      if (!cancelled) setOmsSyncByShipment(m);
+    });
+    return () => { cancelled = true; };
+  }, [shipments]);
 
   // Auto-open shipment detail from URL ?id=SHP-xxxx (run once on mount)
   const [autoOpened, setAutoOpened] = useState(false);
@@ -1327,12 +1348,13 @@ export default function ShipmentsPage() {
             <th>Pickup</th>
             <th>Delivery</th>
             <th onClick={() => toggleSort("status")}>Status <SortIcon col="status" /></th>
+            <th title="OMS sync — did the tender-accept reach the OMS mirror?">OMS</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={10} className="empty-state">No shipments found</td></tr>
+            <tr><td colSpan={11} className="empty-state">No shipments found</td></tr>
           ) : rows.filter((s) => s.bol_type !== "CBOL").map((s) => (<React.Fragment key={s.id}>
             <tr>
               <td>
@@ -1372,6 +1394,14 @@ export default function ShipmentsPage() {
                 <span className={STATUS_BADGES[s._displayStatus] || "badge badge-blue"}>
                   {s._displayStatus || "—"}
                 </span>
+              </td>
+              <td>
+                <OmsSyncPill
+                  {...deriveOmsSyncStatus(
+                    omsSyncByShipment.get(String(s.id)) || [],
+                    { ...s, status: s._displayStatus || s.status }
+                  )}
+                />
               </td>
               <td style={{ whiteSpace: "nowrap" }}>
                 <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
@@ -1432,7 +1462,7 @@ export default function ShipmentsPage() {
             {/* CBOL sub-rows for MBOL shipments */}
             {s.bol_type === "MBOL" && rows.filter((c) => c.bol_type === "CBOL" && c.master_shipment_id === s.id).map((c) => (
               <tr key={c.id} style={{ background: "#f8faff", fontSize: 11 }}>
-                <td colSpan={10} style={{ padding: "4px 16px 4px 40px" }}>
+                <td colSpan={11} style={{ padding: "4px 16px 4px 40px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "nowrap" }}>
                     <span className="badge badge-teal" style={{ fontSize: 8, padding: "0 5px", height: 16, lineHeight: "16px" }}>CBOL</span>
                     <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(c); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 11 }}>{c.id}</a>
@@ -1442,6 +1472,13 @@ export default function ShipmentsPage() {
                     <span className="mono" style={{ color: "var(--text3)" }}>{c.pickup_date || "—"}</span>
                     <span className="mono" style={{ color: "var(--text3)" }}>{c.delivery_date || "—"}</span>
                     <span className={STATUS_BADGES[c._displayStatus] || "badge"} style={{ fontSize: 9 }}>{c._displayStatus}</span>
+                    <OmsSyncPill
+                      {...deriveOmsSyncStatus(
+                        omsSyncByShipment.get(String(c.id)) || [],
+                        { ...c, status: c._displayStatus || c.status }
+                      )}
+                    />
+
                     {["Planned", "Tender Rejected"].includes(c._displayStatus) && (
                       <button style={{ background: "#2563eb", color: "#fff", border: "none", padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: "pointer" }} disabled={busyId === c.id} onClick={() => onTender(c)}>📤 Tender</button>
                     )}
@@ -1536,7 +1573,7 @@ export default function ShipmentsPage() {
       )}
 
       {/* Shipment Detail Modal */}
-      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} />}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} onShipmentPatched={(patch) => { setDetailShipment((prev) => prev ? { ...prev, ...patch } : prev); refreshData(); }} />}
 
       {/* Tender Result Modal */}
       <TenderResultModal
