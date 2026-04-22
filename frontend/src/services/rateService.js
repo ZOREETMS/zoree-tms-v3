@@ -8,6 +8,8 @@
  * never hard-code the enum strings (Rule 10 §no hardcoded values).
  */
 
+import { DbApi } from "../lib/api";
+
 /* ── match_type: single source of truth for the UI layer ─────────
  * Mirrors api/services/ltlRateMatcher.js MATCH_TYPES. Kept in sync
  * manually; a future shared/types package could own both.
@@ -58,6 +60,51 @@ export function getMatchTypeBadge(value) {
   if (norm === MATCH_TYPE_VALUES.ZIP)     return "ZIP";
   if (norm === MATCH_TYPE_VALUES.COUNTRY) return "CTRY";
   return "CITY";
+}
+
+/* ── Rate lookup ──────────────────────────────────────────────
+ * Rates are shared across every planning surface (bulk plan, route
+ * optimizer, rate-management). Shipment rows store only the rate_id /
+ * lane reference — discount %, discount $, and FSC % live in the
+ * rates table. Views that want to display "how was this shipment
+ * priced" must look up the rate at render time through this service.
+ */
+
+/**
+ * Fetch a single rate row by its `lane` identifier (the value stored
+ * in shipments.rate_id). Returns the first matching row or null when
+ * no match is found. Errors are swallowed and logged — a missing rate
+ * is not fatal to the caller (e.g. shipment detail still renders).
+ */
+export async function getRateByLane(lane) {
+  const key = String(lane || "").trim();
+  if (!key) return null;
+  try {
+    const rows = await DbApi.query("rates", `select=*&lane=eq.${key}&limit=1`);
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch (e) {
+    console.warn("[rateService] getRateByLane failed:", e?.message || e);
+    return null;
+  }
+}
+
+/**
+ * Extract the (possibly blended) discount info from a rate row into
+ * the shape the UI actually renders. Normalizes the legacy `discount`
+ * / `discount_pct` and `discount_flat` / `discount_amt` aliases, and
+ * computes the money value of the % discount against a supplied base.
+ */
+export function summarizeDiscount(rate, baseAmount = 0) {
+  if (!rate) return { pct: 0, flat: 0, amount: 0, hasDiscount: false };
+  const pct = Number(rate.discount ?? rate.discount_pct ?? 0) || 0;
+  const flat = Number(rate.discount_flat ?? rate.discount_amt ?? 0) || 0;
+  const amount = Math.round((Number(baseAmount) || 0) * pct / 100) + flat;
+  return {
+    pct,
+    flat,
+    amount,
+    hasDiscount: pct > 0 || flat > 0,
+  };
 }
 
 /* ── CSV template / export ──────────────────────────────────── */

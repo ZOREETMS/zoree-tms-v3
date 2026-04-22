@@ -20,7 +20,7 @@ export default function OrderEditModal({ isOpen, order, items = [], onClose, onS
         customer: order.customer || "",
         status: order.status || "Unplanned",
         refNum: order.ref_num || order.refNum || "",
-        poNum: order.po_num || order.poNum || "",
+        poNum: order.po_number || order.po_num || order.poNum || "",
         originCity: op.city,
         originState: op.state,
         originZip: order.origin_zip || op.zip || "",

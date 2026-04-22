@@ -62,15 +62,24 @@ export function buildPersistedTenderResponses(shipments) {
 }
 
 /**
- * UI status: if DB still says Tendered but carrier portal saved [CP_RESPONSE] accept in notes, treat as Confirmed.
+ * UI status: if DB still says Tendered but carrier portal saved [CP_RESPONSE]
+ * accept in notes, surface it as "Tender Accepted".
+ *
+ * The label deliberately matches migration 014_orders_status_add_tender_accepted
+ * so the shipment badge, the order badge, and the timeline step all read
+ * identically — previously the shipment flipped to "Confirmed" while the
+ * linked orders read "Tender Accepted", which confused planners.
  */
 export function effectiveShipmentStatus(s) {
   if (!s) return "";
   const raw = String(s.status || "").trim();
   if (raw === "Tendered") {
     const r = parseResponseFromNotes(s.notes);
-    if (r?.action === "accept") return "Confirmed";
+    if (r?.action === "accept") return "Tender Accepted";
   }
+  // Some legacy rows may still carry the old "Confirmed" literal — normalize
+  // them so downstream checks only need one label.
+  if (raw === "Confirmed") return "Tender Accepted";
   return raw || "—";
 }
 

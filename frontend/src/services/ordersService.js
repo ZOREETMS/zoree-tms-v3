@@ -301,7 +301,7 @@ export async function copyOrder(source) {
     no_contract_rate: source.no_contract_rate || false,
     dedicated_equip: source.dedicated_equip || false,
     notes: source.notes || null,
-    po_num: source.po_num || null,
+    po_number: source.po_number || source.po_num || null,
   };
   await DbApi.upsert("orders", copy);
   return copy;

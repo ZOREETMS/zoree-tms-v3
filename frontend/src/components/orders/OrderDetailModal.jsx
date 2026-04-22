@@ -117,7 +117,7 @@ export default function OrderDetailModal({
               <SdField icon={"\ud83d\udd17"} label="Lane Peers" value={sibs.length > 0 ? `${sibs.length} eligible order(s)` : "No consolidation peers"} />
               {o.shipment_id && <SdField icon={"\ud83d\ude9a"} label="Shipment ID" value={<a href={`/shipments?id=${o.shipment_id}`} onClick={(e) => { e.preventDefault(); window.location.href = `/shipments?id=${o.shipment_id}`; }} className="mono" style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "none" }}>{o.shipment_id} {"\u2197"}</a>} />}
               {o.ref_num && <SdField icon={"\ud83d\udccb"} label="Reference #" value={o.ref_num} />}
-              {o.po_num && <SdField icon={"\ud83e\uddfe"} label="PO Number" value={o.po_num} />}
+              {(o.po_number || o.po_num) && <SdField icon={"\ud83e\uddfe"} label="PO Number" value={o.po_number || o.po_num} />}
             </div>
 
             {/* Line Items */}

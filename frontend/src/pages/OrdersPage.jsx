@@ -154,6 +154,34 @@ export default function OrdersPage() {
     },
   );
 
+  // Belt-and-suspenders for the "I came back to the tab and an OMS order
+  // isn't showing" case. If the EventSource dropped while backgrounded
+  // and Realtime missed the INSERT, neither auto-refresh path fires and
+  // the list stays stale until a hard reload. Listening for
+  // `visibilitychange` catches that — when the tab becomes visible we
+  // re-pull orders + shipments once. Cheap, idempotent, and covers the
+  // intermittent "doesn't show up in tms" symptom users see.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        try { refreshData?.(); } catch (_) { /* noop */ }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // refreshData is stable from the outlet — subscribe once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  async function handleManualRefresh() {
+    if (manualRefreshing) return;
+    setManualRefreshing(true);
+    try { await refreshData?.(); setLastSyncAt(new Date().toISOString()); }
+    finally { setManualRefreshing(false); }
+  }
+
   const [editUser, setEditUser] = useState("Sridhar (Dispatcher)");
   const [editStatus, setEditStatus] = useState("");
   const [orderChangeLog, setOrderChangeLog] = useState({}); // {orderId: [{ts, user, changes}]}
@@ -457,7 +485,7 @@ export default function OrdersPage() {
       if (!shipTo.zip)   shipTo.zip   = cityZipLookup(o.dest)   || "";
       setEditForm({
         customer: o.customer || "", status: o.status || "Unplanned",
-        refNum: o.ref_num || o.refNum || "", poNum: o.po_num || o.poNum || "",
+        refNum: o.ref_num || o.refNum || "", poNum: o.po_number || o.po_num || o.poNum || "",
         shipFrom,
         shipTo,
         weight: o.weight || "", pieces: o.pieces || "", shipMode: o.ship_mode || o.shipMode || "",
@@ -600,7 +628,7 @@ export default function OrdersPage() {
       commodity: f.commodity || "General",
       incoterms: (f.incoterms || "").trim() || null,
       ref_num: (f.refNum || "").trim() || null,
-      po_num:  (f.poNum  || "").trim() || null,
+      po_number: (f.poNum || "").trim() || null,
       ship_mode:     (f.shipMode     || "").trim() || null,
       service_level: (f.serviceLevel || "").trim() || null,
       notes: (f.notes || "").trim() || null,
@@ -1257,6 +1285,27 @@ export default function OrdersPage() {
         </select>
         <LocationFilter side="from" value={shipFromFilter} onChange={setShipFromFilter} />
         <LocationFilter side="to"   value={shipToFilter}   onChange={setShipToFilter} />
+        <button
+          type="button"
+          onClick={handleManualRefresh}
+          disabled={manualRefreshing}
+          title={lastSyncAt ? `Last sync: ${new Date(lastSyncAt).toLocaleTimeString()}` : "Pull latest orders now"}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 10px", borderRadius: 6,
+            border: "1px solid var(--border)", background: "var(--bg2, #fff)",
+            fontSize: 12, fontWeight: 600, cursor: manualRefreshing ? "default" : "pointer",
+            color: autoSyncLive ? "#16a34a" : "var(--text2)",
+            fontFamily: "inherit",
+          }}
+        >
+          <span style={{ display: "inline-block", transform: manualRefreshing ? "rotate(180deg)" : "none", transition: "transform .4s" }}>↻</span>
+          {manualRefreshing ? "Refreshing…" : "Refresh"}
+          <span style={{
+            display: "inline-block", width: 6, height: 6, borderRadius: "50%",
+            background: autoSyncLive ? "#22c55e" : "#9ca3af",
+          }} />
+        </button>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text3)" }}>Ready From</span>
         <input type="date" value={readyFrom} onChange={(e) => setReadyFrom(e.target.value)} style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12 }} />
         <span style={{ fontSize: 12, color: "var(--text3)" }}>To</span>

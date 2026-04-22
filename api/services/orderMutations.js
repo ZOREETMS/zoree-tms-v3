@@ -23,7 +23,7 @@ function apiOrderToDbPatch(body) {
   if ("commodity" in b) patch.commodity = b.commodity || null;
   if ("incoterms" in b) patch.incoterms = b.incoterms || null;
   if ("refNum" in b || "ref_num" in b) patch.ref_num = b.refNum || b.ref_num || null;
-  if ("poNum" in b || "po_num" in b) patch.po_num = b.poNum || b.po_num || null;
+  if ("poNum" in b || "po_num" in b || "po_number" in b) patch.po_number = b.poNum || b.po_number || b.po_num || null;
   if ("readyDate" in b || "ready" in b) patch.ready = b.readyDate || b.ready || null;
   if ("dueDate" in b || "due" in b) patch.due = b.dueDate || b.due || null;
   if ("status" in b) patch.status = b.status || null;

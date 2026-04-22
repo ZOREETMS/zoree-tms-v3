@@ -828,7 +828,12 @@
       "Bash(node -c api/services/orderMutations.js)",
       "Bash(curl -s http://localhost:5175/src/components/orders/NewOrderModal.jsx)",
       "Bash(curl -s http://localhost:5175/src/pages/OrdersPage.jsx)",
-      "Bash(node -e \"const { apiOrderToDbPatch } = require\\('./api/services/orderMutations'\\); console.log\\(JSON.stringify\\(apiOrderToDbPatch\\({ shipFromName: 'Chicago DC', shipToName: 'Dallas WH', origin: 'Chicago, IL', dest: 'Dallas, TX' }\\), null, 2\\)\\); console.log\\('---snake case---'\\); console.log\\(JSON.stringify\\(apiOrderToDbPatch\\({ ship_from_name: 'SFO HUB', ship_to_name: 'LAX HUB' }\\), null, 2\\)\\);\")"
+      "Bash(node -e \"const { apiOrderToDbPatch } = require\\('./api/services/orderMutations'\\); console.log\\(JSON.stringify\\(apiOrderToDbPatch\\({ shipFromName: 'Chicago DC', shipToName: 'Dallas WH', origin: 'Chicago, IL', dest: 'Dallas, TX' }\\), null, 2\\)\\); console.log\\('---snake case---'\\); console.log\\(JSON.stringify\\(apiOrderToDbPatch\\({ ship_from_name: 'SFO HUB', ship_to_name: 'LAX HUB' }\\), null, 2\\)\\);\")",
+      "Bash(grep -E \"\\\\.js$\")",
+      "Bash(grep -E \"\\\\.sql$\")",
+      "Bash(xargs -I {} sh -c 'grep -l \"orders.*status\\\\|status.*orders\" {} 2>/dev/null')",
+      "Bash(node -e \"require\\('./api/services/shipmentEvents.js'\\); console.log\\('OK — service loads'\\);\")",
+      "Bash(curl -s -o /tmp/resp.txt -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:3001/api/shipments/SHP-2026-8793/events -H \"Content-Type: application/json\" -d '{\"type\":\"Delivered\"}')"
     ]
   }
 }

@@ -9,18 +9,24 @@ import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/h
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
 import NewShipmentModal from "../components/shipments/NewShipmentModal";
-import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations } from "../services/shipmentService";
+import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations, recordShipmentEvent } from "../services/shipmentService";
 import LocationFieldsEditor from "../components/LocationFieldsEditor";
 import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
 import { confirmOrdersForShipment, unassignOrderAndCleanupShipment, unplanOrdersForShipmentRemoval } from "../services/shipmentOrderService";
 import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
+import { deriveShipmentCostBreakdown, formatUSD } from "../utils/shipmentCost";
+import { getRateByLane, summarizeDiscount } from "../services/rateService";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
   Tendered: "badge badge-purple",
   "Tender Rejected": "badge badge-red",
+  // Shared label with orders.status (migration 014) so the shipment badge
+  // and the order badge both read "Tender Accepted" after a carrier accept.
+  "Tender Accepted": "badge badge-green",
+  Confirmed: "badge badge-green",
   "In Transit": "badge badge-blue",
   Delivered: "badge badge-green",
   Exception: "badge badge-red",
@@ -127,6 +133,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   const [events, setEvents] = useState([]);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
+  const [eventSaving, setEventSaving] = useState(false);
   const [showChangeCarrier, setShowChangeCarrier] = useState(false);
   const [carrierQuotes, setCarrierQuotes] = useState([]);
   const [carrierLoading, setCarrierLoading] = useState(false);
@@ -135,6 +142,10 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   // add-order / unassign / invoice / status). Fetched on open.
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  // Rate lookup for discount / FSC% visibility. Fetched on open so the
+  // cost breakdown can show "how was $total_cost built up?" — discount
+  // lives on the rates table, not the shipment row.
+  const [rateRow, setRateRow] = useState(null);
 
   // REQ-24: inline edit state for the ship-from / ship-to blocks. The
   // canonical {name, city, state, zip} shape lives in types/location.js;
@@ -191,8 +202,23 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
       .catch(() => { if (!cancelled) { setHistoryRows([]); setHistoryLoading(false); } });
     return () => { cancelled = true; };
   }, [ds.id]);
+
+  // Load the rate row referenced by this shipment so we can display
+  // discount %, discount $, and FSC % alongside the cost breakdown.
+  useEffect(() => {
+    let cancelled = false;
+    const lane = ds.rate_id;
+    if (!lane) { setRateRow(null); return; }
+    getRateByLane(lane).then((row) => { if (!cancelled) setRateRow(row); });
+    return () => { cancelled = true; };
+  }, [ds.rate_id]);
   const consolidated = linked.length > 1;
-  const pct = displayStatus === "Delivered" ? 100 : displayStatus === "In Transit" ? 62 : displayStatus === "Confirmed" ? 32 : displayStatus === "Tendered" ? 20 : displayStatus === "Exception" ? 55 : 5;
+  const pct = displayStatus === "Delivered" ? 100
+    : displayStatus === "In Transit" ? 62
+    : (displayStatus === "Tender Accepted" || displayStatus === "Confirmed") ? 32
+    : displayStatus === "Tendered" ? 20
+    : displayStatus === "Exception" ? 55
+    : 5;
   const barCol = displayStatus === "Exception" ? "var(--red)" : displayStatus === "Delivered" ? "var(--green)" : "var(--accent)";
   const isTendered = displayStatus !== "Planned" && displayStatus !== "Tender Rejected";
   // REQ-19: separate "tender accepted" from "tendered" so the timeline can
@@ -364,12 +390,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
 
           {/* Details grid - 3 columns */}
           <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, borderBottom: "1px solid var(--border)" }}>
+            {/* Status as a first-class field in the grid — the status bar above
+                is a quick glance but users expect to see it alongside Carrier/Mode. */}
+            <InfoBox icon="🚦" label="Status" value={displayStatus} />
             <InfoBox icon="🚛" label="Carrier" value={ds._carrier || "—"} />
             <InfoBox icon="📦" label="Mode" value={ds.mode || "—"} />
             <InfoBox icon="⚖️" label="Weight" value={`${(ds.weight || 0).toLocaleString()} lbs`} />
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
             <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
-            <InfoBox icon="💰" label="Est. Cost" value={`$${(ds.total_cost || 0).toLocaleString()}`} />
             {ds.rate_id && (
               <div className="sd-field">
                 <div className="sd-field-label">📄 Rate ID</div>
@@ -378,11 +406,37 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                 </div>
               </div>
             )}
-            {(ds.rate > 0 || ds.fuel_surcharge > 0) && (<>
-            <InfoBox icon="📊" label="Base / Linehaul" value={`$${(ds.rate || 0).toLocaleString()}`} />
-            <InfoBox icon="⛽" label="Fuel Surcharge" value={`$${(ds.fuel_surcharge || 0).toLocaleString()}`} />
-            <InfoBox icon="📦" label="Accessorials" value={`$${(ds.accessorials || 0).toLocaleString()}`} />
-            </>)}
+            {/* Cost breakdown — always rendered so the planner can see how
+                total_cost was built up. deriveShipmentCostBreakdown() fills
+                in the base from the total when legacy/OMS rows only stored
+                total_cost. Discount / FSC% come from the rate row
+                (shipment doesn't persist them). */}
+            {(() => {
+              const cost = deriveShipmentCostBreakdown(ds);
+              const disc = summarizeDiscount(rateRow, cost.base);
+              const fscPct = rateRow?.fsc || "";
+              return (
+                <>
+                  <InfoBox icon="📊" label={cost.baseIsDerived ? "Base / Linehaul (derived)" : "Base / Linehaul"} value={formatUSD(cost.base)} />
+                  <InfoBox
+                    icon="🎟️"
+                    label={disc.hasDiscount ? `Discount (${disc.pct}%${disc.flat ? ` + ${formatUSD(disc.flat)}` : ""})` : "Discount"}
+                    value={disc.hasDiscount ? `− ${formatUSD(disc.amount)}` : "No discount applied"}
+                  />
+                  <InfoBox
+                    icon="⛽"
+                    label={fscPct ? `Fuel Surcharge (${fscPct})` : "Fuel Surcharge"}
+                    value={formatUSD(cost.fuel)}
+                  />
+                  <InfoBox
+                    icon="📦"
+                    label="Accessorials"
+                    value={cost.accessorials > 0 ? formatUSD(cost.accessorials) : "$0 (none billed)"}
+                  />
+                  <InfoBox icon="💰" label="Est. Cost (Total)" value={formatUSD(cost.total)} />
+                </>
+              );
+            })()}
             <InfoBox icon="📅" label="Pickup Date" value={ds.pickup_date || ds.pickup || "—"} />
             <InfoBox icon="🏁" label="Delivery Date" value={ds.delivery_date || ds.delivery || "—"} />
             <InfoBox icon="🚚" label="Transit Days" value={transitDays} />
@@ -477,12 +531,27 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                 </div>
                 <input placeholder="Add a note (optional)" value={newEvent.note} onChange={(e) => setNewEvent({ ...newEvent, note: e.target.value })} style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, fontFamily: "inherit", marginBottom: 8, boxSizing: "border-box" }} />
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => {
-                    if (!newEvent.type) return;
-                    setEvents([...events, { type: newEvent.type, note: newEvent.note, date: newEvent.date, time: new Date().toLocaleTimeString() }]);
-                    setNewEvent({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
-                    setShowAddEvent(false);
-                  }} style={{ padding: "5px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Save Event</button>
+                  <button disabled={eventSaving} onClick={async () => {
+                    if (!newEvent.type || eventSaving) return;
+                    setEventSaving(true);
+                    try {
+                      await recordShipmentEvent(ds.id, {
+                        type: newEvent.type,
+                        note: newEvent.note,
+                        date: newEvent.date,
+                      });
+                      setEvents([...events, { type: newEvent.type, note: newEvent.note, date: newEvent.date, time: new Date().toLocaleTimeString() }]);
+                      setNewEvent({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
+                      setShowAddEvent(false);
+                      // Close modal and refresh parent list so the shipment + linked
+                      // orders reflect the new status (Delivered / In Transit / etc.).
+                      if (typeof onChangeCarrier === "function") { onClose(); onChangeCarrier(); }
+                    } catch (err) {
+                      alert("Failed to save event: " + err.message);
+                    } finally {
+                      setEventSaving(false);
+                    }
+                  }} style={{ padding: "5px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: eventSaving ? "wait" : "pointer", fontFamily: "inherit", opacity: eventSaving ? 0.6 : 1 }}>{eventSaving ? "Saving…" : "Save Event"}</button>
                   <button onClick={() => setShowAddEvent(false)} style={{ padding: "5px 14px", background: "var(--bg3)", color: "var(--text2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                 </div>
               </div>
@@ -1198,7 +1267,7 @@ export default function ShipmentsPage() {
           className="search"
         />
         <select className="fsel" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          {["All", "Planned", "Tendered", "Tender Rejected", "Confirmed", "In Transit", "Delivered", "Cancelled"].map((s) => (
+          {["All", "Planned", "Tendered", "Tender Rejected", "Tender Accepted", "In Transit", "Delivered", "Cancelled"].map((s) => (
             <option key={s} value={s}>{s === "All" ? "ALL STATUSES" : s} {statusCounts[s] ? `(${statusCounts[s]})` : ""}</option>
           ))}
         </select>
@@ -1319,8 +1388,8 @@ export default function ShipmentsPage() {
                     ↩ Withdraw
                   </button>
                 </>)}
-                {s._displayStatus === "Confirmed" && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Confirmed</span>
+                {s._displayStatus === "Tender Accepted" && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Tender Accepted</span>
                 )}
                 <button
                   title="Copy Shipment"

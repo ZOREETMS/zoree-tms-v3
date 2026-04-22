@@ -181,6 +181,17 @@ export const DbApi = {
       body: JSON.stringify(payload),
     });
   },
+  /**
+   * Generic filtered read. `query` is the Supabase-style filter that
+   * sits inside the `q=` param (e.g. "select=*&lane=eq.AVRT-CHI-DAL").
+   * Service-layer callers should prefer domain-specific helpers, but
+   * this escape hatch keeps one-off lookups out of the raw fetch layer
+   * so the view never builds URLs itself (CLAUDE_RULES §4).
+   */
+  query(table, query) {
+    const q = encodeURIComponent(query);
+    return api(`/db/${table}?q=${q}`);
+  },
   async saveCarrier(carrier) {
     if (carrier?.id) return this.patch("carriers", carrier.id, carrier);
     return this.upsert("carriers", carrier);
@@ -248,6 +259,15 @@ export const ShipmentsApi = {
     return api(`/shipments/${encodeURIComponent(shipmentId)}/add-order`, {
       method: "POST",
       body: JSON.stringify({ orderId }),
+    });
+  },
+  // Record a manual timeline event (Picked Up / Delivered / Exception / ...).
+  // The backend transitions shipment + linked order status where applicable
+  // and writes change_history rows on both sides.
+  addEvent(shipmentId, { type, note, date }) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/events`, {
+      method: "POST",
+      body: JSON.stringify({ type, note, date }),
     });
   },
 };

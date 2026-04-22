@@ -106,3 +106,25 @@ export async function updateShipmentLocations(shipmentId, fromLoc, toLoc) {
   const patch = locationsToShipmentPatch(fromLoc, toLoc);
   return DbApi.patch("shipments", shipmentId, patch);
 }
+
+/**
+ * Record a manual timeline event on a shipment. Backend maps the event
+ * type to a shipment/order status transition where applicable (Delivered
+ * flips shipment + linked orders to Delivered and stamps delivery_date;
+ * Picked Up flips them to In Transit and stamps pickup_date; Exception
+ * moves the shipment to Exception; etc.) and writes change_history rows
+ * on both entities. UI components MUST go through this service (no
+ * direct calls to ShipmentsApi from components — CLAUDE_RULES #3 / #4).
+ *
+ * @param {string} shipmentId
+ * @param {{ type:string, note?:string, date?:string }} event
+ */
+export async function recordShipmentEvent(shipmentId, event) {
+  if (!shipmentId) throw new Error("recordShipmentEvent: shipmentId is required");
+  if (!event || !event.type) throw new Error("recordShipmentEvent: event.type is required");
+  return ShipmentsApi.addEvent(shipmentId, {
+    type: event.type,
+    note: event.note || "",
+    date: event.date || new Date().toISOString().slice(0, 10),
+  });
+}

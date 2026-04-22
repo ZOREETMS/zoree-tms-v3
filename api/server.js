@@ -33,7 +33,7 @@ const ORDER_HISTORY_FIELDS = {
   customer: 'customer', origin: 'origin', dest: 'destination',
   weight: 'weight', pieces: 'pieces', ship_mode: 'shipMode',
   commodity: 'commodity', incoterms: 'incoterms', ref_num: 'refNum',
-  po_num: 'poNum', ready: 'readyDate', due: 'dueDate', status: 'status',
+  po_number: 'poNum', ready: 'readyDate', due: 'dueDate', status: 'status',
   shipment_id: 'shipmentId', origin_zip: 'originZip', dest_zip: 'destZip',
   hazmat: 'hazmat', preferred_carrier: 'preferredCarrier',
   excluded_carrier: 'excludedCarrier', no_consolidate: 'noConsolidate',
@@ -1490,6 +1490,33 @@ app.get('/api/shipments/:id/history', async (req, res) => {
     res.json({ entity: 'shipment', id: req.params.id, rows, total: rows.length });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Manual shipment timeline event from the UI. Transitions the shipment
+// status (and linked orders where appropriate) and records change_history
+// rows so the event + any note persist beyond the modal's local state.
+//   body: { type, note?, date? }
+app.post('/api/shipments/:id/events', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  const roleS = getUserRole(u);
+  if (!['admin', 'planner'].includes(roleS)) {
+    return res.status(403).json({ error: `Role '${roleS}' cannot add shipment events. Required: admin, planner.` });
+  }
+  try {
+    const shipmentEvents = require('./services/shipmentEvents');
+    const result = await shipmentEvents.applyShipmentEvent({
+      shipmentId: req.params.id,
+      type: req.body?.type,
+      note: req.body?.note,
+      date: req.body?.date,
+      user: u,
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    const status = e.status || 500;
+    res.status(status).json({ ok: false, error: e.message });
   }
 });
 
