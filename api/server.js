@@ -2060,7 +2060,9 @@ app.post('/api/ltl/quote', async (req, res) => {
         'carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,' +
         'czarlite_min_wt,czarlite_max_wt,transit_days,' +
         // New columns from migration 021 — match_type + structured geo.
-        'match_type,origin_zip,dest_zip,origin_country,dest_country',
+        'match_type,origin_zip,dest_zip,origin_country,dest_country,' +
+        // Migration 024: trailer this rate was negotiated against.
+        'equipment',
       { headers: sbHeaders(null) }
     );
     if (rr.ok) adderRates = await rr.json();
@@ -2601,7 +2603,11 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
             'carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles,' +
             'czarlite_min_wt,czarlite_max_wt,' +
             // Migration 021 structured columns.
-            'match_type,origin_zip,dest_zip,origin_country,dest_country';
+            'match_type,origin_zip,dest_zip,origin_country,dest_country,' +
+            // Migration 024: trailer this rate was negotiated against.
+            // Soft reference to equipment_types.name; planner uses it
+            // to resolve max_weight when binning shipment groups.
+            'equipment';
           const tlRes = await fetch(tlUrl, { headers: sbHeaders(null) });
           const tlRates = await tlRes.json();
 

@@ -1,9 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   MATCH_TYPE_OPTIONS,
   MATCH_TYPE_VALUES,
   normalizeMatchType,
 } from "../services/rateService";
+// Equipment master is the source of truth for trailers; getEquipmentList
+// falls back to the seed catalog when the DB table is empty so the
+// dropdown is populated even on a fresh tenant.
+import { getEquipmentList } from "../services/equipmentService";
 
 const MODE_OPTIONS = ["TL", "LTL", "Intermodal", "Flatbed", "Reefer", "Air Freight"];
 const STATUS_OPTIONS = ["Active", "Expiring", "Expired"];
@@ -54,6 +58,14 @@ function parseLocation(str) {
 // the carrier on every >9999 lb TL group).
 const isLtlMode = (mode) => String(mode || "").toUpperCase() === "LTL";
 
+// Default trailer suggested when MODE flips. Mirrors migration 024
+// backfill so a freshly-toggled rate matches what a backfilled row
+// would carry. NULL master entry is fine — the planner falls back.
+const DEFAULT_EQUIPMENT_BY_MODE = {
+  LTL: "LTL",
+  TL: "Dry Van 53ft",
+};
+
 function buildInitialForm(rate) {
   if (!rate) return {};
   const oLoc = parseLocation(rate.origin);
@@ -62,6 +74,7 @@ function buildInitialForm(rate) {
   return {
     lane: rate.lane || "",
     mode: rate.mode || "TL",
+    equipment: rate.equipment || "",
     // Migration 021: controls how this rate is matched to shipments.
     matchType: normalizeMatchType(rate.match_type || rate.matchType),
     origin: rate.origin || "",
@@ -106,6 +119,9 @@ function buildPayload(form) {
   return {
     lane: form.lane,
     mode: form.mode,
+    // Migration 024: soft reference to equipment_types.name so the
+    // planner can resolve max_weight via the equipment master.
+    equipment: form.equipment || null,
     // Migration 021 columns — promoted from the free-text origin/dest
     // so the LTL matcher can compare structured values (see
     // api/services/ltlRateMatcher.js).
@@ -138,9 +154,16 @@ function buildPayload(form) {
   };
 }
 
-export default function EditRateModal({ rate, onClose, onSave, isNew, carriers = [], existingLanes = [] }) {
+export default function EditRateModal({ rate, onClose, onSave, isNew, carriers = [], equipmentTypes = [], existingLanes = [] }) {
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
+
+  // Resolve equipment list once: DB rows when present, seed catalog
+  // otherwise. Then strip Inactive entries for the dropdown.
+  const activeEquipment = useMemo(
+    () => getEquipmentList(equipmentTypes).filter((eq) => (eq.status || "Active") === "Active"),
+    [equipmentTypes]
+  );
 
   useEffect(() => {
     if (rate) setForm(buildInitialForm(rate));
@@ -219,10 +242,40 @@ export default function EditRateModal({ rate, onClose, onSave, isNew, carriers =
                   setField("czarliteMinWt", "");
                   setField("czarliteMaxWt", "");
                 }
+                // Suggest a default equipment for the new mode if the
+                // user hasn't already pinned one. Mirrors migration 024
+                // backfill so freshly-toggled rates match backfilled rows.
+                const suggested = DEFAULT_EQUIPMENT_BY_MODE[String(next).toUpperCase()];
+                if (suggested && !form.equipment) setField("equipment", suggested);
               }}>
                 {MODE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Equipment — soft reference to equipment_types.name. Drives
+              the planner's max_weight lookup when binning shipment groups. */}
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">EQUIPMENT</label>
+            <select
+              value={form.equipment || ""}
+              onChange={(e) => setField("equipment", e.target.value)}
+            >
+              <option value="">— Select Equipment —</option>
+              {activeEquipment.map((eq) => (
+                <option key={eq.id || eq.name} value={eq.name}>
+                  {eq.name}{eq.max_weight ? ` (${Number(eq.max_weight).toLocaleString()} lb max)` : ""}
+                </option>
+              ))}
+              {/* Preserve a backfilled / legacy value not present in master */}
+              {form.equipment &&
+                !activeEquipment.some((eq) => eq.name === form.equipment) && (
+                <option value={form.equipment}>{form.equipment}</option>
+              )}
+            </select>
+            <span style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
+              Trailer this rate was negotiated against — planner reads max_weight from the equipment master.
+            </span>
           </div>
 
           {/* Match Type — controls how this rate is paired with shipments */}

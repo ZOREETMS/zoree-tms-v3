@@ -113,7 +113,7 @@ function CzarLiteBadge({ r, carriers }) {
 }
 
 export default function RateManagementPage() {
-  const { carriers, rates: contextRates, refreshData } = useOutletContext();
+  const { carriers, rates: contextRates, equipmentTypes = [], refreshData } = useOutletContext();
   const [searchParams] = useSearchParams();
 
   // State — initialize search from URL ?q= param (e.g. linked from shipment rate_id)
@@ -684,6 +684,7 @@ export default function RateManagementPage() {
         onSave={handleSaveRate}
         isNew={editRate && !editRate.id}
         carriers={carriers}
+        equipmentTypes={equipmentTypes}
         existingLanes={rates.map((r) => r.lane).filter(Boolean)}
       />
 
