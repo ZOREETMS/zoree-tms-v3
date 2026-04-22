@@ -272,6 +272,8 @@ export async function clearOrderLines(orderId) {
 
 /**
  * Copy an existing order with a new ID and "Unplanned" status.
+ * Also duplicates the source order's line items so the new order
+ * has the same freight composition as the original.
  * @param {object} source - The order to copy
  * @returns {Promise<object>} The newly created order
  */
@@ -304,7 +306,30 @@ export async function copyOrder(source) {
     po_number: source.po_number || source.po_num || null,
   };
   await DbApi.upsert("orders", copy);
+  await copyOrderLines(source.id, newId);
   return copy;
+}
+
+/**
+ * Duplicate order_lines from a source order onto a target order.
+ * Backend POST /api/orders/:id/lines regenerates line ids from the
+ * target order id and recalculates weight/pieces/line_count on the
+ * target — so we strip identity fields before posting.
+ * @param {string} sourceId
+ * @param {string} targetId
+ */
+async function copyOrderLines(sourceId, targetId) {
+  const sourceLines = await OrdersApi.lines(sourceId);
+  if (!Array.isArray(sourceLines) || sourceLines.length === 0) return;
+  const payload = sourceLines.map((l, i) => ({
+    line_num: l.line_num || (i + 1),
+    item_id: l.item_id || null,
+    description: l.description || "",
+    qty_ordered: l.qty_ordered || 0,
+    unit_weight: l.unit_weight || 0,
+    total_weight: l.total_weight || 0,
+  }));
+  await OrdersApi.saveLines(targetId, payload);
 }
 
 /* ── Internal helper: generate a shipment ID ── */

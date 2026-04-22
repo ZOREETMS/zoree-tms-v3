@@ -219,4 +219,94 @@ async function addOrderToShipment({ shipmentId, orderId, user = null, tenantConf
   };
 }
 
-module.exports = { addOrderToShipment, recalcCost, _internal: { LOCKED_STATUSES } };
+// ── Recalculate shipment after an order is removed ────────────────
+// Mirror of addOrderToShipment for the unassign path. Called by the
+// PATCH /api/orders/:id route after the order's shipment_id has been
+// cleared, when the shipment still has remaining orders (i.e. orphan
+// cleanup did NOT delete it).
+//
+// Reuses recalcCost() so add and remove paths share identical
+// proportional-scaling math against the existing weight, pieces,
+// total_cost, fuel_surcharge, and accessorials columns. No schema
+// changes (zoree_db_rules).
+async function recalcShipmentAfterOrderRemoval({
+  shipmentId,
+  removedOrderId,
+  user = null,
+  tenantConfig = null,
+}) {
+  if (!shipmentId) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
+
+  const shipRows = await db.dbSelect('shipments', {
+    filters: [['id', 'eq', shipmentId]], limit: 1,
+  }, tenantConfig);
+  const shipBefore = Array.isArray(shipRows) && shipRows.length ? shipRows[0] : null;
+  if (!shipBefore) return null; // shipment was deleted by orphan cleanup — nothing to do.
+
+  const remaining = await db.dbSelect('orders', {
+    filters: [['shipment_id', 'eq', shipmentId]], limit: 500,
+  }, tenantConfig);
+  const remainingRows = Array.isArray(remaining) ? remaining : [];
+
+  const newWeight = remainingRows.reduce((s, o) => s + num(o.weight), 0);
+  const newPieces = remainingRows.reduce((s, o) => s + num(o.pieces), 0);
+  const remainingIds = remainingRows.map((o) => o.id);
+
+  const recalc = recalcCost({
+    oldWeight: shipBefore.weight,
+    oldCost:   shipBefore.total_cost,
+    newWeight,
+    oldFsc: shipBefore.fuel_surcharge ?? null,
+    oldAcc: shipBefore.accessorials ?? null,
+  });
+
+  const shipPatch = {
+    weight:     newWeight,
+    pieces:     newPieces,
+    total_cost: recalc.total_cost,
+    order_ids:  remainingIds,
+  };
+  if (recalc.fuel_surcharge != null) shipPatch.fuel_surcharge = recalc.fuel_surcharge;
+  if (recalc.accessorials   != null) shipPatch.accessorials   = recalc.accessorials;
+
+  const shipAfter = await db.dbUpdate('shipments', shipmentId, shipPatch, tenantConfig);
+
+  try {
+    await history.recordFieldDiffs({
+      entityType: 'shipment',
+      entityId:   shipmentId,
+      before: {
+        weight:         shipBefore.weight,
+        pieces:         shipBefore.pieces,
+        total_cost:     shipBefore.total_cost,
+        fuel_surcharge: shipBefore.fuel_surcharge,
+        accessorials:   shipBefore.accessorials,
+        order_ids:      Array.isArray(shipBefore.order_ids) ? shipBefore.order_ids : [],
+      },
+      after: {
+        weight:         newWeight,
+        pieces:         newPieces,
+        total_cost:     recalc.total_cost,
+        fuel_surcharge: recalc.fuel_surcharge,
+        accessorials:   recalc.accessorials,
+        order_ids:      remainingIds,
+      },
+      fields: {
+        weight: 'weight',
+        pieces: 'pieces',
+        total_cost: 'total_cost',
+        fuel_surcharge: 'fuel_surcharge',
+        accessorials: 'accessorials',
+        order_ids: 'order_ids',
+      },
+      user,
+      metadata: { reason: 'order-removed', removedOrderId, costRecalc: recalc.note, scale: recalc.scale },
+    });
+  } catch (auditErr) {
+    console.error('[shipmentMutations] history write failed (recalc on removal):', auditErr.message);
+  }
+
+  return { shipment: shipAfter, recalc };
+}
+
+module.exports = { addOrderToShipment, recalcShipmentAfterOrderRemoval, recalcCost, _internal: { LOCKED_STATUSES } };

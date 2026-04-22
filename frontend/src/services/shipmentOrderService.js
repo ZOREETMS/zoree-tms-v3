@@ -1,6 +1,5 @@
 import { DbApi, ShipmentsApi } from "../lib/api";
 import { unassignOrderFromShipment, updateOrderStatus } from "./orderWriteService";
-import { deleteShipmentById } from "./shipmentService";
 
 /**
  * REQ-03: manually add an order to an existing shipment.
@@ -16,28 +15,28 @@ export async function addOrderToShipment(orderId, shipmentId) {
 }
 
 export async function unassignOrderAndCleanupShipment(orderId, shipmentId, orders, shipments) {
+  // Backend (PATCH /api/orders/:id) owns the side-effects:
+  //   1. clears the order's shipment_id + sets status='Unplanned'
+  //   2. orphan cleanup: deletes the shipment (and master, if last sibling) when empty
+  //   3. recalc: updates remaining shipment's weight/pieces/total_cost/fuel/accessorials/order_ids
+  // The client only computes the user-facing toast string from in-memory snapshots.
   await unassignOrderFromShipment(orderId);
-  const remaining = orders.filter((o) => o.shipment_id === shipmentId && o.id !== orderId);
 
-  if (remaining.length === 0) {
-    const ship = shipments.find((s) => s.id === shipmentId);
-    await deleteShipmentById(shipmentId);
-    if (ship?.master_shipment_id) {
-      const siblingCbols = shipments.filter(
-        (s) => s.master_shipment_id === ship.master_shipment_id && s.id !== shipmentId
-      );
-      if (siblingCbols.length === 0) {
-        await deleteShipmentById(ship.master_shipment_id);
-        return `Order ${orderId} unassigned. Shipment ${shipmentId} and master ${ship.master_shipment_id} deleted.`;
-      }
-    }
-    return `Order ${orderId} unassigned. Shipment ${shipmentId} deleted.`;
+  const remaining = orders.filter((o) => o.shipment_id === shipmentId && o.id !== orderId);
+  if (remaining.length > 0) {
+    return `Order ${orderId} unassigned from shipment ${shipmentId}`;
   }
 
-  const newWeight = remaining.reduce((s, o) => s + (Number(o.weight) || 0), 0);
-  const newPieces = remaining.reduce((s, o) => s + (Number(o.pieces) || 0), 0);
-  await DbApi.patch("shipments", shipmentId, { weight: newWeight, pieces: newPieces });
-  return `Order ${orderId} unassigned from shipment ${shipmentId}`;
+  const ship = shipments.find((s) => s.id === shipmentId);
+  if (ship?.master_shipment_id) {
+    const siblingCbols = shipments.filter(
+      (s) => s.master_shipment_id === ship.master_shipment_id && s.id !== shipmentId
+    );
+    if (siblingCbols.length === 0) {
+      return `Order ${orderId} unassigned. Shipment ${shipmentId} and master ${ship.master_shipment_id} deleted.`;
+    }
+  }
+  return `Order ${orderId} unassigned. Shipment ${shipmentId} deleted.`;
 }
 
 export async function confirmOrdersForShipment(row, shipments, orders) {

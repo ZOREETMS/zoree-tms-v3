@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
+import ConfirmDialog from "../components/ConfirmDialog";
 import {
+  deleteRate,
   downloadRateTemplate,
+  duplicateRate,
   getMatchTypeBadge,
   getMatchTypeLabel,
 } from "../services/rateService";
@@ -129,6 +132,8 @@ export default function RateManagementPage() {
   const [sortAsc, setSortAsc] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [editRate, setEditRate] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null); // rate row pending delete confirmation
+  const [deleting, setDeleting] = useState(false);
 
   // Auto-open rate detail when navigating with ?q= (e.g. from shipment rate_id link)
   useEffect(() => {
@@ -289,6 +294,33 @@ export default function RateManagementPage() {
       if (refreshData) await refreshData();
     } catch (err) {
       toast(`Failed: ${err.message}`, "error");
+    }
+  }
+
+  async function handleCopyRate(rate) {
+    try {
+      await duplicateRate(rate);
+      toast(`Rate ${rate.lane || ""} copied`, "success");
+      invalidateQuoteCache();
+      if (refreshData) await refreshData();
+    } catch (err) {
+      toast(`Copy failed: ${err.message}`, "error");
+    }
+  }
+
+  async function confirmDeleteRate() {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    try {
+      await deleteRate(deleteTarget.id);
+      toast(`Rate ${deleteTarget.lane || deleteTarget.id} deleted`, "success");
+      invalidateQuoteCache();
+      setDeleteTarget(null);
+      if (refreshData) await refreshData();
+    } catch (err) {
+      toast(`Delete failed: ${err.message}`, "error");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -605,13 +637,33 @@ export default function RateManagementPage() {
                       <CzarLiteBadge r={r} carriers={carriers} />
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setEditRate(r)}
-                        style={{ fontSize: 11 }}
-                      >
-                        Edit
-                      </button>
+                      <div style={{ display: "inline-flex", gap: 4 }}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setEditRate(r)}
+                          style={{ fontSize: 11 }}
+                          title="Edit rate"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleCopyRate(r)}
+                          style={{ fontSize: 11 }}
+                          title="Duplicate this rate"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setDeleteTarget(r)}
+                          style={{ fontSize: 11, color: "#b91c1c" }}
+                          title="Delete rate"
+                          disabled={!r.id}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -633,6 +685,22 @@ export default function RateManagementPage() {
         isNew={editRate && !editRate.id}
         carriers={carriers}
         existingLanes={rates.map((r) => r.lane).filter(Boolean)}
+      />
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        tone="danger"
+        title="Delete rate?"
+        message={
+          deleteTarget
+            ? `This will permanently delete rate "${deleteTarget.lane || deleteTarget.id}". This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={confirmDeleteRate}
+        onCancel={() => (deleting ? null : setDeleteTarget(null))}
       />
     </div>
   );

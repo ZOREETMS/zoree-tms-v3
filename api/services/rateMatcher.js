@@ -119,9 +119,18 @@ function rateMatchesShipment(rate, ctx) {
  * Does this rate row satisfy the shipment's weight (if the rate
  * specifies a min/max)? Separate from geo matching so callers can
  * report "skipped on weight" differently from "skipped on geo".
+ *
+ * The `czarlite_min_wt` / `czarlite_max_wt` columns model the weight
+ * breaks of an LTL CzarLite tariff. They are LTL-only by name and by
+ * design — applying them to TL/Flatbed/Intermodal/etc. would cap a
+ * TL rate at LTL volumes (e.g. 9,999 lb) and silently drop every
+ * full-truckload group. Non-LTL modes therefore short-circuit to
+ * "accepts any weight" regardless of what those columns hold.
  */
 function rateAcceptsWeight(rate, weight) {
   if (!rate || weight == null) return true;
+  const mode = String(rate.mode || '').toUpperCase();
+  if (mode !== 'LTL') return true;
   const minWt = Number(rate.czarlite_min_wt) || 0;
   const maxWt = Number(rate.czarlite_max_wt) || Infinity;
   return weight >= minWt && weight <= maxWt;

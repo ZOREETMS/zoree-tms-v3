@@ -107,6 +107,41 @@ export function summarizeDiscount(rate, baseAmount = 0) {
   };
 }
 
+/* ── Rate mutations ────────────────────────────────────────────
+ * Writes go through DbApi so the UI layer never builds a fetch URL
+ * itself (CLAUDE_RULES §4 — services layer owns the API contract).
+ */
+
+/**
+ * Delete a rate by its row id. Throws on failure so the caller can
+ * surface a toast; returns nothing meaningful on success.
+ */
+export async function deleteRate(id) {
+  if (!id) throw new Error("deleteRate: id is required");
+  return DbApi.remove("rates", id);
+}
+
+/**
+ * Duplicate an existing rate row. Client-side clone: strips the id
+ * and any server-managed timestamps, appends " (COPY)" to the lane
+ * so the new row is distinguishable in the grid, then upserts via
+ * the existing create path. No new API endpoint required.
+ *
+ * Returns the API response (the inserted row).
+ */
+export async function duplicateRate(rate) {
+  if (!rate || typeof rate !== "object") {
+    throw new Error("duplicateRate: rate object is required");
+  }
+  const clone = { ...rate };
+  delete clone.id;
+  delete clone.created_at;
+  delete clone.updated_at;
+  const baseLane = String(rate.lane || "").trim() || "NEW-LANE";
+  clone.lane = `${baseLane} (COPY)`;
+  return DbApi.upsert("rates", clone);
+}
+
 /* ── CSV template / export ──────────────────────────────────── */
 
 const RATE_TEMPLATE_COLUMNS = [

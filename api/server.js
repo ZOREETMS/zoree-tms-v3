@@ -1361,14 +1361,27 @@ app.patch('/api/orders/:id', async (req, res) => {
     const row = await dbUpdate('orders', req.params.id, patch, null);
 
     // Auto-clean orphan shipments: if order was unassigned and no orders remain on that shipment, delete it.
+    // If the shipment still has orders, recalc weight/pieces/total_cost/fuel/accessorials/order_ids
+    // server-side so the detail panel always reflects the post-unassign totals (REQ-03 mirror).
     const prevShipmentId = before?.shipment_id || null;
     const nowShipmentId = row?.shipment_id || null;
     if (prevShipmentId && !nowShipmentId) {
-      await cleanupOrphanShipmentAfterUnassign({
+      const { deleted } = await cleanupOrphanShipmentAfterUnassign({
         previousShipmentId: prevShipmentId,
         dbSelect,
         dbDelete,
       });
+      if (!deleted) {
+        try {
+          await shipmentMutations.recalcShipmentAfterOrderRemoval({
+            shipmentId:     prevShipmentId,
+            removedOrderId: row.id,
+            user:           u,
+          });
+        } catch (recalcErr) {
+          console.error('[orders.patch] recalc after unassign failed:', recalcErr.message);
+        }
+      }
     }
 
     // REQ-02: capture per-field diffs for this edit. If the edit

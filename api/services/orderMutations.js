@@ -50,7 +50,7 @@ function apiOrderToDbPatch(body) {
 }
 
 async function cleanupOrphanShipmentAfterUnassign({ previousShipmentId, dbSelect, dbDelete }) {
-  if (!previousShipmentId) return;
+  if (!previousShipmentId) return { deleted: false };
 
   const remaining = await dbSelect(
     "orders",
@@ -58,7 +58,7 @@ async function cleanupOrphanShipmentAfterUnassign({ previousShipmentId, dbSelect
     null
   );
 
-  if (Array.isArray(remaining) && remaining.length > 0) return;
+  if (Array.isArray(remaining) && remaining.length > 0) return { deleted: false };
 
   const shipRows = await dbSelect(
     "shipments",
@@ -68,7 +68,7 @@ async function cleanupOrphanShipmentAfterUnassign({ previousShipmentId, dbSelect
   const ship = Array.isArray(shipRows) && shipRows.length ? shipRows[0] : null;
   await dbDelete("shipments", previousShipmentId, null).catch(() => {});
 
-  if (!ship?.master_shipment_id) return;
+  if (!ship?.master_shipment_id) return { deleted: true };
 
   const siblings = await dbSelect(
     "shipments",
@@ -78,6 +78,7 @@ async function cleanupOrphanShipmentAfterUnassign({ previousShipmentId, dbSelect
   if (!Array.isArray(siblings) || siblings.length === 0) {
     await dbDelete("shipments", ship.master_shipment_id, null).catch(() => {});
   }
+  return { deleted: true };
 }
 
 module.exports = { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign };

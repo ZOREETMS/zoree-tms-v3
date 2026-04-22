@@ -841,7 +841,11 @@
       "Bash(node -e \"require\\('./api/services/shipmentEvents.js'\\); console.log\\('OK'\\);\")",
       "Bash(findstr :5174)",
       "Bash(findstr :5175)",
-      "Bash(curl -s -X POST http://localhost:3001/api/notify -H \"Content-Type: application/json\" -d '{\"event\":\"tender_accepted\",\"data\":{\"shipmentId\":\"TEST-WS-PROBE\",\"orderIds\":[\"PROBE-1\"]}}')"
+      "Bash(curl -s -X POST http://localhost:3001/api/notify -H \"Content-Type: application/json\" -d '{\"event\":\"tender_accepted\",\"data\":{\"shipmentId\":\"TEST-WS-PROBE\",\"orderIds\":[\"PROBE-1\"]}}')",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3001/health)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3001/api/health)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx|sql|md\\)$\")",
+      "Bash(node -e \"const m = require\\('C:/Zoree/zoree-tms-v3/zoree-tms-v3/api/services/shipmentMutations.js'\\); console.log\\(Object.keys\\(m\\).sort\\(\\).join\\(','\\)\\);\")"
     ]
   }
 }
