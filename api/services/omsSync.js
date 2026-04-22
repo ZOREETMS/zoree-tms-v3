@@ -25,6 +25,19 @@
 const db = require('./supabase');
 const history = require('./changeHistory');
 
+// Classify a PG / Supabase error so the caller can surface a useful
+// reason to the UI instead of opaque raw text. Keys are stable strings
+// the frontend can switch on.
+function classifyDbError(err) {
+  const code = err && (err.code || err.pgCode || '');
+  const msg  = String(err && err.message || err || '').toLowerCase();
+  if (code === '42703' || msg.includes('column') && msg.includes('does not exist')) return 'column_missing';
+  if (code === '42P01' || msg.includes('relation') && msg.includes('does not exist')) return 'table_missing';
+  if (code === '42501' || msg.includes('permission denied') || msg.includes('not authorized')) return 'permission_denied';
+  if (msg.includes('network') || msg.includes('fetch failed') || msg.includes('timeout'))    return 'network';
+  return 'other';
+}
+
 // Push shipment details onto every oms_orders row that belongs to
 // the shipment. Returns per-order status for the caller to surface.
 async function syncTenderAcceptToOms(payload, user) {
@@ -74,7 +87,7 @@ async function syncTenderAcceptToOms(payload, user) {
         // OMS row doesn't exist yet — common for orders created directly
         // in TMS (no OMS origin). Skip silently; the tender-accept still
         // lives on the TMS shipment and REQ-21 can pull it on demand.
-        skipped.push({ id: oid, reason: 'no_oms_row' });
+        skipped.push({ id: oid, reason: 'no_oms_row', detail: 'no matching oms_orders row (likely TMS-origin order)' });
         continue;
       }
       const patch = { ...baseUpdates };
@@ -84,8 +97,9 @@ async function syncTenderAcceptToOms(payload, user) {
       await db.dbUpdate('oms_orders', oid, patch, null);
       updated.push(oid);
     } catch (perOrderErr) {
-      console.error(`[omsSync] row update failed for ${oid}:`, perOrderErr.message);
-      skipped.push({ id: oid, reason: perOrderErr.message });
+      const reason = classifyDbError(perOrderErr);
+      console.error(`[omsSync] row update failed for ${oid} (${reason}):`, perOrderErr.message);
+      skipped.push({ id: oid, reason, detail: perOrderErr.message });
     }
   }
 
@@ -120,7 +134,16 @@ async function syncTenderAcceptToOms(payload, user) {
     console.error('[omsSync] history write failed:', auditErr.message);
   }
 
-  return { shipmentId, pushedAt: nowIso, updated, skipped };
+  // Aggregate skipped reasons so callers (API/UI) can surface a single
+  // headline like "3 orders skipped — column_missing: run migration 023"
+  // instead of re-doing the bucketing on the frontend.
+  const skippedByReason = skipped.reduce((acc, s) => {
+    const k = s.reason || 'other';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+
+  return { shipmentId, pushedAt: nowIso, updated, skipped, skippedByReason };
 }
 
-module.exports = { syncTenderAcceptToOms };
+module.exports = { syncTenderAcceptToOms, classifyDbError };

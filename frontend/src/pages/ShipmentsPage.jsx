@@ -1096,9 +1096,28 @@ export default function ShipmentsPage() {
           orderIds: linkedOrders.map((o) => o.id),
           notes: notes || "",
         });
+        // REQ-24: honest tender-accept feedback. `sent` is now true only when
+        // at least one oms_orders row actually updated (see api/server.js).
+        // When sent=false but some orders were skipped for a non-benign reason
+        // (column_missing / table_missing / permission_denied), surface a
+        // warning toast so the ops user knows the OMS mirror did NOT update
+        // — typically this means migration 023 hasn't been applied.
+        const benignSkipReasons = new Set(["no_oms_row"]);
+        const skipReasons = omsResult.omsSync && omsResult.omsSync.skippedByReason
+          ? Object.keys(omsResult.omsSync.skippedByReason)
+          : [];
+        const hasBadSkip = skipReasons.some((r) => !benignSkipReasons.has(r));
+
         if (omsResult.sent) {
           toast(`✅ Tender confirmed & sent to OMS — ${row.id}`, "success");
+        } else if (hasBadSkip) {
+          toast(
+            `⚠ Tender confirmed locally — ${row.id} · OMS sync FAILED (${skipReasons.join(", ")}). Shipment info did not reach OMS. ${omsResult.message || ""}`,
+            "warning"
+          );
         } else {
+          // All orders skipped for a benign reason (e.g. TMS-origin, no OMS
+          // row) or OMS is not configured. Safe to show success.
           toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS: ${omsResult.message || "not configured"}`, "success");
         }
       } catch (omsErr) {

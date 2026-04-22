@@ -833,7 +833,10 @@
       "Bash(grep -E \"\\\\.sql$\")",
       "Bash(xargs -I {} sh -c 'grep -l \"orders.*status\\\\|status.*orders\" {} 2>/dev/null')",
       "Bash(node -e \"require\\('./api/services/shipmentEvents.js'\\); console.log\\('OK — service loads'\\);\")",
-      "Bash(curl -s -o /tmp/resp.txt -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:3001/api/shipments/SHP-2026-8793/events -H \"Content-Type: application/json\" -d '{\"type\":\"Delivered\"}')"
+      "Bash(curl -s -o /tmp/resp.txt -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:3001/api/shipments/SHP-2026-8793/events -H \"Content-Type: application/json\" -d '{\"type\":\"Delivered\"}')",
+      "Bash(node -e \"require\\('./api/services/omsSync.js'\\); console.log\\('omsSync OK'\\)\")",
+      "Bash(node --check api/server.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:57857/)"
     ]
   }
 }

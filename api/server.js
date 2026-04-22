@@ -1029,12 +1029,20 @@ app.post('/api/oms/push', async (req, res) => {
   if (!omsUrl) {
     // The inline MW sync above has already kept OMS current. Respond
     // with its summary so the caller can show a meaningful toast.
+    // `sent` is true only when at least one oms_orders row was actually
+    // updated — otherwise the UI must not claim "sent to OMS" (REQ-24
+    // honest reporting: avoid the old false-positive toast where every
+    // row was silently skipped because a column was missing).
+    const updatedCount = syncResult ? syncResult.updated.length : 0;
+    const skippedCount = syncResult ? syncResult.skipped.length : 0;
+    let message;
+    if (!syncResult)            message = 'MW auto-sync failed — see server logs.';
+    else if (updatedCount > 0)  message = `MW auto-sync updated ${updatedCount} oms_orders row(s)` + (skippedCount ? `; ${skippedCount} skipped (${Object.keys(syncResult.skippedByReason || {}).join(', ')}).` : '.');
+    else                        message = `MW auto-sync updated 0 rows — ${skippedCount} skipped (${Object.keys(syncResult.skippedByReason || {}).join(', ') || 'unknown'}). Check server logs.`;
     return res.json({
-      sent: !!syncResult,
+      sent: updatedCount > 0,
       via: 'mw-auto-sync',
-      message: syncResult
-        ? `MW auto-sync updated ${syncResult.updated.length} oms_orders row(s).`
-        : 'MW auto-sync failed — see server logs.',
+      message,
       omsSync: syncResult,
       payload,
     });
