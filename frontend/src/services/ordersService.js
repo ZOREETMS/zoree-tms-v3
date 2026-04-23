@@ -287,6 +287,8 @@ export async function copyOrder(source) {
     dest: source.dest || null,
     origin_zip: source.origin_zip || null,
     dest_zip: source.dest_zip || null,
+    ship_from_name: source.ship_from_name || source.shipFromName || null,
+    ship_to_name: source.ship_to_name || source.shipToName || null,
     weight: source.weight || 0,
     pieces: source.pieces || 0,
     commodity: source.commodity || null,

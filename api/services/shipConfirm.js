@@ -73,6 +73,16 @@ async function applyShipConfirm(body) {
     } catch (auditErr) {
       console.error('[shipConfirm] shipment history write failed:', auditErr.message);
     }
+
+    // Broadcast the shipment-level transition so the TMS Shipments page
+    // (and any open detail modal) flip the Picked Up / In Transit rungs
+    // live. server.js bridges this to wsBroadcast.
+    bus.emit(EVENTS.SHIPMENT_UPDATED, {
+      id:         shipmentId,
+      status:     'In Transit',
+      shipped_at: shippedAt,
+      via:        'oms-ship-confirm',
+    });
   }
 
   // 3. Transition every linked order. Prefer the explicit orderIds[] from

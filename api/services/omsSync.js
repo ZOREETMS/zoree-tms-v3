@@ -146,4 +146,100 @@ async function syncTenderAcceptToOms(payload, user) {
   return { shipmentId, pushedAt: nowIso, updated, skipped, skippedByReason };
 }
 
-module.exports = { syncTenderAcceptToOms, classifyDbError };
+// Mirror a TMS "Delivered" timeline event into every linked oms_orders
+// row. Called from api/services/shipmentEvents.js after the TMS-side
+// shipment + orders transition to 'Delivered' commits. Same contract as
+// syncTenderAcceptToOms: inline UPDATE, no external API hop, per-order
+// skip reasons, idempotent (never regresses stage).
+//
+// Payload shape:
+//   { shipmentId, orderIds: [...], deliveredAt?, note?, podReceivedBy? }
+async function syncDeliveredToOms(payload, user) {
+  const shipmentId = String(payload?.shipmentId || '').trim();
+  if (!shipmentId) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
+
+  const orderIds = Array.isArray(payload.orderIds) ? payload.orderIds.map(String).filter(Boolean) : [];
+  const nowIso = new Date().toISOString();
+  // deliveredAt may be a YYYY-MM-DD (from the timeline event's `date`
+  // field) or a full ISO timestamp. Normalize to ISO so the OMS column
+  // (TIMESTAMPTZ) accepts it without a cast round-trip.
+  const rawDelivered = payload.deliveredAt || payload.deliveryDate || nowIso;
+  const deliveredIso = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDelivered))
+    ? new Date(`${rawDelivered}T00:00:00Z`).toISOString()
+    : new Date(rawDelivered).toISOString();
+
+  const updated = [];
+  const skipped = [];
+
+  for (const oid of orderIds) {
+    try {
+      const priorRows = await db.dbSelect('oms_orders', {
+        filters: [['id', 'eq', oid]], limit: 1,
+        select: 'id,stage,delivered_at,tms_pod_pushed_at',
+      });
+      const prior = Array.isArray(priorRows) && priorRows.length ? priorRows[0] : null;
+      if (!prior) {
+        // No OMS origin row — TMS-native order. Nothing to mirror.
+        skipped.push({ id: oid, reason: 'no_oms_row', detail: 'no matching oms_orders row (likely TMS-origin order)' });
+        continue;
+      }
+
+      const patch = {
+        delivered_at:        deliveredIso,
+        tms_pod_pushed_at:   nowIso,
+        updated_at:          nowIso,
+      };
+      // Stage 11 = Delivered. Never regress (an OMS row already past 11
+      // has extra post-delivery state we shouldn't rewind).
+      if ((prior.stage || 0) < 11) patch.stage = 11;
+      // Best-effort POD metadata. Only written when the caller supplied
+      // a value so we don't clobber OMS-side edits (e.g. consignee
+      // signature captured at the dock).
+      if (payload.note)           patch.pod_notes        = String(payload.note);
+      if (payload.podReceivedBy)  patch.pod_received_by  = String(payload.podReceivedBy);
+
+      await db.dbUpdate('oms_orders', oid, patch, null);
+      updated.push(oid);
+    } catch (perOrderErr) {
+      const reason = classifyDbError(perOrderErr);
+      console.error(`[omsSync.delivered] row update failed for ${oid} (${reason}):`, perOrderErr.message);
+      skipped.push({ id: oid, reason, detail: perOrderErr.message });
+    }
+  }
+
+  // REQ-20: audit the mirror on the TMS shipment so the change-history
+  // drawer shows the delivered → OMS hop next to the planner's event.
+  try {
+    await history.recordChange({
+      entityType: 'shipment',
+      entityId:   shipmentId,
+      action:     'status',
+      field:      'oms_sync',
+      before:     null,
+      after:      'delivered',
+      user:       user || { email: 'mw-auto-sync' },
+      metadata: {
+        via:             'tms-delivered-auto-sync',
+        omsRowsUpdated:  updated.length,
+        omsRowsSkipped:  skipped.length,
+        orderIds,
+        deliveredAt:     deliveredIso,
+        note:            payload.note || null,
+        podReceivedBy:   payload.podReceivedBy || null,
+        pushedAt:        nowIso,
+      },
+    });
+  } catch (auditErr) {
+    console.error('[omsSync.delivered] history write failed:', auditErr.message);
+  }
+
+  const skippedByReason = skipped.reduce((acc, s) => {
+    const k = s.reason || 'other';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+
+  return { shipmentId, pushedAt: nowIso, updated, skipped, skippedByReason };
+}
+
+module.exports = { syncTenderAcceptToOms, syncDeliveredToOms, classifyDbError };

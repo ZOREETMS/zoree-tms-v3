@@ -166,6 +166,17 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
       } catch (auditErr) {
         console.error('[shipmentEvents] shipment status history failed:', auditErr.message);
       }
+
+      // Broadcast the transition so the TMS Shipments page + open detail
+      // modal refresh live. Bridged to wsBroadcast in server.js.
+      bus.emit(EVENTS.SHIPMENT_UPDATED, {
+        id,
+        status:        shipPatch.status,
+        pickup_date:   shipPatch.pickup_date   || ship.pickup_date   || null,
+        delivery_date: shipPatch.delivery_date || ship.delivery_date || null,
+        via:           'timeline-event',
+        eventType:     type,
+      });
     }
   }
 
@@ -203,6 +214,41 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
     skipped = result.skipped;
   }
 
+  // 4. Mirror a "Delivered" transition onto oms_orders so the OMS sees
+  //    the POD without a middleware round-trip. Same pattern as the
+  //    tender-accept auto-sync (REQ-24). Best-effort: OMS failure must
+  //    not roll back the TMS transition that already committed.
+  //    Skip when the event originated from the OMS itself
+  //    (/api/ingest/oms-pod → user.email === 'oms-wms') — otherwise we
+  //    round-trip the POD right back onto its source and write a
+  //    spurious audit row.
+  // Key the OMS sync off the event TYPE (not the status transition),
+  // so a planner can re-add a Delivered event to force-sync an OMS row
+  // that was previously missed (stage 10 + tms_pod_pushed_at=null).
+  // Without this, shipments already marked Delivered in TMS would have
+  // no way to trigger the mirror after the fact.
+  const fromOmsIngest = String(user?.email || '').toLowerCase() === 'oms-wms';
+  let omsSync = { updated: [], skipped: [], skippedByReason: {} };
+  if (type === 'Delivered' && !fromOmsIngest) {
+    try {
+      const omsSyncSvc = require('./omsSync');
+      const linkedOrderIds = Array.isArray(ship.order_ids)
+        ? ship.order_ids.map(String).filter(Boolean)
+        : [];
+      if (linkedOrderIds.length) {
+        omsSync = await omsSyncSvc.syncDeliveredToOms({
+          shipmentId:     id,
+          orderIds:       linkedOrderIds,
+          deliveredAt:    shipPatch.delivery_date || ship.delivery_date || eventDate,
+          note:           note || null,
+          podReceivedBy:  (user && (user.name || user.email)) || null,
+        }, user);
+      }
+    } catch (omsErr) {
+      console.error('[shipmentEvents] OMS delivered sync failed:', omsErr.message);
+    }
+  }
+
   return {
     shipmentId: id,
     eventType: type,
@@ -217,6 +263,10 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
     },
     ordersUpdated: transitioned,
     ordersSkipped: skipped,
+    // REQ-24 parity with tender-accept: surface OMS mirror outcome so
+    // the UI can show "X of Y synced to OMS" after the planner adds a
+    // Delivered event.
+    omsSync,
   };
 }
 

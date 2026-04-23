@@ -20,6 +20,10 @@ const EVENTS = {
   ORDER_UPDATED: 'order.updated',
   ORDER_DELETED: 'order.deleted',
   OMS_SYNC_BATCH: 'oms.sync.batch', // fired once per /api/ingest/oms-orders POST
+  // Shipment-level real-time signal. Bridged to the WebSocket broadcast
+  // channel in server.js so the TMS Shipments page (and any open detail
+  // modal) refresh live when a WMS ship-confirm or POD flips the status.
+  SHIPMENT_UPDATED: 'shipment.updated',
 };
 
 module.exports = { bus, EVENTS };

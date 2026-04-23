@@ -3230,6 +3230,16 @@ function wsBroadcast(event, data) {
   });
 }
 
+// Bridge: any service that emits SHIPMENT_UPDATED on the in-process bus
+// (ship-confirm, POD, manual timeline events) is fan-ed out to every
+// connected browser via the existing WS channel. App.jsx listens on WS
+// and triggers refreshData() on any message, so the Shipments list +
+// open detail modal refresh without a page reload.
+bus.on(EVENTS.SHIPMENT_UPDATED, (payload) => {
+  try { wsBroadcast(EVENTS.SHIPMENT_UPDATED, payload || {}); }
+  catch (err) { console.error('[WS] shipment broadcast failed:', err.message); }
+});
+
 // POST /api/notify — called by Middleware after pushing data to TMS
 app.post('/api/notify', (req, res) => {
   const { event, data } = req.body || {};

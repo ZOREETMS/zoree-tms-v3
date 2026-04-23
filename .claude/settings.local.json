@@ -855,7 +855,8 @@
       "Bash(node -c api/routes/shipments.js)",
       "Bash(curl -sS -X POST http://localhost:3001/api/ingest/oms-ship-confirm -H \"Content-Type: application/json\" -d '{\"shipmentId\":\"SHP-2026-9099\",\"orderIds\":[\"ORD-897755\"],\"source\":\"manual-recovery\"}')",
       "Bash(node -c api/routes/ingest.js)",
-      "Bash(curl -sS -X POST http://localhost:3001/api/ingest/oms-pod -H \"Content-Type: application/json\" -d '{\"shipmentId\":\"SHP-DOES-NOT-EXIST\",\"deliveredAt\":\"2026-04-23T05:00:00.000Z\",\"source\":\"smoke-test\"}')"
+      "Bash(curl -sS -X POST http://localhost:3001/api/ingest/oms-pod -H \"Content-Type: application/json\" -d '{\"shipmentId\":\"SHP-DOES-NOT-EXIST\",\"deliveredAt\":\"2026-04-23T05:00:00.000Z\",\"source\":\"smoke-test\"}')",
+      "Bash(grep -E \"\\\\.\\(sql|js\\)$\")"
     ]
   }
 }

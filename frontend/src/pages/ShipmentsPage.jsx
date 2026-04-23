@@ -777,6 +777,30 @@ export default function ShipmentsPage() {
   const [message, setMessage] = useState({ text: "", type: "" });
   const [detailShipment, setDetailShipment] = useState(null);
 
+  // Re-hydrate the open detail modal whenever the outlet `shipments` /
+  // `orders` lists change (e.g. WMS ship-confirm → App.jsx WS refresh).
+  // Without this, `detailShipment` stays a frozen snapshot and the
+  // Picked Up / In Transit rungs don't light up until the user closes
+  // and reopens the modal.
+  useEffect(() => {
+    if (!detailShipment?.id) return;
+    const fresh = (shipments || []).find((s) => s.id === detailShipment.id);
+    if (!fresh) return; // shipment was deleted — leave snapshot alone
+    const linkedOrders = (orders || []).filter(
+      (o) => String(o.shipment_id || "") === String(fresh.id || "")
+    );
+    const nextCarrier = fresh.carrier || detailShipment._carrier || "";
+    // Only patch when something actually moved, otherwise React bails
+    // the diff and we avoid re-rendering the heavy modal body.
+    const statusChanged      = fresh.status        !== detailShipment.status;
+    const pickupChanged      = fresh.pickup_date   !== detailShipment.pickup_date;
+    const deliveryChanged    = fresh.delivery_date !== detailShipment.delivery_date;
+    const carrierChanged     = nextCarrier         !== (detailShipment._carrier || "");
+    const linkedChanged      = linkedOrders.length !== (detailShipment._linkedOrders?.length || 0);
+    if (!(statusChanged || pickupChanged || deliveryChanged || carrierChanged || linkedChanged)) return;
+    setDetailShipment({ ...fresh, _linkedOrders: linkedOrders, _carrier: nextCarrier });
+  }, [shipments, orders, detailShipment?.id]);
+
   // REQ-24: per-shipment OMS-sync status. Populated by fetchOmsSyncForShipmentIds
   // whenever the shipments list changes. Shape: Map<tmsShipmentId, oms_orders[]>.
   const [omsSyncByShipment, setOmsSyncByShipment] = useState(() => new Map());
