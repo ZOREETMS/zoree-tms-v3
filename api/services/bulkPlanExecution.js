@@ -63,6 +63,11 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
     service_level: plan.serviceLevel || null,
     miles: plan.miles || null,
     rate_id: plan.rateId || null,
+    // Migration 025: snapshot the rate's equipment onto the shipment so
+    // the detail UI can display the trailer this load was planned for
+    // without re-joining to the rate row. NULL when the matched rate
+    // didn't carry an equipment value (legacy / non-LTL/TL modes).
+    equipment: plan.equipment || null,
     // Fold the BOL number in at insert time so we don't need a follow-up PATCH.
     bol_number: bolId,
   };

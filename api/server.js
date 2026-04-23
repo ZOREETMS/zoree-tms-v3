@@ -2120,6 +2120,10 @@ app.post('/api/ltl/quote', async (req, res) => {
       carrier:      carrier.name,
       scac:         carrier.scac,
       mode:         'LTL',
+      // Migration 024/025: surface the trailer the matched rate was
+      // negotiated against so the planner can snapshot it onto the
+      // shipment row at execute time.
+      equipment:    (r && r.equipment) || 'LTL',
       serviceLevel: (r && r.service_level) || 'Standard',
       transitDays:  (r && r.transit_days) || null,
       deliveryDate: null,
@@ -2555,6 +2559,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 recommended: false,
                 mode: 'LTL',
                 serviceLevel: q.serviceLevel || '',
+                // Migration 024/025: forward equipment from /api/ltl/quote.
+                equipment: q.equipment || 'LTL',
               });
             });
           }
@@ -2668,6 +2674,10 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 recommended: false,
                 mode: 'TL',
                 serviceLevel: rate.service_level || '',
+                // Migration 024/025: surface the trailer this rate was
+                // negotiated against so the planner can snapshot it
+                // onto the shipment row at execute time.
+                equipment: rate.equipment || null,
                 miles,
                 pcmilerMiles: (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : null,
                 matchReason: tlMatch.reason,

@@ -934,6 +934,8 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
                 totalCost: subBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
                 czarliteRate: subBest.mode === "LTL", serviceLevel: subBest.serviceLevel || "Standard",
                 miles: subBest.miles || null, rateId: subBest.rateId || null,
+                // Migration 025: snapshot the chosen rate's equipment onto the plan.
+                equipment: subBest.equipment || null,
               });
             }
           }
@@ -962,6 +964,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
               totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
               czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
               miles: indBest.miles || null, rateId: indBest.rateId || null,
+              equipment: indBest.equipment || null,
             };
           }));
           for (const r of remainderResults) if (r) lanePlans.push(r);
@@ -987,6 +990,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
               totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
               czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
               miles: indBest.miles || null, rateId: indBest.rateId || null,
+              equipment: indBest.equipment || null,
             };
           }));
           for (const r of indivResults) if (r) lanePlans.push(r);
@@ -1006,6 +1010,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
             totalCost: bestQuote.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
             czarliteRate: bestQuote.mode === "LTL", serviceLevel: bestQuote.serviceLevel || "Standard",
             miles: bestQuote.miles || null, rateId: bestQuote.rateId || null,
+            equipment: bestQuote.equipment || null,
           });
         }
       }

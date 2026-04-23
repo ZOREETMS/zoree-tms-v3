@@ -398,6 +398,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <InfoBox icon="🚦" label="Status" value={displayStatus} />
             <InfoBox icon="🚛" label="Carrier" value={ds._carrier || "—"} />
             <InfoBox icon="📦" label="Mode" value={ds.mode || "—"} />
+            <InfoBox icon="🛻" label="Equipment" value={ds.equipment || "—"} />
             <InfoBox icon="⚖️" label="Weight" value={`${(ds.weight || 0).toLocaleString()} lbs`} />
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
             <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
@@ -1382,6 +1383,11 @@ export default function ShipmentsPage() {
                 <span className={`badge ${s.mode === "LTL" ? "badge-blue" : "badge-green"}`}>
                   {s.mode || "—"}
                 </span>
+                {s.equipment && (
+                  <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
+                    {s.equipment}
+                  </div>
+                )}
               </td>
               <td>
                 {s.czarlite_rate && <span className="badge badge-purple" style={{ marginRight: 4, fontSize: 9 }}>CzarLite</span>}
