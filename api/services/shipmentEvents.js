@@ -35,6 +35,87 @@ const EVENT_MAP = {
   'Note':       { shipStatus: null,         orderStatus: null,         dateField: null },
 };
 
+// Single source of truth for shipment-status → linked-order-status.
+// Any writer that changes `shipments.status` must call
+// syncLinkedOrdersForShipmentStatus so the order row doesn't drift.
+// Terminal states on the order side (Delivered, Cancelled) are never
+// regressed by this sync — they can only move forward.
+const SHIPMENT_STATUS_TO_ORDER_STATUS = {
+  'In Transit': 'In Transit',
+  'Delivered':  'Delivered',
+};
+
+const ORDER_TERMINAL_STATUSES = new Set(['Delivered', 'Cancelled']);
+
+// Propagate a shipment's new status to every linked order, idempotent
+// and safe to call from any writer (event timeline, direct PATCH,
+// ship-confirm, future webhooks). Returns { updated, skipped } so the
+// caller can surface the diff to the UI.
+async function syncLinkedOrdersForShipmentStatus({ shipmentId, newStatus, user, via, extraMetadata }) {
+  const id = String(shipmentId || '').trim();
+  if (!id) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
+
+  const targetOrderStatus = SHIPMENT_STATUS_TO_ORDER_STATUS[newStatus];
+  if (!targetOrderStatus) return { updated: [], skipped: [] };
+
+  const shipRows = await db.dbSelect('shipments', {
+    filters: [['id', 'eq', id]], limit: 1,
+    select: 'id,order_ids',
+  });
+  const ship = Array.isArray(shipRows) && shipRows.length ? shipRows[0] : null;
+  if (!ship) return { updated: [], skipped: [] };
+
+  const orderIds = Array.isArray(ship.order_ids) ? ship.order_ids.map(String).filter(Boolean) : [];
+  if (!orderIds.length) return { updated: [], skipped: [] };
+
+  const metadata = {
+    via: via || 'shipment-status-sync',
+    shipmentId: id,
+    shipmentStatus: newStatus,
+    ...(extraMetadata || {}),
+  };
+  const updated = [];
+  const skipped = [];
+
+  for (const oid of orderIds) {
+    try {
+      const priorRows = await db.dbSelect('orders', {
+        filters: [['id', 'eq', oid]], limit: 1,
+        select: 'id,status,shipment_id',
+      });
+      const prior = Array.isArray(priorRows) && priorRows.length ? priorRows[0] : null;
+      if (!prior)                                       { skipped.push({ id: oid, reason: 'not_found' });    continue; }
+      if (prior.status === targetOrderStatus)           { skipped.push({ id: oid, reason: 'already_set' });  continue; }
+      if (ORDER_TERMINAL_STATUSES.has(prior.status))    { skipped.push({ id: oid, reason: 'terminal' });     continue; }
+
+      await db.dbUpdate('orders', oid, { status: targetOrderStatus }, null);
+      updated.push(oid);
+
+      try {
+        await history.recordChange({
+          entityType: 'order',
+          entityId:   oid,
+          action:     'status',
+          field:      'status',
+          before:     prior.status || null,
+          after:      targetOrderStatus,
+          user,
+          metadata,
+        });
+      } catch (auditErr) {
+        console.error(`[shipmentEvents] order history failed (${oid}):`, auditErr.message);
+      }
+
+      bus.emit(EVENTS.ORDER_UPDATED, { id: oid, status: targetOrderStatus, shipment_id: id });
+    } catch (perOrderErr) {
+      console.error(`[shipmentEvents] order transition failed (${oid}):`, perOrderErr.message);
+      skipped.push({ id: oid, reason: perOrderErr.message });
+    }
+  }
+
+  return { updated, skipped };
+}
+
 async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
   const id = String(shipmentId || '').trim();
   if (!id) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
@@ -105,48 +186,21 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
     console.error('[shipmentEvents] timeline history failed:', auditErr.message);
   }
 
-  // 3. Propagate to linked orders when the event implies an order status.
-  const orderIds = Array.isArray(ship.order_ids) ? ship.order_ids.map(String).filter(Boolean) : [];
-  const transitioned = [];
-  const skipped = [];
-
-  if (map.orderStatus && orderIds.length) {
-    for (const oid of orderIds) {
-      try {
-        const priorRows = await db.dbSelect('orders', {
-          filters: [['id', 'eq', oid]], limit: 1,
-          select: 'id,status,shipment_id',
-        });
-        const prior = Array.isArray(priorRows) && priorRows.length ? priorRows[0] : null;
-        if (!prior) { skipped.push({ id: oid, reason: 'not_found' }); continue; }
-        if (prior.status === map.orderStatus) { skipped.push({ id: oid, reason: 'already_set' }); continue; }
-
-        await db.dbUpdate('orders', oid, { status: map.orderStatus }, null);
-        transitioned.push(oid);
-
-        try {
-          await history.recordChange({
-            entityType: 'order',
-            entityId:   oid,
-            action:     'status',
-            field:      'status',
-            before:     prior.status || null,
-            after:      map.orderStatus,
-            user,
-            metadata:   { ...metadata, shipmentId: id },
-          });
-        } catch (auditErr) {
-          console.error(`[shipmentEvents] order history failed (${oid}):`, auditErr.message);
-        }
-
-        bus.emit(EVENTS.ORDER_UPDATED, {
-          id: oid, status: map.orderStatus, shipment_id: id,
-        });
-      } catch (perOrderErr) {
-        console.error(`[shipmentEvents] order transition failed (${oid}):`, perOrderErr.message);
-        skipped.push({ id: oid, reason: perOrderErr.message });
-      }
-    }
+  // 3. Propagate to linked orders via the shared sync helper. We pass
+  //    the mapped shipment status so the helper can derive the canonical
+  //    order status from the single source of truth.
+  let transitioned = [];
+  let skipped = [];
+  if (map.orderStatus && map.shipStatus) {
+    const result = await syncLinkedOrdersForShipmentStatus({
+      shipmentId: id,
+      newStatus:  map.shipStatus,
+      user,
+      via:        'timeline-event',
+      extraMetadata: { eventType: type, eventDate, note: note || null },
+    });
+    transitioned = result.updated;
+    skipped = result.skipped;
   }
 
   return {
@@ -166,4 +220,9 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
   };
 }
 
-module.exports = { applyShipmentEvent, EVENT_MAP };
+module.exports = {
+  applyShipmentEvent,
+  syncLinkedOrdersForShipmentStatus,
+  EVENT_MAP,
+  SHIPMENT_STATUS_TO_ORDER_STATUS,
+};

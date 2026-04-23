@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
-import { DbApi, TenderApi, OrdersApi, OmsApi, BulkPlanApi } from "../lib/api";
+import { DbApi, TenderApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import { sendTenderEmailIfAvailable, gatherOrderDetails } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getShipmentHistory } from "../services/historyService";
@@ -14,6 +14,7 @@ import LocationFieldsEditor from "../components/LocationFieldsEditor";
 import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
 import { confirmOrdersForShipment, unassignOrderAndCleanupShipment, unplanOrdersForShipmentRemoval } from "../services/shipmentOrderService";
+import { propagateTenderAcceptance } from "../services/tenderAcceptanceNotifier";
 import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
 import { deriveShipmentCostBreakdown, formatUSD } from "../utils/shipmentCost";
@@ -1092,44 +1093,33 @@ export default function ShipmentsPage() {
       }
       // 2. Update linked orders (master + children)
       const linkedOrders = await confirmOrdersForShipment(row, shipments, orders);
-      // 3. Push to OMS
-      try {
-        const omsResult = await OmsApi.push({
-          shipmentId: row.id,
-          carrier: row.carrier || "",
-          mode: row.mode || "",
-          serviceLevel: service || "",
-          pickupDate: pickup,
-          deliveryDate: delivery || "",
-          proNumber: pro || "",
-          bolNumber: bol || "",
-          // REQ-22: include trailer seal in the OMS push so REQ-21's
-          // OMS "TMS Plan" tab can surface it without a second round-trip.
-          sealNumber: seal || "",
-          dockNumber: dock || "",
-          dockLoadStart: dockLoadStart || "",
-          dockLoadEnd: dockLoadEnd || "",
-          origin: row.origin || "",
-          destination: row.dest || "",
-          weight: row.weight || 0,
-          pieces: row.pieces || 0,
-          commodity: row.commodity || "",
-          cost: row.cost || 0,
-          orderIds: linkedOrders.map((o) => o.id),
-          notes: notes || "",
-        });
-        // REQ-24: honest tender-accept feedback. `sent` is now true only when
-        // at least one oms_orders row actually updated (see api/server.js).
-        // When sent=false but some orders were skipped for a non-benign reason
-        // (column_missing / table_missing / permission_denied), surface a
-        // warning toast so the ops user knows the OMS mirror did NOT update
-        // — typically this means migration 023 hasn't been applied.
+      // 3. Propagate accept → OMS mirror (oms_orders) + WS broadcast.
+      //    The service encapsulates both side-effects so the Shipments
+      //    and Carrier-Portal accept paths cannot drift out of sync
+      //    (see services/tenderAcceptanceNotifier.js).
+      const propagation = await propagateTenderAcceptance({
+        shipment: row,
+        response: {
+          proNumber: pro, carrierPickupDate: pickup, serviceLevel: service,
+          bolNumber: bol, sealNumber: seal, dockDoor: dock,
+          dockLoadStart, dockLoadEnd, notes,
+        },
+        orderIds: linkedOrders.map((o) => o.id),
+      });
+      // REQ-24 toast: honest tender-accept feedback. `sent` is true only
+      // when at least one oms_orders row actually updated. When skipped
+      // for a non-benign reason (column_missing / table_missing /
+      // permission_denied) — typically migration 023 not applied — warn
+      // the ops user that the OMS mirror did NOT update.
+      const omsResult = propagation.omsResult;
+      if (propagation.omsError || !omsResult) {
+        toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS push failed (non-blocking)`, "success");
+      } else {
         const benignSkipReasons = new Set(["no_oms_row"]);
         const skipReasons = omsResult.omsSync && omsResult.omsSync.skippedByReason
           ? Object.keys(omsResult.omsSync.skippedByReason)
           : [];
         const hasBadSkip = skipReasons.some((r) => !benignSkipReasons.has(r));
-
         if (omsResult.sent) {
           toast(`✅ Tender confirmed & sent to OMS — ${row.id}`, "success");
         } else if (hasBadSkip) {
@@ -1138,22 +1128,9 @@ export default function ShipmentsPage() {
             "warning"
           );
         } else {
-          // All orders skipped for a benign reason (e.g. TMS-origin, no OMS
-          // row) or OMS is not configured. Safe to show success.
           toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS: ${omsResult.message || "not configured"}`, "success");
         }
-      } catch (omsErr) {
-        console.warn("[OMS Push] Failed:", omsErr.message);
-        toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS push failed (non-blocking)`, "success");
       }
-      // Notify WebSocket so all TMS clients and middleware update instantly
-      try {
-        fetch("/api/notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: "tender_accepted", data: { shipmentId: row.id, proNumber: pro, orderIds: linkedOrders.map((o) => o.id) } }),
-        }).catch(() => {});
-      } catch { /* non-blocking */ }
       setAcceptModal(null);
       await refreshData();
     } catch (err) {

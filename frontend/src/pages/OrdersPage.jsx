@@ -11,6 +11,7 @@ import { assignDockToPlan } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
 import { useRealtimeOrders } from "../hooks/useRealtimeOrders";
+import { useOrdersPollingFallback } from "../hooks/useOrdersPollingFallback";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
@@ -173,6 +174,15 @@ export default function OrdersPage() {
     // refreshData is stable from the outlet — subscribe once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Final safety net. SSE + Realtime + visibilitychange cover the common
+  // failure modes, but a tab that stays foregrounded while both streams
+  // silently die will otherwise go stale forever. A cheap 15s poll
+  // guarantees a missed OMS order surfaces within one interval.
+  useOrdersPollingFallback(
+    () => { try { refreshData?.(); } catch (_) { /* noop */ } },
+    { intervalMs: 15_000 },
+  );
 
   const [manualRefreshing, setManualRefreshing] = useState(false);
   async function handleManualRefresh() {

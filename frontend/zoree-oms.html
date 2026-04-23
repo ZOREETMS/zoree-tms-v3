@@ -1241,25 +1241,35 @@ var ZoreeMiddleware = {
     switch(cmd) {
       case 'PUSH_ORDER_TO_TMS': {
         // REQ-01: route through the TMS ingest endpoint so the server
-        // stamps sync_source='oms', auto_synced_at, and broadcasts the
-        // SSE event that drives the TMS Orders page auto-refresh.
-        // Falls back to direct Supabase upsert if the TMS API is offline.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        // stamps sync_source='oms', auto_synced_at, writes
+        // change_history, and broadcasts the SSE event that drives the
+        // TMS Orders page auto-refresh. The previous silent direct-DB
+        // upsert fallback skipped the services layer (rule violation)
+        // and left the TMS UI stale. We now FAIL LOUDLY so the operator
+        // sees the ingest outage instead of silently diverging.
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var resp;
         try {
-          var resp = await fetch(tmsApi + '/ingest/oms-orders', {
+          resp = await fetch(tmsApi + '/ingest/oms-orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orders: [payload] }),
           });
-          var body = await resp.json().catch(function(){return {};});
-          if (!resp.ok) throw new Error(body.error || ('TMS ingest returned ' + resp.status));
-          return { tmsOrderId: payload.id, ingestResponse: body, via: 'tms-ingest' };
-        } catch (ingestErr) {
-          console.warn('[PUSH_ORDER_TO_TMS] ingest endpoint unavailable, falling back to direct DB:', ingestErr.message);
-          var { error } = await this._tmsDb().from('orders').upsert(payload, {onConflict:'id'});
-          if (error) throw error;
-          return { tmsOrderId: payload.id, via: 'direct-db' };
+        } catch (networkErr) {
+          throw new Error(
+            'TMS ingest unreachable at ' + tmsApi + ' — order NOT pushed. ' +
+            'Check the TMS API is running and zoree_tms_api_base is set correctly. ' +
+            'Original error: ' + networkErr.message
+          );
         }
+        var body = await resp.json().catch(function(){ return {}; });
+        if (!resp.ok) {
+          throw new Error(
+            'TMS ingest returned ' + resp.status + ' — order NOT pushed. ' +
+            (body.error || '')
+          );
+        }
+        return { tmsOrderId: payload.id, ingestResponse: body, via: 'tms-ingest' };
       }
       case 'PULL_TMS_PLANNING': {
         var ids = payload.omsOrderIds || [];
@@ -1280,13 +1290,20 @@ var ZoreeMiddleware = {
         return { mapped, ships };
       }
       case 'PUSH_SHIP_STATUS': {
-        // REQ-23: the warehouse ship-confirm must flow through the
-        // middleware-exposed TMS ingest endpoint, not a direct DB
-        // write. The endpoint flips shipment → In Transit, each linked
-        // order → Shipped, records change_history on both sides, and
-        // emits SSE so the TMS Orders / Shipments pages refresh live.
-        // Direct-DB is kept as an offline fallback only.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        // REQ-23: the warehouse ship-confirm MUST flow through the TMS
+        // ingest endpoint so the service layer can atomically transition
+        // shipment → In Transit AND every linked order → Shipped, record
+        // change_history on both sides, and broadcast SSE for the live
+        // TMS pages.
+        //
+        // We removed the previous silent "direct-DB fallback" because it
+        // wrote only the shipments row — leaving linked orders stuck in
+        // 'Tender Accepted' (ORD-841629, ORD-897755). That split write
+        // violates the no-duplicate-source-of-truth and
+        // no-skipping-services-layer rules. If the ingest endpoint is
+        // unreachable we now FAIL LOUDLY so the warehouse operator (and
+        // ops) see the problem instead of silently desyncing data.
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
         var body = {
           shipmentId: payload.tmsShipmentId,
           orderIds: payload.orderIds || null,
@@ -1294,28 +1311,65 @@ var ZoreeMiddleware = {
           sealNumber: payload.sealNumber || null,
           source: 'oms-wms',
         };
+        var resp;
         try {
-          var resp = await fetch(tmsApi + '/ingest/oms-ship-confirm', {
+          resp = await fetch(tmsApi + '/ingest/oms-ship-confirm', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
           });
-          var respBody = await resp.json().catch(function(){return {};});
-          if (!resp.ok) throw new Error(respBody.error || ('TMS ingest returned ' + resp.status));
-          return { via: 'tms-ingest', result: respBody };
-        } catch (ingestErr) {
-          console.warn('[PUSH_SHIP_STATUS] ingest endpoint unavailable, falling back to direct DB:', ingestErr.message);
-          var { error } = await this._tmsDb().from('shipments')
-            .update({status:'In Transit', shipped_at: payload.shippedAt}).eq('id', payload.tmsShipmentId);
-          if (error) throw error;
-          return { via: 'direct-db' };
+        } catch (networkErr) {
+          throw new Error(
+            'TMS ingest unreachable at ' + tmsApi + ' — ship-confirm NOT applied. ' +
+            'Check the TMS API is running and zoree_tms_api_base is set correctly. ' +
+            'Original error: ' + networkErr.message
+          );
         }
+        var respBody = await resp.json().catch(function(){ return {}; });
+        if (!resp.ok) {
+          throw new Error(
+            'TMS ingest returned ' + resp.status + ' — ship-confirm NOT applied. ' +
+            (respBody.error || '')
+          );
+        }
+        return { via: 'tms-ingest', result: respBody };
       }
       case 'PUSH_POD_STATUS': {
-        var { error } = await this._tmsDb().from('shipments')
-          .update({status:'Delivered', delivered_at: payload.deliveredAt}).eq('id', payload.tmsShipmentId);
-        if (error) throw error;
-        return {};
+        // Proof-of-Delivery MUST flow through the TMS ingest endpoint so
+        // the service layer atomically transitions shipment → Delivered
+        // AND every linked order → Delivered, stamps delivery_date,
+        // records change_history on both sides, and broadcasts SSE for
+        // the live TMS pages. A previous direct-DB write here left
+        // linked orders stranded — the same class of bug we hit on
+        // ship-confirm. If ingest is unreachable we FAIL LOUDLY.
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var podBody = {
+          shipmentId: payload.tmsShipmentId,
+          deliveredAt: payload.deliveredAt,
+          source: 'oms-wms',
+        };
+        var podResp;
+        try {
+          podResp = await fetch(tmsApi + '/ingest/oms-pod', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(podBody),
+          });
+        } catch (networkErr) {
+          throw new Error(
+            'TMS ingest unreachable at ' + tmsApi + ' — POD NOT applied. ' +
+            'Check the TMS API is running and zoree_tms_api_base is set correctly. ' +
+            'Original error: ' + networkErr.message
+          );
+        }
+        var podRespBody = await podResp.json().catch(function(){ return {}; });
+        if (!podResp.ok) {
+          throw new Error(
+            'TMS ingest returned ' + podResp.status + ' — POD NOT applied. ' +
+            (podRespBody.error || '')
+          );
+        }
+        return { via: 'tms-ingest', result: podRespBody };
       }
       case 'PULL_TMS_ITEMS': {
         var { data, error } = await this._tmsDb().from('items').select('*').limit(1000);
@@ -1328,34 +1382,37 @@ var ZoreeMiddleware = {
       }
       // REQ-21: fetch a single TMS shipment's full tender-accept details
       // (BOL / PRO / Seal / dock fields / service level / dates) so the
-      // OMS order's "TMS Plan" tab can show them. Goes through the TMS
-      // HTTP API (the middleware-exposed endpoint) first; falls back to
-      // the direct Supabase client only if the TMS API is unreachable.
+      // OMS order's "TMS Plan" tab can show them. Routed through the
+      // TMS HTTP API only — the direct-Supabase fallback was removed
+      // because it duplicated the read path (services-layer bypass) and
+      // masked API outages instead of surfacing them.
       case 'PULL_TMS_SHIPMENT_DETAILS': {
         var sid = payload && payload.shipmentId;
         if (!sid) return { shipment: null };
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var resp;
         try {
-          var resp = await fetch(tmsApi + '/shipments?id=eq.' + encodeURIComponent(sid) + '&limit=1', {
+          resp = await fetch(tmsApi + '/shipments/' + encodeURIComponent(sid), {
             method: 'GET', headers: { 'Content-Type': 'application/json' },
           });
-          if (resp.ok) {
-            var body = await resp.json().catch(function(){return {};});
-            var arr = Array.isArray(body) ? body : (body.shipments || body.data || []);
-            var found = arr.find(function(s){ return s.id === sid; }) || arr[0] || null;
-            if (found) return { shipment: found, via: 'tms-api' };
-          }
-          // API reachable but shipment not found — still return the absence signal
-          if (resp.status === 200) return { shipment: null, via: 'tms-api' };
-        } catch (apiErr) {
-          console.warn('[PULL_TMS_SHIPMENT_DETAILS] TMS API unreachable, falling back to direct DB:', apiErr.message);
+        } catch (networkErr) {
+          throw new Error(
+            'TMS API unreachable at ' + tmsApi + ' — cannot pull shipment ' + sid + '. ' +
+            'Original error: ' + networkErr.message
+          );
         }
-        // Fallback: direct Supabase client (used only when the MW-exposed API is offline)
-        var { data, error } = await this._tmsDb().from('shipments')
-          .select('id,status,carrier,mode,service_level,pickup_date,delivery_date,dock_assigned,dock_door,dock_time,dock_load_start,dock_load_end,bol_number,pro_number,seal_number,notes')
-          .eq('id', sid).maybeSingle();
-        if (error) throw error;
-        return { shipment: data || null, via: 'direct-db' };
+        if (resp.status === 404) return { shipment: null, via: 'tms-api' };
+        var body = await resp.json().catch(function(){ return {}; });
+        if (!resp.ok) {
+          throw new Error(
+            'TMS API returned ' + resp.status + ' for shipment ' + sid + '. ' +
+            (body.error || '')
+          );
+        }
+        var found = body && body.id ? body
+          : (Array.isArray(body) ? body.find(function(s){ return s.id === sid; }) : null)
+          || (body && (body.shipment || null));
+        return { shipment: found || null, via: 'tms-api' };
       }
       default: throw new Error('Unknown cmd: ' + cmd);
     }

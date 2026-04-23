@@ -8,6 +8,7 @@ import {
   mergeCarrierOptions,
   saveTenderResponse,
 } from "../services/carrierPortalService";
+import { propagateTenderAcceptance } from "../services/tenderAcceptanceNotifier";
 import TenderCard from "../components/carrier-portal/TenderCard";
 import TenderRespondModal from "../components/carrier-portal/TenderRespondModal";
 import TenderDetailModal from "../components/carrier-portal/TenderDetailModal";
@@ -203,19 +204,34 @@ export default function CarrierPortalPage() {
     const ship = shipments.find((s) => s.id === shipId);
     if (!ship) return;
 
+    const linkedOrders = getRelatedOrders(ship);
     let savedResponse = responseData;
     try {
       savedResponse = await saveTenderResponse(ship, responseData, {
-        orders: getRelatedOrders(ship),
+        orders: linkedOrders,
       });
       setLocalTenderResponses((prev) => ({ ...prev, [shipId]: savedResponse }));
-      await refreshData();
     } catch (err) {
       console.error("Failed to save carrier portal response:", err);
       toast(`Failed to save response: ${err.message}`, "error");
       return;
     }
 
+    // On accept, mirror into oms_orders and broadcast `tender_accepted`
+    // on the WS so zoree-oms.html's OmsLive subscriber re-renders
+    // immediately. Previously missing here, which is why OMS showed
+    // stale data until a manual refresh after a carrier-portal accept.
+    // Fire-and-await so the toast reflects the real outcome; failures
+    // inside the service are logged but never throw.
+    if (responseData.action === "accept") {
+      await propagateTenderAcceptance({
+        shipment: ship,
+        response: savedResponse,
+        orderIds: linkedOrders.map((o) => o.id),
+      });
+    }
+
+    await refreshData();
     closeRespond();
 
     if (responseData.action === "accept") {

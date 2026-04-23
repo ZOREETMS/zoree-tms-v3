@@ -69,6 +69,34 @@ router.post('/oms-ship-confirm', requireIngestKey, async (req, res) => {
   }
 });
 
+// ── POST /api/ingest/oms-pod ─────────────────────────────────────
+// When the OMS warehouse / driver app confirms Proof of Delivery, the
+// middleware POSTs here. We route through the shared timeline-event
+// service so shipment → 'Delivered', every linked order → 'Delivered',
+// delivery_date is stamped, change_history rows are written, and the
+// live TMS pages refresh via SSE — no split writes, one source of
+// truth (api/services/shipmentEvents.js).
+//
+// Body shape:
+//   { shipmentId, deliveredAt?, note?, source?: 'oms-wms' }
+router.post('/oms-pod', requireIngestKey, async (req, res) => {
+  try {
+    const shipmentEvents = require('../services/shipmentEvents');
+    const { shipmentId, deliveredAt, note, source } = req.body || {};
+    const result = await shipmentEvents.applyShipmentEvent({
+      shipmentId,
+      type: 'Delivered',
+      date: deliveredAt ? String(deliveredAt).slice(0, 10) : undefined,
+      note: note || null,
+      user: { email: source || 'oms-wms' },
+    });
+    res.status(202).json({ ok: true, ...result });
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ ok: false, error: err.message });
+  }
+});
+
 // ── GET /api/events/orders — Server-Sent Events ──────────────────
 // Clients open an EventSource here. Every ORDER_CREATED /
 // ORDER_UPDATED / ORDER_DELETED / OMS_SYNC_BATCH event on the in-

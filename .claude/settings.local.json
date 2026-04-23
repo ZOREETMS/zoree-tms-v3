@@ -848,7 +848,14 @@
       "Bash(node -e \"const m = require\\('C:/Zoree/zoree-tms-v3/zoree-tms-v3/api/services/shipmentMutations.js'\\); console.log\\(Object.keys\\(m\\).sort\\(\\).join\\(','\\)\\);\")",
       "Bash(nslookup github.com)",
       "Bash(ping -n 2 github.com)",
-      "Bash(grep -E \"\\\\.\\(log|txt\\)$\")"
+      "Bash(grep -E \"\\\\.\\(log|txt\\)$\")",
+      "Bash(find /c/Zoree/zoree-tms-v3/zoree-tms-v3/api -type f -name \"*.js\" -exec grep -l \"applyShipmentEvent\\\\|shipmentEvent\\\\|shipment.*event\" {} \\\\;)",
+      "Bash(node -c api/services/shipmentEvents.js)",
+      "Bash(node -c api/services/shipments.js)",
+      "Bash(node -c api/routes/shipments.js)",
+      "Bash(curl -sS -X POST http://localhost:3001/api/ingest/oms-ship-confirm -H \"Content-Type: application/json\" -d '{\"shipmentId\":\"SHP-2026-9099\",\"orderIds\":[\"ORD-897755\"],\"source\":\"manual-recovery\"}')",
+      "Bash(node -c api/routes/ingest.js)",
+      "Bash(curl -sS -X POST http://localhost:3001/api/ingest/oms-pod -H \"Content-Type: application/json\" -d '{\"shipmentId\":\"SHP-DOES-NOT-EXIST\",\"deliveredAt\":\"2026-04-23T05:00:00.000Z\",\"source\":\"smoke-test\"}')"
     ]
   }
 }

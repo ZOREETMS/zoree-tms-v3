@@ -3,6 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════
 
 const db = require('./supabase');
+const history = require('./changeHistory');
+const { syncLinkedOrdersForShipmentStatus, SHIPMENT_STATUS_TO_ORDER_STATUS } =
+  require('./shipmentEvents');
 
 function dbToShipment(r) {
   return {
@@ -112,11 +115,50 @@ async function createShipment(payload, tenantConfig = null) {
   return dbToShipment(row);
 }
 
-async function updateShipment(id, updates, tenantConfig = null) {
+async function updateShipment(id, updates, tenantConfig = null, context = {}) {
   const existing = await getShipment(id, tenantConfig);
   const merged   = { ...existing, ...updates, id };
   const row = await db.dbUpdate('shipments', id, shipmentToDb(merged), tenantConfig);
-  return dbToShipment(row || merged);
+  const next = dbToShipment(row || merged);
+
+  // Detect a status transition that the sync map cares about and
+  // propagate it to linked orders via the single-source-of-truth helper
+  // in shipmentEvents.js. Terminal order states are protected inside
+  // the helper (Delivered/Cancelled never regress).
+  const statusChanged = existing.status !== next.status;
+  const shouldSync    = statusChanged && !!SHIPMENT_STATUS_TO_ORDER_STATUS[next.status];
+
+  if (statusChanged) {
+    try {
+      await history.recordChange({
+        entityType: 'shipment',
+        entityId:   id,
+        action:     'status',
+        field:      'status',
+        before:     existing.status || null,
+        after:      next.status,
+        user:       context.user || null,
+        metadata:   { via: context.via || 'shipment-update' },
+      });
+    } catch (auditErr) {
+      console.error('[shipments] status history failed:', auditErr.message);
+    }
+  }
+
+  if (shouldSync) {
+    try {
+      await syncLinkedOrdersForShipmentStatus({
+        shipmentId: id,
+        newStatus:  next.status,
+        user:       context.user || null,
+        via:        context.via  || 'shipment-update',
+      });
+    } catch (syncErr) {
+      console.error('[shipments] order sync failed:', syncErr.message);
+    }
+  }
+
+  return next;
 }
 
 module.exports = { listShipments, getShipment, createShipment, updateShipment, estimateCost };

@@ -38,7 +38,12 @@ router.post('/', requireRole('admin', 'planner'), async (req, res, next) => {
 // PATCH /api/shipments/:id
 router.patch('/:id', requireRole('admin', 'planner', 'dispatcher'), async (req, res, next) => {
   try {
-    const shipment = await shipService.updateShipment(req.params.id, req.body, req.tenant);
+    const shipment = await shipService.updateShipment(
+      req.params.id,
+      req.body,
+      req.tenant,
+      { user: req.user || null, via: 'shipment-patch' },
+    );
     res.json(shipment);
   } catch (err) { next(err); }
 });
@@ -51,7 +56,12 @@ router.patch('/:id/status', requireRole('admin', 'planner', 'dispatcher'), async
     if (!VALID.includes(status)) {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${VALID.join(', ')}` });
     }
-    const shipment = await shipService.updateShipment(req.params.id, { status }, req.tenant);
+    const shipment = await shipService.updateShipment(
+      req.params.id,
+      { status },
+      req.tenant,
+      { user: req.user || null, via: 'shipment-status-patch' },
+    );
     res.json(shipment);
   } catch (err) { next(err); }
 });

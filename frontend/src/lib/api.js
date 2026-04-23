@@ -290,6 +290,19 @@ export const OmsApi = {
   },
 };
 
+// Thin wrapper around POST /api/notify → wsBroadcast on the server.
+// Lets the services layer fan-out events to every connected TMS client
+// and to external listeners (zoree-oms.html's OmsLive, Middleware) with
+// no direct fetch() calls from UI components (CLAUDE_RULES §4).
+export const NotifyApi = {
+  broadcast(event, data) {
+    return api("/notify", {
+      method: "POST",
+      body: JSON.stringify({ event, data: data || {} }),
+    });
+  },
+};
+
 // REQ-06: invoices now go through domain endpoints that run the tolerance
 // decision server-side. The generic /db/invoices proxy is kept as a
 // fallback for list reads (admin) but writes should use the new routes.
