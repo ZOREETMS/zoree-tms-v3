@@ -656,23 +656,37 @@ export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate, 
     }
   }
 
-  // Sort: feasible (on-time) first, then by cost ascending
+  // Sort: feasible first, then by cost ascending.
+  //
+  // "Feasible" here means the quote can actually be planned — it has a
+  // real transit time AND, if dates were supplied, calcDatesFn doesn't
+  // flag the delivery as late. A quote without transitDays returns
+  // calcDates({ error }) (NOT { warning }), so we must check transit
+  // explicitly — otherwise no-transit quotes tie with on-time quotes
+  // on the warning key and the cost tiebreaker can pick an unplannable
+  // carrier (e.g. ODFL with no CC transit beating AVERITT @ 4d when
+  // both cost the same).
+  const isFeasible = (q) => {
+    if (!q || !(Number(q.transitDays) > 0)) return false;
+    if (!calcDatesFn) return true;
+    const d = calcDatesFn(q, dueDate, readyDate);
+    return !d.error && !d.warning;
+  };
   const sortedQuotes = [...workingQuotes].sort((a, b) => {
-    if (calcDatesFn) {
-      const datesA = calcDatesFn(a, dueDate, readyDate);
-      const datesB = calcDatesFn(b, dueDate, readyDate);
-      const lateA = datesA.warning ? 1 : 0;
-      const lateB = datesB.warning ? 1 : 0;
-      if (lateA !== lateB) return lateA - lateB; // on-time first
-    }
+    const fa = isFeasible(a) ? 0 : 1;
+    const fb = isFeasible(b) ? 0 : 1;
+    if (fa !== fb) return fa - fb; // feasible first
     return (a.totalCharge || 0) - (b.totalCharge || 0); // then cheapest
   });
 
-  // After sorting, the first on-time-and-cheapest quote is the "best"
+  // After sorting, the first feasible-and-cheapest quote is the "best"
   // from the constrained pool. Recompute so bestQuote stays consistent
-  // with the filter.
+  // with the filter — but only promote a feasible quote; if none are
+  // feasible, fall back to the cheapest so the caller's existing
+  // dates.error path can surface a clear failure reason.
   if (modeConstraint || slConstraint) {
-    workingBest = sortedQuotes[0] || null;
+    const firstFeasible = sortedQuotes.find(isFeasible);
+    workingBest = firstFeasible || sortedQuotes[0] || null;
   }
 
   return { quotes: sortedQuotes, bestQuote: workingBest };

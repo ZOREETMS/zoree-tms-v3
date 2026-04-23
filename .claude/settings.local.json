@@ -847,7 +847,8 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx|sql|md\\)$\")",
       "Bash(node -e \"const m = require\\('C:/Zoree/zoree-tms-v3/zoree-tms-v3/api/services/shipmentMutations.js'\\); console.log\\(Object.keys\\(m\\).sort\\(\\).join\\(','\\)\\);\")",
       "Bash(nslookup github.com)",
-      "Bash(ping -n 2 github.com)"
+      "Bash(ping -n 2 github.com)",
+      "Bash(grep -E \"\\\\.\\(log|txt\\)$\")"
     ]
   }
 }
