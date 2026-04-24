@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { DbApi, OrdersApi } from "../../lib/api";
 import OrderLinesEditor from "../OrderLinesEditor";
+import { ORDER_STATUSES } from "../../constants/orders";
 
 /**
  * Order edit modal for Bulk Plan page — matches the Orders page edit form.
@@ -127,12 +128,8 @@ export default function OrderEditModal({ isOpen, order, items = [], onClose, onS
               <FormField label="Customer" value={form.customer} onChange={(v) => set("customer", v)} style={inputStyle} />
               <div>
                 <label style={labelStyle}>Status</label>
-                <select value={form.status} onChange={(e) => set("status", e.target.value)} style={{ ...inputStyle, background: "#fff" }}>
-                  <option value="Unplanned">Unplanned</option>
-                  <option value="Planned">Planned</option>
-                  <option value="Consolidated">Consolidated</option>
-                  <option value="On Hold">On Hold</option>
-                  <option value="Cancelled">Cancelled</option>
+                <select value={form.status || "Unplanned"} onChange={(e) => set("status", e.target.value)} style={{ ...inputStyle, background: "#fff" }}>
+                  {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             </div>

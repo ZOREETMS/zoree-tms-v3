@@ -89,6 +89,54 @@ export async function getRateByLane(lane) {
 }
 
 /**
+ * Case-insensitive, whitespace-tolerant string key used for carrier /
+ * lane matching. Mirrors the inline `normalize` used by the CBOL
+ * planner in ordersService.js so both paths match consistently.
+ */
+function normalizeKey(s) {
+  return String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Find the first rate in `rates` that matches a given lane triple
+ * (carrier + origin + destination). Matching is the same fuzzy-substring
+ * logic already used by the CBOL planner — either side containing the
+ * other counts as a match.
+ *
+ * Used by shipment-creation paths (ZoreeAI `PLAN_ORDER`, CBOL, etc.) to
+ * copy rate-scoped fields — notably `equipment` (migration 025) and
+ * `rate_id` — onto the new shipment. Returns `null` when no rate
+ * matches; callers should fall back to `null` equipment, not invent one.
+ *
+ * @param {Array<Object>} rates   - Full rates list from TMS data.
+ * @param {Object} lane
+ * @param {string} lane.carrier   - Carrier name (e.g. "Averitt Express").
+ * @param {string} lane.origin    - Origin city/location string.
+ * @param {string} lane.dest      - Destination city/location string.
+ * @returns {Object|null} matching rate row, or null.
+ */
+export function findMatchingRate(rates, { carrier, origin, dest } = {}) {
+  if (!Array.isArray(rates) || rates.length === 0) return null;
+  const cNorm = normalizeKey(carrier);
+  const oNorm = normalizeKey(origin);
+  const dNorm = normalizeKey(dest);
+  if (!cNorm || !oNorm || !dNorm) return null;
+
+  return (
+    rates.find((r) => {
+      const rc = normalizeKey(r.carrier);
+      const ro = normalizeKey(r.origin);
+      const rd = normalizeKey(r.dest || r.destination);
+      return (
+        (rc.includes(cNorm) || cNorm.includes(rc)) &&
+        (ro.includes(oNorm) || oNorm.includes(ro)) &&
+        (rd.includes(dNorm) || dNorm.includes(rd))
+      );
+    }) || null
+  );
+}
+
+/**
  * Extract the (possibly blended) discount info from a rate row into
  * the shape the UI actually renders. Normalizes the legacy `discount`
  * / `discount_pct` and `discount_flat` / `discount_amt` aliases, and

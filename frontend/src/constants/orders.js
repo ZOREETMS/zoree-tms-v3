@@ -13,9 +13,26 @@ export const STATUS_BADGES = {
   Shipped: "badge badge-blue",
   "In Transit": "badge badge-blue",
   Delivered: "badge badge-green",
+  "On Hold": "badge badge-amber",
   Cancelled: "badge badge-red",
   "Planning Failed": "badge badge-red",
 };
+
+// Canonical order status list — single source of truth for status dropdowns.
+// Ordering reflects the lifecycle (pre-plan → in-flight → terminal).
+export const ORDER_STATUSES = [
+  "Unplanned",
+  "Planned",
+  "Consolidated",
+  "Tendered",
+  "Tender Accepted",
+  "Shipped",
+  "In Transit",
+  "Delivered",
+  "On Hold",
+  "Planning Failed",
+  "Cancelled",
+];
 
 export const STATUS_ROW_COLORS = {
   Unplanned:    { bg: "#fffef0", border: "#ca8a04" },

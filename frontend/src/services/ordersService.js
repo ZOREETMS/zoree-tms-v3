@@ -494,6 +494,7 @@ export async function createShipmentsFromRoute(route, ordersList, rates = []) {
       pickup_date: pickupDate, delivery_date: deliveryDate,
       service_level: route.service_level || "Standard",
       rate_id: matchedRate ? (matchedRate.lane || matchedRate.id) : null,
+      equipment: matchedRate?.equipment ?? null,
       dock_door: cbolDock.dockDoor,
       dock_time: cbolDock.dockTime,
       loading_start: cbolDock.loadingStart,

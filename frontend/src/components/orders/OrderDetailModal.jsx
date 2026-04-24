@@ -2,7 +2,7 @@ import React from "react";
 import OrderLinesEditor from "../OrderLinesEditor";
 import LocationFieldsEditor from "../LocationFieldsEditor";
 // API calls handled via props from parent (services layer)
-import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEMO_USERS } from "../../constants/orders";
+import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEMO_USERS, ORDER_STATUSES } from "../../constants/orders";
 import { fmt$, constraintBadges, SdField, cityZipLookup } from "../../utils/orderUtils.jsx";
 
 export default function OrderDetailModal({
@@ -194,7 +194,7 @@ export default function OrderDetailModal({
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>{"\ud83d\udccb"} Order Identity</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                   <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Customer</label><input value={editForm.customer || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, customer: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>
-                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Status</label><select value={editForm.status || "Unplanned"} onChange={(e) => onEditFormChange((f) => ({ ...f, status: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", background: "#fff", marginTop: 5 }}><option value="Unplanned">Unplanned</option><option value="Planned">Planned</option><option value="Consolidated">Consolidated</option><option value="Tendered">Tendered</option><option value="Tender Accepted">Tender Accepted</option><option value="Shipped">Shipped</option><option value="On Hold">On Hold</option><option value="Planning Failed">Planning Failed</option><option value="Cancelled">Cancelled</option></select></div>
+                  <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Status</label><select value={editForm.status || "Unplanned"} onChange={(e) => onEditFormChange((f) => ({ ...f, status: e.target.value }))} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", background: "#fff", marginTop: 5 }}>{ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                   <div><label style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", display: "block" }}>Reference #</label><input value={editForm.refNum || ""} onChange={(e) => onEditFormChange((f) => ({ ...f, refNum: e.target.value }))} placeholder="e.g. PO-2026-001" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginTop: 5 }} /></div>

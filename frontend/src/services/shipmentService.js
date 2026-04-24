@@ -73,6 +73,7 @@ export async function copyShipment(sourceShipment) {
     rate: sourceShipment.rate || 0,
     fuel_surcharge: sourceShipment.fuel_surcharge || 0,
     service_level: sourceShipment.service_level || "Standard",
+    equipment: sourceShipment.equipment ?? null,
     notes: sourceShipment.notes || "",
     pickup_date: today,
     delivery_date: "",

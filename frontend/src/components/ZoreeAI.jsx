@@ -3,95 +3,13 @@ import { DbApi } from "../lib/api";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import useSpeechSynthesis from "../hooks/useSpeechSynthesis";
 import { unplanOrderFromShipment } from "../services/ordersService";
+import { findMatchingRate } from "../services/rateService";
+import { sendMessage } from "../services/zoreeAIService";
 
 /* ─────────────────────────────────────────────
-   ZoreeAI — Floating chat assistant
-   Ported from the old vanilla-JS TMS chatbot
+   ZoreeAI — Floating chat assistant (UI only)
+   Business logic lives in services/zoreeAI*.js
    ───────────────────────────────────────────── */
-
-function buildTMSContext(data) {
-  const { orders = [], shipments = [], carriers = [], lanePreferences = [], rates = [] } = data || {};
-  const unplanned = orders.filter((o) => o.status === "Unplanned");
-  const planned = orders.filter((o) => o.status === "Planned" || o.status === "Consolidated");
-  const inTransit = shipments.filter((s) => s.status === "In Transit");
-  const exceptions = shipments.filter((s) => s.status === "Exception");
-
-  const carrierSummary = carriers
-    .map((c) => {
-      const cnt = shipments.filter((s) => s.carrier === c.name).length;
-      const cost = parseFloat(c.cost) || 0;
-      return `${c.name} (SCAC:${c.scac || "?"}, OTD:${c.otd || "?"}%, ${cnt} shipments${cost ? `, $${cost.toFixed(2)}/mi` : ""})`;
-    })
-    .join("; ");
-
-  const shipmentsList = shipments
-    .slice(0, 30)
-    .map(
-      (s) =>
-        `${s.id}: ${(s.origin || "").split(",")[0]}→${(s.dest || s.destination || "").split(",")[0]} | ${s.carrier || "?"} | ${s.status} | ${s.cost || "?"}`
-    )
-    .join("\n");
-
-  // Include ALL orders so the AI can find any order by ID
-  const allOrdersList = orders
-    .map(
-      (o) =>
-        `${o.id}: ${o.customer || "?"} | ${o.origin || "?"}→${o.dest || o.destination || "?"} | ${o.weight || "?"}lbs | ${o.pieces || "?"} pcs | ${o.commodity || "—"} | Status: ${o.status} | Ready: ${o.ready || o.pickup_date || "?"} | Due: ${o.due || o.delivery_date || "?"}${o.shipment_id ? ` | Shipment: ${o.shipment_id}` : ""}${o.preferred_carrier ? ` [PREF:${o.preferred_carrier}]` : ""}`
-    )
-    .join("\n");
-
-  const rateSummary = rates.length > 0
-    ? rates.slice(0, 20).map(
-        (r) => `${r.carrier || "?"}|${(r.origin || "").split(",")[0]}→${(r.dest || r.destination || "").split(",")[0]} $${r.rate || "?"}/mi FSC:${r.fsc || "?"}`
-      ).join("; ")
-    : "No rates configured";
-
-  return [
-    "You are ZoreeAI, an AI assistant embedded in ZoreeTMS — a Transportation Management System.",
-    "You have live access to all TMS data below. Be concise, specific, and actionable. Reference actual IDs and numbers.",
-    "",
-    `=== SHIPMENTS (total: ${shipments.length}) ===`,
-    `In Transit: ${inTransit.length} | Exceptions: ${exceptions.length}`,
-    shipmentsList,
-    "",
-    `=== ALL ORDERS (total: ${orders.length}) ===`,
-    `Unplanned: ${unplanned.length} | Planned/Consolidated: ${planned.length}`,
-    allOrdersList || "None",
-    "",
-    "=== CARRIERS ===",
-    carrierSummary || "None configured",
-    "",
-    "=== RATES ===",
-    rateSummary,
-    "",
-    "=== ACTIONS YOU CAN EXECUTE ===",
-    "You can perform real TMS actions. Respond with a JSON action block when the user wants to DO something.",
-    "IMPORTANT: When executing an action, end your response with a JSON block in this exact format:",
-    "```action",
-    '{ "action": "ACTION_NAME", "params": { ... } }',
-    "```",
-    "",
-    "Available actions:",
-    "PLAN_ORDER            — params: { orderIds: [string], carrier?: string } — Creates a real shipment. USE THIS when user says 'plan order X'.",
-    "UPDATE_ORDER_STATUS   — params: { orderId, newStatus }   — statuses: Unplanned, Planned, In Transit, Delivered, Cancelled, On Hold",
-    "UPDATE_SHIPMENT_STATUS — params: { shipmentId, newStatus } — statuses: Planned, Confirmed, In Transit, Delivered, Exception, Cancelled",
-    "ASSIGN_CARRIER        — params: { shipmentId, carrier }",
-    "HOLD_ORDER            — params: { orderId, reason }",
-    "CANCEL_ORDER          — params: { orderId, reason }",
-    "CANCEL_SHIPMENT       — params: { shipmentId, reason }",
-    "FLAG_EXCEPTION        — params: { shipmentId, issue }",
-    "GET_RATES             — params: { originZip, destZip, weight, freightClass?, originCity?, destCity? } — fetch live rates for ALL modes (LTL via CzarLite + TL from rate table + PC*Miler mileage). Returns quotes from all available carriers. CRITICAL: ALWAYS include originCity and destCity derived from the zip: 770xx='Houston, TX', 752xx='Dallas, TX', 606xx='Chicago, IL', 303xx='Atlanta, GA', 100xx-104xx='New York, NY', 432xx='Columbus, OH', 981xx='Seattle, WA', 900xx='Los Angeles, CA', 331xx='Miami, FL'. Example: zip 77003 → originCity 'Houston, TX'. Without these, LTL discounts are NOT applied.",
-    "",
-    "Rules for actions:",
-    '- "plan ORD-XXXX" = emit PLAN_ORDER action immediately. Keep text to 1-2 lines then the action block.',
-    "- PLAN_ORDER, ASSIGN_CARRIER, UPDATE_ORDER_STATUS, UPDATE_SHIPMENT_STATUS, HOLD_ORDER, FLAG_EXCEPTION, and GET_RATES are safe actions — they will be auto-executed immediately. Do NOT say 'click confirm' or 'waiting for confirmation' for these actions.",
-    "- CANCEL_ORDER and CANCEL_SHIPMENT are destructive — they will show a confirmation prompt to the user before executing.",
-    "- After emitting a safe action block, do NOT say the action was already executed. The system will execute it automatically and show the result.",
-    "- Never fabricate order or shipment IDs — only use IDs from the data above.",
-    "",
-    "IMPORTANT: You can see ALL orders above. When a user asks about a specific order ID, find it in the list.",
-  ].join("\n");
-}
 
 function formatMessage(text) {
   // Strip action blocks from display
@@ -263,6 +181,17 @@ export default function ZoreeAI({ data }) {
         chosenCarrier = chosenCarrier || "TBD";
 
         const newId = `SHP-${new Date().getFullYear()}-${1860 + Math.floor(Date.now() % 100000)}`;
+
+        // Resolve the rate for this lane/carrier so the shipment carries
+        // its `equipment` (trailer type) and `rate_id` — consistent with
+        // the main bulk-plan executor. Falls back to nulls if no rate
+        // is configured for the lane (same behavior as any empty-rate path).
+        const matchedRate = findMatchingRate(data?.rates, {
+          carrier: chosenCarrier,
+          origin: o0.origin,
+          dest: o0.dest || o0.destination,
+        });
+
         // Match exact DB column names from shipments table
         const newShip = {
           id: newId,
@@ -273,6 +202,8 @@ export default function ZoreeAI({ data }) {
           weight: tw,
           pieces: tp,
           total_cost: 0,
+          equipment: matchedRate?.equipment ?? null,
+          rate_id: matchedRate ? (matchedRate.lane || matchedRate.id) : null,
           pickup_date: planOrders.map((x) => x.ready || x.pickup_date).filter(Boolean).sort()[0] || null,
           delivery_date: planOrders.map((x) => x.due || x.delivery_date).filter(Boolean).sort().reverse()[0] || null,
           status: "Planned",
@@ -496,80 +427,60 @@ export default function ZoreeAI({ data }) {
     setTyping(true);
 
     try {
-      const systemPrompt = (() => {
-        try {
-          const ctx = buildTMSContext(data);
-          console.log("[ZoreeAI] Context length:", ctx.length, "| Orders:", (data?.orders || []).length);
-          return ctx;
-        } catch (e) {
-          console.error("[ZoreeAI] Context build error:", e);
-          return "You are ZoreeAI, a TMS assistant for Zoree. Answer questions about transportation and logistics.";
-        }
-      })();
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2048,
-          system: systemPrompt,
-          messages: chatHistoryRef.current.slice(-14),
-        }),
+      const result = await sendMessage({
+        apiKey,
+        userText,
+        history: chatHistoryRef.current,
+        data,
       });
 
-      const respData = await response.json();
-
-      if (respData.content?.[0]?.text) {
-        const reply = respData.content[0].text;
-        chatHistoryRef.current.push({ role: "assistant", content: reply });
-
-        // Check for action block
-        const action = parseAction(reply);
-        let shouldSpeakReply = true;
-        if (action) {
-          const actionId = `act-${Date.now()}`;
-          // Destructive actions require user confirmation; safe actions auto-execute
-          const destructiveActions = ["CANCEL_ORDER", "CANCEL_SHIPMENT"];
-          const needsConfirmation = destructiveActions.includes(action.action);
-
-          if (needsConfirmation) {
-            pendingActionsRef.current[actionId] = action;
-            setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "pending" }]);
-          } else {
-            // Auto-execute safe actions silently, then show one final outcome message.
-            try {
-              const result = await executeAction(action);
-              chatHistoryRef.current.push({ role: "user", content: `[SYSTEM: Action executed successfully — ${result}]` });
-              setMessages((prev) => [...prev, { role: "ai", text: `✅ ${result}` }]);
-            } catch (e) {
-              setMessages((prev) => [...prev, { role: "ai", text: `❌ ${e.message}` }]);
-            }
-          }
-          // Suppress TTS for action payloads to avoid reading hidden planning narration.
-          shouldSpeakReply = false;
-        } else {
-          setMessages((prev) => [...prev, { role: "ai", text: reply }]);
-        }
-        // Auto-speak AI response if voice is enabled
-        if (shouldSpeakReply && voiceEnabled && ttsSupported) speak(reply);
-      } else if (respData.error) {
-        const errMsg = respData.error.message || JSON.stringify(respData.error);
+      if (result.kind === "error") {
         setMessages((prev) => [
           ...prev,
-          { role: "ai", text: `⚠️ API error: ${errMsg}\n\nIf this says "invalid x-api-key", click "change key" in the header and re-enter your key.` },
+          { role: "ai", text: `⚠️ API error: ${result.message}\n\nIf this says "invalid x-api-key", click "change key" in the header and re-enter your key.` },
         ]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "ai", text: `⚠️ Unexpected response (HTTP ${response.status})` },
-        ]);
+        return;
       }
+
+      const reply = result.text;
+      chatHistoryRef.current.push({ role: "assistant", content: reply });
+
+      // Locally-refused (off-topic) replies are plain text — no action parsing, no TTS narration of a canned line.
+      if (result.refusedLocally) {
+        setMessages((prev) => [...prev, { role: "ai", text: reply }]);
+        if (voiceEnabled && ttsSupported) speak(reply);
+        return;
+      }
+
+      // Check for action block
+      const action = parseAction(reply);
+      let shouldSpeakReply = true;
+      if (action) {
+        const actionId = `act-${Date.now()}`;
+        // Destructive actions require user confirmation; safe actions auto-execute
+        const destructiveActions = ["CANCEL_ORDER", "CANCEL_SHIPMENT"];
+        const needsConfirmation = destructiveActions.includes(action.action);
+
+        if (needsConfirmation) {
+          pendingActionsRef.current[actionId] = action;
+          setMessages((prev) => [...prev, { role: "ai", text: reply, actionId, action, actionStatus: "pending" }]);
+        } else {
+          // Auto-execute safe actions silently, then show one final outcome message.
+          try {
+            const execResult = await executeAction(action);
+            chatHistoryRef.current.push({ role: "user", content: `[SYSTEM: Action executed successfully — ${execResult}]` });
+            setMessages((prev) => [...prev, { role: "ai", text: `✅ ${execResult}` }]);
+          } catch (e) {
+            setMessages((prev) => [...prev, { role: "ai", text: `❌ ${e.message}` }]);
+          }
+        }
+        // Suppress TTS for action payloads to avoid reading hidden planning narration.
+        shouldSpeakReply = false;
+      } else {
+        setMessages((prev) => [...prev, { role: "ai", text: reply }]);
+      }
+      // Auto-speak AI response if voice is enabled
+      if (shouldSpeakReply && voiceEnabled && ttsSupported) speak(reply);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
