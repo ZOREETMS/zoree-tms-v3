@@ -1071,6 +1071,13 @@ var RELEVANT_TMS_EVENTS = [
   'shipment_status_updated',
   'shipment_delivered',
   'orders_updated',
+  // Bus-bridge channel TMS uses for in-process shipment transitions
+  // (manual timeline events, ship-confirm, POD). server.js bridges
+  // EVENTS.SHIPMENT_UPDATED ("shipment.updated") straight onto the WS
+  // without renaming, so we have to listen on this channel too —
+  // otherwise a planner-added "Delivered" event lands in OMS only
+  // after a manual page refresh.
+  'shipment.updated',
 ];
 
 async function _omsLiveSyncRefresh(reason){

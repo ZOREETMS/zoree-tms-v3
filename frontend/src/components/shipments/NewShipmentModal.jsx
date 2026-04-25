@@ -1,14 +1,22 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { buildBlankShipment } from "../../services/shipmentService";
+import { getEquipmentList } from "../../services/equipmentService";
 import LocationFieldsEditor from "../LocationFieldsEditor";
 import { locationsToShipmentPatch } from "../../types/location";
 
 const MODES = ["LTL", "TL"];
 const SERVICE_LEVELS = ["Standard", "Expedited", "Economy", "White Glove", "Time-Critical"];
 
-export default function NewShipmentModal({ carriers, onSave, onClose }) {
+export default function NewShipmentModal({ carriers, equipmentTypes = [], onSave, onClose }) {
   const [form, setForm] = useState(buildBlankShipment());
   const [saving, setSaving] = useState(false);
+
+  // Active trailer types from the equipment master (migration 20260406_equipment_types).
+  // Source list is owned by equipmentService — same shape EditRateModal consumes.
+  const activeEquipment = useMemo(
+    () => getEquipmentList(equipmentTypes).filter((eq) => (eq.status || "Active") === "Active"),
+    [equipmentTypes]
+  );
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -119,6 +127,22 @@ export default function NewShipmentModal({ carriers, onSave, onClose }) {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Equipment — soft reference to equipment_types.name. Mirrors
+                the EditRateModal pattern so manually-created shipments
+                carry the same trailer info the planner snapshots from
+                the rate (migration 025). */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelStyle}>Equipment</label>
+              <select value={form.equipment || ""} onChange={(e) => set("equipment", e.target.value)} style={inputStyle}>
+                <option value="">— Select Equipment —</option>
+                {activeEquipment.map((eq) => (
+                  <option key={eq.id || eq.name} value={eq.name}>
+                    {eq.name}{eq.max_weight ? ` (${Number(eq.max_weight).toLocaleString()} lb max)` : ""}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Weight / Pieces / Cost */}

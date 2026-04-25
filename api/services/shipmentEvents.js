@@ -166,17 +166,6 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
       } catch (auditErr) {
         console.error('[shipmentEvents] shipment status history failed:', auditErr.message);
       }
-
-      // Broadcast the transition so the TMS Shipments page + open detail
-      // modal refresh live. Bridged to wsBroadcast in server.js.
-      bus.emit(EVENTS.SHIPMENT_UPDATED, {
-        id,
-        status:        shipPatch.status,
-        pickup_date:   shipPatch.pickup_date   || ship.pickup_date   || null,
-        delivery_date: shipPatch.delivery_date || ship.delivery_date || null,
-        via:           'timeline-event',
-        eventType:     type,
-      });
     }
   }
 
@@ -247,6 +236,32 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
     } catch (omsErr) {
       console.error('[shipmentEvents] OMS delivered sync failed:', omsErr.message);
     }
+  }
+
+  // 5. Broadcast a refresh signal to every connected client (TMS + OMS)
+  //    whenever this event caused any visible change — shipment row,
+  //    linked-order rows, or oms_orders rows. Used to gate this on
+  //    `shipPatch.status` only, but a planner re-adding a Delivered
+  //    event on an already-Delivered shipment force-syncs the OMS row
+  //    (see step 4 comment) without changing shipment.status, so the
+  //    OMS would otherwise sit stale until a manual refresh. Emit at
+  //    the end with the post-write state so listeners always see the
+  //    final values regardless of which branch ran.
+  const anythingChanged =
+    Object.keys(shipPatch).length > 0 ||
+    transitioned.length > 0 ||
+    (omsSync && Array.isArray(omsSync.updated) && omsSync.updated.length > 0);
+  if (anythingChanged) {
+    bus.emit(EVENTS.SHIPMENT_UPDATED, {
+      id,
+      status:        shipPatch.status        || ship.status,
+      pickup_date:   shipPatch.pickup_date   || ship.pickup_date   || null,
+      delivery_date: shipPatch.delivery_date || ship.delivery_date || null,
+      via:           'timeline-event',
+      eventType:     type,
+      ordersUpdated: transitioned,
+      omsUpdated:    (omsSync && omsSync.updated) || [],
+    });
   }
 
   return {

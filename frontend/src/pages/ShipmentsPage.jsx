@@ -9,7 +9,7 @@ import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/h
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
 import NewShipmentModal from "../components/shipments/NewShipmentModal";
-import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations, recordShipmentEvent } from "../services/shipmentService";
+import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations, recordShipmentEvent, deriveShipmentEquipment } from "../services/shipmentService";
 import LocationFieldsEditor from "../components/LocationFieldsEditor";
 import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
@@ -399,7 +399,16 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <InfoBox icon="🚦" label="Status" value={displayStatus} />
             <InfoBox icon="🚛" label="Carrier" value={ds._carrier || "—"} />
             <InfoBox icon="📦" label="Mode" value={ds.mode || "—"} />
-            <InfoBox icon="🛻" label="Equipment" value={ds.equipment || "—"} />
+            {(() => {
+              const eq = deriveShipmentEquipment(ds, rateRow);
+              return (
+                <InfoBox
+                  icon="🛻"
+                  label={eq.source === "rate" ? "Equipment (from rate)" : "Equipment"}
+                  value={eq.value || "—"}
+                />
+              );
+            })()}
             <InfoBox icon="⚖️" label="Weight" value={`${(ds.weight || 0).toLocaleString()} lbs`} />
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
             <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
@@ -759,7 +768,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
 }
 
 export default function ShipmentsPage() {
-  const { shipments, orders, carriers, setData, refreshData, refreshShipmentsAndOrders } = useOutletContext();
+  const { shipments, orders, carriers, equipmentTypes, setData, refreshData, refreshShipmentsAndOrders } = useOutletContext();
   // Lightweight refresh for tender-path mutations (shipments + orders only).
   // Falls back to full refresh if the lighter helper isn't provided.
   const refreshTender = refreshShipmentsAndOrders || refreshData;
@@ -1703,6 +1712,7 @@ export default function ShipmentsPage() {
       {showNewShipment && (
         <NewShipmentModal
           carriers={carriers}
+          equipmentTypes={equipmentTypes}
           onSave={handleCreateShipment}
           onClose={() => setShowNewShipment(false)}
         />

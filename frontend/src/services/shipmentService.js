@@ -28,6 +28,10 @@ export function buildBlankShipment() {
     pickup_date: new Date().toISOString().slice(0, 10),
     delivery_date: "",
     service_level: "Standard",
+    // Migration 025: shipments.equipment is a soft reference to
+    // equipment_types.name. Manual creates leave it blank by default
+    // and let the user pick from the master list.
+    equipment: "",
     notes: "",
   };
 }
@@ -39,12 +43,16 @@ export function buildBlankShipment() {
  */
 export async function createShipment(shipmentData) {
   const id = generateShipmentId();
+  const equipment = typeof shipmentData.equipment === "string"
+    ? shipmentData.equipment.trim()
+    : shipmentData.equipment;
   const shipment = {
     id,
     ...shipmentData,
     weight: parseFloat(shipmentData.weight) || 0,
     pieces: parseInt(shipmentData.pieces) || 0,
     total_cost: parseFloat(shipmentData.total_cost) || 0,
+    equipment: equipment || null,
     status: "Planned",
   };
   await DbApi.upsert("shipments", shipment);
@@ -120,6 +128,40 @@ export async function updateShipmentLocations(shipmentId, fromLoc, toLoc) {
  * @param {string} shipmentId
  * @param {{ type:string, note?:string, date?:string }} event
  */
+/**
+ * Resolve the trailer/equipment to display for a shipment.
+ *
+ * Migration 025 added shipments.equipment as a snapshot of the rate's
+ * equipment at planning time, but rows that pre-date the migration (or
+ * were planned before the planner started carrying equipment forward)
+ * are NULL. The migration's own notes explicitly call out a best-effort
+ * fallback: re-derive from rates.equipment via shipments.rate_id.
+ *
+ * Returns:
+ *   { value: string|null, source: "shipment"|"rate"|null }
+ *
+ *   - source === "shipment" → snapshot stored on the row
+ *   - source === "rate"     → derived at render time from the rate
+ *   - source === null       → unknown (no shipment value, no rate match)
+ *
+ * UI components MUST go through this helper instead of reading
+ * `shipment.equipment` directly so the fallback stays consistent across
+ * every shipment view (CLAUDE_RULES #3 — services own logic).
+ */
+export function deriveShipmentEquipment(shipment, rateRow) {
+  const stored = shipment && typeof shipment.equipment === "string"
+    ? shipment.equipment.trim()
+    : "";
+  if (stored) return { value: stored, source: "shipment" };
+
+  const fromRate = rateRow && typeof rateRow.equipment === "string"
+    ? rateRow.equipment.trim()
+    : "";
+  if (fromRate) return { value: fromRate, source: "rate" };
+
+  return { value: null, source: null };
+}
+
 export async function recordShipmentEvent(shipmentId, event) {
   if (!shipmentId) throw new Error("recordShipmentEvent: shipmentId is required");
   if (!event || !event.type) throw new Error("recordShipmentEvent: event.type is required");

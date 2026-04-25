@@ -24,6 +24,10 @@
 //   - orders_updated            { source, count }
 //   - shipment_status_updated   { source, count }
 //   - shipment_delivered        { source, count }
+//   - shipment.updated          { id, status, pickup_date, delivery_date,
+//                                 via, eventType }
+//     ↑ bridged from EVENTS.SHIPMENT_UPDATED on the in-process bus —
+//       fires on manual timeline events, ship-confirm, POD.
 // ---------------------------------------------------------------------------
 
 (function (global) {

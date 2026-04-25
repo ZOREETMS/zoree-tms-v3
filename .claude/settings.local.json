@@ -860,7 +860,8 @@
       "Bash(ls .env*)",
       "Bash(ls ../.env*)",
       "Bash(node -r dotenv/config -e ' *)",
-      "Bash(python -m streamlit run app.py --server.headless true)"
+      "Bash(python -m streamlit run app.py --server.headless true)",
+      "Bash(ls C:\\\\\\\\Zoree\\\\\\\\zoree-tms-v3\\\\\\\\zoree-tms-v3)"
     ]
   }
 }
