@@ -91,6 +91,9 @@ export type InsightsTabParamList = {
 export type SystemTabParamList = {
   Settings: undefined;
   Profile: undefined;
+  // Phase-3: Equipment master (trailer types) — admin surface for the
+  // catalog that rates / shipments / planning all read from.
+  EquipmentMaster: undefined;
 };
 
 // Driver-specific screens (accessible from Execution tab)

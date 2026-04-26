@@ -177,6 +177,7 @@ export default function ShipmentsScreen() {
           visible={creating}
           onClose={() => setCreating(false)}
           carriers={data.carriers as any}
+          equipmentTypes={(data as any).equipmentTypes}
           onCreated={async () => {
             await refreshData();
           }}

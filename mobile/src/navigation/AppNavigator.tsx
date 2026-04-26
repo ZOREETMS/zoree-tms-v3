@@ -15,6 +15,7 @@ import PlanningStack from './tabs/PlanningTabs';
 import ExecutionStack from './tabs/ExecutionTabs';
 import FinanceStack from './tabs/FinanceTabs';
 import InsightsStack from './tabs/InsightsTabs';
+import SystemStack from './tabs/SystemTabs';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
@@ -123,9 +124,9 @@ export default function AppNavigator() {
       />
       <Drawer.Screen
         name="SystemTab"
-        options={{ title: 'Settings', drawerIcon: () => <Text>⚙️</Text> }}>
-        {() => <PlaceholderScreen title="Settings" icon="⚙️" />}
-      </Drawer.Screen>
+        component={SystemStack}
+        options={{ title: 'Settings', drawerIcon: () => <Text>⚙️</Text> }}
+      />
     </Drawer.Navigator>
   );
 }

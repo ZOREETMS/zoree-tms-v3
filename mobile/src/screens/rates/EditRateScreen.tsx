@@ -132,7 +132,11 @@ export default function EditRateScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <RateLaneSection form={form} onChange={setField} />
+        <RateLaneSection
+          form={form}
+          onChange={setField}
+          equipmentTypes={(data as any).equipmentTypes}
+        />
         <RateLocationSection form={form} onChange={setField} />
         <RatePricingSection form={form} onChange={setField} carriers={data.carriers as any} />
         <RateLogisticsSection form={form} onChange={setField} />

@@ -104,6 +104,12 @@ export const DbApi = {
   documents() {
     return api("/db/documents?q=select=*%26order=generated.desc%26limit=500");
   },
+  equipmentTypes() {
+    return api("/db/equipment_types?q=select=*%26order=name.asc%26limit=200");
+  },
+  vehicles() {
+    return api("/db/vehicles?q=select=*%26order=unit.asc%26limit=500");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

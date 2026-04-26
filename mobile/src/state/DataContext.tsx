@@ -20,6 +20,14 @@ export interface TmsData {
   drivers: any[];
   invoices: any[];
   routeTemplates: any[];
+  /**
+   * Equipment master rows (trailer types). Optional in callers — when
+   * absent or empty, services like rateService / equipmentService fall
+   * back to SEED_EQUIPMENT.
+   */
+  equipmentTypes: any[];
+  /** Fleet vehicles. Empty → FleetScreen falls back to its in-file seed. */
+  vehicles: any[];
 }
 
 interface DataContextValue {
@@ -42,6 +50,8 @@ const emptyData: TmsData = {
   drivers: [],
   invoices: [],
   routeTemplates: [],
+  equipmentTypes: [],
+  vehicles: [],
 };
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -68,6 +78,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         drivers,
         invoices,
         routeTemplates,
+        equipmentTypes,
+        vehicles,
       ] = await Promise.all([
         DbApi.orders(),
         DbApi.shipments(),
@@ -80,6 +92,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         DbApi.drivers().catch(() => []),
         DbApi.invoices().catch(() => []),
         DbApi.routeTemplates().catch(() => []),
+        DbApi.equipmentTypes().catch(() => []),
+        DbApi.vehicles().catch(() => []),
       ]);
 
       setData({
@@ -94,6 +108,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         drivers: Array.isArray(drivers) ? drivers : [],
         invoices: Array.isArray(invoices) ? invoices : [],
         routeTemplates: Array.isArray(routeTemplates) ? routeTemplates : [],
+        equipmentTypes: Array.isArray(equipmentTypes) ? equipmentTypes : [],
+        vehicles: Array.isArray(vehicles) ? vehicles : [],
       });
     } catch (e: any) {
       setError(e.message || 'Failed loading data');

@@ -1,4 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════════
+-- ⚠ ARCHIVED — DO NOT RUN
+-- Moved out of supabase/migrations/ on 2026-04-25.
+-- Status: applied manually via the Supabase SQL editor on/around
+--         2026-04-08; never registered in supabase_migrations.schema_migrations.
+-- Superseded by: supabase/migrations/20260425_fix_rls_advisor_errors.sql
+--                (and the rls_disabled_in_public errors it cleared on
+--                tables created after this file was authored).
+-- Kept here for historical reference only. The current source of truth
+-- for RLS policy state is the live database + the 2026-04-25 migration.
+-- ═══════════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════════
 -- Migration: Enable RLS + service_role-only policies (hybrid security)
 -- Date: 2026-04-08
 -- Reason: Supabase security advisory — tables publicly accessible via anon key
