@@ -38,7 +38,7 @@ const ORDER_STATUSES = [
   'Cancelled',
 ];
 
-const MODE_OPTIONS = ['', 'TL', 'LTL', 'Partial', 'Intermodal', 'Air'];
+const MODE_OPTIONS = ['', 'TL', 'LTL', 'Parcel', 'Intermodal', 'Air'];
 
 export interface OrderEditModalProps {
   visible: boolean;

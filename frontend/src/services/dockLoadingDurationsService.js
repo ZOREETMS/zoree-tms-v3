@@ -41,7 +41,7 @@ export function setLoadDurationsCache(rows) {
 
 /**
  * Synchronous getter used by dockService / ordersService during planning.
- * @param {string} mode - "TL" / "LTL" / "Partial" / "Air"
+ * @param {string} mode - "TL" / "LTL" / "Parcel" / "Air"
  * @returns {number} minutes (never undefined)
  */
 export function getLoadDuration(mode) {

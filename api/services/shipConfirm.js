@@ -26,6 +26,37 @@ const db = require('./supabase');
 const history = require('./changeHistory');
 const { bus, EVENTS } = require('./eventBus');
 
+// Mirror BOL / PRO from the TMS shipment into the matching oms_orders row.
+// Skips empty values so an unset field on the shipment can't blow away
+// data the OMS captured through its own UI. Best-effort: a failure here
+// MUST NOT fail the ship-confirm — the warehouse flow still has to complete.
+async function mirrorBolPro(omsOrderId, ship, shippedAt) {
+  try {
+    const priorRows = await db.dbSelect('oms_orders', {
+      filters: [['id', 'eq', omsOrderId]], limit: 1,
+      select: 'id',
+    });
+    if (!priorRows || !priorRows.length) return; // TMS-origin order, no OMS row
+
+    const setIf = (obj, key, val) => {
+      if (val === undefined || val === null) return;
+      if (typeof val === 'string' && val.trim() === '') return;
+      obj[key] = val;
+    };
+    const patch = {
+      updated_at: new Date().toISOString(),
+      tms_ship_status_pushed_at: new Date().toISOString(),
+    };
+    setIf(patch, 'bol_number', ship.bol_number);
+    setIf(patch, 'pro_number', ship.pro_number);
+    setIf(patch, 'shipped_at', shippedAt);
+
+    await db.dbUpdate('oms_orders', omsOrderId, patch, null);
+  } catch (mirrorErr) {
+    console.error(`[shipConfirm] oms BOL/PRO mirror failed (${omsOrderId}):`, mirrorErr.message);
+  }
+}
+
 async function applyShipConfirm(body) {
   const shipmentId = String(body?.shipmentId || '').trim();
   if (!shipmentId) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
@@ -38,9 +69,13 @@ async function applyShipConfirm(body) {
   const source = body?.source || 'oms-wms';
 
   // 1. Read current shipment so we can emit a proper before/after history row.
+  //    bol_number / pro_number are pulled so we can mirror them into oms_orders
+  //    below — closing the gap where a BOL or PRO assigned to the TMS shipment
+  //    *after* tender-accept (e.g. BOL doc generated at ship time, manual edit,
+  //    carrier-supplied PRO) never reached the OMS.
   const beforeRows = await db.dbSelect('shipments', {
     filters: [['id', 'eq', shipmentId]], limit: 1,
-    select: 'id,status,order_ids,carrier,seal_number,pickup_date,delivery_date',
+    select: 'id,status,order_ids,carrier,seal_number,pickup_date,delivery_date,bol_number,pro_number',
   });
   const ship = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
   if (!ship) {
@@ -103,6 +138,16 @@ async function applyShipConfirm(body) {
       });
       const prior = Array.isArray(priorRows) && priorRows.length ? priorRows[0] : null;
       if (!prior) { skipped.push({ id: oid, reason: 'not_found' }); continue; }
+
+      // Mirror BOL / PRO into the OMS row regardless of whether this is
+      // the first ship-confirm or a re-trigger. Closes the gap where a
+      // BOL / PRO is assigned on the TMS shipment after the original
+      // ship-confirm (e.g. BOL doc generated post-pickup, carrier-supplied
+      // PRO, manual edit) — re-firing ship-confirm now propagates it to
+      // the OMS Sales Orders grid. setIf inside the helper skips empty
+      // values so this is safe to run repeatedly.
+      await mirrorBolPro(oid, ship, shippedAt);
+
       if (prior.status === 'Shipped') { skipped.push({ id: oid, reason: 'already_shipped' }); continue; }
 
       await db.dbUpdate('orders', oid, { status: 'Shipped' }, null);

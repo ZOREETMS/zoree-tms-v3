@@ -2745,36 +2745,42 @@ async function doTender(){
   }catch(e){toast('❌ '+e.message,'ter');}
 }
 
+// Shared warehouse-modal header builder. Consolidates the field set the
+// floor uses to identify an order regardless of which stage modal is
+// open (Pick / Pack / Dock / Ship / POD). Per-modal callers append
+// stage-specific cells (cartons, ship date, etc.) after this base.
+//   - Customer is resolved through custName so we never show a raw id.
+//   - Source composes the typed ship_from_* columns and falls back to
+//     the legacy origin_location string.
+//   - Loading window stitches loading_start / loading_end (migration 027).
+function _omsBaseHdr(o){
+  var sourceLbl = (function(){
+    var parts=[o.shipFromName, [o.shipFromCity,o.shipFromState].filter(Boolean).join(', '), o.origZip].filter(Boolean);
+    return parts.join(' · ') || o.orig || '—';
+  })();
+  var loadWin = (function(){
+    if (o.loadingStart && o.loadingEnd) return o.loadingStart + ' → ' + o.loadingEnd;
+    return o.loadingStart || o.loadingEnd || '—';
+  })();
+  return ifc('Order',o.id)+
+         ifc('Customer',custName(o.cust))+
+         ifc('Source',sourceLbl)+
+         ifc('Destination',o.dest)+
+         ifc('Shipment',o.tmsShipId||'—')+
+         ifc('Service Level',o.serviceLevel||'—')+
+         ifc('Carrier',o.carrier||'—')+
+         ifc('BOL',o.bol||'—')+
+         ifc('Pickup',o.pickupDate||'—')+
+         ifc('Dock #',o.dockDoor||'—')+
+         ifc('Dock Window',loadWin);
+}
+
 // ─── PICK (Stage 6→7) ────────────────────────────
 function openPickModal(id){
   var o=orders.find(x=>x.id===id);if(!o)return;
   _pt=id;
   document.getElementById('pick-ti').textContent='Pick Order — '+id;
-  // Compose the source/origin from the typed ship-from columns when present,
-  // falling back to the legacy origin_location string. Same pattern the
-  // openOM modal uses for the Sales Order detail card.
-  var sourceLbl = (function(){
-    var parts=[o.shipFromName, [o.shipFromCity,o.shipFromState].filter(Boolean).join(', '), o.origZip].filter(Boolean);
-    return parts.join(' · ') || o.orig || '—';
-  })();
-  // Loading window: stitch start/end into a single readable line, fall
-  // back to a single value if only one is set, then "—".
-  var loadWin = (function(){
-    if (o.loadingStart && o.loadingEnd) return o.loadingStart + ' → ' + o.loadingEnd;
-    return o.loadingStart || o.loadingEnd || '—';
-  })();
-  document.getElementById('pick-hdr').innerHTML=
-    ifc('Order',o.id)+
-    ifc('Customer',custName(o.cust))+
-    ifc('Source',sourceLbl)+
-    ifc('Destination',o.dest)+
-    ifc('Shipment',o.tmsShipId||'—')+
-    ifc('Service Level',o.serviceLevel||'—')+
-    ifc('Carrier',o.carrier||'—')+
-    ifc('BOL',o.bol||'—')+
-    ifc('Pickup',o.pickupDate||'—')+
-    ifc('Dock #',o.dockDoor||'—')+
-    ifc('Dock Window',loadWin);
+  document.getElementById('pick-hdr').innerHTML=_omsBaseHdr(o);
   document.getElementById('pick-lines').innerHTML=
     `<div style="padding:4px 12px;background:var(--bg4);border-bottom:1px solid var(--border)"><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">PICK LIST — confirm each line when picked</span></div>`+
     (o.lines||[]).map((l,i)=>{
@@ -2799,7 +2805,7 @@ function openPackModal(id){
   var o=orders.find(x=>x.id===id);if(!o)return;
   _pt=id;
   var wt=(o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
-  document.getElementById('pack-hdr').innerHTML=ifc('Order',o.id)+ifc('Customer',o.cust)+ifc('Total Wt',wt.toLocaleString()+' lbs');
+  document.getElementById('pack-hdr').innerHTML=_omsBaseHdr(o)+ifc('Total Wt',wt.toLocaleString()+' lbs');
   document.getElementById('pk-cartons').value=o.cartons||1;
   document.getElementById('pk-weight').value=o.packWt||wt;
   document.getElementById('pk-pallets').value=o.pallets||1;
@@ -2822,7 +2828,7 @@ async function confirmPack(){
 function openDockModal(id){
   var o=orders.find(x=>x.id===id);if(!o)return;
   _pt=id;
-  document.getElementById('dock-hdr').innerHTML=ifc('Order',o.id)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Cartons',o.cartons||'—');
+  document.getElementById('dock-hdr').innerHTML=_omsBaseHdr(o)+ifc('Cartons',o.cartons||'—');
   document.getElementById('dk-door').value=o.dockDoor||'Dock 1';
   document.getElementById('dk-lane').value=o.stageLane||'Lane A-1';
   openM('m-dock');
@@ -2848,7 +2854,7 @@ async function confirmDock(){
 function openShipModal(id){
   var o=orders.find(x=>x.id===id);if(!o)return;
   _pt=id;
-  document.getElementById('ship-hdr').innerHTML=ifc('Order',o.id)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Dock',o.dockDoor||'—')+ifc('Cartons',o.cartons||'—')+ifc('Pallets',o.pallets||'—');
+  document.getElementById('ship-hdr').innerHTML=_omsBaseHdr(o)+ifc('Cartons',o.cartons||'—')+ifc('Pallets',o.pallets||'—');
   document.getElementById('sh-pcs').value=(o.lines||[]).reduce((s,l)=>s+l.qty,0);
   document.getElementById('sh-driver').value=o.driverName||'';
   openM('m-ship');
@@ -2905,7 +2911,7 @@ function openPODModal(id){
     {e:'Loaded & Shipped',t:o.shippedAt||'',done:o.stage>=10,cur:o.stage===10},
     {e:'Delivered / POD',t:o.deliveredAt||'',done:o.stage>=11,cur:false},
   ];
-  document.getElementById('pod-hdr').innerHTML=ifc('Order',o.id)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Ship Date',o.shipDate||'—')+ifc('Est. Delivery',o.deliveryDate||'—')+ifc('PRO #',o.pro||'—');
+  document.getElementById('pod-hdr').innerHTML=_omsBaseHdr(o)+ifc('Ship Date',o.shipDate||'—')+ifc('Est. Delivery',o.deliveryDate||'—')+ifc('PRO #',o.pro||'—');
   document.getElementById('pod-timeline').innerHTML=
     `<div class="track-timeline">`+
     events.map(ev=>`<div class="track-event">

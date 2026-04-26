@@ -14,7 +14,7 @@ export const DOCK_HOURS = Array.from({ length: 15 }, (_, i) => {
 export const LOAD_DURATION_BY_MODE = {
   TL: 120,
   LTL: 90,
-  Partial: 90,
+  Parcel: 90,
   Air: 60,
 };
 

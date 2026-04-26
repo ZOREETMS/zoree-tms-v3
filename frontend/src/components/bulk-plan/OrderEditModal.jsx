@@ -162,7 +162,7 @@ export default function OrderEditModal({ isOpen, order, items = [], onClose, onS
                   <option value="">— TMS Selects —</option>
                   <option value="TL">TL (Truckload)</option>
                   <option value="LTL">LTL</option>
-                  <option value="Partial">Partial TL</option>
+                  <option value="Parcel">Parcel</option>
                   <option value="Intermodal">Intermodal</option>
                   <option value="Air">Air</option>
                 </select>
