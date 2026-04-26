@@ -9,11 +9,14 @@ import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import KpiCard from '../../components/ui/KpiCard';
 import SelectableOrderCard from '../../components/bulkplan/SelectableOrderCard';
+import OrderEditModal from '../../components/bulkplan/OrderEditModal';
 import { classifyLoadType } from '../../shared/utils/laneUtils';
+import { useData } from '../../state/DataContext';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 export default function BulkPlanScreen() {
   const navigation = useNavigation<any>();
+  const { refreshData } = useData();
   const {
     unplannedOrders, selectedIds, selectionSummary, lanes,
     busy, progress, results, error,
@@ -21,6 +24,7 @@ export default function BulkPlanScreen() {
   } = useBulkPlan();
 
   const [search, setSearch] = useState('');
+  const [editingOrder, setEditingOrder] = useState<any | null>(null);
 
   // Navigate to results when available
   React.useEffect(() => {
@@ -45,7 +49,12 @@ export default function BulkPlanScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => (
-      <SelectableOrderCard order={item} selected={selectedIds.has(item.id)} onToggle={toggleSelect} />
+      <SelectableOrderCard
+        order={item}
+        selected={selectedIds.has(item.id)}
+        onToggle={toggleSelect}
+        onEdit={setEditingOrder}
+      />
     ),
     [selectedIds, toggleSelect],
   );
@@ -142,6 +151,16 @@ export default function BulkPlanScreen() {
           )}
         </TouchableOpacity>
       )}
+
+      {/* Mid-plan order editor — surfaced from the per-card pencil. */}
+      <OrderEditModal
+        visible={!!editingOrder}
+        order={editingOrder}
+        onClose={() => setEditingOrder(null)}
+        onSaved={async () => {
+          await refreshData();
+        }}
+      />
     </View>
   );
 }

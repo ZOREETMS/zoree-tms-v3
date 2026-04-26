@@ -4,6 +4,7 @@ import { FinanceTabParamList } from '../types';
 import InvoicesScreen from '../../screens/freight/InvoicesScreen';
 import FreightAuditScreen from '../../screens/freight/FreightAuditScreen';
 import RateManagementScreen from '../../screens/rates/RateManagementScreen';
+import EditRateScreen from '../../screens/rates/EditRateScreen';
 import CarrierBidsScreen from '../../screens/bids/CarrierBidsScreen';
 import PlaceholderScreen from '../../screens/PlaceholderScreen';
 
@@ -17,6 +18,7 @@ export default function FinanceStack() {
       }}>
       <Stack.Screen name="FreightInvoices" component={InvoicesScreen} />
       <Stack.Screen name="RateManagement" component={RateManagementScreen} />
+      <Stack.Screen name="EditRate" component={EditRateScreen} />
       <Stack.Screen name="LanePreferences">
         {() => <PlaceholderScreen title="Lane Preferences" icon="⭐" />}
       </Stack.Screen>

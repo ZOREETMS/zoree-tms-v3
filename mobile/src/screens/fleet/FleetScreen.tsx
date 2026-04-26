@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
+  ActivityIndicator,
   FlatList,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +17,9 @@ import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import DriverFormModal from '../../components/fleet/DriverFormModal';
+import { useData } from '../../state/DataContext';
+import { deleteDriver } from '../../services/fleetService';
 import {
   colors,
   fontSize,
@@ -50,7 +56,22 @@ const SEED_DRIVERS = [
 type TabKey = 'vehicles' | 'drivers';
 
 export default function FleetScreen() {
+  const { data, loading, refreshData } = useData();
   const [activeTab, setActiveTab] = useState<TabKey>('vehicles');
+  const [editingDriver, setEditingDriver] = useState<any | null>(null);
+  const [creatingDriver, setCreatingDriver] = useState(false);
+  const [busyDriverId, setBusyDriverId] = useState<string | null>(null);
+
+  /**
+   * Drivers come from the API via DataContext when available; fall back
+   * to the in-file seed list when the table is empty (fresh tenant or
+   * preview build with no backend).
+   */
+  const drivers = useMemo<any[]>(
+    () => (Array.isArray(data.drivers) && data.drivers.length > 0 ? data.drivers : SEED_DRIVERS),
+    [data.drivers],
+  );
+  const driversBackedByApi = Array.isArray(data.drivers) && data.drivers.length > 0;
 
   const vehicleKpis = useMemo(() => {
     const total = SEED_VEHICLES.length;
@@ -61,12 +82,40 @@ export default function FleetScreen() {
   }, []);
 
   const driverKpis = useMemo(() => {
-    const total = SEED_DRIVERS.length;
-    const available = SEED_DRIVERS.filter((d) => d.status === 'Available').length;
-    const onDuty = SEED_DRIVERS.filter((d) => d.status === 'On Duty').length;
-    const offDuty = SEED_DRIVERS.filter((d) => d.status === 'Off Duty').length;
+    const total = drivers.length;
+    const available = drivers.filter((d: any) => d.status === 'Available').length;
+    const onDuty = drivers.filter((d: any) => d.status === 'On Duty').length;
+    const offDuty = drivers.filter((d: any) => d.status === 'Off Duty').length;
     return { total, available, onDuty, offDuty };
-  }, []);
+  }, [drivers]);
+
+  const handleDeleteDriver = useCallback(
+    (driver: any) => {
+      Alert.alert(
+        'Delete Driver',
+        `Permanently delete ${driver.name || driver.id}? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setBusyDriverId(driver.id);
+              try {
+                await deleteDriver(driver.id);
+                await refreshData();
+              } catch (e: any) {
+                Alert.alert('Delete failed', e?.message || 'Could not delete driver');
+              } finally {
+                setBusyDriverId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [refreshData],
+  );
 
   const renderVehicle = ({ item }: { item: typeof SEED_VEHICLES[0] }) => (
     <Card style={styles.itemCard}>
@@ -98,47 +147,90 @@ export default function FleetScreen() {
     </Card>
   );
 
-  const renderDriver = ({ item }: { item: typeof SEED_DRIVERS[0] }) => (
-    <Card style={styles.itemCard}>
-      <View style={styles.itemHeader}>
-        <View style={styles.itemTitleRow}>
-          <Ionicons name="person-outline" size={18} color={colors.accent} />
-          <Text style={styles.itemTitle}>{item.name}</Text>
-        </View>
-        <StatusBadge status={item.status} />
-      </View>
-      <View style={styles.itemDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>CDL</Text>
-          <Text style={styles.detailValue}>{item.cdl}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Class</Text>
-          <Text style={styles.detailValue}>{item.cdlClass}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Vehicle</Text>
-          <Text style={styles.detailValue}>{item.vehicle}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>HOS Today</Text>
-          <Text style={styles.detailValue}>{item.hosToday}h</Text>
-        </View>
-        {item.endorsements.length > 0 && (
-          <View style={styles.endorsementsRow}>
-            <Text style={styles.detailLabel}>Endorsements</Text>
-            <View style={styles.endorsementTags}>
-              {item.endorsements.map((e) => (
-                <View key={e} style={styles.endorsementTag}>
-                  <Text style={styles.endorsementText}>{e}</Text>
-                </View>
-              ))}
-            </View>
+  const renderDriver = ({ item }: { item: any }) => {
+    const endorsements: string[] = Array.isArray(item.endorsements)
+      ? item.endorsements
+      : typeof item.endorsements === 'string'
+        ? item.endorsements.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : [];
+    const cdlClass = item.cdlClass || item.cdl_class || '--';
+    const vehicle = item.vehicle || item.assigned_vehicle || '--';
+    const hosToday = item.hosToday ?? item.hos_today ?? 0;
+    const rowBusy = busyDriverId === item.id;
+
+    return (
+      <Card style={styles.itemCard}>
+        <View style={styles.itemHeader}>
+          <View style={styles.itemTitleRow}>
+            <Ionicons name="person-outline" size={18} color={colors.accent} />
+            <Text style={styles.itemTitle}>{item.name}</Text>
           </View>
-        )}
-      </View>
-    </Card>
-  );
+          <StatusBadge status={item.status || 'Available'} />
+        </View>
+        <View style={styles.itemDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>CDL</Text>
+            <Text style={styles.detailValue}>{item.cdl || item.cdl_number || '--'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Class</Text>
+            <Text style={styles.detailValue}>{cdlClass}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Vehicle</Text>
+            <Text style={styles.detailValue}>{vehicle}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>HOS Today</Text>
+            <Text style={styles.detailValue}>{hosToday}h</Text>
+          </View>
+          {endorsements.length > 0 && (
+            <View style={styles.endorsementsRow}>
+              <Text style={styles.detailLabel}>Endorsements</Text>
+              <View style={styles.endorsementTags}>
+                {endorsements.map((e) => (
+                  <View key={e} style={styles.endorsementTag}>
+                    <Text style={styles.endorsementText}>{e}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Action row — only when drivers are API-backed (no point
+            offering Edit/Delete on read-only seed rows). */}
+        {driversBackedByApi ? (
+          <View style={styles.driverActions}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnEdit, rowBusy && styles.actionBtnBusy]}
+              onPress={() => setEditingDriver(item)}
+              disabled={rowBusy}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={16} color={colors.accent} />
+              <Text style={[styles.actionBtnText, { color: colors.accent }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnDelete, rowBusy && styles.actionBtnBusy]}
+              onPress={() => handleDeleteDriver(item)}
+              disabled={rowBusy}
+              activeOpacity={0.7}
+            >
+              {rowBusy ? (
+                <ActivityIndicator size="small" color={colors.red} />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={16} color={colors.red} />
+                  <Text style={[styles.actionBtnText, { color: colors.red }]}>Delete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -200,7 +292,7 @@ export default function FleetScreen() {
               color={activeTab === 'drivers' ? colors.accent : colors.text2}
             />
             <Text style={[styles.tabLabel, activeTab === 'drivers' && styles.tabLabelActive]}>
-              Drivers ({SEED_DRIVERS.length})
+              Drivers ({drivers.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -219,16 +311,52 @@ export default function FleetScreen() {
           />
         ) : (
           <FlatList
-            data={SEED_DRIVERS}
+            data={drivers}
             renderItem={renderDriver}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item: any) => String(item.id)}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={refreshData}
+                tintColor={colors.accent}
+                colors={[colors.accent]}
+              />
+            }
             ListEmptyComponent={
               <EmptyState icon="people-outline" title="No drivers" subtitle="Driver data will appear here." />
             }
           />
         )}
+
+        {/* New-driver FAB — only on the drivers tab. Vehicles tab is
+            read-only seed data until a vehicles list endpoint lands. */}
+        {activeTab === 'drivers' ? (
+          <TouchableOpacity
+            style={styles.fab}
+            activeOpacity={0.8}
+            onPress={() => setCreatingDriver(true)}
+          >
+            <Ionicons name="add" size={28} color={colors.white} />
+          </TouchableOpacity>
+        ) : null}
+
+        <DriverFormModal
+          visible={creatingDriver}
+          onClose={() => setCreatingDriver(false)}
+          onSaved={async () => {
+            await refreshData();
+          }}
+        />
+        <DriverFormModal
+          visible={!!editingDriver}
+          driver={editingDriver}
+          onClose={() => setEditingDriver(null)}
+          onSaved={async () => {
+            await refreshData();
+          }}
+        />
       </View>
     </SafeAreaView>
   );

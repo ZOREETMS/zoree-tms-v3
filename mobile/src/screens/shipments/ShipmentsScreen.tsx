@@ -9,10 +9,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import ShipmentCard from '../../components/shipments/ShipmentCard';
+import NewShipmentModal from '../../components/shipments/NewShipmentModal';
 import { useData } from '../../state/DataContext';
 import {
   colors,
@@ -37,6 +39,7 @@ export default function ShipmentsScreen() {
   const { data, loading, refreshData } = useData();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
+  const [creating, setCreating] = useState(false);
 
   const filtered = useMemo(() => {
     let list = data.shipments;
@@ -160,6 +163,24 @@ export default function ShipmentsScreen() {
             />
           }
         />
+
+        {/* New-shipment FAB — mirrors OrdersScreen / RateManagementScreen. */}
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={() => setCreating(true)}
+        >
+          <Ionicons name="add" size={28} color={colors.white} />
+        </TouchableOpacity>
+
+        <NewShipmentModal
+          visible={creating}
+          onClose={() => setCreating(false)}
+          carriers={data.carriers as any}
+          onCreated={async () => {
+            await refreshData();
+          }}
+        />
       </View>
     </SafeAreaView>
   );
@@ -234,5 +255,21 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing['5xl'],
     flexGrow: 1,
+  },
+  fab: {
+    position: 'absolute',
+    right: spacing.xl,
+    bottom: spacing['3xl'],
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

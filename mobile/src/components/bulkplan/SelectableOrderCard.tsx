@@ -8,9 +8,15 @@ interface Props {
   order: any;
   selected: boolean;
   onToggle: (id: string) => void;
+  /**
+   * Optional edit handler. When provided, an edit pencil shows on the
+   * card so the user can adjust the order before bulk-planning. Web
+   * parity: bulk-plan/OrderEditModal.jsx flow.
+   */
+  onEdit?: (order: any) => void;
 }
 
-const SelectableOrderCard: React.FC<Props> = ({ order, selected, onToggle }) => {
+const SelectableOrderCard: React.FC<Props> = ({ order, selected, onToggle, onEdit }) => {
   const weight = order.weight != null ? `${Number(order.weight).toLocaleString()} lbs` : '--';
   const pieces = order.pieces != null ? `${Number(order.pieces).toLocaleString()} pcs` : '';
 
@@ -54,6 +60,22 @@ const SelectableOrderCard: React.FC<Props> = ({ order, selected, onToggle }) => 
               {pieces ? <Text style={styles.meta}>{pieces}</Text> : null}
             </View>
           </View>
+
+          {/* Edit pencil — only when caller wires it. Stop propagation so
+              tapping the pencil doesn't also toggle selection. */}
+          {onEdit ? (
+            <TouchableOpacity
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              onPress={(e) => {
+                e.stopPropagation();
+                onEdit(order);
+              }}
+              style={styles.editBtn}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.text2} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </Card>
     </TouchableOpacity>
@@ -119,6 +141,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: fontWeight.regular,
     color: colors.text3,
+  },
+  editBtn: {
+    padding: spacing.xs,
+    marginLeft: spacing.sm,
   },
 });
 

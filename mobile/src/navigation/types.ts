@@ -58,6 +58,10 @@ export type FinanceTabParamList = {
   FreightInvoices: undefined;
   InvoiceDetail: { invoiceId: string };
   RateManagement: undefined;
+  // EditRate handles both create and edit. Pass mode:'create' (no id) for
+  // a new rate, or mode:'edit' + rateId to edit an existing row. Mirrors
+  // the web EditRateModal that's invoked from RateManagementPage.
+  EditRate: { mode: 'create' | 'edit'; rateId?: string };
   LanePreferences: undefined;
   CarrierBids: undefined;
   FreightAudit: undefined;

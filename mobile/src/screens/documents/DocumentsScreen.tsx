@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +15,13 @@ import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import DocumentViewerModal from '../../components/documents/DocumentViewerModal';
+import GenerateDocumentModal from '../../components/documents/GenerateDocumentModal';
+import {
+  computeDocStats,
+  fetchDocuments,
+} from '../../services/documentService';
+import { useData } from '../../state/DataContext';
 import {
   colors,
   fontSize,
@@ -50,66 +57,99 @@ const DOC_TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function DocumentsScreen() {
+  const { data } = useData();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('All');
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [viewing, setViewing] = useState<any | null>(null);
+  const [generating, setGenerating] = useState(false);
 
-  const filtered = useMemo(() => {
-    if (typeFilter === 'All') return SEED_DOCUMENTS;
-    return SEED_DOCUMENTS.filter((d) => d.type === typeFilter);
-  }, [typeFilter]);
-
-  const stats = useMemo(() => {
-    const total = SEED_DOCUMENTS.length;
-    const bols = SEED_DOCUMENTS.filter((d) => d.type === 'BOL').length;
-    const pods = SEED_DOCUMENTS.filter((d) => d.type === 'POD').length;
-    const pending = SEED_DOCUMENTS.filter((d) => d.status === 'Pending').length;
-    return { total, bols, pods, pending };
+  /**
+   * Fetch documents from the backend. Falls back to seeds when the
+   * table is empty so the screen still demos cleanly on a fresh tenant.
+   */
+  const loadDocs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchDocuments();
+      setDocs(rows.length > 0 ? rows : SEED_DOCUMENTS);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleGenerateBOL = () => {
-    Alert.alert(
-      'Generate BOL',
-      'This would generate a new Bill of Lading for a selected shipment.',
-      [{ text: 'OK' }],
-    );
-  };
+  useEffect(() => {
+    loadDocs();
+  }, [loadDocs]);
+
+  const filtered = useMemo(() => {
+    if (typeFilter === 'All') return docs;
+    return docs.filter((d) => d.type === typeFilter);
+  }, [typeFilter, docs]);
+
+  const stats = useMemo(() => {
+    const s = computeDocStats(docs);
+    return {
+      total: s.total,
+      bols: s.bolsGenerated,
+      pods: s.podsReceived,
+      pending: docs.filter((d) => d.status === 'Pending').length,
+    };
+  }, [docs]);
+
+  const docsBackedByApi = docs !== SEED_DOCUMENTS;
 
   const renderDocument = useCallback(
-    ({ item }: { item: typeof SEED_DOCUMENTS[0] }) => (
-      <Card style={styles.docCard}>
-        <View style={styles.docHeader}>
-          <View style={styles.docTitleRow}>
-            <Ionicons
-              name={DOC_TYPE_ICONS[item.type] || 'document-outline'}
-              size={18}
-              color={colors.accent}
-            />
-            <Text style={styles.docId}>{item.id}</Text>
+    ({ item }: { item: any }) => (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => docsBackedByApi && setViewing(item)}
+        // Only seeded rows can't be opened — they don't have backing
+        // DB data so status updates / deletes would fail.
+        disabled={!docsBackedByApi}
+      >
+        <Card style={styles.docCard}>
+          <View style={styles.docHeader}>
+            <View style={styles.docTitleRow}>
+              <Ionicons
+                name={DOC_TYPE_ICONS[item.type] || 'document-outline'}
+                size={18}
+                color={colors.accent}
+              />
+              <Text style={styles.docId}>{item.id}</Text>
+            </View>
+            <StatusBadge status={item.status} />
           </View>
-          <StatusBadge status={item.status} />
-        </View>
-        <View style={styles.docDetails}>
-          <View style={styles.docDetailRow}>
-            <Text style={styles.docLabel}>Type</Text>
-            <View style={styles.typeBadge}>
-              <Text style={styles.typeBadgeText}>{item.type}</Text>
+          <View style={styles.docDetails}>
+            <View style={styles.docDetailRow}>
+              <Text style={styles.docLabel}>Type</Text>
+              <View style={styles.typeBadge}>
+                <Text style={styles.typeBadgeText}>{item.type}</Text>
+              </View>
+            </View>
+            <View style={styles.docDetailRow}>
+              <Text style={styles.docLabel}>Shipment</Text>
+              <Text style={styles.docValue}>{item.ship}</Text>
+            </View>
+            <View style={styles.docDetailRow}>
+              <Text style={styles.docLabel}>Carrier</Text>
+              <Text style={styles.docValue}>{item.carrier}</Text>
+            </View>
+            <View style={styles.docDetailRow}>
+              <Text style={styles.docLabel}>Date</Text>
+              <Text style={styles.docValue}>{item.generated}</Text>
             </View>
           </View>
-          <View style={styles.docDetailRow}>
-            <Text style={styles.docLabel}>Shipment</Text>
-            <Text style={styles.docValue}>{item.ship}</Text>
-          </View>
-          <View style={styles.docDetailRow}>
-            <Text style={styles.docLabel}>Carrier</Text>
-            <Text style={styles.docValue}>{item.carrier}</Text>
-          </View>
-          <View style={styles.docDetailRow}>
-            <Text style={styles.docLabel}>Date</Text>
-            <Text style={styles.docValue}>{item.generated}</Text>
-          </View>
-        </View>
-      </Card>
+          {docsBackedByApi ? (
+            <View style={styles.docCta}>
+              <Text style={styles.docCtaText}>Tap to view & edit</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.text3} />
+            </View>
+          ) : null}
+        </Card>
+      </TouchableOpacity>
     ),
-    [],
+    [docsBackedByApi],
   );
 
   return (
@@ -137,14 +177,14 @@ export default function DocumentsScreen() {
           <KpiCard label="Pending" value={stats.pending} icon="time-outline" color={colors.yellow} />
         </ScrollView>
 
-        {/* Generate BOL button */}
+        {/* Generate document button — opens picker for type + shipment. */}
         <TouchableOpacity
           style={styles.generateButton}
           activeOpacity={0.7}
-          onPress={handleGenerateBOL}
+          onPress={() => setGenerating(true)}
         >
           <Ionicons name="add-circle-outline" size={20} color={colors.white} />
-          <Text style={styles.generateButtonText}>Generate BOL</Text>
+          <Text style={styles.generateButtonText}>Generate Document</Text>
         </TouchableOpacity>
 
         {/* Type filter chips */}
@@ -175,6 +215,14 @@ export default function DocumentsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={loadDocs}
+              tintColor={colors.accent}
+              colors={[colors.accent]}
+            />
+          }
           ListEmptyComponent={
             <EmptyState
               icon="document-outline"
@@ -182,6 +230,19 @@ export default function DocumentsScreen() {
               subtitle="Try adjusting the type filter."
             />
           }
+        />
+
+        <DocumentViewerModal
+          visible={!!viewing}
+          document={viewing}
+          onClose={() => setViewing(null)}
+          onChanged={loadDocs}
+        />
+        <GenerateDocumentModal
+          visible={generating}
+          shipments={data.shipments as any}
+          onClose={() => setGenerating(false)}
+          onCreated={loadDocs}
         />
       </View>
     </SafeAreaView>
@@ -230,29 +291,24 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   generateButton: {
+  generateButton: {
     flexDirection: 'row',
-    backgroundColor: colors.accent,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.accent,
   },
   generateButtonText: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
     color: colors.white,
   },
-  chipScroll: {
-    flexGrow: 0,
-    marginBottom: spacing.sm,
-  },
-  chipRow: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
+  chipScroll: { flexGrow: 0, marginBottom: spacing.sm },
+  chipRow: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
@@ -261,27 +317,20 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.bg2,
   },
-  chipActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
+  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipLabel: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.text2,
   },
-  chipLabelActive: {
-    color: colors.white,
-  },
+  chipLabelActive: { color: colors.white },
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing['5xl'],
     flexGrow: 1,
   },
-  docCard: {
-    marginBottom: spacing.md,
-  },
+  docCard: { marginBottom: spacing.sm },
   docHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -292,29 +341,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flex: 1,
   },
   docId: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    flex: 1,
   },
-  docDetails: {
-    gap: spacing.xs,
-  },
-  docDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  docDetails: { gap: spacing.xs },
+  docDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   docLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text2,
-  },
-  docValue: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     fontWeight: fontWeight.medium,
-    color: colors.text,
+    color: colors.text3,
+    textTransform: 'uppercase',
   },
+  docValue: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   typeBadge: {
     backgroundColor: colors.accentGlow,
     paddingHorizontal: spacing.sm,
@@ -325,5 +368,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: fontWeight.semibold,
     color: colors.accent,
+  },
+  docCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  docCtaText: {
+    fontSize: fontSize.xs,
+    color: colors.text3,
+    fontWeight: fontWeight.medium,
   },
 });

@@ -1783,6 +1783,8 @@ function dbOrder(r){
     cartons:r.carton_count, pallets:r.pallet_count, packWt:r.packed_weight,
     labelType:r.label_type||'', packingSlip:r.packing_slip||'', packedAt:r.packed_at,
     dockDoor:r.dock_door||'', stageLane:r.stage_lane||'', dockETA:r.carrier_eta, stagedAt:r.staged_at,
+    // Migration 027: dock loading window mirrored from TMS shipments.
+    loadingStart:r.loading_start||'', loadingEnd:r.loading_end||'',
     shipDate:r.ship_date||'', shipTime:r.ship_time||'', sealNum:r.seal_number||'',
     driverSign:r.driver_signature||'', piecesLoaded:r.pieces_loaded, shippedAt:r.shipped_at,
     deliveredAt:r.delivered_at, podRecv:r.pod_received_by||'', podCond:r.pod_condition||'',
@@ -2748,7 +2750,31 @@ function openPickModal(id){
   var o=orders.find(x=>x.id===id);if(!o)return;
   _pt=id;
   document.getElementById('pick-ti').textContent='Pick Order — '+id;
-  document.getElementById('pick-hdr').innerHTML=ifc('Order',o.id)+ifc('Customer',o.cust)+ifc('Destination',o.dest)+ifc('BOL',o.bol||'—')+ifc('Carrier',o.carrier||'—')+ifc('Pickup',o.pickupDate||'—');
+  // Compose the source/origin from the typed ship-from columns when present,
+  // falling back to the legacy origin_location string. Same pattern the
+  // openOM modal uses for the Sales Order detail card.
+  var sourceLbl = (function(){
+    var parts=[o.shipFromName, [o.shipFromCity,o.shipFromState].filter(Boolean).join(', '), o.origZip].filter(Boolean);
+    return parts.join(' · ') || o.orig || '—';
+  })();
+  // Loading window: stitch start/end into a single readable line, fall
+  // back to a single value if only one is set, then "—".
+  var loadWin = (function(){
+    if (o.loadingStart && o.loadingEnd) return o.loadingStart + ' → ' + o.loadingEnd;
+    return o.loadingStart || o.loadingEnd || '—';
+  })();
+  document.getElementById('pick-hdr').innerHTML=
+    ifc('Order',o.id)+
+    ifc('Customer',custName(o.cust))+
+    ifc('Source',sourceLbl)+
+    ifc('Destination',o.dest)+
+    ifc('Shipment',o.tmsShipId||'—')+
+    ifc('Service Level',o.serviceLevel||'—')+
+    ifc('Carrier',o.carrier||'—')+
+    ifc('BOL',o.bol||'—')+
+    ifc('Pickup',o.pickupDate||'—')+
+    ifc('Dock #',o.dockDoor||'—')+
+    ifc('Dock Window',loadWin);
   document.getElementById('pick-lines').innerHTML=
     `<div style="padding:4px 12px;background:var(--bg4);border-bottom:1px solid var(--border)"><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">PICK LIST — confirm each line when picked</span></div>`+
     (o.lines||[]).map((l,i)=>{

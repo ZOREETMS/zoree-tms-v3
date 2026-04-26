@@ -9,6 +9,11 @@ import { useData } from '../../state/DataContext';
 import { BulkPlanApi } from '../../lib/api';
 import { buildLaneGroups, classifyLoadType } from '../utils/laneUtils';
 import { planAllLanes } from '../services/bulkPlanService';
+import {
+  createFailureCollector,
+  mapBackendErrorsToOrders,
+} from '../../services/bulkPlanFailureCollector';
+import { FAILURE_CODES } from '../../types/planningFailure';
 
 export default function useBulkPlan() {
   const { data, refreshData } = useData();
@@ -100,13 +105,41 @@ export default function useBulkPlan() {
         setProgress(`Creating ${planResult.plans.length} shipment(s)...`);
         const executeResult = await BulkPlanApi.execute(planResult.plans);
 
+        // Build a structured failure list so the results screen can
+        // render *why* each order dropped, instead of a bare count.
+        // Source 1: orders that planAllLanes itself couldn't rate
+        //   (currently only NO_CARRIER_QUOTE — extend planAllLanes to
+        //   return richer reasons if we ever surface them).
+        // Source 2: backend lane errors from /bulk-plan/execute, keyed
+        //   back to orders via the plan list and skipping orders that
+        //   survived on a different shipment.
+        const failures = createFailureCollector();
+        const failedIds = planResult.failedOrderIds || [];
+        for (const id of failedIds) failures.add(id, FAILURE_CODES.NO_CARRIER_QUOTE);
+
+        const shipments = executeResult.shipments || [];
+        const plannedOrderIds = new Set(
+          shipments.flatMap((sh) =>
+            Array.isArray(sh.order_ids) ? sh.order_ids : [],
+          ),
+        );
+        const backendFailures = mapBackendErrorsToOrders({
+          backendErrors: executeResult.errors || [],
+          plans: planResult.plans,
+          plannedOrderIds,
+        });
+        for (const f of backendFailures) failures.add(f.orderId, f.code, f.details);
+
         setResults({
-          shipments: executeResult.shipments || [],
+          shipments,
           ordersUpdated: executeResult.ordersUpdated || 0,
           errors: executeResult.errors || [],
           consolidated: planResult.totalConsolidated,
           individual: planResult.totalIndividual,
-          failed: planResult.failedOrderIds || [],
+          failed: failedIds,
+          // New structured shape (orderId / code / details). The
+          // results screen renders this list when present.
+          failures: failures.list(),
         });
 
         // Refresh data to get updated order statuses

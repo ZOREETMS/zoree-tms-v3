@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import PlanResultCard from '../../components/bulkplan/PlanResultCard';
+import FailedOrderCard from '../../components/bulkplan/FailedOrderCard';
 import KpiCard from '../../components/ui/KpiCard';
+import { useData } from '../../state/DataContext';
+import { FAILURE_CODES } from '../../types/planningFailure';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 type ResultsRoute = RouteProp<{ BulkPlanResults: { results: any } }, 'BulkPlanResults'>;
@@ -13,12 +16,40 @@ type ResultsRoute = RouteProp<{ BulkPlanResults: { results: any } }, 'BulkPlanRe
 export default function BulkPlanResultsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<ResultsRoute>();
+  const { data } = useData();
   const results = route.params?.results || {};
 
   const shipments = results.shipments || [];
   const ordersUpdated = results.ordersUpdated || 0;
   const totalCost = shipments.reduce((s: number, sh: any) => s + (sh.total_cost || 0), 0);
-  const failedCount = results.failed?.length || 0;
+
+  // Prefer the new structured failure list when present; fall back to
+  // the legacy `failed: string[]` shape so older results still render.
+  const failures: Array<{ orderId: string; code: string; details: string }> = useMemo(() => {
+    if (Array.isArray(results.failures) && results.failures.length > 0) {
+      return results.failures;
+    }
+    if (Array.isArray(results.failed) && results.failed.length > 0) {
+      return results.failed.map((id: string) => ({
+        orderId: id,
+        code: FAILURE_CODES.NO_CARRIER_QUOTE,
+        details: '',
+      }));
+    }
+    return [];
+  }, [results.failures, results.failed]);
+
+  // Index orders by id so each FailedOrderCard can show customer / lane.
+  const orderById = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const o of data.orders || []) {
+      const id = o.id ?? o.order_id;
+      if (id) map[String(id)] = o;
+    }
+    return map;
+  }, [data.orders]);
+
+  const failedCount = failures.length;
 
   return (
     <View style={styles.container}>
@@ -57,22 +88,38 @@ export default function BulkPlanResultsScreen() {
         <View style={styles.warnBanner}>
           <Ionicons name="warning-outline" size={16} color={colors.yellow} />
           <Text style={styles.warnText}>
-            {failedCount} order{failedCount !== 1 ? 's' : ''} could not be planned (no carrier quotes)
+            {failedCount} order{failedCount !== 1 ? 's' : ''} could not be planned — see reasons below
           </Text>
         </View>
       )}
 
-      {/* Shipment List */}
-      <Text style={styles.sectionTitle}>Created Shipments</Text>
-      <FlatList
-        data={shipments}
-        keyExtractor={(item: any) => String(item.id)}
-        renderItem={({ item }) => <PlanResultCard shipment={item} />}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
+      {/* Shipments + failures together so the user can scroll the
+          whole results page (a single FlatList can't span two lists). */}
+      <ScrollView contentContainerStyle={styles.listContent}>
+        <Text style={styles.sectionTitle}>Created Shipments</Text>
+        {shipments.length === 0 ? (
           <Text style={styles.emptyText}>No shipments created</Text>
-        }
-      />
+        ) : (
+          shipments.map((item: any) => (
+            <PlanResultCard key={String(item.id)} shipment={item} />
+          ))
+        )}
+
+        {failedCount > 0 ? (
+          <>
+            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
+              Could Not Plan ({failedCount})
+            </Text>
+            {failures.map((f) => (
+              <FailedOrderCard
+                key={f.orderId}
+                failure={f as any}
+                order={orderById[f.orderId]}
+              />
+            ))}
+          </>
+        ) : null}
+      </ScrollView>
 
       {/* Done Button */}
       <TouchableOpacity
@@ -116,6 +163,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text2,
     paddingHorizontal: spacing.lg, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  sectionTitleSpaced: {
+    marginTop: spacing.lg,
   },
   listContent: { paddingBottom: 100 },
   emptyText: { fontSize: fontSize.md, color: colors.text3, textAlign: 'center', marginTop: spacing.xl },

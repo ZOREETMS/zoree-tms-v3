@@ -13,12 +13,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import useInvoices from '../../shared/hooks/useInvoices';
 import { formatCurrency } from '../../shared/utils/formatters';
+import {
+  approveInvoice,
+  deleteInvoice,
+  disputeInvoice,
+} from '../../services/invoiceService';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import SearchBar from '../../components/ui/SearchBar';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import StatusFilter from '../../components/common/StatusFilter';
+import InvoiceFormModal from '../../components/invoices/InvoiceFormModal';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 const INVOICE_STATUSES = ['All', 'Pending', 'Approved', 'Disputed'];
@@ -37,41 +43,89 @@ export default function InvoicesScreen() {
     setCarrierFilter,
   } = useInvoices(data.invoices);
 
-  const [localInvoices, setLocalInvoices] = useState<any[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  /** Resolve a stable id we can pass to the API + use for busy tracking. */
+  const idOf = useCallback(
+    (inv: any) => String(inv.id || inv.invoice_id || inv.num || ''),
+    [],
+  );
 
   const handleApprove = useCallback(
     (inv: any) => {
-      Alert.alert('Approve Invoice', `Approve ${inv.num}?`, [
+      Alert.alert('Approve Invoice', `Approve ${inv.num || idOf(inv)}?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Approve',
-          onPress: () => {
-            const updated = data.invoices.map((i: any) =>
-              i.num === inv.num ? { ...i, status: 'Approved' } : i,
-            );
-            // Optimistically update through data context
-            refreshData();
+          onPress: async () => {
+            setBusyId(idOf(inv));
+            try {
+              await approveInvoice(inv);
+              await refreshData();
+            } catch (e: any) {
+              Alert.alert('Approve failed', e?.message || 'Could not approve invoice');
+            } finally {
+              setBusyId(null);
+            }
           },
         },
       ]);
     },
-    [data.invoices, refreshData],
+    [refreshData, idOf],
   );
 
   const handleDispute = useCallback(
     (inv: any) => {
-      Alert.alert('Dispute Invoice', `Dispute ${inv.num}?`, [
+      Alert.alert('Dispute Invoice', `Mark ${inv.num || idOf(inv)} as disputed?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Dispute',
           style: 'destructive',
-          onPress: () => {
-            refreshData();
+          onPress: async () => {
+            setBusyId(idOf(inv));
+            try {
+              await disputeInvoice(inv);
+              await refreshData();
+            } catch (e: any) {
+              Alert.alert('Dispute failed', e?.message || 'Could not dispute invoice');
+            } finally {
+              setBusyId(null);
+            }
           },
         },
       ]);
     },
-    [refreshData],
+    [refreshData, idOf],
+  );
+
+  const handleDelete = useCallback(
+    (inv: any) => {
+      Alert.alert(
+        'Delete Invoice',
+        `Permanently delete ${inv.num || idOf(inv)}? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setBusyId(idOf(inv));
+              try {
+                await deleteInvoice(inv);
+                await refreshData();
+              } catch (e: any) {
+                Alert.alert('Delete failed', e?.message || 'Could not delete invoice');
+              } finally {
+                setBusyId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [refreshData, idOf],
   );
 
   const activeStatus =
@@ -85,80 +139,101 @@ export default function InvoicesScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: any }) => (
-      <Card style={styles.invoiceCard}>
-        <View style={styles.invoiceHeader}>
-          <View style={styles.invoiceInfo}>
-            <Text style={styles.invoiceNum}>{item.num || item.id}</Text>
-            <Text style={styles.invoiceCarrier} numberOfLines={1}>
-              {item.carrier || 'Unknown Carrier'}
-            </Text>
-          </View>
-          <StatusBadge status={item.status || 'Pending'} />
-        </View>
-
-        <View style={styles.invoiceDetails}>
-          <View style={styles.detailCol}>
-            <Text style={styles.detailLabel}>Amount</Text>
-            <Text style={styles.detailValue}>
-              ${(item.amount || 0).toLocaleString()}
-            </Text>
-          </View>
-          <View style={styles.detailCol}>
-            <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>
-              {item.date
-                ? new Date(item.date).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                : 'N/A'}
-            </Text>
-          </View>
-          {item.variance !== undefined && item.variance !== 0 && (
-            <View style={styles.detailCol}>
-              <Text style={styles.detailLabel}>Variance</Text>
-              <Text
-                style={[
-                  styles.detailValue,
-                  {
-                    color: item.variance > 0 ? colors.red : colors.green,
-                  },
-                ]}
-              >
-                {item.variance > 0 ? '+' : ''}${item.variance.toLocaleString()}
+    ({ item }: { item: any }) => {
+      const rowBusy = busyId === idOf(item);
+      return (
+        <Card style={styles.invoiceCard}>
+          <View style={styles.invoiceHeader}>
+            <View style={styles.invoiceInfo}>
+              <Text style={styles.invoiceNum}>{item.num || item.id}</Text>
+              <Text style={styles.invoiceCarrier} numberOfLines={1}>
+                {item.carrier || 'Unknown Carrier'}
               </Text>
             </View>
-          )}
-        </View>
+            <StatusBadge status={item.status || 'Pending'} />
+          </View>
 
-        {item.status === 'Pending' && (
-          <View style={styles.invoiceActions}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnApprove]}
-              activeOpacity={0.7}
-              onPress={() => handleApprove(item)}
-            >
-              <Ionicons name="checkmark" size={16} color={colors.green} />
-              <Text style={[styles.actionBtnText, { color: colors.green }]}>
-                Approve
+          <View style={styles.invoiceDetails}>
+            <View style={styles.detailCol}>
+              <Text style={styles.detailLabel}>Amount</Text>
+              <Text style={styles.detailValue}>
+                ${(item.amount || 0).toLocaleString()}
               </Text>
+            </View>
+            <View style={styles.detailCol}>
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>
+                {item.date
+                  ? new Date(item.date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : 'N/A'}
+              </Text>
+            </View>
+            {item.variance !== undefined && item.variance !== 0 && (
+              <View style={styles.detailCol}>
+                <Text style={styles.detailLabel}>Variance</Text>
+                <Text
+                  style={[
+                    styles.detailValue,
+                    {
+                      color: item.variance > 0 ? colors.red : colors.green,
+                    },
+                  ]}
+                >
+                  {item.variance > 0 ? '+' : ''}${item.variance.toLocaleString()}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.invoiceActions}>
+            {item.status === 'Pending' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnApprove, rowBusy && styles.actionBtnBusy]}
+                  activeOpacity={0.7}
+                  onPress={() => handleApprove(item)}
+                  disabled={rowBusy}
+                >
+                  <Ionicons name="checkmark" size={16} color={colors.green} />
+                  <Text style={[styles.actionBtnText, { color: colors.green }]}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnDispute, rowBusy && styles.actionBtnBusy]}
+                  activeOpacity={0.7}
+                  onPress={() => handleDispute(item)}
+                  disabled={rowBusy}
+                >
+                  <Ionicons name="close" size={16} color={colors.red} />
+                  <Text style={[styles.actionBtnText, { color: colors.red }]}>Dispute</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnEdit, rowBusy && styles.actionBtnBusy]}
+              activeOpacity={0.7}
+              onPress={() => setEditingInvoice(item)}
+              disabled={rowBusy}
+            >
+              <Ionicons name="create-outline" size={16} color={colors.accent} />
+              <Text style={[styles.actionBtnText, { color: colors.accent }]}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnDispute]}
+              style={[styles.actionBtn, styles.actionBtnDelete, rowBusy && styles.actionBtnBusy]}
               activeOpacity={0.7}
-              onPress={() => handleDispute(item)}
+              onPress={() => handleDelete(item)}
+              disabled={rowBusy}
             >
-              <Ionicons name="close" size={16} color={colors.red} />
-              <Text style={[styles.actionBtnText, { color: colors.red }]}>
-                Dispute
-              </Text>
+              <Ionicons name="trash-outline" size={16} color={colors.red} />
+              <Text style={[styles.actionBtnText, { color: colors.red }]}>Delete</Text>
             </TouchableOpacity>
           </View>
-        )}
-      </Card>
-    ),
-    [handleApprove, handleDispute],
+        </Card>
+      );
+    },
+    [busyId, idOf, handleApprove, handleDispute, handleDelete],
   );
 
   const keyExtractor = useCallback(
@@ -262,6 +337,35 @@ export default function InvoicesScreen() {
             />
           }
         />
+
+        {/* New-invoice FAB. */}
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={() => setCreating(true)}
+        >
+          <Ionicons name="add" size={28} color={colors.white} />
+        </TouchableOpacity>
+
+        <InvoiceFormModal
+          visible={creating}
+          onClose={() => setCreating(false)}
+          carriers={data.carriers as any}
+          shipments={data.shipments as any}
+          onSaved={async () => {
+            await refreshData();
+          }}
+        />
+        <InvoiceFormModal
+          visible={!!editingInvoice}
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          carriers={data.carriers as any}
+          shipments={data.shipments as any}
+          onSaved={async () => {
+            await refreshData();
+          }}
+        />
       </View>
     </SafeAreaView>
   );
@@ -356,6 +460,7 @@ const styles = StyleSheet.create({
   },
   invoiceActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.md,
     paddingTop: spacing.md,
@@ -364,6 +469,7 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
+    minWidth: '45%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -380,8 +486,35 @@ const styles = StyleSheet.create({
     borderColor: colors.redDim,
     backgroundColor: colors.redDim,
   },
+  actionBtnEdit: {
+    borderColor: colors.accentGlow,
+    backgroundColor: colors.accentGlow,
+  },
+  actionBtnDelete: {
+    borderColor: colors.redDim,
+    backgroundColor: 'transparent',
+  },
+  actionBtnBusy: {
+    opacity: 0.5,
+  },
   actionBtnText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
+  },
+  fab: {
+    position: 'absolute',
+    right: spacing.xl,
+    bottom: spacing['3xl'],
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

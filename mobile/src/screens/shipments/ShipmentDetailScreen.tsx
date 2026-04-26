@@ -17,6 +17,7 @@ import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useData } from '../../state/DataContext';
 import { TenderApi } from '../../lib/api';
+import { copyShipment, deleteShipmentById } from '../../services/shipmentService';
 import { formatCurrency } from '../../shared/utils/formatters';
 import {
   borderRadius,
@@ -51,9 +52,10 @@ export default function ShipmentDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<DetailRoute>();
   const { shipmentId } = route.params;
-  const { data, setData } = useData();
+  const { data, setData, refreshData } = useData() as any;
 
   const [tenderLoading, setTenderLoading] = useState(false);
+  const [mutating, setMutating] = useState(false);
 
   const shipment = useMemo(
     () =>
@@ -85,6 +87,71 @@ export default function ShipmentDetailScreen() {
       setTenderLoading(false);
     }
   }, [shipment, shipmentId]);
+
+  /**
+   * Copy this shipment. Mirrors the web "Copy Shipment" path —
+   * creates a fresh planning candidate (no order_ids, no BOL fields,
+   * status reset to Planned). Refreshes the data layer so the new row
+   * appears in the list and navigates back so the user can find it.
+   */
+  const handleCopy = useCallback(() => {
+    if (!shipment) return;
+    Alert.alert(
+      'Copy Shipment',
+      `Create a copy of "${shipment.id || shipment.shipment_id}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Copy',
+          onPress: async () => {
+            setMutating(true);
+            try {
+              await copyShipment(shipment);
+              if (refreshData) await refreshData();
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert('Copy failed', e?.message || 'Could not copy shipment');
+            } finally {
+              setMutating(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [shipment, refreshData, navigation]);
+
+  /**
+   * Permanently delete this shipment. Web parity: shipmentService
+   * calls ShipmentsApi.remove which goes through the domain endpoint.
+   * Mobile uses DbApi.remove via deleteShipmentById — same end state.
+   */
+  const handleDelete = useCallback(() => {
+    if (!shipment) return;
+    const id = shipment.id || shipment.shipment_id || shipment.shipmentId;
+    Alert.alert(
+      'Delete Shipment',
+      `Permanently delete "${id}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setMutating(true);
+            try {
+              await deleteShipmentById(String(id));
+              if (refreshData) await refreshData();
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert('Delete failed', e?.message || 'Could not delete shipment');
+            } finally {
+              setMutating(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [shipment, refreshData, navigation]);
 
   const handleStatusUpdate = useCallback(
     (newStatus: string) => {
@@ -148,8 +215,39 @@ export default function ShipmentDetailScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {id}
         </Text>
-        <StatusBadge status={status} />
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handleCopy}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            disabled={mutating}
+            style={mutating ? { opacity: 0.4 } : undefined}
+          >
+            <Ionicons
+              name="copy-outline"
+              size={22}
+              color={mutating ? colors.text3 : colors.text2}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleDelete}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            disabled={mutating}
+            style={mutating ? { opacity: 0.4 } : undefined}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={22}
+              color={mutating ? colors.text3 : colors.red}
+            />
+          </TouchableOpacity>
+          <StatusBadge status={status} />
+        </View>
       </View>
+      {mutating ? (
+        <View style={styles.headerSpinner}>
+          <ActivityIndicator size="small" color={colors.accent} />
+        </View>
+      ) : null}
 
       <ScrollView
         style={styles.scroll}
@@ -320,6 +418,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  headerSpinner: {
+    paddingVertical: spacing.xs,
+    alignItems: 'center',
+    backgroundColor: colors.bg2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   scroll: {
     flex: 1,

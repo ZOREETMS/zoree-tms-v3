@@ -12,6 +12,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import { DbApi, OrdersApi } from '../../lib/api';
+import { copyOrder } from '../../services/ordersService';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
@@ -44,6 +45,40 @@ export default function OrderDetailScreen() {
       .catch(() => setLines([]))
       .finally(() => setLinesLoading(false));
   }, [orderId]);
+
+  /**
+   * Copy this order. Mirrors the web "Copy Order" action in
+   * OrderDetailModal — creates a new Unplanned order with the same
+   * customer / lane / line items, then navigates to the new order so
+   * the user can edit it before planning.
+   */
+  const handleCopy = useCallback(() => {
+    if (!order) return;
+    Alert.alert(
+      'Copy Order',
+      `Create a new Unplanned order from "${order.order_id || order.id}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Copy',
+          onPress: async () => {
+            setUpdating(true);
+            try {
+              const created = await copyOrder(order);
+              await refreshData();
+              // Replace the current detail screen with the new order so
+              // the back button still returns to the orders list.
+              navigation.replace('OrderDetail', { orderId: created.id });
+            } catch (e: any) {
+              Alert.alert('Copy failed', e?.message || 'Could not copy order');
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [order, navigation, refreshData]);
 
   const changeStatus = useCallback(
     async (newStatus: string) => {
@@ -209,6 +244,13 @@ export default function OrderDetailScreen() {
             icon="create-outline"
             color={colors.accent}
             onPress={() => navigation.navigate('OrderDetail', { orderId: order.id, edit: true })}
+            disabled={updating}
+          />
+          <ActionButton
+            label="Copy"
+            icon="copy-outline"
+            color={colors.accent}
+            onPress={handleCopy}
             disabled={updating}
           />
           <ActionButton

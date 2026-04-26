@@ -101,6 +101,9 @@ export const DbApi = {
   routeTemplates() {
     return api("/db/route_templates?q=select=*%26order=created_at.desc%26limit=200");
   },
+  documents() {
+    return api("/db/documents?q=select=*%26order=generated.desc%26limit=500");
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

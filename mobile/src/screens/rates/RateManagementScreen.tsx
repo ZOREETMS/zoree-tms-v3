@@ -6,18 +6,99 @@ import {
   RefreshControl,
   StyleSheet,
   SafeAreaView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import { formatCurrency } from '../../shared/utils/formatters';
+import { deleteRate, duplicateRate } from '../../services/rateService';
 import Card from '../../components/ui/Card';
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 export default function RateManagementScreen() {
+  const navigation = useNavigation<any>();
   const { data, loading, refreshData } = useData();
   const [search, setSearch] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  /** Resolve a stable id for a rate row (handles legacy aliasing). */
+  const idOf = useCallback(
+    (item: any): string =>
+      String(item.id ?? item.rate_id ?? item.lane ?? ''),
+    [],
+  );
+
+  const handleEdit = useCallback(
+    (item: any) => {
+      navigation.navigate('EditRate', { mode: 'edit', rateId: idOf(item) });
+    },
+    [navigation, idOf],
+  );
+
+  const handleNew = useCallback(() => {
+    navigation.navigate('EditRate', { mode: 'create' });
+  }, [navigation]);
+
+  const handleDuplicate = useCallback(
+    (item: any) => {
+      Alert.alert(
+        'Duplicate Rate',
+        `Create a copy of "${item.lane || idOf(item)}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Duplicate',
+            onPress: async () => {
+              setBusyId(idOf(item));
+              try {
+                await duplicateRate(item);
+                await refreshData();
+              } catch (e: any) {
+                Alert.alert('Duplicate failed', e?.message || 'Could not duplicate rate');
+              } finally {
+                setBusyId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [refreshData, idOf],
+  );
+
+  const handleDelete = useCallback(
+    (item: any) => {
+      const id = idOf(item);
+      Alert.alert(
+        'Delete Rate',
+        `Permanently delete "${item.lane || id}"? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setBusyId(id);
+              try {
+                await deleteRate(id);
+                await refreshData();
+              } catch (e: any) {
+                Alert.alert('Delete failed', e?.message || 'Could not delete rate');
+              } finally {
+                setBusyId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [refreshData, idOf],
+  );
 
   const filteredRates = useMemo(() => {
     let rates = data.rates;
@@ -43,6 +124,7 @@ export default function RateManagementScreen() {
       const mode = item.mode || item.transport_mode || 'TL';
       const rate = parseFloat(item.rate || item.rate_per_mile || 0);
       const fsc = parseFloat(item.fsc || item.fuel_surcharge || 0);
+      const rowBusy = busyId === idOf(item);
 
       return (
         <Card style={styles.rateCard}>
@@ -88,10 +170,41 @@ export default function RateManagementScreen() {
               </Text>
             </View>
           </View>
+
+          {/* Actions */}
+          <View style={styles.actionsRow}>
+            <RateAction
+              icon="create-outline"
+              label="Edit"
+              color={colors.accent}
+              onPress={() => handleEdit(item)}
+              disabled={rowBusy}
+            />
+            <RateAction
+              icon="copy-outline"
+              label="Duplicate"
+              color={colors.cyan}
+              onPress={() => handleDuplicate(item)}
+              disabled={rowBusy}
+            />
+            <RateAction
+              icon="trash-outline"
+              label="Delete"
+              color={colors.red}
+              onPress={() => handleDelete(item)}
+              disabled={rowBusy}
+            />
+          </View>
+
+          {rowBusy ? (
+            <View style={styles.rowOverlay}>
+              <ActivityIndicator size="small" color={colors.accent} />
+            </View>
+          ) : null}
         </Card>
       );
     },
-    [],
+    [busyId, idOf, handleEdit, handleDuplicate, handleDelete],
   );
 
   const keyExtractor = useCallback(
@@ -150,8 +263,41 @@ export default function RateManagementScreen() {
             />
           }
         />
+
+        {/* New-rate FAB — mirrors the OrdersScreen pattern. */}
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={handleNew}
+        >
+          <Ionicons name="add" size={28} color={colors.white} />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
+  );
+}
+
+interface RateActionProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  onPress: () => void;
+  disabled?: boolean;
+}
+
+function RateAction({ icon, label, color, onPress, disabled }: RateActionProps) {
+  return (
+    <TouchableOpacity
+      style={[styles.actionBtn, { borderColor: color }, disabled && styles.actionBtnDisabled]}
+      onPress={onPress}
+      activeOpacity={0.7}
+      disabled={disabled}
+    >
+      <Ionicons name={icon} size={16} color={disabled ? colors.text3 : color} />
+      <Text style={[styles.actionLabel, { color: disabled ? colors.text3 : color }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -242,5 +388,51 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: fontWeight.semibold,
     color: colors.accent,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    backgroundColor: colors.bg2,
+  },
+  actionBtnDisabled: {
+    opacity: 0.5,
+  },
+  actionLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+  },
+  rowOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+  },
+  fab: {
+    position: 'absolute',
+    right: spacing.xl,
+    bottom: spacing['3xl'],
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

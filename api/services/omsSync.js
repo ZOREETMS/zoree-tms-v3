@@ -66,6 +66,11 @@ async function syncTenderAcceptToOms(payload, user) {
   setIf(baseUpdates, 'pickup_date',               payload.pickupDate);
   setIf(baseUpdates, 'estimated_delivery',        payload.deliveryDate);
   setIf(baseUpdates, 'dock_door',                 payload.dockNumber);
+  // Migration 027: mirror the TMS-side dock loading window so the OMS
+  // warehouse modals (Pick / Pack / Stage / Ship) can show pickup
+  // start/end without a TMS round-trip.
+  setIf(baseUpdates, 'loading_start',             payload.dockLoadStart);
+  setIf(baseUpdates, 'loading_end',               payload.dockLoadEnd);
   // Time-stamp columns the OMS uses to track MW sync state.
   baseUpdates.tendered_at                = nowIso;
   baseUpdates.tms_ship_status_pushed_at  = nowIso;
