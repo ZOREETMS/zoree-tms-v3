@@ -110,6 +110,19 @@ export const DbApi = {
   vehicles() {
     return api("/db/vehicles?q=select=*%26order=unit.asc%26limit=500");
   },
+  planningParameters() {
+    return api("/db/planning_parameters?q=select=*%26order=label.asc%26limit=200");
+  },
+  dockLoadingDurations() {
+    return api("/db/dock_loading_durations?q=select=*%26order=mode.asc%26limit=50");
+  },
+  dockAppointments(date) {
+    // Optional date filter — when present, only return appointments
+    // for that calendar day. Otherwise returns the future-window
+    // backlog so the screen can show upcoming days at a glance.
+    const filter = date ? `%26date=eq.${encodeURIComponent(date)}` : '';
+    return api(`/db/dock_appointments?q=select=*${filter}%26order=date.asc,start.asc%26limit=200`);
+  },
   remove(table, id) {
     return api(`/db/${table}/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

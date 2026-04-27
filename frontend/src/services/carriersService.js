@@ -41,6 +41,36 @@ async function patchWithColumnFallback(table, id, payload) {
   return DbApi.patch(table, id, patch);
 }
 
+// Mirror of patchWithColumnFallback for INSERT / upsert. The carriers table
+// has accumulated columns over multiple migrations and the UI form drifts
+// faster than the schema (e.g. `cost_per_mile` was emitted before its
+// migration landed). Without this fallback, a single missing column meant
+// every "Save Carrier" silently failed with a 500. We retry the upsert
+// without the offending column rather than fail the whole save.
+async function upsertWithColumnFallback(table, payload) {
+  const row = { ...payload };
+  const maxAttempts = Math.max(1, Object.keys(row).length + 2);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await DbApi.upsert(table, row);
+    } catch (err) {
+      const missing = parseMissingColumn(err.message);
+      if (!missing || !hasKey(row, missing)) throw err;
+      delete row[missing];
+      if (!Object.keys(row).length) throw err;
+    }
+  }
+  return DbApi.upsert(table, row);
+}
+
+// Convert "" / undefined / null to null so empty tolerance inputs don't
+// fail the NUMERIC check constraint as NaN, while preserving 0 as 0.
+function numericOrNull(value) {
+  if (value === "" || value === undefined || value === null) return null;
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function buildCarrierPayload(editCarrier) {
   const source = editCarrier || {};
   const emailKey = firstExistingKey(source, ["email", "contact_email"], "email");
@@ -67,6 +97,11 @@ function buildCarrierPayload(editCarrier) {
     [czKey]: !!source.czarlite_enabled,
     [ccKey]: !!source.carrierconnect_enabled,
     [pcKey]: !!source.pcmiler_enabled,
+    // REQ-06: invoice tolerance inputs were already on the form but were
+    // never being persisted. Keep blanks as NULL so the system default
+    // (5% / $100) kicks in via api/services/invoiceAudit.js.
+    invoice_tolerance_pct:     numericOrNull(source.invoice_tolerance_pct),
+    invoice_tolerance_abs_usd: numericOrNull(source.invoice_tolerance_abs_usd),
   };
 
   return payload;
@@ -78,5 +113,15 @@ export async function saveCarrierRecord(editCarrier) {
     return patchWithColumnFallback("carriers", editCarrier.id, payload);
   }
   const row = { id: "CAR-" + Date.now(), ...payload };
-  return DbApi.upsert("carriers", row);
+  return upsertWithColumnFallback("carriers", row);
+}
+
+// Hard delete. The carriers table has no inbound FKs, so removing a row
+// does not cascade-fail on shipments/rates/invoices (those reference
+// carriers by name/SCAC strings, not by id). The previous behaviour was
+// a soft-delete that flipped status to 'Inactive'; the trash button now
+// removes the row outright per the user's instruction.
+export async function deleteCarrierRecord(carrierId) {
+  if (!carrierId) throw new Error("carrierId is required");
+  return DbApi.remove("carriers", carrierId);
 }

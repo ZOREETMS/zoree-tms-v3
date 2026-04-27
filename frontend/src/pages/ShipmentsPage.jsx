@@ -1,10 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import { DbApi, TenderApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import { sendTenderEmailIfAvailable, gatherOrderDetails } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getShipmentHistory } from "../services/historyService";
+import {
+  derivePhaseTimestamps,
+  formatTimelineTs,
+} from "../services/shipmentTimelineService";
 import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/hereMaps";
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
@@ -197,8 +201,12 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     }).catch(() => setLinesLoading(false));
   }, [ds.id]);
 
-  // REQ-20: pull shipment change history whenever the modal opens for a new id.
-  useEffect(() => {
+  // REQ-20: pull shipment change history whenever the modal opens for
+  // a new id. Exposed as a callback so the Add-Event handler can refetch
+  // after a new event is recorded — otherwise the timeline rungs keep
+  // rendering against a stale snapshot until the user closes and
+  // reopens the modal.
+  const reloadHistory = useCallback(() => {
     let cancelled = false;
     setHistoryLoading(true);
     getShipmentHistory(ds.id, { limit: 200 })
@@ -206,6 +214,8 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
       .catch(() => { if (!cancelled) { setHistoryRows([]); setHistoryLoading(false); } });
     return () => { cancelled = true; };
   }, [ds.id]);
+
+  useEffect(() => reloadHistory(), [reloadHistory]);
 
   // Load the rate row referenced by this shipment so we can display
   // discount %, discount $, and FSC % alongside the cost breakdown.
@@ -284,16 +294,27 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     if (isNaN(d1) || isNaN(d2)) return "—";
     return Math.max(1, Math.round((d2 - d1) / 86400000)) + " days";
   })();
+  // Derive the actual timestamp at which each phase fired from the
+  // change_history rows we already loaded for the audit drawer. Falls
+  // back to the shipment's planned date only when no history row exists
+  // for that phase yet (e.g. an in-flight transition).
+  const phaseTimestamps = derivePhaseTimestamps(historyRows);
+  const phaseLine = (phase, planned, doneFallback) => {
+    const fromHistory = formatTimelineTs(phaseTimestamps[phase]);
+    if (fromHistory) return fromHistory;
+    if (planned) return planned;
+    return doneFallback;
+  };
   const timelineEvents = [
-    { icon: "📋", label: "Order Created & Rate Confirmed", done: true },
-    { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? (ds.pickup_date || "—") : "Pending" },
+    { icon: "📋", label: "Order Created & Rate Confirmed", done: true, time: phaseLine(null, null, "Confirmed") },
+    { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? phaseLine("tendered", null, "Confirmed") : "Pending" },
     // REQ-19: surface the tender-accepted event in the shipment timeline.
     // Previously the timeline jumped straight from "Tendered" to "Picked Up",
     // leaving the accept step invisible to the planner.
-    { icon: "🤝", label: "Tender Accepted", done: isTenderAccepted, time: isTenderAccepted ? (ds.pickup_date || "Confirmed") : "Pending" },
-    { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? (ds.pickup_date || "—") : "Pending" },
-    { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? "En route" : "Pending" },
-    { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? (ds.delivery_date || "—") : "Pending" },
+    { icon: "🤝", label: "Tender Accepted", done: isTenderAccepted, time: isTenderAccepted ? phaseLine("accepted", null, "Confirmed") : "Pending" },
+    { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? phaseLine("pickedUp", null, "Confirmed") : "Pending" },
+    { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? phaseLine("inTransit", null, "En route") : "Pending" },
+    { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? phaseLine("delivered", null, "Confirmed") : "Pending" },
   ];
 
   return (
@@ -565,6 +586,9 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                       if (typeof onShipmentPatched === "function" && Object.keys(patch).length) {
                         onShipmentPatched(patch);
                       }
+                      // Refresh the audit drawer + timeline timestamps so the
+                      // newly-recorded event appears without a modal close/open.
+                      reloadHistory();
                     } catch (err) {
                       alert("Failed to save event: " + err.message);
                     } finally {
@@ -1065,18 +1089,46 @@ export default function ShipmentsPage() {
   const [acceptModal, setAcceptModal] = useState(null); // { shipment, pro, pickup, service, bol, dock, dockTime, notes }
   const [showNewShipment, setShowNewShipment] = useState(false);
 
+  // Pull the HH:mm portion off a "YYYY-MM-DD HH:mm" timestamp so an
+  // <input type="time"> can render it. Returns "" if no time is present.
+  function timeOf(value) {
+    const s = String(value || "").trim();
+    if (!s) return "";
+    const m = s.match(/(\d{1,2}):(\d{2})/);
+    return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
+  }
+
+  // Re-attach a date prefix to a "HH:mm" time input so we can write
+  // it back into the loading_start / loading_end "YYYY-MM-DD HH:mm" columns.
+  function combineDateTime(date, time) {
+    const d = String(date || "").trim();
+    const t = String(time || "").trim();
+    if (!d || !t) return "";
+    return `${d} ${t}`;
+  }
+
   function openAcceptTender(row) {
     const today = new Date().toISOString().slice(0, 10);
+    // Read canonical column names (migrations 20260324120000 +
+    // 20260406_shipments_dock_fields). Fall back to legacy aliases so a
+    // shipment row created by older code paths still pre-populates.
+    const pickupDate   = row.pickup_date   || row.pickup   || today;
+    const deliveryDate = row.delivery_date || row.delivery || "";
+    const dockDoor     = row.dock_door     || row.dock_assigned || "";
+    const loadingStart = row.loading_start || row.dock_load_start || row.dock_time || "";
+    const loadingEnd   = row.loading_end   || row.dock_load_end   || "";
     setAcceptModal({
       shipment: row,
       pro: row.pro_number || "",
-      pickup: row.pickup || today,
-      delivery: row.delivery || "",
+      pickup: pickupDate,
+      delivery: deliveryDate,
       service: row.service_level || "",
       bol: row.bol_number || "",
-      dock: row.dock_assigned || "",
-      dockLoadStart: row.dock_load_start || "",
-      dockLoadEnd: row.dock_load_end || "",
+      dock: dockDoor,
+      // The HTML <input type="time"> only accepts "HH:mm" — strip the
+      // date prefix off the stored "YYYY-MM-DD HH:mm" loading window.
+      dockLoadStart: timeOf(loadingStart),
+      dockLoadEnd:   timeOf(loadingEnd),
       // REQ-22: capture the carrier-supplied trailer seal number at
       // tender-accept time and persist it on the shipment row.
       seal: row.seal_number || "",
@@ -1105,7 +1157,16 @@ export default function ShipmentsPage() {
         notes: notes || "",
         respondedAtIso: new Date().toISOString(),
       };
-      // 1. Update shipment in DB
+      // Combine the carrier-entered HH:mm time inputs with the pickup
+      // date so we can persist a full "YYYY-MM-DD HH:mm" timestamp into
+      // the canonical loading_start / loading_end columns (migration
+      // 20260324120000_shipments_loading_times).
+      const loadingStartFull = combineDateTime(pickup, dockLoadStart);
+      const loadingEndFull   = combineDateTime(pickup, dockLoadEnd);
+      // 1. Update shipment in DB. Use canonical column names — see
+      // 20260406_shipments_dock_fields (dock_door, dock_time) and
+      // 20260324120000 (loading_start, loading_end). dock_time is kept
+      // as the human-readable window string for display parity.
       await patchShipmentWithFallback(row.id, {
         status: "Tendered",
         pro_number: pro || null,
@@ -1113,8 +1174,10 @@ export default function ShipmentsPage() {
         delivery_date: delivery || null,
         service_level: service || null,
         bol_number: bol || null,
-        dock_assigned: dock || null,
-        dock_time: dockLoadStart || null,
+        dock_door: dock || null,
+        dock_time: dockLoadStart && dockLoadEnd ? `${dockLoadStart}–${dockLoadEnd}` : (dockLoadStart || null),
+        loading_start: loadingStartFull || null,
+        loading_end:   loadingEndFull   || null,
         // REQ-22: persist trailer seal on the shipment row.
         seal_number: seal || null,
         notes: withCarrierResponseNotes(row.notes, responseMeta),

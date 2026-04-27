@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DbApi } from "../lib/api";
-import { saveCarrierRecord } from "../services/carriersService";
+import { saveCarrierRecord, deleteCarrierRecord } from "../services/carriersService";
 
 export default function CarriersPage() {
   const { carriers, setData, refreshData } = useOutletContext();
@@ -62,11 +61,11 @@ export default function CarriersPage() {
   }
 
   async function deleteCarrier(c) {
-    if (!window.confirm(`Deactivate carrier ${c.name}?`)) return;
+    if (!window.confirm(`Permanently delete carrier ${c.name}? This cannot be undone.`)) return;
     setBusyId(c.id);
     try {
-      await DbApi.patch("carriers", c.id, { status: "Inactive" });
-      toast(`${c.name} deactivated`, "success");
+      await deleteCarrierRecord(c.id);
+      toast(`${c.name} deleted`, "success");
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
     finally { setBusyId(""); }

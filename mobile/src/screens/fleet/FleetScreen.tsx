@@ -18,8 +18,9 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import DriverFormModal from '../../components/fleet/DriverFormModal';
+import VehicleFormModal from '../../components/fleet/VehicleFormModal';
 import { useData } from '../../state/DataContext';
-import { deleteDriver } from '../../services/fleetService';
+import { deleteDriver, deleteVehicle } from '../../services/fleetService';
 import {
   colors,
   fontSize,
@@ -61,6 +62,9 @@ export default function FleetScreen() {
   const [editingDriver, setEditingDriver] = useState<any | null>(null);
   const [creatingDriver, setCreatingDriver] = useState(false);
   const [busyDriverId, setBusyDriverId] = useState<string | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
+  const [creatingVehicle, setCreatingVehicle] = useState(false);
+  const [busyVehicleUnit, setBusyVehicleUnit] = useState<string | null>(null);
 
   /**
    * Drivers come from the API via DataContext when available; fall back
@@ -73,13 +77,27 @@ export default function FleetScreen() {
   );
   const driversBackedByApi = Array.isArray(data.drivers) && data.drivers.length > 0;
 
+  /**
+   * Vehicles use the same DataContext-or-seed pattern as drivers. The
+   * vehicles list endpoint landed alongside the equipment master, so
+   * `data.vehicles` arrives empty (not undefined) on a fresh tenant.
+   */
+  const vehicles = useMemo<any[]>(
+    () => {
+      const fromCtx = (data as any).vehicles;
+      return Array.isArray(fromCtx) && fromCtx.length > 0 ? fromCtx : SEED_VEHICLES;
+    },
+    [(data as any).vehicles],
+  );
+  const vehiclesBackedByApi = Array.isArray((data as any).vehicles) && (data as any).vehicles.length > 0;
+
   const vehicleKpis = useMemo(() => {
-    const total = SEED_VEHICLES.length;
-    const available = SEED_VEHICLES.filter((v) => v.status === 'Available').length;
-    const inTransit = SEED_VEHICLES.filter((v) => v.status === 'In Transit').length;
-    const maintenance = SEED_VEHICLES.filter((v) => v.status === 'Maintenance').length;
+    const total = vehicles.length;
+    const available = vehicles.filter((v: any) => v.status === 'Available').length;
+    const inTransit = vehicles.filter((v: any) => v.status === 'In Transit').length;
+    const maintenance = vehicles.filter((v: any) => v.status === 'Maintenance').length;
     return { total, available, inTransit, maintenance };
-  }, []);
+  }, [vehicles]);
 
   const driverKpis = useMemo(() => {
     const total = drivers.length;
@@ -88,6 +106,34 @@ export default function FleetScreen() {
     const offDuty = drivers.filter((d: any) => d.status === 'Off Duty').length;
     return { total, available, onDuty, offDuty };
   }, [drivers]);
+
+  const handleDeleteVehicle = useCallback(
+    (v: any) => {
+      Alert.alert(
+        'Delete Vehicle',
+        `Permanently delete ${v.unit}? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setBusyVehicleUnit(v.unit);
+              try {
+                await deleteVehicle(v.unit);
+                await refreshData();
+              } catch (e: any) {
+                Alert.alert('Delete failed', e?.message || 'Could not delete vehicle');
+              } finally {
+                setBusyVehicleUnit(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [refreshData],
+  );
 
   const handleDeleteDriver = useCallback(
     (driver: any) => {
@@ -117,35 +163,68 @@ export default function FleetScreen() {
     [refreshData],
   );
 
-  const renderVehicle = ({ item }: { item: typeof SEED_VEHICLES[0] }) => (
-    <Card style={styles.itemCard}>
-      <View style={styles.itemHeader}>
-        <View style={styles.itemTitleRow}>
-          <Ionicons name="bus-outline" size={18} color={colors.accent} />
-          <Text style={styles.itemTitle}>{item.unit}</Text>
+  const renderVehicle = ({ item }: { item: any }) => {
+    const milesYTD = item.milesYTD ?? item.miles_ytd ?? 0;
+    const rowBusy = busyVehicleUnit === item.unit;
+    return (
+      <Card style={styles.itemCard}>
+        <View style={styles.itemHeader}>
+          <View style={styles.itemTitleRow}>
+            <Ionicons name="bus-outline" size={18} color={colors.accent} />
+            <Text style={styles.itemTitle}>{item.unit}</Text>
+          </View>
+          <StatusBadge status={item.status || 'Available'} />
         </View>
-        <StatusBadge status={item.status} />
-      </View>
-      <View style={styles.itemDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Type</Text>
-          <Text style={styles.detailValue}>{item.type}</Text>
+        <View style={styles.itemDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Type</Text>
+            <Text style={styles.detailValue}>{item.type || '--'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Driver</Text>
+            <Text style={styles.detailValue}>{item.driver || 'Unassigned'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Location</Text>
+            <Text style={styles.detailValue}>{item.location || '--'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Miles YTD</Text>
+            <Text style={styles.detailValue}>{Number(milesYTD).toLocaleString()}</Text>
+          </View>
         </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Driver</Text>
-          <Text style={styles.detailValue}>{item.driver}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Location</Text>
-          <Text style={styles.detailValue}>{item.location}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Miles YTD</Text>
-          <Text style={styles.detailValue}>{item.milesYTD.toLocaleString()}</Text>
-        </View>
-      </View>
-    </Card>
-  );
+
+        {vehiclesBackedByApi ? (
+          <View style={styles.driverActions}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnEdit, rowBusy && styles.actionBtnBusy]}
+              onPress={() => setEditingVehicle(item)}
+              disabled={rowBusy}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={16} color={colors.accent} />
+              <Text style={[styles.actionBtnText, { color: colors.accent }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnDelete, rowBusy && styles.actionBtnBusy]}
+              onPress={() => handleDeleteVehicle(item)}
+              disabled={rowBusy}
+              activeOpacity={0.7}
+            >
+              {rowBusy ? (
+                <ActivityIndicator size="small" color={colors.red} />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={16} color={colors.red} />
+                  <Text style={[styles.actionBtnText, { color: colors.red }]}>Delete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </Card>
+    );
+  };
 
   const renderDriver = ({ item }: { item: any }) => {
     const endorsements: string[] = Array.isArray(item.endorsements)
@@ -278,7 +357,7 @@ export default function FleetScreen() {
               color={activeTab === 'vehicles' ? colors.accent : colors.text2}
             />
             <Text style={[styles.tabLabel, activeTab === 'vehicles' && styles.tabLabelActive]}>
-              Vehicles ({SEED_VEHICLES.length})
+              Vehicles ({vehicles.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -300,11 +379,19 @@ export default function FleetScreen() {
         {/* List */}
         {activeTab === 'vehicles' ? (
           <FlatList
-            data={SEED_VEHICLES}
+            data={vehicles}
             renderItem={renderVehicle}
-            keyExtractor={(item) => item.unit}
+            keyExtractor={(item: any) => String(item.unit)}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={refreshData}
+                tintColor={colors.accent}
+                colors={[colors.accent]}
+              />
+            }
             ListEmptyComponent={
               <EmptyState icon="bus-outline" title="No vehicles" subtitle="Vehicle data will appear here." />
             }
@@ -330,17 +417,17 @@ export default function FleetScreen() {
           />
         )}
 
-        {/* New-driver FAB — only on the drivers tab. Vehicles tab is
-            read-only seed data until a vehicles list endpoint lands. */}
-        {activeTab === 'drivers' ? (
-          <TouchableOpacity
-            style={styles.fab}
-            activeOpacity={0.8}
-            onPress={() => setCreatingDriver(true)}
-          >
-            <Ionicons name="add" size={28} color={colors.white} />
-          </TouchableOpacity>
-        ) : null}
+        {/* FAB — opens the right modal for the active tab. */}
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={() => {
+            if (activeTab === 'drivers') setCreatingDriver(true);
+            else setCreatingVehicle(true);
+          }}
+        >
+          <Ionicons name="add" size={28} color={colors.white} />
+        </TouchableOpacity>
 
         <DriverFormModal
           visible={creatingDriver}
@@ -353,6 +440,25 @@ export default function FleetScreen() {
           visible={!!editingDriver}
           driver={editingDriver}
           onClose={() => setEditingDriver(null)}
+          onSaved={async () => {
+            await refreshData();
+          }}
+        />
+        <VehicleFormModal
+          visible={creatingVehicle}
+          equipmentTypes={(data as any).equipmentTypes}
+          drivers={drivers}
+          onClose={() => setCreatingVehicle(false)}
+          onSaved={async () => {
+            await refreshData();
+          }}
+        />
+        <VehicleFormModal
+          visible={!!editingVehicle}
+          vehicle={editingVehicle}
+          equipmentTypes={(data as any).equipmentTypes}
+          drivers={drivers}
+          onClose={() => setEditingVehicle(null)}
           onSaved={async () => {
             await refreshData();
           }}

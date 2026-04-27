@@ -10,6 +10,7 @@
      the moment TMS fires tender_accepted / shipment_status_updated / shipment_delivered.
      Services-layer module — pure dispatcher, no DOM access. -->
 <script src="services/omsLive/omsWsClient.js"></script>
+<script src="services/omsBridge/tmsLink.js"></script>
 <style>
 :root {
   --bg:#f0f4ff; --bg2:#ffffff; --bg3:#f5f7ff; --bg4:#eef1fa;
@@ -439,11 +440,11 @@ textarea{resize:vertical;min-height:60px;}
     </div>
     <div class="oms-fgrp">
       <span class="oms-flbl">Ship From</span>
-      <select class="fsel oms-fsel-wide" id="f-origin" onchange="ro()" title="Origin location"><option value="">All Origins</option></select>
+      <input class="oms-fdate" id="f-origin" oninput="ro()" placeholder="city, state, name…" title="Filter by ship-from name, city, state, or ZIP" style="min-width:160px">
     </div>
     <div class="oms-fgrp">
       <span class="oms-flbl">Ship To</span>
-      <select class="fsel oms-fsel-wide" id="f-dest" onchange="ro()" title="Destination city/state"><option value="">All Destinations</option></select>
+      <input class="oms-fdate" id="f-dest" oninput="ro()" placeholder="city, state, name…" title="Filter by ship-to name, city, state, or ZIP" style="min-width:160px">
     </div>
     <div class="oms-fgrp">
       <span class="oms-flbl">Shipment ID</span>
@@ -2144,16 +2145,6 @@ function updatePipelineCounts(){
 // kept pure where possible so they can be lifted into a module later with
 // minimal rewrites. See audit notes in the commit message.
 
-// Normalize a free-text destination string ("Chicago, IL, 60632" → "chicago, il")
-// so Ship-To dropdown options collapse zip variations into a single entry.
-function _omsDestKey(s){
-  if(!s) return '';
-  var parts = String(s).split(',').map(function(p){return p.trim();}).filter(Boolean);
-  // Drop trailing zip-ish tokens so "Chicago, IL, 60632" and "Chicago, IL" match.
-  parts = parts.filter(function(p){ return !/^\d{5}(-\d{4})?$/.test(p); });
-  return parts.slice(0,2).join(', ').toLowerCase();
-}
-
 // Read the current state of the filter bar into a plain object.
 // Defensive DOM lookups so this still works if called before first paint.
 function _readOmsFilterState(){
@@ -2163,8 +2154,8 @@ function _readOmsFilterState(){
     cust:        v('fc'),
     stage:       v('f-stage'),
     status:      v('f-status'),
-    origin:      v('f-origin'),
-    dest:        v('f-dest'),
+    origin:      v('f-origin').toLowerCase().trim(),
+    dest:        v('f-dest').toLowerCase().trim(),
     shipId:      v('f-shipid').toLowerCase().trim(),
     dueFrom:     v('f-due-from'),
     dueTo:       v('f-due-to'),
@@ -2184,8 +2175,16 @@ function _omsOrderMatches(o, f){
     var bucket = STATUS_BUCKETS.find(function(b){ return b.key===f.status; });
     if(bucket && !bucket.match(o)) return false;
   }
-  if(f.origin && (o.orig||'')!==f.origin) return false;
-  if(f.dest   && _omsDestKey(o.dest)!==f.dest) return false;
+  if(f.origin){
+    var ohay=[o.orig,o.shipFromName,o.shipFromCity,o.shipFromState,o.origZip]
+      .map(function(x){return (x==null?'':String(x));}).join(' ').toLowerCase();
+    if(!ohay.includes(f.origin)) return false;
+  }
+  if(f.dest){
+    var dhay=[o.dest,o.shipToName,o.shipToCity,o.shipToState,o.destZip]
+      .map(function(x){return (x==null?'':String(x));}).join(' ').toLowerCase();
+    if(!dhay.includes(f.dest)) return false;
+  }
   if(f.shipId && !String(o.tmsShipId||'').toLowerCase().includes(f.shipId)) return false;
   if(f.dueFrom && (o.due||'')<f.dueFrom) return false;
   if(f.dueTo   && (o.due||'')>f.dueTo)   return false;
@@ -2222,41 +2221,14 @@ function _initOmsFilterOptions(){
   }
 }
 
-// Populate data-dependent dropdowns (Customer, Origin, Destination).
-// Called from ro() because `custs`/`locs`/`orders` are loaded async.
+// Populate data-dependent dropdowns (Customer only — Ship From / Ship To
+// are free-text inputs and need no option list).
 function _populateOmsFilterDropdowns(){
   var csel=document.getElementById('fc');
   if(csel && csel.options.length<=1){
     custs.forEach(function(c){
       var o=document.createElement('option'); o.value=c.id; o.textContent=c.name; csel.appendChild(o);
     });
-  }
-  var osel=document.getElementById('f-origin');
-  if(osel && osel.options.length<=1){
-    locs.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).forEach(function(l){
-      var opt=document.createElement('option');
-      opt.value=l.id;
-      var cityState=[l.city,l.state].filter(Boolean).join(', ');
-      opt.textContent=(l.name||l.id)+(cityState?' — '+cityState:'');
-      osel.appendChild(opt);
-    });
-  }
-  var dsel=document.getElementById('f-dest');
-  if(dsel){
-    var seen={};
-    orders.forEach(function(o){ var k=_omsDestKey(o.dest); if(k) seen[k]=true; });
-    var keys=Object.keys(seen).sort();
-    if(dsel.options.length !== keys.length+1){
-      var cur=dsel.value;
-      dsel.innerHTML='<option value="">All Destinations</option>';
-      keys.forEach(function(k){
-        var opt=document.createElement('option');
-        opt.value=k;
-        opt.textContent=k.split(', ').map(function(p){ return p.replace(/\b\w/g,function(c){return c.toUpperCase();}); }).join(', ');
-        dsel.appendChild(opt);
-      });
-      if(cur) dsel.value=cur;
-    }
   }
 }
 
@@ -2281,8 +2253,27 @@ function ro(){
   tb.innerHTML=rows.map(o=>{
     var wt=(o.lines||[]).reduce((s,l)=>s+(l.qty*l.wt),0);
     var ship=o.tmsShipId?tmsS.find(s=>s.id===o.tmsShipId):null;
-    var bol=o.bol?`<span class="mono" style="color:var(--teal)">${o.bol}</span>`:'—';
-    var tref=o.tmsShipId?`<span class="mono" style="color:var(--cyan);font-size:10px">${o.tmsShipId}</span>`:o.stage>=4?`<span class="mono" style="color:var(--purple);font-size:10px">${o.id}</span>`:'—';
+    // BOL / PRO / TMS REF route to the linked TMS shipment via
+    // openTmsShipment (window.location.assign). Same-tab navigation
+    // initiated by a real click handler — invisible to popup-blocker
+    // extensions that intercept <a target="_blank"> and window.open.
+    // event.stopPropagation keeps the row's stage-action handler from
+    // also firing.
+    var clickHandler = o.tmsShipId ? `event.stopPropagation();openTmsShipment('${o.tmsShipId}')` : '';
+    var bol=o.bol
+      ? (o.tmsShipId
+          ? `<span class="mono" style="color:var(--teal);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="${clickHandler}" title="Open shipment in TMS">${o.bol}</span>`
+          : `<span class="mono" style="color:var(--teal)">${o.bol}</span>`)
+      : '—';
+    var proStyleBase = 'color:var(--text3);font-size:10px';
+    var proLine = o.pro
+      ? (o.tmsShipId
+          ? `<div class="mono" style="${proStyleBase};cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="${clickHandler}" title="Open shipment in TMS">PRO: ${o.pro}</div>`
+          : `<div class="mono" style="${proStyleBase}">PRO: ${o.pro}</div>`)
+      : '';
+    var tref = o.tmsShipId
+      ? `<span class="mono" style="color:var(--cyan);font-size:10px;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="${clickHandler}" title="Open shipment in TMS">${o.tmsShipId}</span>`
+      : (o.stage>=4 ? `<span class="mono" style="color:var(--purple);font-size:10px">${o.id}</span>` : '—');
     // Action button based on stage
     var a=stageAction(o);
     // REQ-15: always-available "Copy" button duplicates the order into
@@ -2298,7 +2289,7 @@ function ro(){
       <td class="mono">${wt.toLocaleString()} lbs</td>
       <td class="mono">${o.due||'—'}</td>
       <td>${stgBadge(o.stage)}${o.hold?`<span class="stg s-hold" style="margin-left:4px">Hold</span>`:''}</td>
-      <td>${bol}${o.pro?`<div class="mono" style="color:var(--text3);font-size:10px">PRO: ${o.pro}</div>`:''}</td>
+      <td>${bol}${proLine}</td>
       <td>${tref}</td>
       <td onclick="event.stopPropagation()"><div class="acts">${a} ${copyBtn}</div></td>
     </tr>`;
@@ -2321,6 +2312,23 @@ function stageAction(o){
     case 10: return `<button class="btn btn-success btn-sm" onclick="openPODModal('${id}')">✅ POD</button>`;
     case 11: return `<span class="badge" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(5,150,105,.2)">✓ CLOSED</span>`;
     default: return '';
+  }
+}
+
+// OMS→TMS deep-link navigation moved to services/omsBridge/tmsLink.js
+// (CLAUDE_RULES §1, §4: services layer owns cross-system navigation).
+// Thin shim kept so existing inline onclick="openTmsShipment(...)"
+// attributes in the row template still resolve. Both call paths route
+// through OmsTmsLink.openShipment for a single source of truth.
+function openTmsShipment(shipmentId){
+  if (window.OmsTmsLink && typeof window.OmsTmsLink.openShipment === 'function') {
+    window.OmsTmsLink.openShipment(shipmentId);
+  } else {
+    // Defensive: tmsLink.js failed to load. Fall back to a same-tab
+    // navigation so the click still lands somewhere useful.
+    if (!shipmentId) return;
+    var base = (window.location.origin || '').replace(/\/$/, '');
+    window.location.assign(base + '/shipments?id=' + encodeURIComponent(shipmentId));
   }
 }
 
@@ -3152,7 +3160,7 @@ async function copyOrder(id){
   copy.pro=null;
   copy.tmsShipId=null;
   copy.stageLog=[];
-  copy.po=src.po?src.po+' (copy)':'';
+  copy.po=src.po||'';
   // Re-key line ids so we don't collide in the order_lines table.
   if(Array.isArray(copy.lines)){
     copy.lines=copy.lines.map((l,idx)=>({ ...l, line_num: idx+1 }));

@@ -861,7 +861,21 @@
       "Bash(ls ../.env*)",
       "Bash(node -r dotenv/config -e ' *)",
       "Bash(python -m streamlit run app.py --server.headless true)",
-      "Bash(ls C:\\\\\\\\Zoree\\\\\\\\zoree-tms-v3\\\\\\\\zoree-tms-v3)"
+      "Bash(ls C:\\\\\\\\Zoree\\\\\\\\zoree-tms-v3\\\\\\\\zoree-tms-v3)",
+      "Bash(npx tsc *)",
+      "Bash(npx --no-install tsc --noEmit)",
+      "Bash(npx jest *)",
+      "Bash(npm test *)",
+      "Bash(node node_modules/jest/bin/jest.js src/services/__tests__/carrierPortalService.test.ts)",
+      "Bash(node node_modules/jest/bin/jest.js src/services/__tests__/carrierPortalService.test.ts --colors=false)",
+      "Bash(node node_modules/jest/bin/jest.js --version)",
+      "PowerShell(node node_modules\\\\jest\\\\bin\\\\jest.js src/services/__tests__/carrierPortalService.test.ts --colors=false 2>&1)",
+      "PowerShell(node -e \"console.log\\('node works'\\)\")",
+      "PowerShell(& node \"node_modules\\\\jest\\\\bin\\\\jest.js\" \"src/services/__tests__/carrierPortalService.test.ts\" \"--colors=false\" 2>&1)",
+      "PowerShell($ErrorActionPreference='Continue')",
+      "PowerShell(& node \"node_modules\\\\jest\\\\bin\\\\jest.js\" \"--listTests\" 2>&1)",
+      "Bash(grep -nE \"tms_shipment_id.*\\\\\\\\?|tms_shipment_id.*\\\\|\\\\|\" frontend/zoree-oms.html)",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@zoree.io\",\"password\":\"Zoree@2024\"}')"
     ]
   }
 }

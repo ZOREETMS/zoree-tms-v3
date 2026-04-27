@@ -209,8 +209,14 @@ select.fsel:focus{border-color:var(--accent);}
 /* ── FORM (exact match) ─────────────────────────────────────── */
 .form-grid,.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
-.form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;min-width:0;}
 .form-group.full{grid-column:span 2;}
+/* Form fields must fill their grid/flex cell. Without width:100% the input
+   falls back to its browser-intrinsic size (~180px) and overflows the
+   third column of .form-row-3 inside the 640px-wide modal. min-width:0
+   on .form-group lets the grid item shrink below the input's intrinsic
+   content size instead of blowing the modal out horizontally. */
+.form-group input,.form-group select,.form-group textarea{width:100%;max-width:100%;}
 .form-label,label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;}
 input,select,textarea{background:#FAFBFC;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:0 12px;height:40px;font-size:13px;font-weight:500;font-family:inherit;outline:none;transition:border-color .15s,box-shadow .15s;text-transform:uppercase;}
 textarea{height:auto;padding:10px 12px;}

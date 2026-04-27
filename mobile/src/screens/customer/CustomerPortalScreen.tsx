@@ -16,7 +16,11 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import { useData } from '../../state/DataContext';
-import useCustomerPortal from '../../../../shared/src/hooks/useCustomerPortal';
+// Local hook copy lives in the mobile tree; the workspace `shared/`
+// folder also has one for the web app — they're identical, but the
+// in-tree path is what Metro resolves without a custom alias.
+import useCustomerPortal from '../../shared/hooks/useCustomerPortal';
+import InviteCustomerModal from '../../components/customer/InviteCustomerModal';
 import {
   colors,
   fontSize,
@@ -36,7 +40,9 @@ export default function CustomerPortalScreen() {
     setSearch,
     handleShareTracking,
     handleShareCustomer,
+    inviteModalOpen,
     setInviteModalOpen,
+    handleInvite,
   } = useCustomerPortal(data.shipments, data.orders);
 
   const filteredCustomers = useMemo(() => {
@@ -209,6 +215,14 @@ export default function CustomerPortalScreen() {
           )}
         </View>
       </ScrollView>
+
+      <InviteCustomerModal
+        visible={!!inviteModalOpen}
+        onClose={() => setInviteModalOpen(false)}
+        onSubmit={async (invite) => {
+          await handleInvite(invite);
+        }}
+      />
     </SafeAreaView>
   );
 }

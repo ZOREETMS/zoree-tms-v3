@@ -9,6 +9,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SystemTabParamList } from '../types';
 import EquipmentMasterScreen from '../../screens/equipment/EquipmentMasterScreen';
+import PlanningParametersScreen from '../../screens/admin/PlanningParametersScreen';
 import PlaceholderScreen from '../../screens/PlaceholderScreen';
 
 const Stack = createNativeStackNavigator<SystemTabParamList>();
@@ -23,6 +24,7 @@ export default function SystemStack() {
         {() => <PlaceholderScreen title="Profile" icon="👤" />}
       </Stack.Screen>
       <Stack.Screen name="EquipmentMaster" component={EquipmentMasterScreen} />
+      <Stack.Screen name="PlanningParameters" component={PlanningParametersScreen} />
     </Stack.Navigator>
   );
 }

@@ -94,6 +94,9 @@ export type SystemTabParamList = {
   // Phase-3: Equipment master (trailer types) — admin surface for the
   // catalog that rates / shipments / planning all read from.
   EquipmentMaster: undefined;
+  // Phase-3: Planning parameters — feature toggles + dock loading
+  // duration defaults that drive the planner's behavior.
+  PlanningParameters: undefined;
 };
 
 // Driver-specific screens (accessible from Execution tab)

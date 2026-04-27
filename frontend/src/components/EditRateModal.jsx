@@ -66,13 +66,33 @@ const DEFAULT_EQUIPMENT_BY_MODE = {
   TL: "Dry Van 53ft",
 };
 
+// Append the expiry date suffix (YYYYMMDD) to a lane. If the lane already
+// ends with an 8-digit date suffix that doesn't match the current expiry
+// (i.e. the user changed the expiration date), strip it first so we don't
+// double-append. Idempotent when the suffix already matches. Mirrors
+// RateManagementPage.buildLaneId so modal, table, and DB stay in sync.
+function appendExpirySuffix(lane, exp) {
+  let base = String(lane || "").trim();
+  if (!base) return base;
+  const expCompact = String(exp || "").replace(/-/g, "");
+  if (!expCompact) return base;
+  if (base.endsWith(`-${expCompact}`)) return base;
+  // Strip any stale trailing -YYYYMMDD (years 1900-2099) before re-appending.
+  base = base.replace(/-(?:19|20)\d{6}$/, "");
+  return `${base}-${expCompact}`;
+}
+
 function buildInitialForm(rate) {
   if (!rate) return {};
   const oLoc = parseLocation(rate.origin);
   const dLoc = parseLocation(rate.dest);
   const ltl = isLtlMode(rate.mode);
+  // Promote the full display lane (base + expiry suffix) into the editable
+  // form value so the input shows the same ID the user clicked on in the
+  // table. On save we re-append to defend against expiry-date changes.
+  const expRaw = getField(rate, "exp", "expires", "expiry_date", "expiryDate");
   return {
-    lane: rate.lane || "",
+    lane: appendExpirySuffix(rate.lane || "", expRaw),
     mode: rate.mode || "TL",
     equipment: rate.equipment || "",
     // Migration 021: controls how this rate is matched to shipments.
@@ -177,23 +197,35 @@ export default function EditRateModal({ rate, onClose, onSave, isNew, carriers =
   }
 
   async function handleSave() {
-    // Auto-generate lane ID if empty
+    // Auto-generate lane ID if empty. The trailing date code is the
+    // expiry date (YYYYMMDD) so the auto-gen value matches the suffix
+    // we'll re-append below — otherwise we'd end up with two date
+    // chunks on the same lane.
     if (!form.lane && form.carrier && form.originCity && form.destCity) {
       const carrierCode = (form.carrier || "").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 4);
       const oCode = (form.originCity || "").slice(0, 3).toUpperCase();
       const dCode = (form.destCity || "").slice(0, 3).toUpperCase();
       const modeCode = (form.mode || "TL").toUpperCase();
       const svcCode = (form.serviceLevel || "STD").slice(0, 3).toUpperCase();
-      const dateCode = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      setField("lane", `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`);
-      form.lane = `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`;
+      const dateCode = String(form.exp || new Date().toISOString().slice(0, 10)).replace(/-/g, "");
+      const generated = `${carrierCode}-${oCode}-${dCode}-${modeCode}-${svcCode}-${dateCode}`;
+      setField("lane", generated);
+      form.lane = generated;
     }
     if (!form.lane) {
       alert("Lane ID is required.");
       return;
     }
-    if (isNew && existingLanes.includes(form.lane)) {
-      alert(`Duplicate Lane ID: "${form.lane}" already exists. Please use a unique Lane ID.`);
+    // Always persist the lane with the expiry suffix so the DB matches
+    // the table and modal display. appendExpirySuffix is a no-op when
+    // the suffix is already present (e.g. user typed it manually).
+    const finalLane = appendExpirySuffix(form.lane, form.exp);
+    if (finalLane !== form.lane) {
+      setField("lane", finalLane);
+      form.lane = finalLane;
+    }
+    if (isNew && existingLanes.includes(finalLane)) {
+      alert(`Duplicate Lane ID: "${finalLane}" already exists. Please use a unique Lane ID.`);
       return;
     }
     if (!(form.originCity || form.origin) || !(form.destCity || form.dest) || !form.carrier) {
@@ -202,21 +234,36 @@ export default function EditRateModal({ rate, onClose, onSave, isNew, carriers =
     }
     setBusy(true);
     try {
-      const payload = buildPayload(form);
+      const payload = buildPayload({ ...form, lane: finalLane });
       await onSave(rate.id, payload, isNew);
     } finally {
       setBusy(false);
     }
   }
 
-  const title = isNew ? "ADD RATE" : `EDIT RATE \u2014 ${form.lane || ""}`;
+  // Title uses the same suffix-appending helper as buildInitialForm/save,
+  // so the title stays in sync if the user changes the expiry date in the
+  // form before saving. No-op when form.lane already carries the suffix.
+  const displayLane = appendExpirySuffix(form.lane, form.exp);
+  const title = isNew ? "ADD RATE" : `EDIT RATE \u2014 ${displayLane}`;
 
   return (
     <div className="modal-overlay" onClick={() => !busy && onClose()}>
       <div className="modal-card" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>{title}</h3>
-          <button className="modal-close" onClick={() => !busy && onClose()}>✕</button>
+        <div className="modal-header" style={{ alignItems: "flex-start", gap: 12 }}>
+          {/* Long lane IDs (e.g. AVRT-CHI-ATL-LTL-CZ-STD) were getting clipped
+              by the close button. Allow the title to wrap and break on
+              hyphens, and pin the close button so it never shrinks away. */}
+          <h3 style={{ flex: 1, minWidth: 0, margin: 0, wordBreak: "break-word", overflowWrap: "anywhere", lineHeight: 1.3 }}>
+            {title}
+          </h3>
+          <button
+            className="modal-close"
+            style={{ flexShrink: 0 }}
+            onClick={() => !busy && onClose()}
+          >
+            ✕
+          </button>
         </div>
         <div className="modal-body">
 
