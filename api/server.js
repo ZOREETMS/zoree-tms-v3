@@ -17,7 +17,7 @@ const { createRolesRouter } = require('./routes/roles');
 const ingestRouter = require('./routes/ingest');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
-const { matchRate } = require('./services/rateMatcher');
+const { matchRate, matchAllRates } = require('./services/rateMatcher');
 const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
@@ -2090,19 +2090,12 @@ app.post('/api/ltl/quote', async (req, res) => {
     weight:        wt,
   };
 
-  czCarriers.forEach(carrier => {
-    const carrierRates = adderRates.filter(r => r.carrier === carrier.name);
-    const match = matchRate(shipmentCtx, carrierRates);
-
-    if (match.reason === 'weight-out-of-range') {
-      const offending = match.offending || {};
-      const minWt = offending.czarlite_min_wt || 0;
-      const maxWt = offending.czarlite_max_wt || 'Inf';
-      console.log(`[LTL/quote] ${carrier.name}: SKIPPED — weight ${wt}lbs outside range ${minWt}–${maxWt}lbs (rate ${offending.lane || '?'})`);
-      return; // skip this carrier — mirrors pre-refactor behavior
-    }
-
-    const r = match.rate; // may be null → carrier priced CzarLite-only
+  // Build one LTL quote object from a (possibly null) rate row.
+  // Extracted so we can call it once per matched rate when a carrier
+  // has multiple service levels (Standard + Express, etc.) on the
+  // same lane, AND once with `null` for the CzarLite-only fallback
+  // path when no rate row matched at all.
+  function buildLtlQuote(carrier, r, matchReason) {
     const discountPct  = r ? (parseFloat(r.discount)      || 0) : 0;
     const discountFlat = r ? (parseFloat(r.discount_flat) || 0) : 0;
     const discountAmt  = Math.round(baseTotal * discountPct / 100) + discountFlat;
@@ -2114,8 +2107,8 @@ app.post('/api/ltl/quote', async (req, res) => {
       : Math.round(czarBase.surchargeAmount || 0);
     const total = Math.round(discountedBase + fscCharge);
 
-    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'} reason=${match.reason}`);
-    quotes.push({
+    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'} reason=${matchReason}`);
+    return {
       rateId:       r ? (r.lane || r.id) : null,
       carrier:      carrier.name,
       scac:         carrier.scac,
@@ -2143,6 +2136,32 @@ app.post('/api/ltl/quote', async (req, res) => {
       tariff:       SMC3_TARIFF,
       class:        fc,
       weight:       wt,
+    };
+  }
+
+  czCarriers.forEach(carrier => {
+    const carrierRates = adderRates.filter(r => r.carrier === carrier.name);
+    const match = matchAllRates(shipmentCtx, carrierRates);
+
+    if (match.reason === 'weight-out-of-range') {
+      const offending = match.offending || {};
+      const minWt = offending.czarlite_min_wt || 0;
+      const maxWt = offending.czarlite_max_wt || 'Inf';
+      console.log(`[LTL/quote] ${carrier.name}: SKIPPED — weight ${wt}lbs outside range ${minWt}–${maxWt}lbs (rate ${offending.lane || '?'})`);
+      return; // skip this carrier — mirrors pre-refactor behavior
+    }
+
+    if (match.rates.length === 0) {
+      // No specific rate matched but weight didn't fail either — this
+      // carrier still gets a CzarLite-only quote (legacy behavior).
+      quotes.push(buildLtlQuote(carrier, null, match.reason));
+      return;
+    }
+
+    // One quote per matching rate so a carrier with both Standard and
+    // Express tariffs on this lane shows up twice.
+    match.rates.forEach(({ rate, reason }) => {
+      quotes.push(buildLtlQuote(carrier, rate, reason));
     });
   });
 
@@ -2629,9 +2648,11 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               weight:        wt,
             };
 
-            // Group candidate rates by carrier — the matcher is
-            // per-carrier so each carrier can only produce one
-            // quote on this lane / mode.
+            // Group candidate rates by carrier. matchAllRates is
+            // per-carrier and returns EVERY matching rate so a carrier
+            // with multiple service levels (Standard + Express, etc.)
+            // on the same lane produces one quote per service level
+            // instead of silently dropping all but the first.
             const tlRatesByCarrier = tlRates.reduce((acc, rt) => {
               const key = rt.carrier || '';
               (acc[key] = acc[key] || []).push(rt);
@@ -2640,47 +2661,48 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
 
             let tlMatched = 0;
             Object.entries(tlRatesByCarrier).forEach(([carrierName, carrierTlRates]) => {
-              const tlMatch = matchRate(tlShipmentCtx, carrierTlRates);
-              if (!tlMatch.rate) {
+              const tlMatch = matchAllRates(tlShipmentCtx, carrierTlRates);
+              if (!tlMatch.rates.length) {
                 // 'weight-out-of-range' / 'no-match' — skip this
                 // carrier on TL. LTL branch above may still quote.
                 return;
               }
-              const rate = tlMatch.rate;
-              tlMatched += 1;
 
-              // Parse rate string like "$2.15" → 2.15
-              const rpm = parseFloat((rate.rate || '').replace(/[^0-9.]/g, '')) || 0;
-              if (!rpm) return;
-              // Parse FSC string like "22.5%" → 22.5
-              const fscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
-              // Miles: PC*MILER if carrier has pcmiler_enabled, else rate.miles, else haversine.
-              const carrierKey = (rate.carrier || '').toUpperCase();
-              const cFlags = carrierFlags[carrierKey] || {};
-              const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || haversineMiles || 500);
-              const baseCost = Math.round(rpm * miles);
-              const fscCharge = Math.round(baseCost * (fscPct / 100));
-              quotes.push({
-                carrier: rate.carrier || carrierName || 'Unknown',
-                scac: '',
-                rateId: rate.lane || rate.id || null,
-                totalCharge: baseCost + fscCharge,
-                czarBaseGross: baseCost,
-                discountPct: 0,
-                fscCharge,
-                fscPct,
-                transitDays: rate.transit_days || null,
-                deliveryDate: '',
-                recommended: false,
-                mode: 'TL',
-                serviceLevel: rate.service_level || '',
-                // Migration 024/025: surface the trailer this rate was
-                // negotiated against so the planner can snapshot it
-                // onto the shipment row at execute time.
-                equipment: rate.equipment || null,
-                miles,
-                pcmilerMiles: (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : null,
-                matchReason: tlMatch.reason,
+              tlMatch.rates.forEach(({ rate, reason }) => {
+                // Parse rate string like "$2.15" → 2.15
+                const rpm = parseFloat((rate.rate || '').replace(/[^0-9.]/g, '')) || 0;
+                if (!rpm) return;
+                // Parse FSC string like "22.5%" → 22.5
+                const fscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
+                // Miles: PC*MILER if carrier has pcmiler_enabled, else rate.miles, else haversine.
+                const carrierKey = (rate.carrier || '').toUpperCase();
+                const cFlags = carrierFlags[carrierKey] || {};
+                const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || haversineMiles || 500);
+                const baseCost = Math.round(rpm * miles);
+                const fscCharge = Math.round(baseCost * (fscPct / 100));
+                tlMatched += 1;
+                quotes.push({
+                  carrier: rate.carrier || carrierName || 'Unknown',
+                  scac: '',
+                  rateId: rate.lane || rate.id || null,
+                  totalCharge: baseCost + fscCharge,
+                  czarBaseGross: baseCost,
+                  discountPct: 0,
+                  fscCharge,
+                  fscPct,
+                  transitDays: rate.transit_days || null,
+                  deliveryDate: '',
+                  recommended: false,
+                  mode: 'TL',
+                  serviceLevel: rate.service_level || '',
+                  // Migration 024/025: surface the trailer this rate was
+                  // negotiated against so the planner can snapshot it
+                  // onto the shipment row at execute time.
+                  equipment: rate.equipment || null,
+                  miles,
+                  pcmilerMiles: (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : null,
+                  matchReason: reason,
+                });
               });
             });
             console.log(`[BulkPlan/rate] TL rates for ${oCity}→${dCity}: ${tlMatched} matched from ${tlRates.length} candidates`);

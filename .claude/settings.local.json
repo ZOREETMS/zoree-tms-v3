@@ -875,7 +875,32 @@
       "PowerShell($ErrorActionPreference='Continue')",
       "PowerShell(& node \"node_modules\\\\jest\\\\bin\\\\jest.js\" \"--listTests\" 2>&1)",
       "Bash(grep -nE \"tms_shipment_id.*\\\\\\\\?|tms_shipment_id.*\\\\|\\\\|\" frontend/zoree-oms.html)",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@zoree.io\",\"password\":\"Zoree@2024\"}')"
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@zoree.io\",\"password\":\"Zoree@2024\"}')",
+      "Read(//c/Users/tulasi konathala/AppData/Local/**)",
+      "Bash(where.exe java *)",
+      "Bash(where.exe adb *)",
+      "Bash(npx eas-cli *)",
+      "Bash(npm uninstall *)",
+      "Bash(eas whoami *)",
+      "Read(//c/Users/tulasi konathala/.expo//**)",
+      "Read(//c/Users/tulasi konathala/.expo/**)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas whoami)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas init --non-interactive --force)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build --platform android --profile preview --non-interactive --no-wait)",
+      "Bash(node -e \"console.log\\(require.resolve\\('lodash.throttle'\\)\\)\")",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build:view f665401c-4efc-43d6-b403-ddfacffaaad0)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build --help)",
+      "Bash(npm ci *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build:view b8c5ba50-8a9a-4f90-96a9-82d6adbb9f6a)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build:view b8c5ba50-8a9a-4f90-96a9-82d6adbb9f6a --json)",
+      "Bash(node --check api/services/rateMatcher.js)",
+      "Bash(npx --no-install eslint src/components/orders/ShipmentGroupCard.jsx)",
+      "Bash(curl -s -o /dev/null -w \"API: %{http_code}\\\\n\" http://localhost:3010/health)",
+      "Bash(curl -s -o /dev/null -w \"Frontend: %{http_code}\\\\n\" http://localhost:5173)",
+      "Bash(curl -s -o /dev/null -w \"API:      %{http_code}\\\\n\" http://localhost:3010/health)",
+      "Bash(taskkill //F //PID 35792)",
+      "Bash(taskkill //F //PID 3032)"
     ]
   }
 }

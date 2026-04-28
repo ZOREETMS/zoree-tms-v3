@@ -50,8 +50,14 @@ export default function ShipmentGroupCard({ group, groupIdx, onSelectQuote }) {
           const dates = calcDates(quote, earliestDue, readyDate);
           const isPref = quote.preferred;
           const isCzarlite = quote.czarlite || rMode === "LTL";
+          // Composite key: a carrier can now appear multiple times in
+          // the quotes list (one per matching rate, e.g. STD + EXP on
+          // the same lane). Index alone is fine, but pairing it with
+          // rateId / serviceLevel keeps React's diff stable if the
+          // backend reorders the list between fetches.
+          const rowKey = `${quote.rateId || quote.carrier}-${quote.serviceLevel || "std"}-${i}`;
           return (
-            <div key={i}
+            <div key={rowKey}
               onClick={() => onSelectQuote(groupIdx, i)}
               style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", marginBottom: 4,

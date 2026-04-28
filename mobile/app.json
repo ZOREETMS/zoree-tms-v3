@@ -7,13 +7,19 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.zoree.tms"
     },
     "android": {
       "package": "com.zoree.tms"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "dc622bc9-a88a-472a-a860-b6e4ce70aa63"
+      }
+    },
+    "owner": "sridhart09"
   }
 }

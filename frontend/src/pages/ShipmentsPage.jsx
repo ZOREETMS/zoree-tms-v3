@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import { DbApi, TenderApi, OrdersApi, BulkPlanApi } from "../lib/api";
-import { sendTenderEmailIfAvailable, gatherOrderDetails } from "../services/tenderService";
+import { sendTenderEmailIfAvailable, gatherOrderDetails, withMergedTenderNotes } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getShipmentHistory } from "../services/historyService";
 import {
@@ -26,6 +26,7 @@ import { getRateByLane, summarizeDiscount } from "../services/rateService";
 import { fetchOmsSyncForShipmentIds } from "../services/omsSyncStatusService";
 import { deriveOmsSyncStatus } from "../utils/omsSyncStatus";
 import OmsSyncPill from "../components/shipments/OmsSyncPill";
+import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -113,14 +114,11 @@ async function patchShipmentWithFallback(shipmentId, payload) {
   return DbApi.patch("shipments", shipmentId, patch);
 }
 
-function withCarrierResponseNotes(existingNotes, response) {
-  const marker = "[CP_RESPONSE]";
-  const text = String(existingNotes || "");
-  const idx = text.lastIndexOf(marker);
-  const cleaned = idx >= 0 ? text.slice(0, idx).trim() : text.trim();
-  const markerLine = `${marker} ${JSON.stringify(response)}`;
-  return cleaned ? `${cleaned}\n${markerLine}` : markerLine;
-}
+// CP_RESPONSE notes serialization is owned by services/tenderService —
+// withMergedTenderNotes preserves carrier-supplied fields (driver,
+// truck, etc.) when a planner submits the dock plan after the carrier
+// has already responded via the carrier portal. Replaces an earlier
+// inline helper that overwrote the entire payload.
 
 /* ── InfoBox helper ── */
 function InfoBox({ icon, label, value }) {
@@ -1085,21 +1083,19 @@ export default function ShipmentsPage() {
     }
   }
 
-  /* ── Accept Tender Modal ── */
-  const [acceptModal, setAcceptModal] = useState(null); // { shipment, pro, pickup, service, bol, dock, dockTime, notes }
+  /* ── Accept Tender Modal ──
+   *
+   * The modal (TenderAcceptModal) owns its own form state. We just
+   * track which shipment row is being edited; the modal hands back a
+   * single payload via its onConfirm prop and confirmAcceptTender does
+   * the DB patch + downstream propagation.
+   */
+  const [acceptModal, setAcceptModal] = useState(null); // { shipment } | null
   const [showNewShipment, setShowNewShipment] = useState(false);
 
-  // Pull the HH:mm portion off a "YYYY-MM-DD HH:mm" timestamp so an
-  // <input type="time"> can render it. Returns "" if no time is present.
-  function timeOf(value) {
-    const s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/(\d{1,2}):(\d{2})/);
-    return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
-  }
-
-  // Re-attach a date prefix to a "HH:mm" time input so we can write
-  // it back into the loading_start / loading_end "YYYY-MM-DD HH:mm" columns.
+  // Re-attach a date prefix to a "HH:mm" time input so we can write it
+  // back into the loading_start / loading_end "YYYY-MM-DD HH:mm"
+  // columns (migration 20260324120000_shipments_loading_times).
   function combineDateTime(date, time) {
     const d = String(date || "").trim();
     const t = String(time || "").trim();
@@ -1108,79 +1104,67 @@ export default function ShipmentsPage() {
   }
 
   function openAcceptTender(row) {
-    const today = new Date().toISOString().slice(0, 10);
-    // Read canonical column names (migrations 20260324120000 +
-    // 20260406_shipments_dock_fields). Fall back to legacy aliases so a
-    // shipment row created by older code paths still pre-populates.
-    const pickupDate   = row.pickup_date   || row.pickup   || today;
-    const deliveryDate = row.delivery_date || row.delivery || "";
-    const dockDoor     = row.dock_door     || row.dock_assigned || "";
-    const loadingStart = row.loading_start || row.dock_load_start || row.dock_time || "";
-    const loadingEnd   = row.loading_end   || row.dock_load_end   || "";
-    setAcceptModal({
-      shipment: row,
-      pro: row.pro_number || "",
-      pickup: pickupDate,
-      delivery: deliveryDate,
-      service: row.service_level || "",
-      bol: row.bol_number || "",
-      dock: dockDoor,
-      // The HTML <input type="time"> only accepts "HH:mm" — strip the
-      // date prefix off the stored "YYYY-MM-DD HH:mm" loading window.
-      dockLoadStart: timeOf(loadingStart),
-      dockLoadEnd:   timeOf(loadingEnd),
-      // REQ-22: capture the carrier-supplied trailer seal number at
-      // tender-accept time and persist it on the shipment row.
-      seal: row.seal_number || "",
-      notes: "",
-    });
+    setAcceptModal({ shipment: row });
   }
 
-  async function confirmAcceptTender() {
+  async function confirmAcceptTender(formData) {
     if (!acceptModal) return;
-    const { shipment: row, pro, pickup, delivery, service, bol, dock, dockLoadStart, dockLoadEnd, seal, notes } = acceptModal;
-    if (!pickup) { toast("Pickup date is required", "warning"); return; }
+    const row = acceptModal.shipment;
+    const {
+      driver, phone, truck,
+      proNumber, carrierPickupDate, pickupEta, carrierNotes,
+      serviceLevel, bolNumber, deliveryDate,
+      dockDoor, dockLoadStart, dockLoadEnd, sealNumber, internalNotes,
+    } = formData || {};
+
+    if (!carrierPickupDate) { toast("Pickup date is required", "warning"); return; }
     setBusyId(row.id);
     try {
-      const responseMeta = {
+      // Build the addition for the [CP_RESPONSE] merge. Empty values
+      // are dropped by mergeTenderResponse, so this never wipes a
+      // carrier-supplied field the planner happens to leave blank.
+      const responseAddition = {
         action: "accept",
-        proNumber: pro || "",
-        carrierPickupDate: pickup || "",
-        serviceLevel: service || "",
-        bolNumber: bol || "",
-        dockDoor: dock || "",
+        // Carrier-supplied
+        driver: driver || "",
+        phone: phone || "",
+        truck: truck || "",
+        proNumber: proNumber || "",
+        carrierPickupDate: carrierPickupDate || "",
+        pickupEta: pickupEta || "",
+        // The carrier's own free-text "notes to shipper" lives here.
+        notes: carrierNotes || "",
+        // Planner-supplied
+        serviceLevel: serviceLevel || "",
+        bolNumber: bolNumber || "",
+        deliveryDate: deliveryDate || "",
+        dockDoor: dockDoor || "",
         dockLoadStart: dockLoadStart || "",
         dockLoadEnd: dockLoadEnd || "",
-        // REQ-22: persist seal in the carrier response audit metadata too,
-        // so the carrier-portal "what did the carrier reply" view shows it.
-        sealNumber: seal || "",
-        notes: notes || "",
+        sealNumber: sealNumber || "",
+        internalNotes: internalNotes || "",
         respondedAtIso: new Date().toISOString(),
       };
-      // Combine the carrier-entered HH:mm time inputs with the pickup
-      // date so we can persist a full "YYYY-MM-DD HH:mm" timestamp into
-      // the canonical loading_start / loading_end columns (migration
-      // 20260324120000_shipments_loading_times).
-      const loadingStartFull = combineDateTime(pickup, dockLoadStart);
-      const loadingEndFull   = combineDateTime(pickup, dockLoadEnd);
       // 1. Update shipment in DB. Use canonical column names — see
       // 20260406_shipments_dock_fields (dock_door, dock_time) and
       // 20260324120000 (loading_start, loading_end). dock_time is kept
       // as the human-readable window string for display parity.
+      const loadingStartFull = combineDateTime(carrierPickupDate, dockLoadStart);
+      const loadingEndFull   = combineDateTime(carrierPickupDate, dockLoadEnd);
       await patchShipmentWithFallback(row.id, {
         status: "Tendered",
-        pro_number: pro || null,
-        pickup_date: pickup || null,
-        delivery_date: delivery || null,
-        service_level: service || null,
-        bol_number: bol || null,
-        dock_door: dock || null,
+        pro_number: proNumber || null,
+        pickup_date: carrierPickupDate || null,
+        delivery_date: deliveryDate || null,
+        service_level: serviceLevel || null,
+        bol_number: bolNumber || null,
+        dock_door: dockDoor || null,
         dock_time: dockLoadStart && dockLoadEnd ? `${dockLoadStart}–${dockLoadEnd}` : (dockLoadStart || null),
         loading_start: loadingStartFull || null,
         loading_end:   loadingEndFull   || null,
         // REQ-22: persist trailer seal on the shipment row.
-        seal_number: seal || null,
-        notes: withCarrierResponseNotes(row.notes, responseMeta),
+        seal_number: sealNumber || null,
+        notes: withMergedTenderNotes(row.notes, responseAddition),
       });
       // 1b. If MBOL, cascade Confirmed to child CBOLs
       if (row.bol_type === "MBOL") {
@@ -1196,9 +1180,13 @@ export default function ShipmentsPage() {
       const propagation = await propagateTenderAcceptance({
         shipment: row,
         response: {
-          proNumber: pro, carrierPickupDate: pickup, serviceLevel: service,
-          bolNumber: bol, sealNumber: seal, dockDoor: dock,
-          dockLoadStart, dockLoadEnd, notes,
+          proNumber: proNumber, carrierPickupDate: carrierPickupDate, serviceLevel: serviceLevel,
+          bolNumber: bolNumber, sealNumber: sealNumber, dockDoor: dockDoor,
+          dockLoadStart, dockLoadEnd,
+          // Concatenate carrier and internal notes so the OMS mirror
+          // sees both — keeps parity with the carrier-portal flow which
+          // only emits a single `notes` field.
+          notes: [carrierNotes, internalNotes].filter(Boolean).join(" · "),
         },
         orderIds: linkedOrders.map((o) => o.id),
       });
@@ -1209,7 +1197,7 @@ export default function ShipmentsPage() {
       // the ops user that the OMS mirror did NOT update.
       const omsResult = propagation.omsResult;
       if (propagation.omsError || !omsResult) {
-        toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS push failed (non-blocking)`, "success");
+        toast(`✅ Tender confirmed — ${row.id} · PRO: ${proNumber || "pending"} · Pickup: ${carrierPickupDate} · OMS push failed (non-blocking)`, "success");
       } else {
         const benignSkipReasons = new Set(["no_oms_row"]);
         const skipReasons = omsResult.omsSync && omsResult.omsSync.skippedByReason
@@ -1224,7 +1212,7 @@ export default function ShipmentsPage() {
             "warning"
           );
         } else {
-          toast(`✅ Tender confirmed — ${row.id} · PRO: ${pro || "pending"} · Pickup: ${pickup} · OMS: ${omsResult.message || "not configured"}`, "success");
+          toast(`✅ Tender confirmed — ${row.id} · PRO: ${proNumber || "pending"} · Pickup: ${carrierPickupDate} · OMS: ${omsResult.message || "not configured"}`, "success");
         }
       }
       setAcceptModal(null);
@@ -1669,106 +1657,18 @@ export default function ShipmentsPage() {
         }}
       />
 
-      {/* Accept Tender Modal */}
+      {/* Accept Tender Modal — see components/shipments/TenderAcceptModal.
+       * Two tabs (Carrier Response + Internal Plan) so the planner can
+       * review what the carrier submitted via the carrier portal AND
+       * record their internal dock plan in one place. The modal owns
+       * its own form state; we just receive the merged payload here. */}
       {acceptModal && (
-        <div className="modal-overlay" onClick={() => setAcceptModal(null)}>
-          <div style={{ background: "var(--bg)", borderRadius: 16, width: 520, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.4)", border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div style={{ background: "linear-gradient(135deg,#0f4c35,#16a34a)", padding: "20px 24px", borderRadius: "16px 16px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>✅ Accept Tender</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.8)", marginTop: 3 }}>{acceptModal.shipment.id} · {acceptModal.shipment.carrier}</div>
-              </div>
-              <button onClick={() => setAcceptModal(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", width: 30, height: 30, borderRadius: "50%", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-            </div>
-
-            {/* Shipment summary */}
-            <div style={{ padding: "16px 24px", background: "var(--bg2)", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", fontWeight: 700 }}>Origin</div><div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{acceptModal.shipment.origin}</div></div>
-              <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", fontWeight: 700 }}>Destination</div><div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{acceptModal.shipment.dest}</div></div>
-              <div><div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", fontWeight: 700 }}>Weight</div><div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{(acceptModal.shipment.weight || 0).toLocaleString()} lbs</div></div>
-            </div>
-
-            {/* Form */}
-            <div style={{ padding: "20px 24px" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>Tender Response Details</div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>PRO Number <span style={{ color: "var(--accent)", fontSize: 10 }}>(from carrier)</span></label>
-                  <input value={acceptModal.pro} onChange={(e) => setAcceptModal({ ...acceptModal, pro: e.target.value })} placeholder="e.g. PRO-123456" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", fontFamily: "monospace", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Pickup Date *</label>
-                  <input type="date" value={acceptModal.pickup} onChange={(e) => setAcceptModal({ ...acceptModal, pickup: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Service Level</label>
-                  <select value={acceptModal.service} onChange={(e) => setAcceptModal({ ...acceptModal, service: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }}>
-                    <option value="">— Select —</option>
-                    <option value="Standard">Standard</option>
-                    <option value="Expedited">Expedited</option>
-                    <option value="Economy">Economy</option>
-                    <option value="White Glove">White Glove</option>
-                    <option value="Time-Critical">Time-Critical</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Carrier Ref / BOL</label>
-                  <input value={acceptModal.bol} onChange={(e) => setAcceptModal({ ...acceptModal, bol: e.target.value })} placeholder="e.g. BOL-2026-001" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", fontFamily: "monospace", boxSizing: "border-box" }} />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Delivery Date</label>
-                  <input type="date" value={acceptModal.delivery} onChange={(e) => setAcceptModal({ ...acceptModal, delivery: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Assigned</label>
-                  <input value={acceptModal.dock} onChange={(e) => setAcceptModal({ ...acceptModal, dock: e.target.value })} placeholder="e.g. Dock 4A" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Loading Start</label>
-                  <input type="time" value={acceptModal.dockLoadStart} onChange={(e) => setAcceptModal({ ...acceptModal, dockLoadStart: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Dock Loading End</label>
-                  <input type="time" value={acceptModal.dockLoadEnd} onChange={(e) => setAcceptModal({ ...acceptModal, dockLoadEnd: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
-                </div>
-              </div>
-
-              {/* REQ-22: seal number captured at tender acceptance */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Seal Number <span style={{ color: "var(--accent)", fontSize: 10 }}>(trailer seal from carrier)</span></label>
-                  <input value={acceptModal.seal || ""} onChange={(e) => setAcceptModal({ ...acceptModal, seal: e.target.value })} placeholder="e.g. SEAL-998877" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", fontFamily: "monospace", boxSizing: "border-box" }} />
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 5 }}>Notes (optional)</label>
-                <input value={acceptModal.notes} onChange={(e) => setAcceptModal({ ...acceptModal, notes: e.target.value })} placeholder="Any additional carrier notes" style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, background: "var(--bg2)", color: "var(--text)", boxSizing: "border-box" }} />
-              </div>
-
-              <div style={{ background: "rgba(59,130,246,.06)", border: "1px solid rgba(59,130,246,.2)", borderRadius: 8, padding: "10px 14px", marginTop: 14, fontSize: 11, color: "var(--text2)" }}>
-                💡 These details will be sent back to OMS via Middleware Pull TMS Planning so the shipping team has all confirmation info.
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: 10, justifyContent: "flex-end", background: "var(--bg2)", borderRadius: "0 0 16px 16px" }}>
-              <button onClick={() => setAcceptModal(null)} style={{ padding: "10px 20px", background: "var(--bg)", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "var(--text2)", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-              <button onClick={confirmAcceptTender} disabled={busyId === acceptModal.shipment.id} style={{ padding: "10px 24px", background: "#16a34a", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>✅ Confirm Acceptance</button>
-            </div>
-          </div>
-        </div>
+        <TenderAcceptModal
+          shipment={acceptModal.shipment}
+          busy={busyId === acceptModal.shipment.id}
+          onClose={() => setAcceptModal(null)}
+          onConfirm={confirmAcceptTender}
+        />
       )}
 
       {/* New Shipment Modal */}
