@@ -2014,27 +2014,23 @@ async function processMWQueue() {
             // REQ-01: route through the TMS ingest endpoint so the server
             // stamps sync_source='oms', auto_synced_at, and broadcasts the
             // SSE event that drives the TMS Orders page auto-refresh.
-            // Falls back to direct Supabase upsert if the TMS API is offline.
-            var via = 'tms-ingest';
-            try {
-              var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
-              // Ensure oms_order_ref is preserved even if OMS didn't send it explicitly.
-              var ingestPayload = Object.assign({ omsOrderRef: payload.id }, payload);
-              var resp = await fetch(tmsApi + '/ingest/oms-orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orders: [ingestPayload] }),
-              });
-              var body = await resp.json().catch(function(){return {};});
-              if (!resp.ok) throw new Error(body.error || ('TMS ingest ' + resp.status));
-            } catch (ingestErr) {
-              via = 'direct-db';
-              logEvent('inf', 'OMS → TMS', 'ingest unavailable, direct DB fallback: '+ingestErr.message);
-              var { error: we } = await tmsDb().from('orders').upsert(payload, { onConflict: 'id' });
-              if (we) throw we;
-            }
-            result = { tmsOrderId: payload.id, via: via };
-            logEvent('ok', 'OMS → TMS', 'pushOrderToTMS: ' + payload.id + ' · via ' + via, {
+            // Middleware-only contract: no direct DB fallback.
+            var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+            var ingestKey = (MW_CONFIG && MW_CONFIG.ingestKey) || null;
+            // Ensure oms_order_ref is preserved even if OMS didn't send it explicitly.
+            var ingestPayload = Object.assign({ omsOrderRef: payload.id }, payload);
+            var resp = await fetch(tmsApi + '/ingest/oms-orders', {
+              method: 'POST',
+              headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                ingestKey ? { 'X-API-Key': ingestKey } : {}
+              ),
+              body: JSON.stringify({ orders: [ingestPayload] }),
+            });
+            var body = await resp.json().catch(function(){return {};});
+            if (!resp.ok) throw new Error(body.error || ('TMS ingest ' + resp.status));
+            result = { tmsOrderId: payload.id, via: 'tms-ingest' };
+            logEvent('ok', 'OMS → TMS', 'pushOrderToTMS: ' + payload.id + ' · via tms-ingest', {
               srcSystem:'OMS', dstSystem:'TMS', recordId: payload.id, rowCount: 1,
               fields: ['id','customer','origin','dest','weight','pieces','due'],
               payload: payload,
@@ -2089,12 +2085,31 @@ async function processMWQueue() {
           }
 
           case 'PUSH_SHIP_STATUS': {
-            var { error: we1 } = await tmsDb().from('shipments')
-              .update({ status: 'In Transit', shipped_at: payload.shippedAt || new Date().toISOString() })
-              .eq('id', payload.tmsShipmentId);
-            if (we1) throw we1;
-            result = { updated: payload.tmsShipmentId };
-            logEvent('ok', 'OMS → TMS', 'pushShipStatus: ' + payload.tmsShipmentId + ' → In Transit', {
+            // Route through the TMS ingest endpoint so the API writes
+            // change_history (Picked Up / In Transit timeline timestamps)
+            // and emits SHIPMENT_UPDATED on the bus → wsBroadcast →
+            // open TMS pages refresh live. Middleware-only contract: no
+            // direct DB fallback.
+            var tmsApi_ship = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+            var ingestKey_ship = (MW_CONFIG && MW_CONFIG.ingestKey) || null;
+            var resp_ship = await fetch(tmsApi_ship + '/ingest/oms-ship-confirm', {
+              method:  'POST',
+              headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                ingestKey_ship ? { 'X-API-Key': ingestKey_ship } : {}
+              ),
+              body:    JSON.stringify({
+                shipmentId: payload.tmsShipmentId,
+                orderIds:   payload.orderIds || (payload.omsOrderId ? [payload.omsOrderId] : []),
+                shippedAt:  payload.shippedAt || null,
+                sealNumber: payload.sealNumber || null,
+                source:     'oms-wms',
+              }),
+            });
+            var bodyShip = await resp_ship.json().catch(function(){return {};});
+            if (!resp_ship.ok) throw new Error(bodyShip.error || ('TMS ingest ' + resp_ship.status));
+            result = { updated: payload.tmsShipmentId, via: 'tms-ingest' };
+            logEvent('ok', 'OMS → TMS', 'pushShipStatus: ' + payload.tmsShipmentId + ' → In Transit · via tms-ingest', {
               srcSystem:'OMS', dstSystem:'TMS', recordId: payload.tmsShipmentId, rowCount: 1,
               fields: ['status','shipped_at'], payload: payload,
             });
@@ -2102,11 +2117,31 @@ async function processMWQueue() {
           }
 
           case 'PUSH_POD_STATUS': {
-            var { error: we2 } = await tmsDb().from('shipments')
-              .update({ status: 'Delivered', delivered_at: payload.deliveredAt || new Date().toISOString() })
-              .eq('id', payload.tmsShipmentId);
-            if (we2) throw we2;
-            result = { updated: payload.tmsShipmentId };
+            // Same pattern as PUSH_SHIP_STATUS — POD goes through the
+            // ingest endpoint so applyShipmentEvent can write the audit
+            // row, stamp delivered_at, and broadcast SHIPMENT_UPDATED.
+            var tmsApi_pod = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+            var ingestKey_pod = (MW_CONFIG && MW_CONFIG.ingestKey) || null;
+            var noteParts = [];
+            if (payload.podReceivedBy) noteParts.push('POD by: ' + payload.podReceivedBy);
+            if (payload.podCondition)  noteParts.push('Condition: ' + payload.podCondition);
+            if (payload.podNotes)      noteParts.push(String(payload.podNotes));
+            var resp_pod = await fetch(tmsApi_pod + '/ingest/oms-pod', {
+              method:  'POST',
+              headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                ingestKey_pod ? { 'X-API-Key': ingestKey_pod } : {}
+              ),
+              body:    JSON.stringify({
+                shipmentId:  payload.tmsShipmentId,
+                deliveredAt: payload.deliveredAt || null,
+                note:        noteParts.length ? noteParts.join(' · ') : null,
+                source:      'oms-wms',
+              }),
+            });
+            var bodyPod = await resp_pod.json().catch(function(){return {};});
+            if (!resp_pod.ok) throw new Error(bodyPod.error || ('TMS ingest ' + resp_pod.status));
+            result = { updated: payload.tmsShipmentId, via: 'tms-ingest' };
             logEvent('ok', 'OMS → TMS', 'pushPODStatus: ' + payload.tmsShipmentId + ' → Delivered', {
               srcSystem:'OMS', dstSystem:'TMS', recordId: payload.tmsShipmentId, rowCount: 1,
               fields: ['status','delivered_at'], payload: payload,
@@ -2128,6 +2163,21 @@ async function processMWQueue() {
             logEvent('ok', 'TMS → OMS', 'pullTMSItems: ' + items.length + ' items', {
               srcSystem:'TMS', dstSystem:'OMS', rowCount: items.length,
               fields: ['id','description','weight_unit','value_unit','freight_class'],
+            });
+            break;
+          }
+
+          case 'PULL_TMS_SHIPMENT_DETAILS': {
+            var sid = payload && payload.shipmentId ? String(payload.shipmentId) : '';
+            if (!sid) throw new Error('shipmentId required');
+            var { data: shipOne, error: shipErr } = await tmsDb().from('shipments')
+              .select('id,status,carrier,mode,service_level,pickup_date,delivery_date,dock_assigned,dock_time,dock_load_start,dock_load_end,bol_number,pro_number,seal_number')
+              .eq('id', sid).maybeSingle();
+            if (shipErr) throw shipErr;
+            result = { shipment: shipOne || null };
+            logEvent('ok', 'TMS → OMS', 'pullTMSShipmentDetails: ' + sid, {
+              srcSystem:'TMS', dstSystem:'OMS', recordId:sid, rowCount: shipOne ? 1 : 0,
+              fields: ['id','status','carrier','service_level','pickup_date','delivery_date'],
             });
             break;
           }
@@ -2453,7 +2503,10 @@ async function runPullPlanningFlowEnhanced() {
         dockAppt = bookDockSlot(slot);
       }
 
-      // Build OMS update payload
+      // Build OMS update payload. tms_planned_at marks the moment TMS
+      // planning landed in OMS — column was added in migration 010 but
+      // never populated by this flow. Stamping here lets the OMS UI
+      // surface "synced from TMS planning at HH:MM" without a guess.
       var update = {
         tms_shipment_id:    to.shipment_id,
         carrier:            shp.carrier,
@@ -2461,6 +2514,7 @@ async function runPullPlanningFlowEnhanced() {
         estimated_delivery: delivDate,
         transit_days:       transitDays,
         dock_appointment:   dockAppt ? JSON.stringify(dockAppt) : null,
+        tms_planned_at:     new Date().toISOString(),
       };
       if (oo.stage < 5) { update.stage = 5; promoted++; }
 

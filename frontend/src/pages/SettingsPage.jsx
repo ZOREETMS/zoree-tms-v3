@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import MwQueuePanel from "../components/admin/MwQueuePanel";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -45,6 +46,11 @@ export default function SettingsPage() {
       </div>
 
       <div className="page-content">
+        {/* MW Queue Worker — admins only. Hidden for non-admins because
+            the backend rejects them anyway, and showing a panel that
+            errors on every poll creates noise (CLAUDE_RULES §2). */}
+        {String(user?.role || "").toLowerCase() === "admin" && <MwQueuePanel />}
+
         {/* Status KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
           <div className={`stat-card ${apiColor}`}>

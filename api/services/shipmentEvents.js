@@ -24,15 +24,21 @@ const { bus, EVENTS } = require('./eventBus');
 
 // Event-type → shipment/order status mapping. Null means "do not change
 // that status column"; the event is recorded as a timeline note only.
+//   - dateField: the planned-date column (pickup_date / delivery_date)
+//   - tsField:   the actual-timestamp column (shipped_at / delivered_at).
+//                Populating this is what gives the Picked Up / Delivered
+//                rungs in the timeline a real timestamp without relying
+//                on a change_history derivation. Mirrors what
+//                shipConfirm.js already does for the OMS ship-confirm path.
 const EVENT_MAP = {
-  'Picked Up':  { shipStatus: 'In Transit', orderStatus: 'In Transit', dateField: 'pickup_date' },
-  'In Transit': { shipStatus: 'In Transit', orderStatus: 'In Transit', dateField: null },
-  'Departed':   { shipStatus: null,         orderStatus: null,         dateField: null },
-  'Arrived':    { shipStatus: null,         orderStatus: null,         dateField: null },
-  'Delivered':  { shipStatus: 'Delivered',  orderStatus: 'Delivered',  dateField: 'delivery_date' },
-  'Exception':  { shipStatus: 'Exception',  orderStatus: null,         dateField: null },
-  'Delay':      { shipStatus: null,         orderStatus: null,         dateField: null },
-  'Note':       { shipStatus: null,         orderStatus: null,         dateField: null },
+  'Picked Up':  { shipStatus: 'In Transit', orderStatus: 'In Transit', dateField: 'pickup_date',  tsField: 'shipped_at'   },
+  'In Transit': { shipStatus: 'In Transit', orderStatus: 'In Transit', dateField: null,            tsField: 'shipped_at'   },
+  'Departed':   { shipStatus: null,         orderStatus: null,         dateField: null,            tsField: null            },
+  'Arrived':    { shipStatus: null,         orderStatus: null,         dateField: null,            tsField: null            },
+  'Delivered':  { shipStatus: 'Delivered',  orderStatus: 'Delivered',  dateField: 'delivery_date', tsField: 'delivered_at' },
+  'Exception':  { shipStatus: 'Exception',  orderStatus: null,         dateField: null,            tsField: null            },
+  'Delay':      { shipStatus: null,         orderStatus: null,         dateField: null,            tsField: null            },
+  'Note':       { shipStatus: null,         orderStatus: null,         dateField: null,            tsField: null            },
 };
 
 // Single source of truth for shipment-status → linked-order-status.
@@ -124,10 +130,13 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
   const map = EVENT_MAP[type];
   if (!map) { const e = new Error(`Unsupported event type: ${type}`); e.status = 400; throw e; }
 
-  // 1. Read the shipment so we can diff + walk linked orders.
+  // 1. Read the shipment so we can diff + walk linked orders. shipped_at
+  //    and delivered_at are pulled so the tsField stamp below is a no-op
+  //    when the column is already set (idempotent re-firing of the same
+  //    event must not rewrite a real warehouse timestamp).
   const rows = await db.dbSelect('shipments', {
     filters: [['id', 'eq', id]], limit: 1,
-    select: 'id,status,order_ids,pickup_date,delivery_date',
+    select: 'id,status,order_ids,pickup_date,delivery_date,shipped_at,delivered_at',
   });
   const ship = Array.isArray(rows) && rows.length ? rows[0] : null;
   if (!ship) { const e = new Error(`Shipment not found: ${id}`); e.status = 404; throw e; }
@@ -147,6 +156,14 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
   }
   if (map.dateField && !ship[map.dateField]) {
     shipPatch[map.dateField] = eventDate;
+  }
+  // Stamp the actual-timestamp column only when this event is a fresh
+  // status transition (skip on already-set events so a planner replay
+  // doesn't rewrite a real warehouse timestamp). The supplied `date`
+  // arrives as YYYY-MM-DD; we use NOW() instead so the timeline rung
+  // shows when the event actually fired, not the calendar day.
+  if (map.tsField && shipPatch.status && !ship[map.tsField]) {
+    shipPatch[map.tsField] = new Date().toISOString();
   }
 
   if (Object.keys(shipPatch).length) {

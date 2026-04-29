@@ -24,6 +24,7 @@
 
 const db = require('./supabase');
 const history = require('./changeHistory');
+const { bus, EVENTS } = require('./eventBus');
 
 // Classify a PG / Supabase error so the caller can surface a useful
 // reason to the UI instead of opaque raw text. Keys are stable strings
@@ -147,6 +148,27 @@ async function syncTenderAcceptToOms(payload, user) {
     acc[k] = (acc[k] || 0) + 1;
     return acc;
   }, {});
+
+  // Broadcast so live-sync clients refresh the second the OMS mirror
+  // lands. server.js bridges SHIPMENT_UPDATED to wsBroadcast, which the
+  // OMS Sales Orders page picks up via OmsLive (see zoree-oms.html:1098)
+  // and the TMS pages pick up via wsClient.js. Without this, the OMS UI
+  // would stay on "Released to TMS" until a manual refresh — exactly the
+  // failure mode reported for SHP-2026-6004 / ORD-140058.
+  if (updated.length) {
+    try {
+      bus.emit(EVENTS.SHIPMENT_UPDATED, {
+        id:              shipmentId,
+        via:             'tms-tender-accept-auto-sync',
+        carrier:         payload.carrier || null,
+        omsRowsUpdated:  updated,
+        omsRowsSkipped:  skipped.map((s) => s.id),
+        pushedAt:        nowIso,
+      });
+    } catch (busErr) {
+      console.error('[omsSync] tender-accept broadcast failed:', busErr.message);
+    }
+  }
 
   return { shipmentId, pushedAt: nowIso, updated, skipped, skippedByReason };
 }

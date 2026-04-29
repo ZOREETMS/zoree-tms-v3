@@ -928,7 +928,21 @@
       "Bash(curl -sS -o /dev/null -w \"bulkPlan:%{http_code}\\\\n\" \"http://localhost:5174/src/services/bulkPlanService.js\")",
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_extensions",
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_edge_functions",
-      "Bash(grep -E \"\\\\.\\(js|jsx|ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(js|jsx|ts|tsx\\)$\")",
+      "Bash(curl -s --max-time 5 -o /dev/null -w \"Local API 3010: %{http_code}\\\\n\" http://localhost:3010/api)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build --platform android --profile preview --non-interactive --no-wait --message \"Rebuild\")",
+      "Bash(node --check services/shipmentEvents.js)",
+      "Bash(taskkill //PID 34408 //F)",
+      "Bash(node --check services/omsSync.js)",
+      "Bash(taskkill //PID 33160 //F)",
+      "Bash(node --check services/mwQueueWorker.js)",
+      "Bash(node --check services/mwQueueHandlers/index.js)",
+      "Bash(node --check services/mwQueueHandlers/pushOrderHandler.js)",
+      "Bash(node --check services/mwQueueHandlers/pushShipHandler.js)",
+      "Bash(node --check services/mwQueueHandlers/pushPodHandler.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:61918/zoree-oms.html)",
+      "Bash(node --check server.js)",
+      "Bash(taskkill //PID 40576 //F)"
     ]
   }
 }

@@ -15,6 +15,8 @@ const nodemailer = require('nodemailer');
 const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
 const ingestRouter = require('./routes/ingest');
+const { buildMwQueueAdminRouter } = require('./routes/mwQueueAdmin');
+const mwQueueWorker = require('./services/mwQueueWorker');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { matchRate, matchAllRates } = require('./services/rateMatcher');
@@ -580,6 +582,15 @@ app.use('/api/invoices', createInvoicesRouter({
 // Both routes live in routes/ingest.js.
 app.use('/api/ingest', ingestRouter);
 app.use('/api', ingestRouter); // exposes /api/events/orders via the same router
+
+// ── MW Queue Admin (REQ-31) ───────────────────────────────────────
+// GET  /api/mw-queue/status     — worker state
+// POST /api/mw-queue/start      — begin periodic drain
+// POST /api/mw-queue/stop       — halt periodic drain
+// POST /api/mw-queue/run-once   — single-batch drain on demand
+// Auth helpers are passed in so the route module stays free of
+// server.js-level concerns (Supabase client, etc).
+app.use('/api/mw-queue', buildMwQueueAdminRouter({ verifyToken, getUserRole }));
 
 // REQ-29 / REQ-30 — location master search + create
 app.use('/api/locations', locationsRouter);
@@ -3325,6 +3336,18 @@ server.listen(PORT, () => {
   verifySmtpOnStartup().catch(function(err) {
     console.error('   📧 Tender email: verify error:', err && err.message ? err.message : err);
   });
+
+  // REQ-31: backend MW queue worker. Defaults ON so OMS→TMS sync
+  // doesn't depend on a browser tab being open. Disable per-env with
+  // MW_QUEUE_AUTO_START=false (e.g. for tests or while debugging the
+  // browser MW). Interval is configurable via MW_QUEUE_INTERVAL_MS.
+  if (String(process.env.MW_QUEUE_AUTO_START || 'true').toLowerCase() !== 'false') {
+    const intervalMs = Number(process.env.MW_QUEUE_INTERVAL_MS) || undefined;
+    mwQueueWorker.start(intervalMs ? { intervalMs } : {});
+    console.log(`   ✅ MW queue worker started (mwQueueWorker)`);
+  } else {
+    console.log(`   ℹ️  MW queue worker NOT auto-started (MW_QUEUE_AUTO_START=false). Use POST /api/mw-queue/start.`);
+  }
   console.log('');
 });
 

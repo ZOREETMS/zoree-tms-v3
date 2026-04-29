@@ -136,7 +136,6 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
   const [linesLoading, setLinesLoading] = useState(true);
-  const [events, setEvents] = useState([]);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
   const [eventSaving, setEventSaving] = useState(false);
@@ -578,7 +577,6 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                         note: newEvent.note,
                         date: newEvent.date,
                       });
-                      setEvents([...events, { type: newEvent.type, note: newEvent.note, date: newEvent.date, time: new Date().toLocaleTimeString() }]);
                       setNewEvent({ type: "", note: "", date: new Date().toISOString().slice(0, 10) });
                       setShowAddEvent(false);
                       // Keep the modal open — merge the status/date patch from the
@@ -602,22 +600,6 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                 </div>
               </div>
             )}
-
-            {/* Custom Events */}
-            {events.map((ev, i) => (
-              <div key={`custom-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 4 }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#10b981", border: "2px solid #10b981", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
-                    <span style={{ color: "#fff", fontSize: 12 }}>📝</span>
-                  </div>
-                  <div style={{ width: 2, height: 20, background: "#10b981" }} />
-                </div>
-                <div style={{ paddingTop: 4 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{ev.type}</div>
-                  <div style={{ fontSize: 11, color: "var(--text3)" }}>{ev.date} {ev.time}{ev.note ? ` — ${ev.note}` : ""}</div>
-                </div>
-              </div>
-            ))}
 
             {/* Default Timeline */}
             {timelineEvents.map((ev, i) => (

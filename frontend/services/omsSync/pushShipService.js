@@ -75,8 +75,9 @@
     var ingestKey    = deps.ingestKey || null;
     var logEvent     = deps.logEvent;
     var payloadBytes = deps.payloadBytes;
-    var notifyTMS    = deps.notifyTMS;
-
+    // notifyTMS is no longer needed: applyShipConfirm emits SHIPMENT_UPDATED
+    // on the API bus, which the wsBroadcast bridge already fans out to TMS
+    // clients. Sending an extra notify from here would double-broadcast.
     if (!tmsApiBase) {
       throw new Error('pushShipService: deps.tmsApiBase is required (set MW_CONFIG.tmsApi).');
     }
@@ -133,9 +134,6 @@
       }
     }
 
-    if (pushed > 0 && typeof notifyTMS === 'function') {
-      notifyTMS('shipment_status_updated', { source: 'oms', count: pushed });
-    }
     return pushed + ' status push(es)';
   }
 

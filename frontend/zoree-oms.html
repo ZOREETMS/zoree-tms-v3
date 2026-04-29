@@ -1116,6 +1116,42 @@ function startOmsLiveSync(){
       console.log('[OmsLive] status=' + status);
     },
   });
+
+  // Belt-and-braces: subscribe to Supabase Realtime on `oms_orders` directly.
+  // The TMS WebSocket bridge above relies on the API emitting SHIPMENT_UPDATED;
+  // any path that writes to oms_orders without going through the API (the
+  // browser-side middleware's runPullPlanningFlow, multi-tab edits in this
+  // OMS UI itself, future direct DB writes) would otherwise leave the UI
+  // stale. A Realtime channel on the table catches every commit regardless
+  // of the writer. Idempotent with the WS path: _omsLiveSyncRefresh
+  // coalesces concurrent fires so a TMS-driven update that arrives via
+  // both channels still triggers exactly one re-render.
+  _startOmsTableRealtime();
+}
+
+var _omsRealtimeChannel = null;
+function _startOmsTableRealtime(){
+  try {
+    if (_omsRealtimeChannel) return;     // idempotent
+    var client = (typeof omsDb === 'function') ? omsDb() : null;
+    if (!client || typeof client.channel !== 'function') {
+      console.warn('[OmsLive] Supabase Realtime unavailable — table subscription skipped');
+      return;
+    }
+    _omsRealtimeChannel = client
+      .channel('oms-orders-live')
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'oms_orders' },
+          function (msg) {
+            var rowId = (msg && (msg.new || msg.old) || {}).id || '?';
+            _omsLiveSyncRefresh('oms_orders ' + (msg && msg.eventType || 'change') + ' · ' + rowId);
+          })
+      .subscribe(function (status) {
+        console.log('[OmsLive] oms_orders realtime status=' + status);
+      });
+  } catch (e) {
+    console.warn('[OmsLive] table subscription failed:', e && e.message);
+  }
 }
 
 
@@ -1246,6 +1282,7 @@ var ZoreeMiddleware = {
   },
 
   async _execDirect(cmd, payload) {
+    throw new Error('Direct OMS↔TMS execution is disabled. Route through middleware queue via _dispatch().');
     switch(cmd) {
       case 'PUSH_ORDER_TO_TMS': {
         // REQ-01: route through the TMS ingest endpoint so the server
@@ -1255,12 +1292,16 @@ var ZoreeMiddleware = {
         // upsert fallback skipped the services layer (rule violation)
         // and left the TMS UI stale. We now FAIL LOUDLY so the operator
         // sees the ingest outage instead of silently diverging.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        var ingestKey = localStorage.getItem('zoree_tms_ingest_key') || '';
         var resp;
         try {
           resp = await fetch(tmsApi + '/ingest/oms-orders', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+              { 'Content-Type': 'application/json' },
+              ingestKey ? { 'X-API-Key': ingestKey } : {}
+            ),
             body: JSON.stringify({ orders: [payload] }),
           });
         } catch (networkErr) {
@@ -1311,7 +1352,8 @@ var ZoreeMiddleware = {
         // no-skipping-services-layer rules. If the ingest endpoint is
         // unreachable we now FAIL LOUDLY so the warehouse operator (and
         // ops) see the problem instead of silently desyncing data.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        var ingestKey = localStorage.getItem('zoree_tms_ingest_key') || '';
         var body = {
           shipmentId: payload.tmsShipmentId,
           orderIds: payload.orderIds || null,
@@ -1323,7 +1365,10 @@ var ZoreeMiddleware = {
         try {
           resp = await fetch(tmsApi + '/ingest/oms-ship-confirm', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+              { 'Content-Type': 'application/json' },
+              ingestKey ? { 'X-API-Key': ingestKey } : {}
+            ),
             body: JSON.stringify(body),
           });
         } catch (networkErr) {
@@ -1350,7 +1395,8 @@ var ZoreeMiddleware = {
         // the live TMS pages. A previous direct-DB write here left
         // linked orders stranded — the same class of bug we hit on
         // ship-confirm. If ingest is unreachable we FAIL LOUDLY.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
+        var ingestKey = localStorage.getItem('zoree_tms_ingest_key') || '';
         var podBody = {
           shipmentId: payload.tmsShipmentId,
           deliveredAt: payload.deliveredAt,
@@ -1360,7 +1406,10 @@ var ZoreeMiddleware = {
         try {
           podResp = await fetch(tmsApi + '/ingest/oms-pod', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+              { 'Content-Type': 'application/json' },
+              ingestKey ? { 'X-API-Key': ingestKey } : {}
+            ),
             body: JSON.stringify(podBody),
           });
         } catch (networkErr) {
@@ -1397,7 +1446,7 @@ var ZoreeMiddleware = {
       case 'PULL_TMS_SHIPMENT_DETAILS': {
         var sid = payload && payload.shipmentId;
         if (!sid) return { shipment: null };
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3001/api').replace(/\/$/, '');
+        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
         var resp;
         try {
           resp = await fetch(tmsApi + '/shipments/' + encodeURIComponent(sid), {
@@ -1426,60 +1475,27 @@ var ZoreeMiddleware = {
     }
   },
 
-  // ─── Internal: Fire-and-forget dispatch ─────────────────────────────────
-  // Writes to mw_requests queue and returns immediately.
-  // Middleware processes asynchronously in the background.
-  // If mw_requests table doesn't exist, falls back to direct execution.
+  // ─── Internal: Middleware-only dispatch ──────────────────────────────────
+  // All OMS ↔ TMS traffic MUST flow through mw_requests.
+  // No direct OMS → TMS execution is allowed from this page.
   async _dispatch(cmd, payload, omsOrderId) {
     var hasQueue = await this._checkQueue();
     if (hasQueue) {
-      // Enqueue to mw_requests for audit / retry. Historically we
-      // returned here and let a background poller process the row,
-      // but that poller only runs every ~30–60 s, so a user who
-      // booked an order had to wait up to a minute before the TMS
-      // Orders page received the SSE event. The queue row is still
-      // written, but we ALSO fire _execDirect() immediately so the
-      // TMS sees the request inside ~1 s. If the direct path fails,
-      // the queue row survives for the poller to retry — no data
-      // loss, just a belt-and-suspenders hot path.
+      // Queue first, then wait for middleware to process the row.
       var { requestId, error } = await this._enqueue(cmd, payload, omsOrderId);
       if (error) throw error;
       mwLog('📤 Queued → Middleware: ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
         flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
         src: 'OMS', dst: 'MW', recordId: omsOrderId, rowCount: 1, payload, requestId
       });
-      // Inline hot-path execution (fire-and-forget from the caller's POV).
-      try {
-        var inlineResult = await this._execDirect(cmd, payload);
-        mwLog('⚡ Inline → ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
-          flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
-          src: cmd.startsWith('PULL') ? 'TMS' : 'OMS',
-          dst: cmd.startsWith('PULL') ? 'OMS' : 'TMS',
-          recordId: omsOrderId, rowCount: 1, payload, requestId
-        });
-        return { result: { queued: true, inline: true, requestId, ...inlineResult }, error: null };
-      } catch (inlineErr) {
-        // Direct path failed — queued row stays behind so the
-        // background poller can retry. Caller still sees success.
-        console.warn('[_dispatch] inline ' + cmd + ' failed, falling back to queue poll:', inlineErr.message);
-        mwLog('⏳ Inline failed, will retry via queue: ' + inlineErr.message, false, { requestId });
-        return { result: { queued: true, inline: false, requestId }, error: null };
-      }
+      var timeoutMs = cmd.startsWith('PULL') ? 20000 : 30000;
+      var polled = await this._pollResult(requestId, timeoutMs);
+      if (polled.error) throw polled.error;
+      return { result: { queued: true, requestId, ...(polled.result || {}) }, error: null };
     } else {
-      // No queue table — execute directly (legacy/setup mode)
-      try {
-        var result = await this._execDirect(cmd, payload);
-        mwLog('→ [direct] ' + cmd + (omsOrderId ? ' · ' + omsOrderId : ''), true, {
-          flow: cmd.startsWith('PULL') ? 'TMS → OMS' : 'OMS → TMS',
-          src: cmd.startsWith('PULL') ? 'TMS' : 'OMS',
-          dst: cmd.startsWith('PULL') ? 'OMS' : 'TMS',
-          recordId: omsOrderId, rowCount: 1, payload
-        });
-        return { result, error: null };
-      } catch(e) {
-        mwLog('✗ [direct] ' + cmd + ': ' + e.message, false);
-        throw e;
-      }
+      throw new Error(
+        'Middleware queue unavailable. Create mw_requests and run Middleware portal auto-sync; direct OMS→TMS is disabled.'
+      );
     }
   },
 
@@ -1637,14 +1653,14 @@ var ZoreeMiddleware = {
     if (!tmsShipmentId) return { error: null };
     opts = opts || {};
     try {
-      var { error: pollErr } = await this._dispatch('PUSH_SHIP_STATUS', {
+      var dispatchRes = await this._dispatch('PUSH_SHIP_STATUS', {
         tmsShipmentId,
         status: 'In Transit',
         shippedAt: opts.shippedAt || new Date().toISOString(),
         sealNumber: opts.sealNumber || null,
         orderIds:   opts.orderIds   || null,
-      }, null).then(r=>({error:r.error})).catch(e=>({error:e}));
-      if (pollErr) throw pollErr;
+      }, null);
+      if (dispatchRes.error) throw dispatchRes.error;
       return { error: null };
     } catch(e) { return { error: e }; }
   },
@@ -2453,8 +2469,8 @@ async function populateOmTmsPlan(o){
   panel.style.display = 'block';
   var ship = null;
   try {
-    var resp = await ZoreeMiddleware._execDirect('PULL_TMS_SHIPMENT_DETAILS', { shipmentId: o.tmsShipId });
-    ship = resp && resp.shipment;
+    var pulled = await ZoreeMiddleware._dispatch('PULL_TMS_SHIPMENT_DETAILS', { shipmentId: o.tmsShipId }, o.id || null);
+    ship = pulled && pulled.result && pulled.result.shipment;
   } catch(e) {
     grid.innerHTML = '<div style="grid-column:1/-1;color:var(--red);font-size:11px">Could not load TMS plan: '+(e.message||e)+'</div>';
     return;
@@ -2597,13 +2613,13 @@ async function svO(action){
     cl('m-o');ro();updateBadges();updatePipelineCounts();
     // REQ-14: always surface the generated order number on the confirmation
     // toast so users see the ID they need to track / reference the order.
-    // REQ-27: order-creation toasts must stay visible for 60 seconds unless
-    // the user dismisses them manually via the × button.
+    // REQ-27: order-creation toasts stay visible for 30 seconds (default)
+    // unless the user dismisses them manually via the × button.
     if(action==='book'){
-      toast('✅ Order '+id+' has been booked successfully — Stage 2','tok',{ durationMs: 60000, dismissible: true });
+      toast('✅ Order '+id+' has been booked successfully — Stage 2','tok',{ durationMs: 30000, dismissible: true });
       openAvail(id);
     } else {
-      toast('✅ Order '+id+' has been created (Draft)','tin',{ durationMs: 60000, dismissible: true });
+      toast('✅ Order '+id+' has been created (Draft)','tin',{ durationMs: 30000, dismissible: true });
     }
   }catch(e){toast('❌ '+e.message,'ter');console.error(e);}
 }
@@ -2875,6 +2891,9 @@ async function confirmShip(){
   o.driverSign=document.getElementById('sh-driver').value;
   o.piecesLoaded=parseInt(document.getElementById('sh-pcs').value)||0;
   o.stage=10;o.shippedAt=new Date().toISOString();
+  // Close modal immediately for responsive UX — async work continues below
+  // and reports success/failure via toast regardless.
+  cl('m-ship');
   try{
     // Deduct inventory (unreserve + reduce qty)
     for(var l of (o.lines||[])){
@@ -2898,8 +2917,12 @@ async function confirmShip(){
     });
     if(mwRes.error) console.warn('[confirmShip] TMS status push failed:', mwRes.error.message);
     mwLog(mwRes.error ? '⚠ pushShipStatus failed for ' + o.tmsShipId : '→ pushShipStatus: ' + o.tmsShipId + ' → In Transit', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','shipped_at'], payload:{tmsShipmentId:o.tmsShipId, status:'In Transit', shippedAt:o.shippedAt, sealNumber:o.sealNum, orderIds:[o.id]}});
-    cl('m-ship');rd();ro();ri();updateBadges();updatePipelineCounts();
-    toast('🚛 Shipped — '+o.id+(o.tmsShipId?' · TMS → In Transit':''),'tok');
+    rd();ro();ri();updateBadges();updatePipelineCounts();
+    if (mwRes.error && o.tmsShipId) {
+      toast('⚠ Shipped in OMS, but TMS status push failed: ' + mwRes.error.message, 'ter');
+    } else {
+      toast('🚛 Shipped — '+o.id+(o.tmsShipId?' · TMS → In Transit':''),'tok');
+    }
   }catch(e){toast('❌ '+e.message,'ter');}
 }
 

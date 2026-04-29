@@ -1,0 +1,42 @@
+-- ============================================================
+-- Migration: Add oms_orders to the supabase_realtime publication
+-- Date:      2026-04-29
+-- Author:    Claude (with @sidtkonathala)
+--
+-- Purpose
+-- -------
+-- The OMS Sales Orders UI (frontend/zoree-oms.html) subscribes to a
+-- Supabase Realtime channel on `oms_orders` so it can re-render live
+-- when ANY writer changes the table — TMS-driven (POST /api/oms/push,
+-- POST /api/ingest/oms-pod, applyShipmentEvent), middleware-driven
+-- (runPullPlanningFlowEnhanced direct write), or OMS-side multi-tab
+-- edits. Without the table in the publication, postgres_changes events
+-- never reach the browser and the page stays stale until a manual
+-- refresh — exactly the failure the planner reported for SHP-2026-6004.
+--
+-- Tables already in the publication (verified 2026-04-29):
+--   public.shipments, public.orders
+-- This adds:
+--   public.oms_orders
+--
+-- Impact
+-- ------
+-- + Read amplification: every committed change on oms_orders fans out
+--   over the Realtime channel. The OMS UI is the only consumer today;
+--   debounced via _omsLiveSyncRefresh (coalesces concurrent fires) so
+--   one batch UPDATE = one full reload, not N reloads.
+-- + RLS: the Realtime publication respects RLS. Subscribers see only
+--   the rows their JWT is allowed to see. No data exposure beyond what
+--   the OMS UI already reads via SELECT.
+-- + Cost: marginal — Supabase Realtime is included; for our scale
+--   (a few hundred order changes/day) bandwidth is negligible.
+-- + Backwards compatibility: pure additive — existing direct-SELECT
+--   queries on oms_orders are unaffected. Removing the table from the
+--   publication later only loses the live-refresh feature.
+--
+-- Rollback
+-- --------
+--   ALTER PUBLICATION supabase_realtime DROP TABLE public.oms_orders;
+-- ============================================================
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.oms_orders;

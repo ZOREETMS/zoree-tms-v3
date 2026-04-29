@@ -301,6 +301,27 @@ export const OmsApi = {
   },
 };
 
+// MW Queue Worker admin API — surfaces the lifecycle of the backend
+// queue drainer that ports zoree-middleware.html's processMWQueue. All
+// endpoints are admin-only on the server side (see api/routes/mwQueueAdmin.js).
+export const MwQueueApi = {
+  status() {
+    return api("/mw-queue/status");
+  },
+  start(intervalMs) {
+    return api("/mw-queue/start", {
+      method: "POST",
+      body: JSON.stringify(intervalMs ? { intervalMs } : {}),
+    });
+  },
+  stop() {
+    return api("/mw-queue/stop", { method: "POST" });
+  },
+  runOnce() {
+    return api("/mw-queue/run-once", { method: "POST" });
+  },
+};
+
 // Thin wrapper around POST /api/notify → wsBroadcast on the server.
 // Lets the services layer fan-out events to every connected TMS client
 // and to external listeners (zoree-oms.html's OmsLive, Middleware) with
