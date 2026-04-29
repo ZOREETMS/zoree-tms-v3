@@ -1135,12 +1135,21 @@ async function runFullSync(){
 function _omsSyncDeps(){
   var svc = (window.ZoreeMW && window.ZoreeMW.services && window.ZoreeMW.services.omsSync);
   if(!svc) throw new Error('OMS sync services not loaded — check <script> tags.');
+  // TMS API base for the ingest endpoints. Configurable via MW_CONFIG.tmsApi
+  // so the same middleware can target dev (localhost) vs deployed envs.
+  // push-ship / push-pod call the ingest endpoints rather than direct DB
+  // updates so the API can write change_history audit rows and emit the
+  // SHIPMENT_UPDATED event that drives live TMS UI refresh.
+  var tmsApiBase = (MW_CONFIG && MW_CONFIG.tmsApi) || 'http://localhost:3010/api';
+  var ingestKey  = (MW_CONFIG && MW_CONFIG.ingestKey) || null;
   return {
     omsDb:        omsDb,
     tmsDb:        tmsDb,
     logEvent:     logEvent,
     payloadBytes: payloadBytes,
-    notifyTMS:    svc.buildDefaultNotify('http://localhost:3001/api/notify'),
+    tmsApiBase:   tmsApiBase,
+    ingestKey:    ingestKey,
+    notifyTMS:    svc.buildDefaultNotify(tmsApiBase + '/notify'),
   };
 }
 

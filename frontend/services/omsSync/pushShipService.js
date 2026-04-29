@@ -31,21 +31,55 @@
       .is('tms_ship_status_pushed_at', null);
   }
 
-  async function updateTmsToInTransit(tmsDb, omsRow) {
-    var shipUpd = { status: 'In Transit' };
-    var r1 = await tmsDb().from('shipments').update(shipUpd).eq('id', omsRow.tms_shipment_id);
-    var r2 = await tmsDb().from('orders').update({ status: 'In Transit' }).eq('id', omsRow.id);
-    return { error: r1.error || r2.error, shipUpd: shipUpd };
+  // Routes through the TMS API ingest endpoint instead of writing the
+  // status directly into the shipments / orders tables. The API handler
+  // (api/services/shipConfirm.js) is the single writer for this transition,
+  // which is what makes the audit-row + live-refresh story work:
+  //   • change_history rows are written for shipment + each linked order,
+  //     so the timeline derivation finds real "Picked Up" / "In Transit"
+  //     timestamps instead of falling back to "Confirmed".
+  //   • bus.emit(SHIPMENT_UPDATED) → wsBroadcast, so any open TMS detail
+  //     modal flips its rungs live without a manual refresh.
+  //   • mirrorBolPro propagates BOL / PRO back to the OMS row for free.
+  // Direct DB writes from the browser bypassed all three.
+  async function updateTmsToInTransit(tmsApiBase, ingestKey, omsRow) {
+    var url = String(tmsApiBase || '').replace(/\/+$/, '') + '/ingest/oms-ship-confirm';
+    var headers = { 'Content-Type': 'application/json' };
+    if (ingestKey) headers['X-API-Key'] = ingestKey;
+    var body = {
+      shipmentId: omsRow.tms_shipment_id,
+      orderIds:   [omsRow.id],
+      shippedAt:  omsRow.shipped_at || null,
+      sealNumber: omsRow.seal_number || null,
+      source:     'oms-wms',
+    };
+    try {
+      var res = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+      var json = null;
+      try { json = await res.json(); } catch (_) { json = null; }
+      if (!res.ok) {
+        var msg = (json && (json.error || json.message)) || ('HTTP ' + res.status);
+        return { error: { message: msg }, shipUpd: body };
+      }
+      return { error: null, shipUpd: body, response: json };
+    } catch (err) {
+      return { error: { message: err.message || 'fetch failed' }, shipUpd: body };
+    }
   }
 
   // ── Orchestration ─────────────────────────────────────────────────────
 
   async function runPushShip(deps) {
     var omsDb        = deps.omsDb;
-    var tmsDb        = deps.tmsDb;
+    var tmsApiBase   = deps.tmsApiBase;
+    var ingestKey    = deps.ingestKey || null;
     var logEvent     = deps.logEvent;
     var payloadBytes = deps.payloadBytes;
     var notifyTMS    = deps.notifyTMS;
+
+    if (!tmsApiBase) {
+      throw new Error('pushShipService: deps.tmsApiBase is required (set MW_CONFIG.tmsApi).');
+    }
 
     var res = await fetchPendingShipStatuses(omsDb);
     if (res.error) throw res.error;
@@ -67,7 +101,7 @@
     var pushed = 0;
     for (var i = 0; i < data.length; i++) {
       var o = data[i];
-      var upd = await updateTmsToInTransit(tmsDb, o);
+      var upd = await updateTmsToInTransit(tmsApiBase, ingestKey, o);
 
       if (!upd.error) {
         await tracking.stampShipStatusPushed(omsDb, o.id);

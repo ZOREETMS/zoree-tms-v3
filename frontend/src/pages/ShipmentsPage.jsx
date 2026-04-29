@@ -311,9 +311,13 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     // Previously the timeline jumped straight from "Tendered" to "Picked Up",
     // leaving the accept step invisible to the planner.
     { icon: "🤝", label: "Tender Accepted", done: isTenderAccepted, time: isTenderAccepted ? phaseLine("accepted", null, "Confirmed") : "Pending" },
-    { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? phaseLine("pickedUp", null, "Confirmed") : "Pending" },
-    { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? phaseLine("inTransit", null, "En route") : "Pending" },
-    { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? phaseLine("delivered", null, "Confirmed") : "Pending" },
+    // shipped_at is stamped by the OMS ship-confirm path even when no
+    // "status → Picked Up / In Transit" audit row was written, so use it
+    // as the row-level fallback for both rungs (pick-up is the load-out
+    // moment, transit starts immediately after).
+    { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? phaseLine("pickedUp", ds.shipped_at, "Confirmed") : "Pending" },
+    { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? phaseLine("inTransit", ds.shipped_at, "En route") : "Pending" },
+    { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? phaseLine("delivered", ds.delivered_at, "Confirmed") : "Pending" },
   ];
 
   return (

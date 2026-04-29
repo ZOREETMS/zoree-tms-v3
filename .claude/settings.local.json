@@ -927,7 +927,8 @@
       "Bash(curl -sS -o /dev/null -w \"ctx:%{http_code} \" \"http://localhost:5174/src/services/zoreeAIContext.js\")",
       "Bash(curl -sS -o /dev/null -w \"bulkPlan:%{http_code}\\\\n\" \"http://localhost:5174/src/services/bulkPlanService.js\")",
       "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_extensions",
-      "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_edge_functions"
+      "mcp__8325f4aa-93c0-4a89-9efa-71775b72ef84__list_edge_functions",
+      "Bash(grep -E \"\\\\.\\(js|jsx|ts|tsx\\)$\")"
     ]
   }
 }

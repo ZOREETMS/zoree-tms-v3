@@ -31,21 +31,58 @@
       .is('tms_pod_pushed_at', null);
   }
 
-  async function updateTmsToDelivered(tmsDb, omsRow) {
-    var shipUpd = { status: 'Delivered' };
-    var r1 = await tmsDb().from('shipments').update(shipUpd).eq('id', omsRow.tms_shipment_id);
-    var r2 = await tmsDb().from('orders').update({ status: 'Delivered' }).eq('id', omsRow.id);
-    return { error: r1.error || r2.error, shipUpd: shipUpd };
+  // Routes through the TMS API ingest endpoint (api/routes/ingest.js
+  // → applyShipmentEvent('Delivered')) so the API can:
+  //   • Write change_history rows for the shipment + each linked order
+  //     (status → 'Delivered', metadata.via = 'timeline-event'),
+  //     populating the Delivered rung's timestamp without row-fallback.
+  //   • Emit SHIPMENT_UPDATED + ORDER_UPDATED on the bus → wsBroadcast,
+  //     so open TMS pages flip live without a refresh.
+  //   • Stamp delivery_date on the shipment row (idempotent).
+  // Direct DB writes from the browser skipped all of that.
+  async function updateTmsToDelivered(tmsApiBase, ingestKey, omsRow) {
+    var url = String(tmsApiBase || '').replace(/\/+$/, '') + '/ingest/oms-pod';
+    var headers = { 'Content-Type': 'application/json' };
+    if (ingestKey) headers['X-API-Key'] = ingestKey;
+    // Compose a short note from the POD condition / receiver so the audit
+    // row carries the OMS-captured detail forward into the TMS history drawer.
+    var noteParts = [];
+    if (omsRow.pod_received_by) noteParts.push('POD by: ' + omsRow.pod_received_by);
+    if (omsRow.pod_condition)   noteParts.push('Condition: ' + omsRow.pod_condition);
+    if (omsRow.pod_notes)       noteParts.push(String(omsRow.pod_notes));
+    var body = {
+      shipmentId:  omsRow.tms_shipment_id,
+      deliveredAt: omsRow.delivered_at || null,
+      note:        noteParts.length ? noteParts.join(' · ') : null,
+      source:      'oms-wms',
+    };
+    try {
+      var res = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+      var json = null;
+      try { json = await res.json(); } catch (_) { json = null; }
+      if (!res.ok) {
+        var msg = (json && (json.error || json.message)) || ('HTTP ' + res.status);
+        return { error: { message: msg }, shipUpd: body };
+      }
+      return { error: null, shipUpd: body, response: json };
+    } catch (err) {
+      return { error: { message: err.message || 'fetch failed' }, shipUpd: body };
+    }
   }
 
   // ── Orchestration ─────────────────────────────────────────────────────
 
   async function runPushPod(deps) {
     var omsDb        = deps.omsDb;
-    var tmsDb        = deps.tmsDb;
+    var tmsApiBase   = deps.tmsApiBase;
+    var ingestKey    = deps.ingestKey || null;
     var logEvent     = deps.logEvent;
     var payloadBytes = deps.payloadBytes;
     var notifyTMS    = deps.notifyTMS;
+
+    if (!tmsApiBase) {
+      throw new Error('pushPodService: deps.tmsApiBase is required (set MW_CONFIG.tmsApi).');
+    }
 
     var res = await fetchPendingPods(omsDb);
     if (res.error) throw res.error;
@@ -67,7 +104,7 @@
     var pushed = 0;
     for (var i = 0; i < data.length; i++) {
       var o = data[i];
-      var upd = await updateTmsToDelivered(tmsDb, o);
+      var upd = await updateTmsToDelivered(tmsApiBase, ingestKey, o);
 
       if (!upd.error) {
         await tracking.stampPodPushed(omsDb, o.id);
