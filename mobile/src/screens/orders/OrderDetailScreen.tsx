@@ -243,7 +243,11 @@ export default function OrderDetailScreen() {
             label="Edit"
             icon="create-outline"
             color={colors.accent}
-            onPress={() => navigation.navigate('OrderDetail', { orderId: order.id, edit: true })}
+            // Edit opens OrderFormScreen pre-populated from this
+            // order. The previous handler navigated back to
+            // OrderDetail with `edit: true`, but OrderDetailScreen
+            // never read that flag — so the button silently no-op'd.
+            onPress={() => navigation.navigate('OrderForm', { orderId: order.id })}
             disabled={updating}
           />
           <ActionButton

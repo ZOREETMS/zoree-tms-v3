@@ -5,6 +5,7 @@ import { PlanningTabParamList } from '../types';
 // Order screens
 import OrdersScreen from '../../screens/orders/OrdersScreen';
 import OrderDetailScreen from '../../screens/orders/OrderDetailScreen';
+import OrderFormScreen from '../../screens/orders/OrderFormScreen';
 
 // Shipment screens
 import ShipmentsScreen from '../../screens/shipments/ShipmentsScreen';
@@ -39,6 +40,7 @@ export default function PlanningStack() {
       {/* Orders */}
       <Stack.Screen name="Orders" component={OrdersScreen} />
       <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+      <Stack.Screen name="OrderForm" component={OrderFormScreen} />
 
       {/* Shipments */}
       <Stack.Screen name="Shipments" component={ShipmentsScreen} />

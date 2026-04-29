@@ -114,7 +114,17 @@ export default function DashboardScreen() {
           <TouchableOpacity
             style={styles.actionButton}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('PlanningTab', { screen: 'OrderDetail', params: { orderId: 'new' } })}
+            // Quick Actions → New Order opens the dedicated
+            // OrderFormScreen in create mode (no orderId). The
+            // legacy "OrderDetail with orderId='new'" path 404'd
+            // because OrderDetailScreen is read-only and renders
+            // "Order not found" when its lookup misses.
+            onPress={() =>
+              navigation.navigate('PlanningTab', {
+                screen: 'OrderForm',
+                params: {},
+              })
+            }
           >
             <View style={[styles.actionIcon, { backgroundColor: `${colors.accent}14` }]}>
               <Ionicons name="add-circle-outline" size={22} color={colors.accent} />

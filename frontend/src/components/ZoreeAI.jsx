@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DbApi } from "../lib/api";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import useSpeechSynthesis from "../hooks/useSpeechSynthesis";
-import { unplanOrderFromShipment } from "../services/ordersService";
-import { planOrdersAsSingleShipment } from "../services/bulkPlanService";
 import { sendMessage } from "../services/zoreeAIService";
+import {
+  executeChatAction,
+  isDestructiveChatAction,
+} from "../services/zoreeAIActionsService";
 
 /* ─────────────────────────────────────────────
    ZoreeAI — Floating chat assistant (UI only)
@@ -47,7 +48,14 @@ function actionLabel(a) {
     case "UPDATE_SHIPMENT_STATUS":
       return `Update Shipment ${p.shipmentId} → ${p.newStatus}`;
     case "ASSIGN_CARRIER":
-      return `Assign ${p.carrier} to Shipment ${p.shipmentId}`;
+    case "CHANGE_CARRIER":
+      return `🔄 Change Carrier on ${p.shipmentId} → ${p.carrier} (re-rates the lane)`;
+    case "TENDER_SHIPMENT":
+      return `📤 Tender Shipment ${p.shipmentId}${p.carrier ? ` to ${p.carrier}` : ""}`;
+    case "ADD_SHIPMENT_EVENT":
+      return `📌 Add Event on ${p.shipmentId} — ${p.type || p.eventType}${p.note ? `: ${p.note}` : ""}`;
+    case "COPY_ORDER":
+      return `📄 Copy Order ${p.orderId} → new Unplanned order`;
     case "HOLD_ORDER":
       return `Put Order ${p.orderId} On Hold — ${p.reason}`;
     case "CANCEL_ORDER":
@@ -150,191 +158,16 @@ export default function ZoreeAI({ data }) {
     chatHistoryRef.current = [];
   }
 
-  // ── Action executor — calls real TMS API ──────────────
+  // ── Action executor ──────────────────────────────────
+  // Component is UI-only (CLAUDE_RULES §1, §3, §4). All TMS-mutating
+  // logic lives in services/zoreeAIActionsService — this wrapper just
+  // forwards the chat snapshot and refreshes the UI on success.
   async function executeAction(actionData) {
-    const p = actionData.params || {};
-    const { orders = [], shipments = [], refreshData, refreshCoreData } = data || {};
+    const { orders = [], shipments = [], carriers = [], rates = [], refreshData, refreshCoreData } = data || {};
     const refreshAfterMutation = refreshCoreData || refreshData;
-
-    switch (actionData.action) {
-      case "PLAN_ORDER": {
-        let rawIds = p.orderIds || (p.orderId ? [p.orderId] : []);
-        if (!Array.isArray(rawIds)) rawIds = [rawIds];
-        if (rawIds.length === 0) throw new Error("No order IDs provided");
-
-        const planOrders = rawIds.map((oid) => {
-          const ord = orders.find((o) => o.id === oid);
-          if (!ord) throw new Error(`Order ${oid} not found`);
-          if (ord.status !== "Unplanned") throw new Error(`Order ${oid} is ${ord.status} — only Unplanned orders can be planned`);
-          return ord;
-        });
-
-        // Route through the same rate → plan → execute pipeline that
-        // regular bulk planning uses. This ensures the new shipment
-        // carries the full cost breakdown (rate, fuel_surcharge,
-        // accessorials, service_level, miles, rate_id, equipment,
-        // total_cost) instead of zeros — fixing the parity gap between
-        // chat-created and UI-created shipments.
-        const result = await planOrdersAsSingleShipment(planOrders, { carrier: p.carrier });
-        if (!result.ok) throw new Error(result.errorMessage || "Failed to plan orders");
-
-        if (refreshAfterMutation) await refreshAfterMutation();
-
-        const ship = result.shipment;
-        const originCity = (ship.origin || "").split(",")[0];
-        const destCity = (ship.dest || "").split(",")[0];
-        return `Shipment **${ship.id}** created · ${rawIds.length} order(s) · Carrier: ${ship.carrier} · ${ship.mode} · $${(ship.total_cost || 0).toLocaleString()} · ${originCity} → ${destCity}`;
-      }
-
-      case "UPDATE_ORDER_STATUS": {
-        const o = orders.find((x) => x.id === p.orderId);
-        if (!o) throw new Error(`Order ${p.orderId} not found`);
-        const prev = o.status;
-        const isUnplanning = p.newStatus === "Unplanned";
-        if (isUnplanning) {
-          const { message } = await unplanOrderFromShipment(p.orderId, orders, shipments);
-          if (refreshAfterMutation) await refreshAfterMutation();
-          return message;
-        }
-
-        await DbApi.patch("orders", p.orderId, { status: p.newStatus });
-
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Order ${p.orderId} status changed from ${prev} → ${p.newStatus}`;
-      }
-
-      case "UPDATE_SHIPMENT_STATUS": {
-        const s = shipments.find((x) => x.id === p.shipmentId);
-        if (!s) throw new Error(`Shipment ${p.shipmentId} not found`);
-        const prev = s.status;
-        const patch = { status: p.newStatus };
-        if (p.newStatus === "In Transit" && !s.shipped_at) patch.shipped_at = new Date().toISOString();
-        if (p.newStatus === "Delivered" && !s.delivered_at) patch.delivered_at = new Date().toISOString();
-        await DbApi.patch("shipments", p.shipmentId, patch);
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Shipment ${p.shipmentId} status changed from ${prev} → ${p.newStatus}`;
-      }
-
-      case "ASSIGN_CARRIER": {
-        const s = shipments.find((x) => x.id === p.shipmentId);
-        if (!s) throw new Error(`Shipment ${p.shipmentId} not found`);
-        const prev = s.carrier || "None";
-        await DbApi.patch("shipments", p.shipmentId, { carrier: p.carrier });
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Carrier for shipment ${p.shipmentId} set to ${p.carrier} (was: ${prev})`;
-      }
-
-      case "HOLD_ORDER": {
-        await DbApi.patch("orders", p.orderId, { status: "On Hold", notes: `HOLD: ${p.reason || "AI action"}` });
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Order ${p.orderId} placed On Hold — ${p.reason}`;
-      }
-
-      case "CANCEL_ORDER": {
-        await DbApi.patch("orders", p.orderId, { status: "Cancelled", notes: `CANCELLED: ${p.reason || "AI action"}` });
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Order ${p.orderId} cancelled — ${p.reason}`;
-      }
-
-      case "CANCEL_SHIPMENT": {
-        const linked = orders.filter((o) => o.shipment_id === p.shipmentId);
-        for (const o of linked) {
-          await DbApi.patch("orders", o.id, { status: "Unplanned", shipment_id: null });
-        }
-        await DbApi.patch("shipments", p.shipmentId, { status: "Cancelled", notes: `CANCELLED: ${p.reason || "AI action"}` });
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Shipment ${p.shipmentId} cancelled · ${linked.length} order(s) returned to Unplanned`;
-      }
-
-      case "FLAG_EXCEPTION": {
-        await DbApi.patch("shipments", p.shipmentId, { status: "Exception", notes: `EXCEPTION: ${p.issue || "Flagged by AI"}` });
-        if (refreshAfterMutation) await refreshAfterMutation();
-        return `Shipment ${p.shipmentId} flagged as Exception — ${p.issue}`;
-      }
-
-      case "GET_RATES": {
-        const originZip = p.originZip || "";
-        const destZip = p.destZip || "";
-        const weight = parseInt(p.weight) || 5000;
-        const freightClass = parseInt(p.freightClass) || 70;
-        const originCity = p.originCity || "";
-        const destCity = p.destCity || "";
-        if (!originZip || !destZip) throw new Error("originZip and destZip are required");
-
-        const apiBase = import.meta.env.VITE_API_BASE || window.ZOREE_API_URL || "http://localhost:3001/api";
-        const token = localStorage.getItem("zoree_token") || "";
-        const lane = {
-          laneKey: `${originZip}-${destZip}`,
-          originZip, destZip,
-          totalWeight: weight,
-          freightClass,
-          origin: originCity || originZip,
-          destination: destCity || destZip,
-          orderIds: [],
-        };
-        const res = await fetch(`${apiBase.replace(/\/api\/?$/, "")}/api/bulk-plan/rate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ lanes: [lane], optimizeBy: "cost" }),
-        });
-        const rateData = await res.json();
-        const result = rateData?.results?.[0];
-        if (!result || !result.quotes?.length) {
-          return `No rates available for ${originZip}→${destZip} (${weight} lbs). Check that carriers/rates are configured for this lane.`;
-        }
-
-        const ltlQuotes = result.quotes.filter((q) => q.mode === "LTL");
-        const tlQuotes = result.quotes.filter((q) => q.mode === "TL");
-        const otherQuotes = result.quotes.filter((q) => q.mode !== "LTL" && q.mode !== "TL");
-        const best = result.bestQuote;
-        const lines = [];
-
-        lines.push(`**Load type:** ${result.loadType || "—"}`);
-        if (best) lines.push(`**Best quote:** ${best.carrier} (${best.mode}) — **$${best.totalCharge}**`);
-        lines.push("");
-
-        if (ltlQuotes.length > 0) {
-          lines.push(`**LTL Rates** (${ltlQuotes.length} carriers):`);
-          ltlQuotes.forEach((q) => {
-            const disc = q.discountPct > 0 ? ` | Disc: ${q.discountPct}%` : "";
-            const fsc = q.fscCharge > 0 ? ` | FSC: $${q.fscCharge}` : "";
-            const transit = q.transitDays ? ` | Transit: ${q.transitDays}d` : "";
-            const svc = q.serviceLevel ? ` | ${q.serviceLevel}` : "";
-            const rec = q.recommended ? " ⭐" : "";
-            lines.push(`• ${q.carrier}: **$${q.totalCharge}**${disc}${fsc}${transit}${svc}${rec}`);
-          });
-          lines.push("");
-        }
-
-        if (tlQuotes.length > 0) {
-          lines.push(`**TL Rates** (${tlQuotes.length} carriers):`);
-          tlQuotes.forEach((q) => {
-            const miles = q.pcmilerMiles || q.miles ? ` | ${q.pcmilerMiles || q.miles} mi` : "";
-            const fsc = q.fscCharge > 0 ? ` | FSC: $${Math.round(q.fscCharge)}` : "";
-            const transit = q.transitDays ? ` | Transit: ${q.transitDays}d` : "";
-            const rec = q.recommended ? " ⭐" : "";
-            lines.push(`• ${q.carrier}: **$${q.totalCharge}**${miles}${fsc}${transit}${rec}`);
-          });
-          lines.push("");
-        }
-
-        if (otherQuotes.length > 0) {
-          lines.push(`**Other Modes** (${otherQuotes.length}):`);
-          otherQuotes.forEach((q) => {
-            lines.push(`• ${q.carrier} (${q.mode}): **$${q.totalCharge}**`);
-          });
-        }
-
-        if (!ltlQuotes.length && !tlQuotes.length && !otherQuotes.length) {
-          return `No carrier quotes returned for ${originZip}→${destZip} (${weight} lbs).`;
-        }
-
-        return `Live rates for ${originCity || originZip} → ${destCity || destZip} (${weight.toLocaleString()} lbs, Class ${freightClass}):\n\n${lines.join("\n")}`;
-      }
-
-      default:
-        throw new Error(`Unknown action: ${actionData.action}`);
-    }
+    const message = await executeChatAction(actionData, { orders, shipments, carriers, rates });
+    if (refreshAfterMutation) await refreshAfterMutation();
+    return message;
   }
 
   // Shared action runner — executes an action by ID, updates message status and chat history
@@ -418,9 +251,10 @@ export default function ZoreeAI({ data }) {
       let shouldSpeakReply = true;
       if (action) {
         const actionId = `act-${Date.now()}`;
-        // Destructive actions require user confirmation; safe actions auto-execute
-        const destructiveActions = ["CANCEL_ORDER", "CANCEL_SHIPMENT"];
-        const needsConfirmation = destructiveActions.includes(action.action);
+        // Destructive actions require user confirmation; safe actions auto-execute.
+        // Source of truth lives next to the executor so adding a new
+        // destructive action means updating one place (CLAUDE_RULES §10).
+        const needsConfirmation = isDestructiveChatAction(action.action);
 
         if (needsConfirmation) {
           pendingActionsRef.current[actionId] = action;
