@@ -26,7 +26,11 @@ export type OverviewTabParamList = {
 
 export type PlanningTabParamList = {
   Orders: undefined;
-  OrderDetail: { orderId: string; edit?: boolean };
+  OrderDetail: { orderId: string };
+  // OrderForm handles both create and edit, mirroring ItemForm /
+  // LocationForm. Pass `orderId` to edit an existing order; omit it
+  // for the New Order flow used by Dashboard → Quick Actions.
+  OrderForm: { orderId?: string };
   Shipments: undefined;
   ShipmentDetail: { shipmentId: string };
   ShipmentMap: { shipmentId: string };

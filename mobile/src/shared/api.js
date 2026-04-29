@@ -162,6 +162,37 @@ export const OrdersApi = {
       method: "DELETE",
     });
   },
+  /**
+   * Create a new order via the service-layer endpoint.
+   * Server-side this hits api/server.js POST /api/orders, which runs
+   * the payload through apiOrderToDbPatch — that mapper accepts both
+   * camelCase (destination, originZip, shipMode, …) and snake_case
+   * (dest, origin_zip, ship_mode, …) keys, so callers don't have to
+   * normalise. Returns the created row (DB shape).
+   *
+   * Prefer this over DbApi.upsert('orders', …): the raw upsert path
+   * is field-name-strict, which previously dropped camelCase keys to
+   * NULL and triggered NOT-NULL upsert failures (400) on copy.
+   */
+  create(payload) {
+    return api("/orders", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+  /**
+   * Patch an existing order via the service-layer endpoint.
+   * Server-side this hits api/server.js PATCH /api/orders/:id, which
+   * also runs through apiOrderToDbPatch and additionally records the
+   * change-history field diffs (REQ-02). Returns the updated row in
+   * the dbToOrderApi camelCase shape.
+   */
+  update(id, patch) {
+    return api(`/orders/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch || {}),
+    });
+  },
 };
 
 export const TenderApi = {

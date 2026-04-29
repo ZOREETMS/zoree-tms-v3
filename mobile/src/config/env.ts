@@ -18,7 +18,7 @@ const DEV_API_BASE = Platform.select({
   default: `http://${LOCAL_IP}:3001/api`,
 });
 
-const PROD_API_BASE = 'https://api.zoree.com/api'; // Replace with production URL
+const PROD_API_BASE = 'https://boys-additional-employment-closely.trycloudflare.com/api';
 
 export const API_BASE = __DEV__ ? DEV_API_BASE : PROD_API_BASE;
 

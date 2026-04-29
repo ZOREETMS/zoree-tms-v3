@@ -246,6 +246,17 @@ export const OrdersApi = {
 };
 
 export const ShipmentsApi = {
+  // Create a shipment via the dedicated endpoint so the backend writes
+  // the 'create' change_history row alongside the row insert. Manual
+  // creates that previously went through DbApi.upsert("shipments", ...)
+  // skipped the audit, leaving the Shipment Details timeline without a
+  // real "Order Created" timestamp.
+  create(payload) {
+    return api("/shipments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
   remove(id) {
     return api(`/shipments/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

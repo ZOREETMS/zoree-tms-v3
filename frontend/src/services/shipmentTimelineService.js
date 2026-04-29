@@ -15,6 +15,7 @@
 
 /** Phase keys the timeline cares about. */
 export const TIMELINE_PHASES = Object.freeze([
+  "created",
   "tendered",
   "accepted",
   "pickedUp",
@@ -78,6 +79,13 @@ export function derivePhaseTimestamps(historyRows) {
   for (const row of historyRows || []) {
     const tsRaw = row && (row.tsRaw || row.ts);
     if (!tsRaw) continue;
+
+    // 0. Creation event — when the shipment row was first written.
+    //    Pairs with the "Order Created & Rate Confirmed" rung so it has
+    //    a real timestamp instead of a static "Confirmed" label.
+    if ((row.action || row.type) === "create") {
+      remember("created", tsRaw);
+    }
 
     // 1. Tender event itself — when the carrier was first tendered.
     if ((row.action || row.type) === "tender") {

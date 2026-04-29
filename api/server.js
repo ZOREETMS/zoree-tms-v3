@@ -1588,6 +1588,43 @@ app.get('/api/shipments', async (req, res) => {
     res.json({ shipments: rows, total: rows.length });
   } catch(e){ res.status(500).json({error:e.message}); }
 });
+// POST /api/shipments — create a single shipment + write a 'create'
+// audit row, mirroring the BulkPlan path so the Shipment Details
+// timeline can show a real "Order Created & Rate Confirmed" timestamp
+// instead of a static "Confirmed" label. Manual creates / copies that
+// previously went through DbApi.upsert("shipments", ...) skipped the
+// audit and broke the timeline rung (CLAUDE_RULES §4: API + audit
+// belong on the server, not in UI).
+app.post('/api/shipments', async (req, res) => {
+  const user = await verifyToken(req, res);
+  if (!user) return;
+  const role = getUserRole(user);
+  if (!['admin', 'planner'].includes(role)) {
+    return res.status(403).json({ error: `Role '${role}' cannot create shipments. Required: admin, planner.` });
+  }
+  // Pull non-column metadata fields out before insert so they don't
+  // poison the DB write but still flow into the audit row.
+  const { copiedFrom = null, ...shipmentRow } = req.body || {};
+  if (!shipmentRow.id) return res.status(400).json({ error: 'shipment.id required' });
+  try {
+    const row = await dbUpsert('shipments', shipmentRow, null);
+    try {
+      await history.recordChange({
+        entityType: 'shipment',
+        entityId:   shipmentRow.id,
+        action:     'create',
+        after:      { status: shipmentRow.status, carrier: shipmentRow.carrier, total_cost: shipmentRow.total_cost },
+        user,
+        metadata:   { mode: shipmentRow.mode, via: copiedFrom ? 'copy' : 'manual', copiedFrom },
+      });
+    } catch (auditErr) {
+      console.error('[shipments/create] history write failed:', auditErr.message);
+    }
+    res.status(201).json(row || shipmentRow);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.delete('/api/shipments/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;

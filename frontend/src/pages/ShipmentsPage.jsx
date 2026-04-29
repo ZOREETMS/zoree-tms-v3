@@ -297,15 +297,16 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   // back to the shipment's planned date only when no history row exists
   // for that phase yet (e.g. an in-flight transition).
   const phaseTimestamps = derivePhaseTimestamps(historyRows);
-  const phaseLine = (phase, planned, doneFallback) => {
+  const phaseLine = (phase, fallbackTsRaw, doneFallback) => {
     const fromHistory = formatTimelineTs(phaseTimestamps[phase]);
     if (fromHistory) return fromHistory;
-    if (planned) return planned;
+    const fromRow = formatTimelineTs(fallbackTsRaw);
+    if (fromRow) return fromRow;
     return doneFallback;
   };
   const timelineEvents = [
-    { icon: "📋", label: "Order Created & Rate Confirmed", done: true, time: phaseLine(null, null, "Confirmed") },
-    { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? phaseLine("tendered", null, "Confirmed") : "Pending" },
+    { icon: "📋", label: "Order Created & Rate Confirmed", done: true, time: phaseLine("created", ds.created_at, "Confirmed") },
+    { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? phaseLine("tendered", ds.tendered_at, "Confirmed") : "Pending" },
     // REQ-19: surface the tender-accepted event in the shipment timeline.
     // Previously the timeline jumped straight from "Tendered" to "Picked Up",
     // leaving the accept step invisible to the planner.

@@ -900,7 +900,26 @@
       "Bash(curl -s -o /dev/null -w \"Frontend: %{http_code}\\\\n\" http://localhost:5173)",
       "Bash(curl -s -o /dev/null -w \"API:      %{http_code}\\\\n\" http://localhost:3010/health)",
       "Bash(taskkill //F //PID 35792)",
-      "Bash(taskkill //F //PID 3032)"
+      "Bash(taskkill //F //PID 3032)",
+      "Bash(curl -s -o /dev/null -w \"localhost:3001 -> %{http_code}\\\\n\" --max-time 3 http://localhost:3001/api/health)",
+      "Bash(curl -s -o /dev/null -w \"localhost:3010 -> %{http_code}\\\\n\" --max-time 3 http://localhost:3010/api/health)",
+      "Bash(curl -s -o /dev/null -w \"tunnel -> %{http_code}\\\\n\" --max-time 5 https://assured-desired-tuning-thesaurus.trycloudflare.com/api/health)",
+      "Bash(curl -s --max-time 3 http://localhost:3001/)",
+      "Bash(curl -s --max-time 3 http://localhost:3010/)",
+      "Bash(curl -s --max-time 3 http://localhost:3010/api)",
+      "Bash(rm -f tunnel_api_new.log)",
+      "Bash(cloudflared tunnel *)",
+      "Bash(curl -s --max-time 10 https://boys-additional-employment-closely.trycloudflare.com/api)",
+      "Bash(curl -s --max-time 10 -X POST -H \"Content-Type: application/json\" -d '{\"email\":\"x\",\"password\":\"x\"}' https://boys-additional-employment-closely.trycloudflare.com/api/auth/login)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build --platform android --profile preview --non-interactive --no-wait --message \"Point to live API tunnel\")",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build:view 72dcee99-af1c-4aab-a403-c0265e7c7d5e)",
+      "Bash(EXPO_TOKEN=\"AWJULCYsXAYkNdY-WEPIX1UVNyjb6FCgtV9hez7v\" eas build:view 72dcee99-af1c-4aab-a403-c0265e7c7d5e --json)",
+      "Bash(curl -s --max-time 5 -o /dev/null -w \"API local 3010 -> %{http_code}\\\\n\" http://localhost:3010/api)",
+      "Bash(curl -s --max-time 10 -X POST -H \"Content-Type: application/json\" -d '{\"email\":\"test@test.com\",\"password\":\"test\"}' https://boys-additional-employment-closely.trycloudflare.com/api/auth/login)",
+      "Bash(curl -sS \"http://localhost:5174/src/services/bulkPlanService.js\")",
+      "Bash(curl -sS \"http://localhost:5174/src/components/ZoreeAI.jsx\")",
+      "Bash(taskkill /PID 8016 /F)",
+      "Bash(curl -s -X POST http://localhost:3010/api/shipments -H \"Content-Type: application/json\" -d '{}' -o /dev/null -w \"HTTP %{http_code}\\\\n\")"
     ]
   }
 }

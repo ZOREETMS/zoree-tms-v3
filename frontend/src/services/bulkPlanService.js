@@ -10,7 +10,7 @@
  */
 
 import { BulkPlanApi } from "../lib/api";
-import { buildSingleOrderLane } from "../utils/laneUtils";
+import { buildSingleOrderLane, buildLaneGroups } from "../utils/laneUtils";
 
 /* ── Date helpers ── */
 
@@ -114,7 +114,97 @@ export function buildPlan(lane, bestQuote, laneOrders) {
     miles: bestQuote.pcmilerMiles || bestQuote.miles || null,
     czarliteRate: bestQuote.mode === "LTL",
     rateId: bestQuote.rateId || null,
+    // Migration 025 — snapshot the rate's equipment onto the plan so
+    // executePlan can persist it on the shipment. The rating engine
+    // already echoes equipment back on every quote.
+    equipment: bestQuote.equipment || null,
   };
+}
+
+/* ── Single-shipment planner (used by ZoreeAI / one-shot surfaces) ── */
+
+/**
+ * Plan a set of orders as ONE shipment using the same rating + executor
+ * pipeline as the bulk planner. Guarantees the resulting shipment carries
+ * the same cost detail (rate, fuel_surcharge, accessorials, service_level,
+ * miles, rate_id, equipment, total_cost) as a regular Plan-Selected flow.
+ *
+ * @param {Object[]} orders                  — Order rows to plan together.
+ * @param {Object}   [options]
+ * @param {string}   [options.carrier]       — Preferred carrier (case-insensitive).
+ *                                              Falls back to bestQuote when omitted
+ *                                              or when the preferred carrier has
+ *                                              no quote on this lane.
+ * @param {string}   [options.optimizeBy="cost"]
+ * @returns {Promise<{ ok: boolean, errorMessage: string, shipment: Object|null, plan: Object|null }>}
+ */
+export async function planOrdersAsSingleShipment(orders, options = {}) {
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return { ok: false, errorMessage: "No orders to plan", shipment: null, plan: null };
+  }
+
+  const lane = orders.length === 1
+    ? buildSingleOrderLane(orders[0])
+    : buildLaneGroups(orders)[0];
+  if (!lane) {
+    return { ok: false, errorMessage: "Could not build a lane from the supplied orders", shipment: null, plan: null };
+  }
+
+  // Rate the lane through the same engine the bulk planner uses.
+  let result;
+  try {
+    const rateRes = await BulkPlanApi.rate([lane], options.optimizeBy || "cost");
+    result = Array.isArray(rateRes?.results) ? rateRes.results[0] : null;
+  } catch (err) {
+    return { ok: false, errorMessage: `Rating failed: ${err?.message || err}`, shipment: null, plan: null };
+  }
+  if (!result) {
+    return { ok: false, errorMessage: "Rating engine returned no result for this lane", shipment: null, plan: null };
+  }
+
+  const quotes = Array.isArray(result.quotes) ? result.quotes : [];
+  const preferred = options.carrier ? String(options.carrier).trim().toLowerCase() : "";
+  let chosenQuote = result.bestQuote || null;
+  if (preferred) {
+    const match = quotes.find((q) => String(q.carrier || "").trim().toLowerCase() === preferred);
+    if (match) chosenQuote = match;
+  }
+  if (!chosenQuote) {
+    return {
+      ok: false,
+      errorMessage: "No carrier rate available for this lane — configure a rate in Rate Management first",
+      shipment: null,
+      plan: null,
+    };
+  }
+
+  const plan = buildPlan(lane, chosenQuote, orders);
+  if (!plan) {
+    return { ok: false, errorMessage: "Could not compute pickup/delivery dates for this lane", shipment: null, plan: null };
+  }
+
+  // Execute via the same backend endpoint regular planning uses, so the
+  // shipment row is built by api/services/bulkPlanExecution.js (single
+  // source of truth — keeps cost columns, BOL doc, and order patches in
+  // lockstep with bulk-plan results).
+  let execRes;
+  try {
+    execRes = await BulkPlanApi.execute([plan]);
+  } catch (err) {
+    return { ok: false, errorMessage: `Shipment creation failed: ${err?.message || err}`, shipment: null, plan };
+  }
+
+  const shipments = Array.isArray(execRes?.shipments) ? execRes.shipments : [];
+  const errors = Array.isArray(execRes?.errors) ? execRes.errors : [];
+  if (shipments.length === 0) {
+    return {
+      ok: false,
+      errorMessage: errors[0]?.error || "Backend did not return a shipment",
+      shipment: null,
+      plan,
+    };
+  }
+  return { ok: true, errorMessage: "", shipment: shipments[0], plan };
 }
 
 /* ── Progressive consolidation ── */

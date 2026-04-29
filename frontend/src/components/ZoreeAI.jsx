@@ -3,7 +3,7 @@ import { DbApi } from "../lib/api";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import useSpeechSynthesis from "../hooks/useSpeechSynthesis";
 import { unplanOrderFromShipment } from "../services/ordersService";
-import { findMatchingRate } from "../services/rateService";
+import { planOrdersAsSingleShipment } from "../services/bulkPlanService";
 import { sendMessage } from "../services/zoreeAIService";
 
 /* ─────────────────────────────────────────────
@@ -169,60 +169,21 @@ export default function ZoreeAI({ data }) {
           return ord;
         });
 
-        const o0 = planOrders[0];
-        const tw = planOrders.reduce((s, x) => s + (Number(x.weight) || 0), 0);
-        const tp = planOrders.reduce((s, x) => s + (parseInt(x.pieces) || 0), 0);
-
-        // Pick carrier — use preferred or first available
-        let chosenCarrier = p.carrier;
-        if (!chosenCarrier && data.carriers?.length > 0) {
-          chosenCarrier = data.carriers[0].name;
-        }
-        chosenCarrier = chosenCarrier || "TBD";
-
-        const newId = `SHP-${new Date().getFullYear()}-${1860 + Math.floor(Date.now() % 100000)}`;
-
-        // Resolve the rate for this lane/carrier so the shipment carries
-        // its `equipment` (trailer type) and `rate_id` — consistent with
-        // the main bulk-plan executor. Falls back to nulls if no rate
-        // is configured for the lane (same behavior as any empty-rate path).
-        const matchedRate = findMatchingRate(data?.rates, {
-          carrier: chosenCarrier,
-          origin: o0.origin,
-          dest: o0.dest || o0.destination,
-        });
-
-        // Match exact DB column names from shipments table
-        const newShip = {
-          id: newId,
-          origin: o0.origin,
-          dest: o0.dest || o0.destination,
-          mode: tw <= 15000 ? "LTL" : "TL",
-          carrier: chosenCarrier,
-          weight: tw,
-          pieces: tp,
-          total_cost: 0,
-          equipment: matchedRate?.equipment ?? null,
-          rate_id: matchedRate ? (matchedRate.lane || matchedRate.id) : null,
-          pickup_date: planOrders.map((x) => x.ready || x.pickup_date).filter(Boolean).sort()[0] || null,
-          delivery_date: planOrders.map((x) => x.due || x.delivery_date).filter(Boolean).sort().reverse()[0] || null,
-          status: "Planned",
-          order_ids: rawIds,
-          notes: `Planned by ZoreeAI. Orders: ${rawIds.join(", ")}`,
-        };
-
-        await DbApi.upsert("shipments", newShip);
-
-        // Update orders to Planned
-        for (const ord of planOrders) {
-          await DbApi.patch("orders", ord.id, {
-            status: planOrders.length > 1 ? "Consolidated" : "Planned",
-            shipment_id: newId,
-          });
-        }
+        // Route through the same rate → plan → execute pipeline that
+        // regular bulk planning uses. This ensures the new shipment
+        // carries the full cost breakdown (rate, fuel_surcharge,
+        // accessorials, service_level, miles, rate_id, equipment,
+        // total_cost) instead of zeros — fixing the parity gap between
+        // chat-created and UI-created shipments.
+        const result = await planOrdersAsSingleShipment(planOrders, { carrier: p.carrier });
+        if (!result.ok) throw new Error(result.errorMessage || "Failed to plan orders");
 
         if (refreshAfterMutation) await refreshAfterMutation();
-        return `Shipment **${newId}** created · ${rawIds.length} order(s) · Carrier: ${chosenCarrier} · ${(o0.origin || "").split(",")[0]} → ${(o0.dest || o0.destination || "").split(",")[0]}`;
+
+        const ship = result.shipment;
+        const originCity = (ship.origin || "").split(",")[0];
+        const destCity = (ship.dest || "").split(",")[0];
+        return `Shipment **${ship.id}** created · ${rawIds.length} order(s) · Carrier: ${ship.carrier} · ${ship.mode} · $${(ship.total_cost || 0).toLocaleString()} · ${originCity} → ${destCity}`;
       }
 
       case "UPDATE_ORDER_STATUS": {

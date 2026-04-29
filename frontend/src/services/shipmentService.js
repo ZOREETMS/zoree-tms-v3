@@ -55,7 +55,10 @@ export async function createShipment(shipmentData) {
     equipment: equipment || null,
     status: "Planned",
   };
-  await DbApi.upsert("shipments", shipment);
+  // Routed through the dedicated endpoint so the backend records a
+  // 'create' change_history row — the Shipment Details timeline reads
+  // this to render the "Order Created & Rate Confirmed" timestamp.
+  await ShipmentsApi.create(shipment);
   return shipment;
 }
 
@@ -87,9 +90,10 @@ export async function copyShipment(sourceShipment) {
     delivery_date: "",
     status: "Planned",
     // Do not copy: order_ids, bol_type, master_shipment_id, tender fields
+    copiedFrom: sourceShipment.id || null,
   };
 
-  await DbApi.upsert("shipments", copy);
+  await ShipmentsApi.create(copy);
   return copy;
 }
 
