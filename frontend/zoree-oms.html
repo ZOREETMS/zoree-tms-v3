@@ -1087,7 +1087,11 @@ async function _omsLiveSyncRefresh(reason){
   try {
     await loadFromDB();
     if (typeof ro === 'function') ro();      // re-render Sales Orders list
-    try { toast('🔄 OMS refreshed — ' + reason, 'tok'); } catch(_) { /* toast optional */ }
+    // Silent refresh — no toast. The list re-renders visibly; surfacing
+    // every backend INSERT/UPDATE in the toast tray was too noisy for
+    // routine actions (copy, book, stage change). Devs can still see the
+    // signal via the console.
+    try { console.debug('[OmsLive] refreshed —', reason); } catch(_) {}
   } catch (e) {
     console.warn('[OmsLive] refresh failed:', e && e.message);
   } finally {
@@ -2737,20 +2741,53 @@ async function doTMS(){
 }
 
 // ─── CARRIER TENDER (Stage 5→6) ──────────────────
-function openTender(id){
-  var o=orders.find(x=>x.id===id);if(!o)return;
-  _pt=id;
-  var ship=o.tmsShipId?tmsS.find(s=>s.id===o.tmsShipId):null;
+// Resolve the TMS shipment for an order. Always prefer a fresh fetch via
+// the middleware so the planned mode/carrier/dates are authoritative —
+// the cached tmsS array is only as fresh as the last syncTMS run and may
+// not yet contain a just-planned shipment. Falls back to the cache if
+// the fetch fails so the modal still has *some* data to render.
+async function _resolveTmsShipForOrder(o){
+  if(!o || !o.tmsShipId) return null;
+  try{
+    var pulled = await ZoreeMiddleware._dispatch(
+      'PULL_TMS_SHIPMENT_DETAILS',
+      { shipmentId: o.tmsShipId },
+      o.id || null
+    );
+    var fresh = pulled && pulled.result && pulled.result.shipment;
+    if(fresh) return fresh;
+  }catch(e){
+    console.warn('[openTender] PULL_TMS_SHIPMENT_DETAILS failed, falling back to cache:', e && e.message);
+  }
+  return tmsS.find(s=>s.id===o.tmsShipId) || null;
+}
+
+function _renderTenderInfo(o, ship){
+  // At Stage 5→6 we are confirming what TMS planned, so the TMS
+  // shipment's fields are authoritative. Order-level fields are the
+  // original preference/intent and are only used as a fallback when the
+  // shipment row hasn't yet propagated that value back.
   document.getElementById('tender-info').innerHTML=
-    ifc('Order',o.id)+ifc('Carrier',o.carrier||ship?.carrier||'TMS Assigned')+
-    ifc('Mode',o.mode||ship?.mode||'TL')+ifc('Origin',locName(o.orig))+
+    ifc('Order',o.id)+ifc('Carrier',ship?.carrier||o.carrier||'TMS Assigned')+
+    ifc('Mode',ship?.mode||o.mode||'TL')+ifc('Origin',locName(o.orig))+
     ifc('Destination',o.dest)+ifc('Pickup',ship?.pickup_date||o.pickupDate||'—')+
     ifc('TMS Shipment',o.tmsShipId||'—')+ifc('Est. Delivery',ship?.delivery_date||o.deliveryDate||'—');
   document.getElementById('bol-in').value=o.bol||('BOL-'+Date.now().toString().slice(-6));
   document.getElementById('pro-in').value=o.pro||'';
   document.getElementById('pu-date').value=o.pickupDate||ship?.pickup_date||'';
   document.getElementById('del-date').value=o.deliveryDate||ship?.delivery_date||'';
+}
+
+async function openTender(id){
+  var o=orders.find(x=>x.id===id);if(!o)return;
+  _pt=id;
+  // Render immediately from cache so the modal opens without a blocking
+  // network wait, then patch with the fresh shipment when it arrives.
+  var cached=o.tmsShipId?tmsS.find(s=>s.id===o.tmsShipId):null;
+  _renderTenderInfo(o, cached);
   openM('m-tender');
+  var fresh=await _resolveTmsShipForOrder(o);
+  if(fresh) _renderTenderInfo(o, fresh);
 }
 async function doTender(){
   var o=orders.find(x=>x.id===_pt);if(!o)return;
@@ -2804,7 +2841,7 @@ function openPickModal(id){
   var o=orders.find(x=>x.id===id);if(!o)return;
   _pt=id;
   document.getElementById('pick-ti').textContent='Pick Order — '+id;
-  document.getElementById('pick-hdr').innerHTML=_omsBaseHdr(o);
+  document.getElementById('pick-hdr').innerHTML=_omsBaseHdr(o)+ifc('Delivery',o.deliveryDate||'—');
   document.getElementById('pick-lines').innerHTML=
     `<div style="padding:4px 12px;background:var(--bg4);border-bottom:1px solid var(--border)"><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">PICK LIST — confirm each line when picked</span></div>`+
     (o.lines||[]).map((l,i)=>{
@@ -3219,12 +3256,10 @@ function ifc(l,v){return`<div class="ifc"><div class="ifl">${l}</div><div class=
 // durationMs === 0 makes the toast sticky until the user clicks ×.
 function toast(msg, cls, opts){
   var o = opts || {};
-  // Default 30 000 ms so stage-progression toasts (Stock reserved,
-  // Auto-released, Tendered, Picked, Packed, …) stay on screen long
-  // enough to be read. Callers that want a shorter display can still
-  // pass an explicit { durationMs }. All toasts are dismissible via the
-  // ✕ button so a long duration never blocks the user.
-  var durationMs = (typeof o.durationMs === 'number') ? o.durationMs : 30000;
+  // Default 10 000 ms — long enough to read stage-progression toasts
+  // (Stock reserved, Tendered, Picked, …) without lingering. Callers
+  // can override via { durationMs }; all toasts are dismissible via ✕.
+  var durationMs = (typeof o.durationMs === 'number') ? o.durationMs : 10000;
   var dismissible = (o.dismissible !== false);
   var w = document.getElementById('twr');
   if (!w) return;

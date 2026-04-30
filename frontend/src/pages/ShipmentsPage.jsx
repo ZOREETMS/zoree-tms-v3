@@ -22,6 +22,7 @@ import { propagateTenderAcceptance } from "../services/tenderAcceptanceNotifier"
 import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
 import { deriveShipmentCostBreakdown, formatUSD } from "../utils/shipmentCost";
+import { deriveCommodityFromOrders } from "../utils/shipmentFromOrders";
 import { getRateByLane, summarizeDiscount } from "../services/rateService";
 import { fetchOmsSyncForShipmentIds } from "../services/omsSyncStatusService";
 import { deriveOmsSyncStatus } from "../utils/omsSyncStatus";
@@ -133,6 +134,10 @@ function InfoBox({ icon, label, value }) {
 /* ── Shipment Detail Modal ── */
 function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier, onShipmentPatched }) {
   const linked = ds._linkedOrders || [];
+  // Derive commodity from linked orders so it stays correct even when ds
+  // was opened before the parent's `orders` list picked up the new
+  // shipment_id link (race on first open after shipment creation).
+  const commodityFromLinked = deriveCommodityFromOrders(linked);
   const displayStatus = effectiveShipmentStatus(ds);
   const [lines, setLines] = useState([]);
   const [linesLoading, setLinesLoading] = useState(true);
@@ -434,7 +439,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             })()}
             <InfoBox icon="⚖️" label="Weight" value={`${(ds.weight || 0).toLocaleString()} lbs`} />
             <InfoBox icon="🔢" label="Pieces" value={String(ds.pieces || 0)} />
-            <InfoBox icon="🏷️" label="Commodity" value={ds._commodity || ds.commodity || "—"} />
+            <InfoBox icon="🏷️" label="Commodity" value={commodityFromLinked || ds._commodity || ds.commodity || "—"} />
             {ds.rate_id && (
               <div className="sd-field">
                 <div className="sd-field-label">📄 Rate ID</div>
@@ -890,14 +895,13 @@ export default function ShipmentsPage() {
       const linkedOrders = orders.filter(
         (o) => String(o.shipment_id || "") === String(s.id || "")
       );
-      const commodities = [...new Set(linkedOrders.map((o) => o.commodity).filter(Boolean))];
       return {
         ...s,
         _carrier: resolveCarrierName(s),
         _displayStatus: effectiveShipmentStatus(s),
         _linkedOrders: linkedOrders,
         _orderCount: linkedOrders.length,
-        _commodity: commodities.join(", ") || s.commodity || "",
+        _commodity: deriveCommodityFromOrders(linkedOrders) || s.commodity || "",
       };
     });
     if (idsFilter) list = list.filter((s) => idsFilter.has(s.id));

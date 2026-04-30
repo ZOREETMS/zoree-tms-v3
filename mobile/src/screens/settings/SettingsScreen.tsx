@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Card from '../../components/ui/Card';
 import { useAuth } from '../../state/AuthContext';
 import { API_BASE, APP_VERSION, APP_NAME } from '../../config/env';
+import { updateApiBase } from '../../lib/api';
+import { storage } from '../../lib/storage';
 import {
   colors,
   fontSize,
@@ -31,8 +33,31 @@ export default function SettingsScreen() {
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
-  // API endpoint configuration
-  const [apiEndpoint, setApiEndpoint] = useState(API_BASE || '');
+  // API endpoint configuration — load saved override (if any), fall back to default
+  const [apiEndpoint, setApiEndpoint] = useState(
+    storage.getItem('zoree_api_base') || API_BASE || '',
+  );
+  const [savingApi, setSavingApi] = useState(false);
+
+  const handleSaveApi = async () => {
+    const trimmed = (apiEndpoint || '').trim();
+    if (!trimmed) {
+      Alert.alert('Invalid URL', 'Please enter an API endpoint.');
+      return;
+    }
+    try {
+      setSavingApi(true);
+      await updateApiBase(trimmed);
+      Alert.alert(
+        'Saved',
+        'API endpoint updated. Sign out and back in for changes to take effect everywhere.',
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to save endpoint.');
+    } finally {
+      setSavingApi(false);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -176,8 +201,19 @@ export default function SettingsScreen() {
               autoCorrect={false}
               keyboardType="url"
             />
+            <TouchableOpacity
+              style={[
+                styles.saveApiButton,
+                savingApi && styles.saveApiButtonDisabled,
+              ]}
+              onPress={handleSaveApi}
+              disabled={savingApi}>
+              <Text style={styles.saveApiButtonText}>
+                {savingApi ? 'Saving...' : 'Save Endpoint'}
+              </Text>
+            </TouchableOpacity>
             <Text style={styles.fieldHint}>
-              Changes require app restart to take effect.
+              Sign out and back in for changes to apply everywhere.
             </Text>
           </Card>
         </View>
@@ -335,6 +371,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.text,
     backgroundColor: colors.bg,
+  },
+  saveApiButton: {
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  saveApiButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveApiButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
   fieldHint: {
     fontSize: fontSize.xs,

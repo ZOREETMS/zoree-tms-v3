@@ -13,7 +13,7 @@ class StorageAdapter {
 
   async init(): Promise<void> {
     if (this.initialized) return;
-    const keys = ['zoree_token', 'zoree_user'];
+    const keys = ['zoree_token', 'zoree_user', 'zoree_api_base'];
     const pairs = await AsyncStorage.multiGet(keys);
     pairs.forEach(([key, value]) => {
       this.cache[key] = value;

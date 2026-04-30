@@ -87,7 +87,7 @@ export default function DocumentViewerModal({ isOpen, doc, shipment, order, carr
 
         {/* Body */}
         <div className="modal-body" style={{ padding: 0, overflowY: "auto", flex: 1 }}>
-          <div ref={contentRef} style={{ padding: "32px 40px", background: "#fff", fontFamily: "'Courier New', monospace" }}>
+          <div ref={contentRef} style={{ padding: "32px 40px", background: "#fff", fontFamily: "Arial, Helvetica, sans-serif" }}>
             {renderDocument()}
           </div>
         </div>
