@@ -14,6 +14,7 @@ import {
   dropReasonForLane,
   mapBackendErrorsToOrders,
 } from "./bulkPlanFailureCollector";
+import { buildLaneKey } from "../utils/laneUtils";
 
 // ── REQ-01: Auto order sync — SSE subscription ─────────────────────
 // Browser opens an EventSource to /api/events/orders. Any order
@@ -873,7 +874,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
         ? TL_MAX
         : (totalWeight <= LTL_MAX ? LTL_MAX : TL_MAX);
     const groups = buildShipmentGroups(laneOrders, {
-      laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
+      laneKey: buildLaneKey(o), origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70",
       totalWeight, totalPieces: laneOrders.reduce((s, x) => s + Number(x.pieces || 0), 0),
       orderIds: laneOrders.map((x) => x.id),

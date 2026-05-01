@@ -29,6 +29,7 @@ import {
   gatherOrderDetails,
   sendTenderEmailIfAvailable,
 } from "./tenderService";
+import { buildLaneKey } from "../utils/laneUtils";
 
 /* ── Internal helpers ──────────────────────────────────────────── */
 
@@ -139,7 +140,7 @@ async function changeCarrierAction(p, { shipments }) {
   const originZip = String(ship.origin_zip || ship.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
   const destZip   = String(ship.dest_zip   || ship.dest   || "").match(/\b(\d{5})\b/)?.[1] || "";
   const lane = {
-    laneKey: `${ship.origin || ""} -> ${ship.dest || ""}`,
+    laneKey: buildLaneKey(ship),
     origin: ship.origin || "",
     destination: ship.dest || "",
     originZip, destZip,

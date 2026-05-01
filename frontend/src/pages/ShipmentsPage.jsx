@@ -28,6 +28,8 @@ import { fetchOmsSyncForShipmentIds } from "../services/omsSyncStatusService";
 import { deriveOmsSyncStatus } from "../utils/omsSyncStatus";
 import OmsSyncPill from "../components/shipments/OmsSyncPill";
 import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
+import { buildLaneKey } from "../utils/laneUtils";
+import ExportButton from "../components/ui/ExportButton";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -252,7 +254,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
       const originZip = String(ds.origin_zip || ds.origin || "").match(/\b(\d{5})\b/)?.[1] || "";
       const destZip = String(ds.dest_zip || ds.dest || "").match(/\b(\d{5})\b/)?.[1] || "";
       const lane = {
-        laneKey: `${ds.origin || ""} -> ${ds.dest || ""}`,
+        laneKey: buildLaneKey(ds),
         origin: ds.origin || "", destination: ds.dest || "",
         originZip, destZip, freightClass: "70",
         totalWeight: ds.weight || 0, totalPieces: ds.pieces || 0,
@@ -1332,7 +1334,7 @@ export default function ShipmentsPage() {
           <div className="page-sub">Plan, track, and manage all freight movements</div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-secondary btn-sm">📥 Export CSV</button>
+          <ExportButton entity="shipments" rows={rows} label="Export Shipments" />
           <button className="btn btn-primary btn-sm" onClick={() => setShowNewShipment(true)}>+ New Shipment</button>
         </div>
       </div>

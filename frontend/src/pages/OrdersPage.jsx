@@ -27,6 +27,8 @@ import { buildBulkPlanResults } from "../services/bulkPlanResultsService";
 import { describeFailure } from "../services/planningFailureCatalog";
 import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
+import { normalizeLane, buildLaneKey } from "../utils/laneUtils";
+import ExportButton from "../components/ui/ExportButton";
 
 export default function OrdersPage() {
   const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
@@ -262,9 +264,6 @@ export default function OrdersPage() {
     return Array.from(set).sort();
   }, [orders]);
 
-  /* ── Lane normalization: lowercase + collapse whitespace (ZIP preserved — different ZIP = different lane) ── */
-  const normalizeLane = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
-
   /* ── Filter + sort ── */
   const rows = useMemo(() => {
     let filtered = orders;
@@ -358,7 +357,7 @@ export default function OrdersPage() {
         const originZip = String(o.origin_zip || o.origin || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.origin);
         const destZip = String(o.dest_zip || o.dest || "").match(/\b(\d{5})\b/)?.[1] || cityZipLookup(o.dest);
         const lane = {
-          laneKey: `${o.origin || ""} -> ${o.dest || ""}`,
+          laneKey: buildLaneKey(o),
           origin: o.origin || "",
           destination: o.dest || "",
           originZip,
@@ -848,7 +847,7 @@ export default function OrdersPage() {
     const laneServiceLevelConstraint = commonServiceLevelConstraint(sibs);
 
     const baseLane = {
-      laneKey: `${o.origin || ""} -> ${o.dest || ""}`, origin: o.origin || "", destination: o.dest || "",
+      laneKey: buildLaneKey(o), origin: o.origin || "", destination: o.dest || "",
       originZip, destZip, freightClass: o.freight_class || "70", totalWeight, totalPieces,
       orderIds: sibs.map((x) => x.id),
       // REQ-09
@@ -1199,6 +1198,7 @@ export default function OrdersPage() {
         </div>
         <div className="header-actions">
           <span style={{ fontSize: 13, color: "var(--text2)", fontWeight: 600 }}>{orders.length} Orders</span>
+          <ExportButton entity="orders" rows={rows} label="Export Orders" />
           <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ New Order</button>
         </div>
       </div>
