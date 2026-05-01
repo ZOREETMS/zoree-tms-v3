@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../../state/AuthContext';
+import { API_BASE } from '../../config/env';
+import { updateApiBase } from '../../lib/api';
+import { storage } from '../../lib/storage';
 import {
   borderRadius,
   colors,
@@ -27,6 +30,29 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Advanced: API endpoint override (for tunnel URL changes)
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [apiEndpoint, setApiEndpoint] = useState(
+    storage.getItem('zoree_api_base') || API_BASE || '',
+  );
+  const [apiSaved, setApiSaved] = useState(false);
+
+  async function handleSaveApi() {
+    const trimmed = (apiEndpoint || '').trim();
+    if (!trimmed) {
+      setError('Please enter an API endpoint.');
+      return;
+    }
+    try {
+      await updateApiBase(trimmed);
+      setError('');
+      setApiSaved(true);
+      setTimeout(() => setApiSaved(false), 2500);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save endpoint.');
+    }
+  }
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
@@ -133,6 +159,44 @@ export default function LoginScreen() {
                 <Text style={styles.loginButtonText}>Sign In</Text>
               )}
             </TouchableOpacity>
+
+            {/* Advanced: API endpoint override */}
+            <TouchableOpacity
+              style={styles.advancedToggle}
+              activeOpacity={0.7}
+              onPress={() => setShowAdvanced(v => !v)}
+            >
+              <Text style={styles.advancedToggleText}>
+                {showAdvanced ? 'Hide advanced' : 'Advanced settings'}
+              </Text>
+            </TouchableOpacity>
+
+            {showAdvanced && (
+              <View style={styles.advancedSection}>
+                <Text style={styles.label}>API Endpoint</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://example.trycloudflare.com/api"
+                  placeholderTextColor={colors.text3}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  value={apiEndpoint}
+                  onChangeText={setApiEndpoint}
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  style={styles.saveApiButton}
+                  activeOpacity={0.8}
+                  onPress={handleSaveApi}
+                  disabled={loading}
+                >
+                  <Text style={styles.saveApiButtonText}>
+                    {apiSaved ? 'Saved \u2713' : 'Save Endpoint'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* ---- Footer ---- */}
@@ -287,6 +351,37 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
+  },
+
+  /* Advanced section */
+  advancedToggle: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+  },
+  advancedToggleText: {
+    color: colors.text3,
+    fontSize: fontSize.sm,
+    textDecorationLine: 'underline',
+  },
+  advancedSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  saveApiButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: borderRadius.sm,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  saveApiButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
   },
 
   /* Footer */
