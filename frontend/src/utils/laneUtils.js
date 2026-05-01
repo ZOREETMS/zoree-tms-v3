@@ -10,11 +10,22 @@ export function normalizeZip(value) {
 }
 
 /**
+ * Normalize an address fragment for stable lane-key matching.
+ * Lowercases, collapses internal whitespace, trims ends. ZIP is preserved
+ * (different ZIP = different lane). Without this, OMS feeds with mixed
+ * case ("College Park" vs "COLLEGE PARK") or stray whitespace produce
+ * distinct lane keys for identical lanes — defeating consolidation.
+ */
+export function normalizeLane(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
  * Build a lane key from an order's origin + destination.
- * Keeps full address including ZIP for accurate grouping.
+ * Normalizes both sides so visually-identical addresses hash to one lane.
  */
 export function buildLaneKey(order) {
-  return `${order.origin || ""} -> ${order.dest || ""}`;
+  return `${normalizeLane(order.origin)} -> ${normalizeLane(order.dest)}`;
 }
 
 /**

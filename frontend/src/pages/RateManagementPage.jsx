@@ -11,6 +11,7 @@ import {
   getMatchTypeLabel,
 } from "../services/rateService";
 import { invalidateQuoteCache } from "../services/ordersService";
+import ExportButton from "../components/ui/ExportButton";
 
 const STATUS_BADGES = {
   Active: "badge badge-green",
@@ -342,6 +343,7 @@ export default function RateManagementPage() {
             <button className="btn btn-primary btn-sm" onClick={() => toast("Upload panel coming soon", "info")}>
               Upload Rates (Excel)
             </button>
+            <ExportButton entity="rates" rows={rows} label="Export Rates" />
             <button
               className="btn btn-secondary btn-sm"
               style={{

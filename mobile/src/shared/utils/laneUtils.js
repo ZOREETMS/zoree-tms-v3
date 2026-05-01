@@ -10,13 +10,23 @@ export function normalizeZip(value) {
 }
 
 /**
+ * Normalize an address fragment for stable lane-key matching.
+ * Lowercases, collapses internal whitespace, trims ends. ZIP is preserved.
+ * Without this, "College Park" vs "COLLEGE PARK" or stray whitespace
+ * produce distinct lane keys for identical lanes — defeating consolidation.
+ */
+export function normalizeLane(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Build a lane key from an order's origin + destination.
  * Uses the API-transformed field names (origin, destination).
  */
 export function buildLaneKey(order) {
   const orig = order.origin || order.dest || '';
   const dest = order.destination || order.dest || '';
-  return `${orig} -> ${dest}`;
+  return `${normalizeLane(orig)} -> ${normalizeLane(dest)}`;
 }
 
 /**
@@ -29,7 +39,7 @@ export function buildLaneGroups(selectedOrders) {
   selectedOrders.forEach((o) => {
     const origin = o.origin || '';
     const destination = o.destination || o.dest || '';
-    const key = `${origin} -> ${destination}`;
+    const key = buildLaneKey(o);
 
     if (!groups.has(key)) {
       groups.set(key, {
@@ -60,7 +70,7 @@ export function buildSingleOrderLane(order) {
   const origin = order.origin || '';
   const destination = order.destination || order.dest || '';
   return {
-    laneKey: `${origin} -> ${destination}`,
+    laneKey: buildLaneKey(order),
     origin,
     destination,
     originZip: normalizeZip(order.origin_zip || order.originZip || origin),
