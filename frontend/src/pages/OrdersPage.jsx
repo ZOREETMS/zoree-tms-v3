@@ -1198,7 +1198,12 @@ export default function OrdersPage() {
         </div>
         <div className="header-actions">
           <span style={{ fontSize: 13, color: "var(--text2)", fontWeight: 600 }}>{orders.length} Orders</span>
-          <ExportButton entity="orders" rows={rows} label="Export Orders" />
+          <ExportButton
+            entity="orders"
+            rows={rows}
+            selectedRows={rows.filter((o) => selectedOrders.has(o.id))}
+            label="Export Orders"
+          />
           <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ New Order</button>
         </div>
       </div>
