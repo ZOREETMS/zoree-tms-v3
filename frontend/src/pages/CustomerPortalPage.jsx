@@ -4,6 +4,8 @@ import PortalStats from "../components/customer-portal/PortalStats";
 import CustomerAccessList from "../components/customer-portal/CustomerAccessList";
 import ShipmentVisibilityTable from "../components/customer-portal/ShipmentVisibilityTable";
 import InviteCustomerModal from "../components/customer-portal/InviteCustomerModal";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
 
 export default function CustomerPortalPage() {
   const { shipments, orders } = useOutletContext();
@@ -21,6 +23,8 @@ export default function CustomerPortalPage() {
     handleShareCustomer,
     handleInvite,
   } = useCustomerPortal(shipments, orders);
+
+  const sel = useRowSelection({ getKey: (r) => r.id });
 
   return (
     <div>
@@ -101,9 +105,11 @@ export default function CustomerPortalPage() {
         </div>
 
         {/* Shipment Visibility Table */}
+        <SelectionBar count={sel.size} entityLabel="Shipment" onClear={sel.clear} />
         <ShipmentVisibilityTable
           rows={visibilityRows}
           onShare={handleShareTracking}
+          sel={sel}
         />
       </div>
 

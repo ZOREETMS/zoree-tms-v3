@@ -10,6 +10,8 @@ import DriverTable from "../components/fleet/DriverTable";
 import VehicleModal from "../components/fleet/VehicleModal";
 import DriverModal from "../components/fleet/DriverModal";
 import DriverAssignModal from "../components/fleet/DriverAssignModal";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
 
 export default function FleetManagementPage() {
   const [activeTab, setActiveTab] = useState("vehicles");
@@ -18,6 +20,9 @@ export default function FleetManagementPage() {
   // Hooks for fleet and driver state
   const fleet = useFleet(SEED_VEHICLES);
   const driverState = useDrivers(SEED_DRIVERS);
+
+  const vehicleSel = useRowSelection({ getKey: (v) => v.unit });
+  const driverSel = useRowSelection({ getKey: (d) => d.id });
 
   // Modal state
   const [vehicleModal, setVehicleModal] = useState({ open: false, vehicle: null });
@@ -163,11 +168,13 @@ export default function FleetManagementPage() {
               <StatCard label="In Transit" value={fleet.kpis.inTransit} color="yellow" />
               <StatCard label="Maintenance" value={fleet.kpis.maintenance} color="red" />
             </div>
+            <SelectionBar count={vehicleSel.size} entityLabel="Vehicle" onClear={vehicleSel.clear} />
             <VehicleTable
               vehicles={fleet.vehicles}
               onEdit={openVehicleModal}
               onAssignDriver={openAssignModal}
               onTrack={(unit) => showToast(`Tracking ${unit}`, "info")}
+              sel={vehicleSel}
             />
           </>
         )}
@@ -182,11 +189,13 @@ export default function FleetManagementPage() {
               <StatCard label="HOS Warnings" value={driverState.kpis.hosWarnings} color="red" />
               <StatCard label="CDL Expiring" value={driverState.kpis.cdlExpiring} color="blue" />
             </div>
+            <SelectionBar count={driverSel.size} entityLabel="Driver" onClear={driverSel.clear} />
             <DriverTable
               drivers={driverState.filtered}
               onEdit={openDriverModal}
               onAssign={openAssignModal}
               onSwitchToVehicles={() => setActiveTab("vehicles")}
+              sel={driverSel}
             />
           </>
         )}

@@ -1,7 +1,8 @@
 import StatusBadge from "./StatusBadge";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../ui/SelectionCheckbox";
 
 /** Shipment visibility table for customer portal */
-export default function ShipmentVisibilityTable({ rows, onShare }) {
+export default function ShipmentVisibilityTable({ rows, onShare, sel }) {
   if (!rows || rows.length === 0) {
     return (
       <div className="card">
@@ -24,6 +25,11 @@ export default function ShipmentVisibilityTable({ rows, onShare }) {
         <table>
           <thead>
             <tr>
+              {sel && (
+                <th style={{ width: 36, textAlign: "center" }}>
+                  <SelectionHeaderCheckbox sel={sel} rows={rows} />
+                </th>
+              )}
               <th>Shipment</th>
               <th>Customer</th>
               <th>Origin → Destination</th>
@@ -36,6 +42,11 @@ export default function ShipmentVisibilityTable({ rows, onShare }) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.id}>
+                {sel && (
+                  <td style={{ textAlign: "center" }}>
+                    <SelectionRowCheckbox sel={sel} rowKey={row.id} />
+                  </td>
+                )}
                 <td>
                   <span className="mono" style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}>
                     {row.id}

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import StatusBadge from "./StatusBadge";
 import { HOS_MAX_HOURS } from "../../types/fleet";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../ui/SelectionCheckbox";
 
 const CDL_CLASS_COLORS = { "Class A": "#1d4ed8", "Class B": "#0891b2", "Class C": "#6b7280" };
 
@@ -43,7 +44,7 @@ function EndorsementBadges({ endorsements }) {
   );
 }
 
-export default function DriverTable({ drivers, onEdit, onAssign, onSwitchToVehicles }) {
+export default function DriverTable({ drivers, onEdit, onAssign, onSwitchToVehicles, sel }) {
   const [sortCol, setSortCol] = useState("name");
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -76,6 +77,11 @@ export default function DriverTable({ drivers, onEdit, onAssign, onSwitchToVehic
         <table>
           <thead>
             <tr>
+              {sel && (
+                <th style={{ width: 36, textAlign: "center" }}>
+                  <SelectionHeaderCheckbox sel={sel} rows={sorted} />
+                </th>
+              )}
               {[
                 { key: "name", label: "Driver" },
                 { key: "cdl", label: "CDL #" },
@@ -97,7 +103,7 @@ export default function DriverTable({ drivers, onEdit, onAssign, onSwitchToVehic
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ textAlign: "center", color: "var(--text3)", padding: 20 }}>
+                <td colSpan={sel ? 11 : 10} style={{ textAlign: "center", color: "var(--text3)", padding: 20 }}>
                   No drivers match current filters
                 </td>
               </tr>
@@ -106,6 +112,11 @@ export default function DriverTable({ drivers, onEdit, onAssign, onSwitchToVehic
               const cdlExpiring = d.cdlExp && d.cdlExp <= in90Str;
               return (
                 <tr key={d.id}>
+                  {sel && (
+                    <td style={{ textAlign: "center" }}>
+                      <SelectionRowCheckbox sel={sel} rowKey={d.id} />
+                    </td>
+                  )}
                   <td>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{d.name}</div>
                     {d.notes && (

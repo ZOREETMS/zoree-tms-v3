@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { DOC_TYPE_COLORS, DOC_STATUS_COLORS } from "../../types/documents";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../ui/SelectionCheckbox";
 
-export default function DocumentTable({ documents, typeFilter, onTypeFilterChange, onView, onSend }) {
+export default function DocumentTable({ documents, typeFilter, onTypeFilterChange, onView, onSend, sel }) {
   const [sortCol, setSortCol] = useState("generated");
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -57,6 +58,11 @@ export default function DocumentTable({ documents, typeFilter, onTypeFilterChang
         <table>
           <thead>
             <tr>
+              {sel && (
+                <th style={{ width: 36, textAlign: "center" }}>
+                  <SelectionHeaderCheckbox sel={sel} rows={sorted} />
+                </th>
+              )}
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -76,6 +82,11 @@ export default function DocumentTable({ documents, typeFilter, onTypeFilterChang
               const sc = DOC_STATUS_COLORS[doc.status] || { color: "var(--text3)", bg: "#f8faff" };
               return (
                 <tr key={doc.id}>
+                  {sel && (
+                    <td style={{ textAlign: "center" }}>
+                      <SelectionRowCheckbox sel={sel} rowKey={doc.id} />
+                    </td>
+                  )}
                   <td className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>{doc.id}</td>
                   <td>
                     <span
@@ -125,7 +136,7 @@ export default function DocumentTable({ documents, typeFilter, onTypeFilterChang
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                <td colSpan={sel ? 8 : 7} style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                   No documents found
                 </td>
               </tr>

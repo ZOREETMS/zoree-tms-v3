@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { saveCarrierRecord, deleteCarrierRecord } from "../services/carriersService";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
 
 export default function CarriersPage() {
   const { carriers, setData, refreshData } = useOutletContext();
@@ -10,6 +13,7 @@ export default function CarriersPage() {
   const [editCarrier, setEditCarrier] = useState(null);
   const [sortCol, setSortCol] = useState("name");
   const [sortAsc, setSortAsc] = useState(true);
+  const sel = useRowSelection({ getKey: (c) => c.id });
 
   function toast(text, type = "info") {
     setMessage({ text, type });
@@ -95,9 +99,12 @@ export default function CarriersPage() {
 
       {message.text && <div className={`toast toast-${message.type}`} style={{ marginBottom: 12 }}>{message.text}</div>}
 
+      <SelectionBar count={sel.size} entityLabel="Carrier" onClear={sel.clear} />
+
       <table className="grid">
         <thead>
           <tr>
+            <th style={{ width: 36, textAlign: "center" }}><SelectionHeaderCheckbox sel={sel} rows={rows} /></th>
             <th onClick={() => toggleSort("name")}>Carrier <SortIcon col="name" /></th>
             <th>SCAC</th>
             <th>Mode</th>
@@ -113,9 +120,10 @@ export default function CarriersPage() {
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={10} className="empty-state">No carriers found</td></tr>
+            <tr><td colSpan={12} className="empty-state">No carriers found</td></tr>
           ) : rows.map((c) => (
             <tr key={c.id}>
+              <td style={{ textAlign: "center" }}><SelectionRowCheckbox sel={sel} rowKey={c.id} /></td>
               <td className="fw-700">{c.name || "—"}</td>
               <td><span className="badge badge-blue" style={{ fontSize: 10, fontFamily: "monospace" }}>{c.scac || "—"}</span></td>
               <td>{c.mode || "—"}</td>

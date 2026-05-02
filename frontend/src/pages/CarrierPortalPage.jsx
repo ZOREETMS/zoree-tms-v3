@@ -12,6 +12,9 @@ import { propagateTenderAcceptance } from "../services/tenderAcceptanceNotifier"
 import TenderCard from "../components/carrier-portal/TenderCard";
 import TenderRespondModal from "../components/carrier-portal/TenderRespondModal";
 import TenderDetailModal from "../components/carrier-portal/TenderDetailModal";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
 
 const TABS = [
   { key: "all", label: "All Tenders" },
@@ -56,6 +59,8 @@ export default function CarrierPortalPage() {
   const [detailModal, setDetailModal] = useState({ open: false, shipId: null });
   /** `"table"` = line-by-line; `"cards"` = original grid */
   const [listView, setListView] = useState("table");
+
+  const sel = useRowSelection({ getKey: (s) => s.id });
 
   function toast(text, type = "info") {
     setMessage({ text, type });
@@ -278,6 +283,8 @@ export default function CarrierPortalPage() {
         {/* KPI Strip */}
         <KpiStrip kpis={kpis} />
 
+        <SelectionBar count={sel.size} entityLabel="Tender" onClear={sel.clear} />
+
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.6 }}>View</span>
           <div style={{ display: "flex", gap: 2, background: "#f0f4ff", borderRadius: 10, padding: 3, border: "1px solid rgba(59,130,246,.15)" }}>
@@ -312,6 +319,7 @@ export default function CarrierPortalPage() {
         ) : listView === "table" ? (
           <TenderTable
             rows={filteredShipments}
+            sel={sel}
             tenderResponses={tenderResponses}
             onAccept={(id) => openRespond(id, "accept")}
             onReject={(id) => openRespond(id, "reject")}
@@ -527,13 +535,14 @@ function portalStatusBadge(response) {
   return { label: "Rejected", bg: "rgba(239,68,68,.1)", color: "#dc2626", border: "rgba(239,68,68,.3)" };
 }
 
-function TenderTable({ rows, tenderResponses, onAccept, onReject, onViewDetail, onChangeResponse }) {
+function TenderTable({ rows, sel, tenderResponses, onAccept, onReject, onViewDetail, onChangeResponse }) {
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div className="table-wrap" style={{ overflowX: "auto" }}>
-        <table className="grid" style={{ border: "none", boxShadow: "none", minWidth: 920, fontSize: 13 }}>
+        <table className="grid" style={{ border: "none", boxShadow: "none", minWidth: 960, fontSize: 13 }}>
           <thead>
             <tr>
+              <th style={{ width: 36, textAlign: "center" }}><SelectionHeaderCheckbox sel={sel} rows={rows} /></th>
               <th style={{ whiteSpace: "nowrap" }}>Shipment</th>
               <th>Status</th>
               <th>Lane</th>
@@ -558,6 +567,7 @@ function TenderTable({ rows, tenderResponses, onAccept, onReject, onViewDetail, 
               const pending = !response;
               return (
                 <tr key={s.id}>
+                  <td style={{ textAlign: "center" }}><SelectionRowCheckbox sel={sel} rowKey={s.id} /></td>
                   <td>
                     <button
                       type="button"

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import StatusBadge from "./StatusBadge";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../ui/SelectionCheckbox";
 
-export default function VehicleTable({ vehicles, onEdit, onAssignDriver, onTrack }) {
+export default function VehicleTable({ vehicles, onEdit, onAssignDriver, onTrack, sel }) {
   const [sortCol, setSortCol] = useState("unit");
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -33,6 +34,11 @@ export default function VehicleTable({ vehicles, onEdit, onAssignDriver, onTrack
         <table>
           <thead>
             <tr>
+              {sel && (
+                <th style={{ width: 36, textAlign: "center" }}>
+                  <SelectionHeaderCheckbox sel={sel} rows={sorted} />
+                </th>
+              )}
               {[
                 { key: "unit", label: "Unit #" },
                 { key: "type", label: "Type" },
@@ -56,13 +62,18 @@ export default function VehicleTable({ vehicles, onEdit, onAssignDriver, onTrack
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", color: "var(--text3)", padding: 20 }}>
+                <td colSpan={sel ? 10 : 9} style={{ textAlign: "center", color: "var(--text3)", padding: 20 }}>
                   No vehicles found
                 </td>
               </tr>
             )}
             {sorted.map((v) => (
               <tr key={v.unit}>
+                {sel && (
+                  <td style={{ textAlign: "center" }}>
+                    <SelectionRowCheckbox sel={sel} rowKey={v.unit} />
+                  </td>
+                )}
                 <td>
                   <span className="mono" style={{ color: "var(--accent)", fontWeight: 700 }}>
                     {v.unit}

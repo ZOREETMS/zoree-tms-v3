@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import { useAuth } from "../state/AuthContext";
 import ToggleSwitch from "../components/ToggleSwitch";
 import { useRolePermissions, useUpdateRolePermissions } from "../hooks/useRolePermissions";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
 
 export default function UserRolesPage() {
   const { user } = useAuth();
@@ -17,6 +20,8 @@ export default function UserRolesPage() {
   const error = roleQuery.error?.message || "";
 
   const roleNames = useMemo(() => Object.keys(roles).sort(), [roles]);
+  const selectionRows = useMemo(() => roleNames.map((roleName) => ({ id: roleName })), [roleNames]);
+  const sel = useRowSelection({ getKey: (r) => r.id });
 
   async function onToggle(roleName, feature, checked) {
     if (!isAdmin) return;
@@ -71,6 +76,8 @@ export default function UserRolesPage() {
           </div>
         )}
 
+        <SelectionBar count={sel.size} entityLabel="Role" onClear={sel.clear} />
+
         <div className="card">
           <div className="card-header">
             <span className="card-title">Role Permission Matrix</span>
@@ -81,6 +88,7 @@ export default function UserRolesPage() {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: 36, textAlign: "center" }}><SelectionHeaderCheckbox sel={sel} rows={selectionRows} /></th>
                     <th>Role</th>
                     {features.map((feature) => (
                       <th key={feature.feature_key}>{feature.label || feature.feature_key}</th>
@@ -91,6 +99,7 @@ export default function UserRolesPage() {
                 <tbody>
                   {roleNames.map((roleName) => (
                     <tr key={roleName}>
+                      <td style={{ textAlign: "center" }}><SelectionRowCheckbox sel={sel} rowKey={roleName} /></td>
                       <td>
                         <span className="tag">{roleName}</span>
                       </td>
@@ -112,7 +121,7 @@ export default function UserRolesPage() {
                   ))}
                   {!loading && roleNames.length === 0 && (
                     <tr>
-                      <td colSpan={featureKeys.length + 2} className="text-muted">No role data found.</td>
+                      <td colSpan={featureKeys.length + 3} className="text-muted">No role data found.</td>
                     </tr>
                   )}
                 </tbody>

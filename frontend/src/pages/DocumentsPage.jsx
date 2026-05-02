@@ -5,6 +5,8 @@ import { computeDocStats } from "../services/documentService";
 import DocumentStats from "../components/documents/DocumentStats";
 import DocumentTable from "../components/documents/DocumentTable";
 import DocumentViewerModal from "../components/documents/DocumentViewerModal";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
 
 export default function DocumentsPage() {
   const { shipments = [], orders = [], carriers = [] } = useOutletContext();
@@ -16,6 +18,7 @@ export default function DocumentsPage() {
     return documents.filter((d) => d.ship === shipmentIdFilter);
   }, [documents, shipmentIdFilter]);
   const stats = useMemo(() => computeDocStats(filteredDocs), [filteredDocs]);
+  const sel = useRowSelection({ getKey: (d) => d.id });
   const [viewerDoc, setViewerDoc] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -72,12 +75,14 @@ export default function DocumentsPage() {
           </div>
         )}
         <DocumentStats stats={stats} />
+        <SelectionBar count={sel.size} entityLabel="Document" onClear={sel.clear} />
         <DocumentTable
           documents={filteredDocs}
           typeFilter={typeFilter}
           onTypeFilterChange={setTypeFilter}
           onView={handleView}
           onSend={handleSend}
+          sel={sel}
         />
       </div>
 

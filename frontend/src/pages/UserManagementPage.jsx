@@ -16,6 +16,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "../state/AuthContext";
 import { UsersApi } from "../lib/api";
+import { useRowSelection } from "../hooks/useRowSelection";
+import SelectionBar from "../components/ui/SelectionBar";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
 
 const ROLE_OPTIONS = [
   { key: "admin",   label: "Admin",   color: "#7c3aed" },
@@ -160,6 +163,8 @@ export default function UserManagementPage() {
     [users]
   );
 
+  const sel = useRowSelection({ getKey: (u) => u.id });
+
   return (
     <div style={{ padding: "20px 24px", maxWidth: 1200 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -175,10 +180,13 @@ export default function UserManagementPage() {
       {err && <div style={{ padding: "10px 12px", background: "#fee2e2", color: "#991b1b", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{err}</div>}
       {msg && <div style={{ padding: "10px 12px", background: "#dcfce7", color: "#14532d", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{msg}</div>}
 
+      <SelectionBar count={sel.size} entityLabel="User" onClear={sel.clear} />
+
       <div style={{ background: "#fff", border: "1.5px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead style={{ background: "#f8faff" }}>
             <tr>
+              <th style={{ padding: "10px 14px", textAlign: "center", fontSize: 11, color: "var(--text3)", width: 36 }}><SelectionHeaderCheckbox sel={sel} rows={sorted} /></th>
               <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.4 }}>Email</th>
               <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.4 }}>Name</th>
               <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.4 }}>Roles</th>
@@ -188,10 +196,11 @@ export default function UserManagementPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={6} style={{ padding: 20, textAlign: "center", color: "var(--text3)" }}>Loading users…</td></tr>}
-            {!loading && sorted.length === 0 && <tr><td colSpan={6} style={{ padding: 20, textAlign: "center", color: "var(--text3)" }}>No users found.</td></tr>}
+            {loading && <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: "var(--text3)" }}>Loading users…</td></tr>}
+            {!loading && sorted.length === 0 && <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: "var(--text3)" }}>No users found.</td></tr>}
             {sorted.map((u) => (
               <tr key={u.id} style={{ borderTop: "1px solid var(--border)", opacity: u.disabled ? 0.55 : 1 }}>
+                <td style={{ padding: "10px 14px", textAlign: "center" }}><SelectionRowCheckbox sel={sel} rowKey={u.id} /></td>
                 <td style={{ padding: "10px 14px", fontFamily: "monospace" }}>{u.email}</td>
                 <td style={{ padding: "10px 14px" }}>{u.fullName || <span style={{ color: "var(--text3)" }}>—</span>}</td>
                 <td style={{ padding: "10px 14px" }}>
