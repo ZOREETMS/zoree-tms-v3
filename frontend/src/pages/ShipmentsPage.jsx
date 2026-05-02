@@ -30,6 +30,9 @@ import OmsSyncPill from "../components/shipments/OmsSyncPill";
 import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
 import { buildLaneKey } from "../utils/laneUtils";
 import ExportButton from "../components/ui/ExportButton";
+import { useRowSelection } from "../hooks/useRowSelection";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
+import SelectionBar from "../components/ui/SelectionBar";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -892,6 +895,8 @@ export default function ShipmentsPage() {
     return "";
   }
 
+  const sel = useRowSelection();
+
   const rows = useMemo(() => {
     let list = shipments.map((s) => {
       const linkedOrders = orders.filter(
@@ -1334,7 +1339,12 @@ export default function ShipmentsPage() {
           <div className="page-sub">Plan, track, and manage all freight movements</div>
         </div>
         <div className="header-actions">
-          <ExportButton entity="shipments" rows={rows} label="Export Shipments" />
+          <ExportButton
+            entity="shipments"
+            rows={rows}
+            selectedRows={sel.selectedRows(rows)}
+            label="Export Shipments"
+          />
           <button className="btn btn-primary btn-sm" onClick={() => setShowNewShipment(true)}>+ New Shipment</button>
         </div>
       </div>
@@ -1391,9 +1401,13 @@ export default function ShipmentsPage() {
 
       {/* Table */}
       <div className="card" style={{ padding: 0 }}><div className="table-wrap">
+      <SelectionBar count={sel.size} entityLabel="Shipment" onClear={sel.clear} />
       <table className="grid" style={{ border: "none", boxShadow: "none" }}>
         <thead>
           <tr>
+            <th style={{ width: 36 }}>
+              <SelectionHeaderCheckbox sel={sel} rows={rows.filter((s) => s.bol_type !== "CBOL")} />
+            </th>
             <th onClick={() => toggleSort("id")}>Shipment ID <SortIcon col="id" /></th>
             <th onClick={() => toggleSort("origin")}>Origin <SortIcon col="origin" /></th>
             <th onClick={() => toggleSort("dest")}>Destination <SortIcon col="dest" /></th>
@@ -1409,9 +1423,12 @@ export default function ShipmentsPage() {
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={11} className="empty-state">No shipments found</td></tr>
+            <tr><td colSpan={12} className="empty-state">No shipments found</td></tr>
           ) : rows.filter((s) => s.bol_type !== "CBOL").map((s) => (<React.Fragment key={s.id}>
             <tr>
+              <td onClick={(e) => e.stopPropagation()}>
+                <SelectionRowCheckbox sel={sel} rowKey={s.id} />
+              </td>
               <td>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {s.bol_type === "MBOL" && <span className="badge badge-blue" style={{ fontSize: 9, padding: "0 6px", height: 18, lineHeight: "18px" }}>MBOL</span>}
@@ -1522,7 +1539,7 @@ export default function ShipmentsPage() {
             {/* CBOL sub-rows for MBOL shipments */}
             {s.bol_type === "MBOL" && rows.filter((c) => c.bol_type === "CBOL" && c.master_shipment_id === s.id).map((c) => (
               <tr key={c.id} style={{ background: "#f8faff", fontSize: 11 }}>
-                <td colSpan={11} style={{ padding: "4px 16px 4px 40px" }}>
+                <td colSpan={12} style={{ padding: "4px 16px 4px 40px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "nowrap" }}>
                     <span className="badge badge-teal" style={{ fontSize: 8, padding: "0 5px", height: 16, lineHeight: "16px" }}>CBOL</span>
                     <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(c); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 11 }}>{c.id}</a>

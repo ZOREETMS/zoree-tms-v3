@@ -12,6 +12,9 @@ import {
 } from "../services/rateService";
 import { invalidateQuoteCache } from "../services/ordersService";
 import ExportButton from "../components/ui/ExportButton";
+import { useRowSelection } from "../hooks/useRowSelection";
+import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
+import SelectionBar from "../components/ui/SelectionBar";
 
 const STATUS_BADGES = {
   Active: "badge badge-green",
@@ -191,6 +194,8 @@ export default function RateManagementPage() {
   }, [rates]);
 
   // Filtered + sorted rows
+  const sel = useRowSelection();
+
   const rows = useMemo(() => {
     let filtered = rates;
 
@@ -343,7 +348,12 @@ export default function RateManagementPage() {
             <button className="btn btn-primary btn-sm" onClick={() => toast("Upload panel coming soon", "info")}>
               Upload Rates (Excel)
             </button>
-            <ExportButton entity="rates" rows={rows} label="Export Rates" />
+            <ExportButton
+              entity="rates"
+              rows={rows}
+              selectedRows={sel.selectedRows(rows)}
+              label="Export Rates"
+            />
             <button
               className="btn btn-secondary btn-sm"
               style={{
@@ -546,9 +556,13 @@ export default function RateManagementPage() {
         {/* Rates Table */}
         <div style={{ position: "relative", border: "1px solid var(--border)", borderRadius: 16, background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,0.04)" }}>
           <div style={{ overflowX: "scroll", overflowY: "visible", WebkitOverflowScrolling: "touch" }}>
+            <SelectionBar count={sel.size} entityLabel="Rate" onClear={sel.clear} />
             <table className="grid" style={{ border: "none", boxShadow: "none", width: 1800 }}>
               <thead>
                 <tr>
+                  <th style={{ width: 36 }}>
+                    <SelectionHeaderCheckbox sel={sel} rows={rows} />
+                  </th>
                   <th onClick={() => toggleSort("lane")} style={{ cursor: "pointer" }}>LANE <SortIcon col="lane" /></th>
                   <th onClick={() => toggleSort("origin")} style={{ cursor: "pointer" }}>ORIGIN <SortIcon col="origin" /></th>
                   <th onClick={() => toggleSort("dest")} style={{ cursor: "pointer" }}>DESTINATION <SortIcon col="dest" /></th>
@@ -572,12 +586,15 @@ export default function RateManagementPage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={19} className="empty-state">No rates found</td></tr>
+                  <tr><td colSpan={20} className="empty-state">No rates found</td></tr>
                 ) : rows.map((r, idx) => (
                   <tr
                     key={r.id || idx}
                     style={r.czarlite ? { borderLeft: "3px solid #6366f1", background: "rgba(99,102,241,.03)" } : undefined}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <SelectionRowCheckbox sel={sel} rowKey={r.id || idx} />
+                    </td>
                     <td style={{ whiteSpace: "nowrap", minWidth: 220 }}>
                       <a href="#" onClick={(e) => { e.preventDefault(); setEditRate(r); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 12, textDecoration: "none", cursor: "pointer" }}>
                         {buildLaneId(r)}
