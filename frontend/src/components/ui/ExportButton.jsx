@@ -3,9 +3,14 @@
  * Pages pass `entity` + `rows` (the filtered/sorted view); the service
  * resolves columns + filename. UI never imports xlsx directly.
  *
+ * Selection behavior: if `selectedRows` is provided AND non-empty, the
+ * button exports those instead of `rows` and labels itself "Export
+ * Selected (N)". Otherwise it falls back to `rows` and the supplied
+ * label. Pages without a selection model can omit `selectedRows`.
+ *
  * Usage:
- *   <ExportButton entity="orders" rows={visibleOrders} />
- *   <ExportButton entity="shipments" rows={visibleShipments} disabled={loading} />
+ *   <ExportButton entity="orders"    rows={visibleOrders}    selectedRows={selectedOrderRows} />
+ *   <ExportButton entity="shipments" rows={visibleShipments} />
  */
 
 import { useCallback, useState } from "react";
@@ -14,6 +19,7 @@ import { exportEntityToExcel } from "../../services/exportService";
 export default function ExportButton({
   entity,
   rows,
+  selectedRows,
   label = "Export",
   className = "btn btn-secondary btn-sm",
   disabled = false,
@@ -21,20 +27,24 @@ export default function ExportButton({
 }) {
   const [busy, setBusy] = useState(false);
 
+  const hasSelection = Array.isArray(selectedRows) && selectedRows.length > 0;
+  const effectiveRows = hasSelection ? selectedRows : (Array.isArray(rows) ? rows : []);
+  const count = effectiveRows.length;
+  const effectiveLabel = hasSelection ? "Export Selected" : label;
+
   const handleClick = useCallback(() => {
-    if (busy || disabled) return;
+    if (busy || disabled || count === 0) return;
     setBusy(true);
     try {
-      exportEntityToExcel(entity, rows || []);
+      exportEntityToExcel(entity, effectiveRows);
     } catch (err) {
       if (typeof onError === "function") onError(err);
       else console.error("[ExportButton] export failed:", err);
     } finally {
       setBusy(false);
     }
-  }, [entity, rows, disabled, busy, onError]);
+  }, [entity, effectiveRows, count, disabled, busy, onError]);
 
-  const count = Array.isArray(rows) ? rows.length : 0;
   const isDisabled = disabled || busy || count === 0;
 
   return (
@@ -45,7 +55,7 @@ export default function ExportButton({
       disabled={isDisabled}
       title={count === 0 ? "No rows to export" : `Export ${count} row${count === 1 ? "" : "s"} to Excel`}
     >
-      {busy ? "Exporting…" : `📥 ${label} (${count})`}
+      {busy ? "Exporting…" : `📥 ${effectiveLabel} (${count})`}
     </button>
   );
 }
