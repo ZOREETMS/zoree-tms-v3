@@ -64,7 +64,7 @@ pre,code{text-transform:none;}
 .logo-sub{font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;}
 .nav-section{padding:16px 12px 6px;}
 .nav-label{font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:0.08em;text-transform:uppercase;padding:0 8px 8px;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;cursor:pointer;color:#CBD5E1;font-size:14px;font-weight:500;transition:all 0.15s;margin-bottom:2px;position:relative;user-select:none;text-decoration:none;height:40px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;cursor:pointer;color:#CBD5E1;font-size:14px;font-weight:500;transition:all 0.15s;margin-bottom:2px;position:relative;user-select:none;text-decoration:none;height:40px;text-transform:none;}
 .nav-item:hover{background:#172554;color:#fff;}
 .nav-item.active{background:rgba(37,99,235,0.15);color:#fff;font-weight:600;}
 .nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;background:#60A5FA;border-radius:0 2px 2px 0;}
