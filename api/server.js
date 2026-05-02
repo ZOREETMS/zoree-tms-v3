@@ -274,18 +274,6 @@ async function getRatesVersionStamp() {
 // ROUTES
 // ══════════════════════════════════════════════════════════════════
 
-// ── Dev: accept new index.html push ────────────────────────────────
-const fs = require('fs');
-const path = require('path');
-app.post('/dev/push-html', express.raw({type:'text/html',limit:'5mb'}), (req,res)=>{
-  const dest = path.join(__dirname,'..','index.html');
-  fs.writeFile(dest, req.body, (err)=>{
-    if(err){ console.error('[dev] write failed:',err.message); return res.status(500).json({error:err.message}); }
-    console.log('[dev] index.html updated →',dest);
-    res.json({ok:true,dest});
-  });
-});
-
 // ── Tender / SMTP diagnostics (updated after startup verify) ───────────────
 let smtpVerifyState = { ok: null, error: null, checkedAt: null };
 
@@ -3045,20 +3033,6 @@ app.post('/api/auth/refresh', async (req, res) => {
       expiresAt:    Date.now() + ((data.expires_in || 3600) * 1000),
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// Temporary deploy endpoint — writes new index.html to the static directory
-app.post('/api/deploy-index', async (req, res) => {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    // Write to the directory that serves static files (parent of api/)
-    const targetPath = path.join(__dirname, '..', 'index.html');
-    const { content } = req.body;
-    if(!content) return res.status(400).json({error:'No content'});
-    fs.writeFileSync(targetPath, content, 'utf8');
-    res.json({ok:true, path:targetPath, bytes:content.length});
-  } catch(e) { res.status(500).json({error:e.message}); }
 });
 
 // ── Haversine approximate mileage (fallback when PC*MILER & rate.miles unavailable) ──
