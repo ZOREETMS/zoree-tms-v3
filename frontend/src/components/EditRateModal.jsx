@@ -70,7 +70,7 @@ const DEFAULT_EQUIPMENT_BY_MODE = {
 // ends with an 8-digit date suffix that doesn't match the current expiry
 // (i.e. the user changed the expiration date), strip it first so we don't
 // double-append. Idempotent when the suffix already matches. Mirrors
-// RateManagementPage.buildLaneId so modal, table, and DB stay in sync.
+// rateService.buildRateLaneId so modal, table, and DB stay in sync.
 function appendExpirySuffix(lane, exp) {
   let base = String(lane || "").trim();
   if (!base) return base;

@@ -1,0 +1,11 @@
+{
+  "_comment": "Snapshot batch (one of N per run; OIC pages BICC at 5k rows / chunk).",
+  "instance_id": "OIC-INST-2026-05-02-02-15-00-0001",
+  "tenant_id": "northwind",
+  "as_of": "2026-05-02T02:15:00.000Z",
+  "rows": [
+    { "location_id": "DAL-DC", "fusion_item_id": "300000010012345", "qty": 12480, "uom": "each" },
+    { "location_id": "DAL-DC", "fusion_item_id": "300000010088990", "qty":  4220, "uom": "each" },
+    { "location_id": "PHX-DC", "fusion_item_id": "300000010012345", "qty":  3315, "uom": "each" }
+  ]
+}

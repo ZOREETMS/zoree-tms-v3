@@ -1,0 +1,12 @@
+{
+  "_comment": "Outbound call OIC makes to Fusion for the SO header update. PATCH on salesOrdersForOrderHub.",
+  "_endpoint": "PATCH https://{fusion-host}/fscmRestApi/resources/11.13.18.05/salesOrdersForOrderHub/300000005711928",
+  "Status": "Shipped",
+  "ShippedDate": "2026-05-02",
+  "WaybillNumber": "BOL-77231",
+  "ProBillNumber": "PRO-44091",
+  "SealNumber": "SEAL-002",
+  "CarrierName": "ACME Express",
+  "ActualWeight": 18420,
+  "ActualWeightUOMCode": "Lbs"
+}

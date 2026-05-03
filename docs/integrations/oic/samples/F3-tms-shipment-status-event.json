@@ -1,0 +1,31 @@
+{
+  "_comment": "Outbound payload TMS publisher POSTs to OIC after a SHIPMENT_UPDATED event. OIC unpacks, transforms, and calls Fusion.",
+  "event_type": "shipment.status",
+  "event_seq": 49281,
+  "tms_shipment_id": "SHP-19384",
+  "fusion_business_unit_id": "300000001234567",
+  "occurred_at": "2026-05-02T15:23:11.000Z",
+  "shipment": {
+    "status": "In Transit",
+    "carrier": "ACME-EXP",
+    "bol_number": "BOL-77231",
+    "pro_number": "PRO-44091",
+    "seal_number": "SEAL-002",
+    "pickup_date": "2026-05-02",
+    "delivery_date": null,
+    "weight": 18420,
+    "weight_uom": "pounds"
+  },
+  "linked_orders": [
+    {
+      "tms_order_id": "FUS-1027382",
+      "fusion_so_header_id": "300000005711928",
+      "fusion_shipment_request_id": "300000091122334",
+      "status": "Shipped"
+    }
+  ],
+  "trace": {
+    "tms_event_log_id": 49281,
+    "via": "shipConfirm"
+  }
+}

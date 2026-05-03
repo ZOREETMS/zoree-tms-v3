@@ -4,11 +4,14 @@ import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import {
+  buildRateLaneId,
   deleteRate,
   downloadRateTemplate,
   duplicateRate,
   getMatchTypeBadge,
   getMatchTypeLabel,
+  isCzarLiteApplicable,
+  rateMatchesSearch,
 } from "../services/rateService";
 import { invalidateQuoteCache } from "../services/ordersService";
 import ExportButton from "../components/ui/ExportButton";
@@ -29,16 +32,6 @@ const MODE_BADGES = {
   FTL: "badge badge-teal",
   Intermodal: "badge badge-purple",
 };
-
-/* ---------- Build display lane ID with expiry date appended ---------- */
-function buildLaneId(r) {
-  let lane = r.lane || "";
-  const exp = r.exp || r.expires || r.expiry_date || "";
-  if (exp && !lane.includes(exp.replace(/-/g, ""))) {
-    lane += "-" + exp.replace(/-/g, "");
-  }
-  return lane;
-}
 
 /* ---------- Format rate display ---------- */
 function formatRate(r) {
@@ -84,9 +77,14 @@ function formatTransitDays(r) {
 
 /* ---------- Render CzarLite badge ---------- */
 function CzarLiteBadge({ r, carriers }) {
-  // Show CzarLite badge if rate-level OR carrier-level czarlite is enabled
-  const carrierCzarlite = (carriers || []).some((c) => c.name === r.carrier && c.czarlite_enabled);
-  if (!r.czarlite && !carrierCzarlite) return <span className="text-muted text-sm">{"\u2014"}</span>;
+  // CzarLite is an LTL-only tariff concept. A carrier may have
+  // `czarlite_enabled = true` for its LTL business, but that flag must
+  // not surface the badge on TL/Flatbed/Intermodal/Drayage rate rows.
+  // Source of truth lives in services/rateService.js so the matcher,
+  // edit modal, and UI badge agree on the rule.
+  if (!isCzarLiteApplicable(r, carriers)) {
+    return <span className="text-muted text-sm">{"\u2014"}</span>;
+  }
   const cls = r.czarliteClass || r.czarlite_class || r.freight_class || "";
   const minWt = r.czarliteMinWt || r.czar_min_wt || r.czarlite_min_wt || 0;
   const maxWt = r.czarliteMaxWt || r.czar_max_wt || r.czarlite_max_wt || 0;
@@ -189,7 +187,7 @@ export default function RateManagementPage() {
       active: rates.filter((r) => r.status === "Active").length,
       expiringSoon: rates.filter((r) => r.status === "Expiring Soon" || (r.status === "Active" && getExp(r) >= now && getExp(r) <= thirtyDays)).length,
       expired: rates.filter((r) => r.status === "Expired" || (getExp(r) && getExp(r) < now)).length,
-      czarlite: rates.filter((r) => r.czarlite || carriers.some((c) => c.name === r.carrier && c.czarlite_enabled)).length,
+      czarlite: rates.filter((r) => isCzarLiteApplicable(r, carriers)).length,
     };
   }, [rates]);
 
@@ -200,7 +198,7 @@ export default function RateManagementPage() {
     let filtered = rates;
 
     if (czarliteOnly) {
-      filtered = filtered.filter((r) => r.czarlite === true);
+      filtered = filtered.filter((r) => isCzarLiteApplicable(r, carriers));
     }
     if (carrierFilter !== "All") {
       filtered = filtered.filter((r) => r.carrier === carrierFilter);
@@ -232,11 +230,10 @@ export default function RateManagementPage() {
       filtered = filtered.filter((r) => getExp(r) && getExp(r) <= expTo);
     }
     if (q.trim()) {
-      const t = q.toLowerCase().trim();
-      filtered = filtered.filter((r) =>
-        [buildLaneId(r), getOrigin(r), getDest(r), r.carrier, r.mode, r.status, r.unit]
-          .some((v) => String(v || "").toLowerCase().includes(t))
-      );
+      // Comma-separated tokens are matched OR-wise (e.g.
+      // "AVRT-...-20261231,AVRT-...-20261231" returns both rates).
+      // Logic lives in rateService so the modal/grid/search stay in sync.
+      filtered = filtered.filter((r) => rateMatchesSearch(r, q));
     }
 
     return [...filtered].sort((a, b) => {
@@ -587,17 +584,19 @@ export default function RateManagementPage() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr><td colSpan={20} className="empty-state">No rates found</td></tr>
-                ) : rows.map((r, idx) => (
+                ) : rows.map((r, idx) => {
+                  const czApplies = isCzarLiteApplicable(r, carriers);
+                  return (
                   <tr
                     key={r.id || idx}
-                    style={r.czarlite ? { borderLeft: "3px solid #6366f1", background: "rgba(99,102,241,.03)" } : undefined}
+                    style={czApplies ? { borderLeft: "3px solid #6366f1", background: "rgba(99,102,241,.03)" } : undefined}
                   >
                     <td onClick={(e) => e.stopPropagation()}>
                       <SelectionRowCheckbox sel={sel} rowKey={r.id || idx} />
                     </td>
                     <td style={{ whiteSpace: "nowrap", minWidth: 220 }}>
                       <a href="#" onClick={(e) => { e.preventDefault(); setEditRate(r); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 12, textDecoration: "none", cursor: "pointer" }}>
-                        {buildLaneId(r)}
+                        {buildRateLaneId(r)}
                       </a>
                     </td>
                     <td className="text-sm">{getOrigin(r).toUpperCase() || "\u2014"}</td>
@@ -623,7 +622,7 @@ export default function RateManagementPage() {
                         {getMatchTypeBadge(r.match_type)}
                       </span>
                     </td>
-                    <td className="mono fw-700" style={r.czarlite ? { color: "#6366f1" } : { color: "var(--green)" }}>
+                    <td className="mono fw-700" style={czApplies ? { color: "#6366f1" } : { color: "var(--green)" }}>
                       {formatRate(r)}
                     </td>
                     <td className="text-sm" style={{ color: "var(--text3)" }}>{formatUnit(r)}</td>
@@ -685,7 +684,8 @@ export default function RateManagementPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

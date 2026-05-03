@@ -1,0 +1,17 @@
+{
+  "_comment": "Source: Fusion itemPublishEvent. One per item.",
+  "EventName": "oracle.apps.scm.productHub.itemPublishEvent",
+  "EventDateTime": "2026-05-02T03:14:09.000Z",
+  "Payload": {
+    "ItemId": "300000010012345",
+    "OrganizationId": "300000005000001",
+    "ItemNumber": "WIDGET-A100",
+    "Description": "Widget A100, Industrial",
+    "PrimaryUOMCode": "Ea",
+    "UnitWeight": 4.2,
+    "UnitWeightUOMCode": "Lbs",
+    "HazardousMaterialFlag": false,
+    "LifecyclePhase": "Production",
+    "Active": true
+  }
+}

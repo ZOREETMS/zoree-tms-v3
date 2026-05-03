@@ -62,6 +62,123 @@ export function getMatchTypeBadge(value) {
   return "CITY";
 }
 
+/* ── CzarLite applicability ──────────────────────────────────────
+ * CzarLite is an LTL-tariff concept (class + weight breaks). The
+ * matcher (api/services/rateMatcher.js → rateAcceptsWeight) and the
+ * Edit Rate modal already gate CzarLite columns on mode === 'LTL';
+ * UI surfaces (badge, stats counter, "CzarLite only" filter, row
+ * highlight on the rate-management table) must do the same so a
+ * carrier-level `czarlite_enabled` flag — set legitimately for the
+ * carrier's LTL business — does not bleed CzarLite styling into
+ * TL/Flatbed/Intermodal/Drayage rate rows.
+ *
+ * Single source of truth: change the rule here, never inline the
+ * mode comparison in components.
+ */
+
+/** True when `mode` is the LTL mode that uses CzarLite tariffs. */
+export function isLtlMode(mode) {
+  return String(mode || "").trim().toUpperCase() === "LTL";
+}
+
+/**
+ * True when CzarLite styling/columns should be shown for this rate.
+ * Combines mode (LTL-only) with the rate-level `czarlite` flag and an
+ * optional carrier-level `czarlite_enabled` fallback.
+ *
+ * @param {Object} rate              - rate row
+ * @param {Array<Object>} [carriers] - full carriers list (for fallback)
+ * @returns {boolean}
+ */
+export function isCzarLiteApplicable(rate, carriers = []) {
+  if (!rate) return false;
+  if (!isLtlMode(rate.mode)) return false;
+  if (rate.czarlite === true) return true;
+  return (carriers || []).some(
+    (c) => c && c.name === rate.carrier && c.czarlite_enabled === true
+  );
+}
+
+/* ── Rate management page helpers ─────────────────────────────
+ * The rate-management grid renders a "lane ID" derived from the
+ * `lane` column plus the expiry date, and the search box on that
+ * page filters against the same string. Keeping both the format
+ * and the matcher in this service is the single source of truth
+ * — change the convention here, never reimplement it inline.
+ */
+
+/**
+ * Build the displayed lane identifier — the rate's `lane` with its
+ * expiry date (YYYYMMDD) appended when not already present. Idempotent
+ * when the suffix is already there (mirrors the table render and the
+ * EditRateModal `appendExpirySuffix` logic).
+ *
+ * @param {Object} rate - rate row (may use snake_case or camelCase aliases)
+ * @returns {string}
+ */
+export function buildRateLaneId(rate) {
+  if (!rate) return "";
+  let lane = rate.lane || "";
+  const exp = rate.exp || rate.expires || rate.expiry_date || rate.expiryDate || "";
+  if (exp && !lane.includes(String(exp).replace(/-/g, ""))) {
+    lane += "-" + String(exp).replace(/-/g, "");
+  }
+  return lane;
+}
+
+/**
+ * Parse the rate-management search-box query into discrete tokens.
+ * Commas separate tokens with OR semantics so users can paste several
+ * lane IDs at once — e.g.
+ *   "AVRT-ATL-DAL-LTL-CZ-STD-20261231,AVRT-ATL-HOU-LTL-CZ-STD-20261231"
+ * Tokens are lowercased, trimmed, de-duplicated; empty/blank inputs
+ * return an empty array.
+ *
+ * @param {string} query
+ * @returns {string[]}
+ */
+export function parseRateSearchQuery(query) {
+  if (query == null) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of String(query).split(",")) {
+    const t = raw.trim().toLowerCase();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * True when a rate row matches the supplied free-text query. Each
+ * comma-separated token is matched independently against the lane
+ * id, origin, destination, carrier, mode, status, and unit fields;
+ * a row matches when any token finds a substring hit on any field
+ * (OR-of-OR). Empty queries match every row.
+ *
+ * @param {Object} rate
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function rateMatchesSearch(rate, query) {
+  const tokens = parseRateSearchQuery(query);
+  if (tokens.length === 0) return true;
+  if (!rate) return false;
+  const fields = [
+    buildRateLaneId(rate),
+    rate.origin || "",
+    rate.dest || rate.destination || "",
+    rate.carrier || "",
+    rate.mode || "",
+    rate.status || "",
+    rate.unit || "",
+  ].map((v) => String(v || "").toLowerCase());
+  // Per-field substring match — mirrors the original .some() semantics
+  // so a token cannot accidentally span two adjacent fields.
+  return tokens.some((t) => fields.some((f) => f.includes(t)));
+}
+
 /* ── Rate lookup ──────────────────────────────────────────────
  * Rates are shared across every planning surface (bulk plan, route
  * optimizer, rate-management). Shipment rows store only the rate_id /

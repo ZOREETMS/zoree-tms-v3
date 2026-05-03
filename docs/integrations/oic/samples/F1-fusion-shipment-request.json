@@ -1,0 +1,56 @@
+{
+  "_comment": "Source-side payload Fusion emits via the DOO Shipment Request business event. OIC picks this up; values shown are realistic.",
+  "EventName": "oracle.apps.scm.dso.processShipmentRequestEvent",
+  "EventId": "0d4a1e4a-7e0d-4b58-8b22-2b72d2f5b0f1",
+  "EventDateTime": "2026-05-02T15:23:11.000Z",
+  "Payload": {
+    "Header": {
+      "HeaderId": "300000005711928",
+      "ShipmentRequestId": "300000091122334",
+      "BusinessUnitId": "300000001234567",
+      "SourceTransactionNumber": "FUS-1027382",
+      "PurchaseOrder": "PO-558821",
+      "RequestedShipDate": "2026-05-04",
+      "RequestedDeliveryDate": "2026-05-07",
+      "SoldToPartyName": "Northwind Logistics LLC",
+      "ShipToPartyName": "Northwind DC - Phoenix",
+      "ShipToAddress": {
+        "AddressLine1": "4220 W Buckeye Rd",
+        "City": "Phoenix",
+        "State": "AZ",
+        "PostalCode": "85009",
+        "Country": "US"
+      },
+      "ShipFromOrganizationCode": "M1",
+      "PreferredCarrierName": "ACME Express",
+      "ServiceLevelCode": "STANDARD",
+      "FreightTermsCode": "FOB_DESTINATION",
+      "HazardousFlag": false,
+      "OrderStatus": "Awaiting Shipping"
+    },
+    "Lines": [
+      {
+        "LineNumber": 1,
+        "InventoryItemId": "300000010012345",
+        "ItemNumber": "WIDGET-A100",
+        "Description": "Widget A100, Industrial",
+        "Quantity": 240,
+        "QuantityUOMCode": "Ea",
+        "UnitWeight": 4.2,
+        "UnitWeightUOMCode": "Lbs",
+        "UnitPrice": 17.50
+      },
+      {
+        "LineNumber": 2,
+        "InventoryItemId": "300000010088990",
+        "ItemNumber": "WIDGET-B250",
+        "Description": "Widget B250, Heavy Duty",
+        "Quantity": 60,
+        "QuantityUOMCode": "Ea",
+        "UnitWeight": 28.0,
+        "UnitWeightUOMCode": "Lbs",
+        "UnitPrice": 89.00
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "_comment": "Carriers are global today (no tenant_id field).",
+  "instance_id": "OIC-INST-2026-05-02-02-30-12-1188",
+  "mode": "full",
+  "carriers": [
+    {
+      "fusion_carrier_id": "300000007800001",
+      "name": "ACME Express",
+      "scac": "ACME",
+      "dot_number": "DOT-1234567",
+      "active": true
+    },
+    {
+      "fusion_carrier_id": "300000007800002",
+      "name": "Cardinal Freight",
+      "scac": "CARD",
+      "dot_number": "DOT-7891234",
+      "active": true
+    }
+  ]
+}

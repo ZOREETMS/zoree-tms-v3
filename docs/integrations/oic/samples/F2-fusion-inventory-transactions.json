@@ -1,0 +1,29 @@
+{
+  "_comment": "Inbound transaction batch — OIC may pack many transactions per call. TMS accepts up to 500 per request.",
+  "instance_id": "OIC-INST-2026-05-02-15-25-02-7711",
+  "tenant_id": "northwind",
+  "transactions": [
+    {
+      "fusion_transaction_id": "TX-991122-001",
+      "transaction_type": "Issue",
+      "occurred_at": "2026-05-02T15:24:01.000Z",
+      "location_id": "DAL-DC",
+      "subinventory": "FG",
+      "fusion_item_id": "300000010012345",
+      "qty": 240,
+      "uom": "each",
+      "source_document_ref": "FUS-1027382"
+    },
+    {
+      "fusion_transaction_id": "TX-991122-002",
+      "transaction_type": "Receipt",
+      "occurred_at": "2026-05-02T15:25:11.000Z",
+      "location_id": "DAL-DC",
+      "subinventory": "FG",
+      "fusion_item_id": "300000010088990",
+      "qty": 720,
+      "uom": "each",
+      "source_document_ref": "PO-7711-RCV"
+    }
+  ]
+}

@@ -12,10 +12,30 @@ const CUSTOMERS = ["Cisco Systems", "AT&T", "Meta", "Google", "Seagate", "XPO"];
 
 function emptyPref() {
   return {
-    id: "", origin: "", dest: "", mode: "TL", customer: "",
+    id: "",
+    originCity: "", originState: "",
+    destCity: "", destState: "",
+    mode: "TL", customer: "",
     preferred: [], excluded: [], priority: "Medium",
     reason: "", transitDays: null, status: "Active",
   };
+}
+
+// Origin/Destination are stored as "CITY, STATE" in a single column.
+// Split for UI; recombine on save.
+function splitCityState(value) {
+  const raw = String(value || "");
+  const idx = raw.lastIndexOf(",");
+  if (idx === -1) return { city: raw.trim(), state: "" };
+  return { city: raw.slice(0, idx).trim(), state: raw.slice(idx + 1).trim() };
+}
+
+function joinCityState(city, state) {
+  const c = (city || "").trim().toUpperCase();
+  const s = (state || "").trim().toUpperCase();
+  if (!c && !s) return "";
+  if (!s) return c;
+  return `${c}, ${s}`;
 }
 
 export default function LanePreferencesPage() {
@@ -112,7 +132,18 @@ export default function LanePreferencesPage() {
   }
 
   function openEdit(p) {
-    setEditPref({ ...p, _originalId: p.id });
+    const o = splitCityState(p.origin);
+    const d = splitCityState(p.dest);
+    setEditPref({
+      ...p,
+      _originalId: p.id,
+      originCity: o.city,
+      originState: o.state,
+      destCity: d.city,
+      destState: d.state,
+      // API returns transit_days (snake_case); map to the field the form uses.
+      transitDays: p.transit_days ?? p.transitDays ?? null,
+    });
     setPrefCarriers([...(p.preferred || [])]);
     setExclCarriers([...(p.excluded || [])]);
     setAddPrefVal("");
@@ -147,9 +178,20 @@ export default function LanePreferencesPage() {
   async function savePref() {
     if (!editPref) return;
     const id = (editPref.id || "").trim().toUpperCase();
-    const origin = (editPref.origin || "").trim().toUpperCase();
-    const dest = (editPref.dest || "").trim().toUpperCase();
-    if (!id || !origin || !dest) { toast("Lane ID, Origin, and Destination are required", "warning"); return; }
+    const originCity = (editPref.originCity || "").trim();
+    const originState = (editPref.originState || "").trim();
+    const destCity = (editPref.destCity || "").trim();
+    const destState = (editPref.destState || "").trim();
+    if (!id || !originCity || !originState || !destCity || !destState) {
+      toast("Lane ID, Origin City/State, and Destination City/State are required", "warning");
+      return;
+    }
+    if (originState.length !== 2 || destState.length !== 2) {
+      toast("State must be a 2-letter code (e.g. CA, TX)", "warning");
+      return;
+    }
+    const origin = joinCityState(originCity, originState);
+    const dest = joinCityState(destCity, destState);
 
     setBusyId("saving");
     try {
@@ -163,18 +205,24 @@ export default function LanePreferencesPage() {
         excluded: exclCarriers,
         priority: editPref.priority || "Medium",
         reason: editPref.reason || "",
-        transitDays: editPref.transitDays ? parseInt(editPref.transitDays) : null,
+        transit_days: editPref.transitDays ? parseInt(editPref.transitDays) : null,
         status: editPref.status || "Active",
       };
 
       const isEditing = !!editPref._originalId;
 
       if (isEditing) {
-        // If ID changed, remove old record
         if (editPref._originalId !== id) {
+          // Renaming the primary key: collision check, then delete-old + insert-new.
+          // PATCH would fail here because no row with the new id exists yet.
+          if (lanePreferences.find((x) => x.id === id)) {
+            toast(`${id} already exists`, "warning"); setBusyId(""); return;
+          }
           await DbApi.remove("lane_preferences", editPref._originalId);
+          await DbApi.upsert("lane_preferences", row);
+        } else {
+          await DbApi.patch("lane_preferences", id, row);
         }
-        await DbApi.patch("lane_preferences", id, row);
         toast(`${id} updated`, "success");
       } else {
         if (lanePreferences.find((x) => x.id === id)) { toast(`${id} already exists`, "warning"); setBusyId(""); return; }
@@ -497,17 +545,37 @@ export default function LanePreferencesPage() {
                 <div className="form-group">
                   <label className="form-label">Origin City *</label>
                   <input
-                    value={editPref.origin || ""}
-                    onChange={(e) => editField("origin", e.target.value)}
-                    placeholder="e.g. Chicago, IL"
+                    value={editPref.originCity || ""}
+                    onChange={(e) => editField("originCity", e.target.value)}
+                    placeholder="e.g. Chicago"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Origin State *</label>
+                  <input
+                    value={editPref.originState || ""}
+                    onChange={(e) => editField("originState", e.target.value.toUpperCase())}
+                    placeholder="e.g. IL"
+                    maxLength={2}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Destination City *</label>
                   <input
-                    value={editPref.dest || ""}
-                    onChange={(e) => editField("dest", e.target.value)}
-                    placeholder="e.g. Dallas, TX"
+                    value={editPref.destCity || ""}
+                    onChange={(e) => editField("destCity", e.target.value)}
+                    placeholder="e.g. Dallas"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Destination State *</label>
+                  <input
+                    value={editPref.destState || ""}
+                    onChange={(e) => editField("destState", e.target.value.toUpperCase())}
+                    placeholder="e.g. TX"
+                    maxLength={2}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
                 <div className="form-group">
@@ -672,7 +740,7 @@ export default function LanePreferencesPage() {
               />
 
               {/* Live Preview */}
-              {(editPref.origin && editPref.dest && (prefCarriers.length > 0 || exclCarriers.length > 0)) && (
+              {(editPref.originCity && editPref.originState && editPref.destCity && editPref.destState && (prefCarriers.length > 0 || exclCarriers.length > 0)) && (
                 <div style={{
                   marginTop: 16, padding: "12px 16px",
                   background: "linear-gradient(135deg,rgba(124,58,237,.06),rgba(59,130,246,.06))",
@@ -680,7 +748,7 @@ export default function LanePreferencesPage() {
                 }}>
                   <div style={{ fontWeight: 700, color: "#7c3aed", marginBottom: 6 }}>Preview - How this affects planning:</div>
                   <div style={{ color: "var(--text2)", lineHeight: 1.7 }}>
-                    <div>Lane: <strong>{editPref.origin} {"\u2192"} {editPref.dest}</strong></div>
+                    <div>Lane: <strong>{joinCityState(editPref.originCity, editPref.originState)} {"\u2192"} {joinCityState(editPref.destCity, editPref.destState)}</strong></div>
                     {prefCarriers.length > 0 && (
                       <div>{"\u2713"} When planning on this lane, these carriers will appear first: <strong>{prefCarriers.join(", ")}</strong></div>
                     )}

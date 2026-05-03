@@ -1,0 +1,30 @@
+{
+  "_comment": "Master-data nightly run — full payload for the Northwind tenant.",
+  "instance_id": "OIC-INST-2026-05-02-02-15-30-9001",
+  "tenant_id": "northwind",
+  "mode": "full",
+  "locations": [
+    {
+      "fusion_location_id": "300000005000001",
+      "fusion_organization_code": "M1",
+      "id": "DAL-DC",
+      "name": "Dallas Distribution Center",
+      "city": "Dallas",
+      "state": "TX",
+      "zip": "75201",
+      "country": "US",
+      "type": "warehouse"
+    },
+    {
+      "fusion_location_id": "300000005000002",
+      "fusion_organization_code": "M2",
+      "id": "PHX-DC",
+      "name": "Phoenix Distribution Center",
+      "city": "Phoenix",
+      "state": "AZ",
+      "zip": "85009",
+      "country": "US",
+      "type": "warehouse"
+    }
+  ]
+}

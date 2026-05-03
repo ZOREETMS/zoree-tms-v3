@@ -1,0 +1,17 @@
+{
+  "_comment": "OIC delta call to TMS after one or more itemPublishEvents. mode='delta' means upsert; 'full' means authoritative for the listed items.",
+  "instance_id": "OIC-INST-2026-05-02-03-14-12-2241",
+  "tenant_id": "northwind",
+  "mode": "delta",
+  "items": [
+    {
+      "fusion_item_id": "300000010012345",
+      "fusion_organization_id": "300000005000001",
+      "id": "WIDGET-A100",
+      "description": "Widget A100, Industrial",
+      "uom": "each",
+      "unit_weight": 4.2,
+      "hazmat": false
+    }
+  ]
+}

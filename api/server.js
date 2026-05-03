@@ -15,8 +15,10 @@ const nodemailer = require('nodemailer');
 const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
 const ingestRouter = require('./routes/ingest');
+const fusionIngestRouter = require('./routes/fusionIngest');
 const { buildMwQueueAdminRouter } = require('./routes/mwQueueAdmin');
 const mwQueueWorker = require('./services/mwQueueWorker');
+const fusionPublisher = require('./services/fusionPublisher');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { matchRate, matchAllRates } = require('./services/rateMatcher');
@@ -570,6 +572,9 @@ app.use('/api/invoices', createInvoicesRouter({
 // Both routes live in routes/ingest.js.
 app.use('/api/ingest', ingestRouter);
 app.use('/api', ingestRouter); // exposes /api/events/orders via the same router
+// Fusion (OM/Inv) inbound via OIC — see docs/integrations/oic/README.md.
+// Endpoints: /api/ingest/fusion/{sales-orders,shipment-requests,inventory/...,items,locations,carriers}
+app.use('/api/ingest/fusion', fusionIngestRouter);
 
 // ── MW Queue Admin (REQ-31) ───────────────────────────────────────
 // GET  /api/mw-queue/status     — worker state
@@ -1105,7 +1110,11 @@ app.post('/api/db/:table', async (req, res) => {
   try {
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpsert(req.params.table, req.body, null);
-    if (req.params.table === 'rates') invalidateLaneRateCaches();
+    // Lane quotes are cached post-pref-filtering; pref or rate changes
+    // must invalidate or stale "preferred=false" quotes leak through.
+    if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
+      invalidateLaneRateCaches();
+    }
     res.status(201).json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1154,7 +1163,9 @@ app.patch('/api/db/:table/:id', async (req, res) => {
     }
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpdate(req.params.table, req.params.id, body, null);
-    if (req.params.table === 'rates') invalidateLaneRateCaches();
+    if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
+      invalidateLaneRateCaches();
+    }
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1170,7 +1181,9 @@ app.delete('/api/db/:table/:id', async (req, res) => {
   }
   try {
     await dbDelete(req.params.table, req.params.id, null);
-    if (req.params.table === 'rates') invalidateLaneRateCaches();
+    if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
+      invalidateLaneRateCaches();
+    }
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2493,12 +2506,15 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     if (!lanes || !lanes.length) return res.status(400).json({ error: 'lanes[] required' });
     const ratesVersion = await getRatesVersionStamp();
 
-    // Check if lane_preferences parameter is enabled
+    // Check if lane_preferences parameter is enabled.
+    // Must include Authorization (service_role) — bare apikey runs as
+    // anon and RLS on planning_parameters / lane_preferences returns []
+    // silently, which made lane prefs never apply.
     let useLanePreferences = false;
     let lanePrefs = [];
     try {
       const ppRes = await fetch(`${SUPABASE_URL}/rest/v1/planning_parameters?key=eq.lane_preferences&select=enabled`, {
-        headers: { 'apikey': SERVICE_KEY },
+        headers: sbHeaders(null),
       });
       const ppData = await ppRes.json();
       if (Array.isArray(ppData) && ppData.length > 0) {
@@ -2506,7 +2522,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       }
       if (useLanePreferences) {
         const lpRes = await fetch(`${SUPABASE_URL}/rest/v1/lane_preferences?status=eq.Active&select=*`, {
-          headers: { 'apikey': SERVICE_KEY },
+          headers: sbHeaders(null),
         });
         const lpData = await lpRes.json();
         if (Array.isArray(lpData)) lanePrefs = lpData;
@@ -3322,6 +3338,10 @@ server.listen(PORT, () => {
   } else {
     console.log(`   ℹ️  MW queue worker NOT auto-started (MW_QUEUE_AUTO_START=false). Use POST /api/mw-queue/start.`);
   }
+
+  // Fusion (TMS → OIC) outbound publisher. No-op unless OIC_PUBLISH_ENABLED=true.
+  // See api/services/fusionPublisher/index.js and docs/integrations/oic/flows/F3-tms-to-fusion-status.md.
+  fusionPublisher.start();
   console.log('');
 });
 
