@@ -116,53 +116,30 @@ function rateMatchesShipment(rate, ctx) {
 }
 
 /**
- * Does this rate row satisfy the shipment's weight (if the rate
- * specifies a min/max)? Separate from geo matching so callers can
- * report "skipped on weight" differently from "skipped on geo".
- *
- * The `czarlite_min_wt` / `czarlite_max_wt` columns model the weight
- * breaks of an LTL CzarLite tariff. They are LTL-only by name and by
- * design — applying them to TL/Flatbed/Intermodal/etc. would cap a
- * TL rate at LTL volumes (e.g. 9,999 lb) and silently drop every
- * full-truckload group. Non-LTL modes therefore short-circuit to
- * "accepts any weight" regardless of what those columns hold.
- */
-function rateAcceptsWeight(rate, weight) {
-  if (!rate || weight == null) return true;
-  const mode = String(rate.mode || '').toUpperCase();
-  if (mode !== 'LTL') return true;
-  const minWt = Number(rate.czarlite_min_wt) || 0;
-  const maxWt = Number(rate.czarlite_max_wt) || Infinity;
-  return weight >= minWt && weight <= maxWt;
-}
-
-/**
  * Pick the best matching rate from a list of candidates.
  *
  * Lookup ladder:
- *   1. First rate whose match_type is satisfied on geo:
- *        a. If weight is in range → return that rate.
- *        b. If weight is OUT of range → return a 'weight-out-of-range'
- *           signal so the caller can skip the carrier entirely (this
- *           mirrors the pre-refactor behavior in api/server.js).
+ *   1. First rate whose match_type is satisfied on geo.
  *   2. Carrier-level fallback — a rate with blank origin AND blank
- *      dest ("applies to any lane for this carrier"). Weight still
- *      checked; weight failure here also skips the carrier.
+ *      dest ("applies to any lane for this carrier").
  *   3. null with 'no-match' — caller should price CzarLite-only.
+ *
+ * Migration 030 dropped the `czarlite_min_wt` / `czarlite_max_wt`
+ * weight-break columns; the matcher no longer rejects rates on
+ * shipment weight. The single `LTL_MAX` ceiling in api/server.js is
+ * the only weight gate on the LTL rating path.
  *
  * @param {Object} ctx   Shipment context (see below).
  * @param {Array}  rates Candidate rate rows (already filtered to the
  *                       relevant carrier + mode + status by the caller).
  * @returns {{
- *   rate:      Object|null,
- *   reason:    string,        // 'matched:<type>' | 'weight-out-of-range'
- *                             // | 'no-candidates' | 'no-match'
- *   offending: Object|null    // the rate that failed weight, if any
+ *   rate:   Object|null,
+ *   reason: string        // 'matched:<type>' | 'no-candidates' | 'no-match'
  * }}
  */
 function matchRate(ctx, rates) {
   if (!Array.isArray(rates) || rates.length === 0) {
-    return { rate: null, reason: 'no-candidates', offending: null };
+    return { rate: null, reason: 'no-candidates' };
   }
 
   const context = {
@@ -172,20 +149,14 @@ function matchRate(ctx, rates) {
     destZip:       normZip(ctx.destZip),
     originCountry: normCountry(ctx.originCountry) || 'USA',
     destCountry:   normCountry(ctx.destCountry)   || 'USA',
-    weight:        ctx.weight != null ? Number(ctx.weight) : null,
   };
 
   // Step 1: first rate that matches on GEO.
   for (const r of rates) {
     if (!rateMatchesShipment(r, context)) continue;
-    if (!rateAcceptsWeight(r, context.weight)) {
-      // Geo matched but weight failed → skip entire carrier.
-      return { rate: null, reason: 'weight-out-of-range', offending: r };
-    }
     return {
-      rate:      r,
-      reason:    `matched:${r.match_type || MATCH_TYPES.CITY}`,
-      offending: null,
+      rate:   r,
+      reason: `matched:${r.match_type || MATCH_TYPES.CITY}`,
     };
   }
 
@@ -200,13 +171,10 @@ function matchRate(ctx, rates) {
     return type === MATCH_TYPES.CITY && !r.origin && !r.dest;
   });
   if (fallback) {
-    if (!rateAcceptsWeight(fallback, context.weight)) {
-      return { rate: null, reason: 'weight-out-of-range', offending: fallback };
-    }
-    return { rate: fallback, reason: 'matched:carrier-fallback', offending: null };
+    return { rate: fallback, reason: 'matched:carrier-fallback' };
   }
 
-  return { rate: null, reason: 'no-match', offending: null };
+  return { rate: null, reason: 'no-match' };
 }
 
 /**
@@ -217,31 +185,27 @@ function matchRate(ctx, rates) {
  * the same lane.
  *
  * Lookup ladder:
- *   1. All rates whose match_type is satisfied on geo AND whose weight
- *      window accepts the shipment. If at least one such rate exists,
- *      return them all (the carrier-level fallback in step 2 is NOT
- *      consulted — explicit lane rates always win over a blanket
- *      "any lane for this carrier" row).
+ *   1. All rates whose match_type is satisfied on geo. If at least
+ *      one such rate exists, return them all (the carrier-level
+ *      fallback in step 2 is NOT consulted — explicit lane rates
+ *      always win over a blanket "any lane for this carrier" row).
  *   2. Carrier-level fallback (blank origin AND blank dest, match_type
- *      city_to_city). Returned as a single rate, weight checked.
- *   3. Empty array with 'weight-out-of-range' if every geo-matching
- *      rate failed weight; the caller should skip the carrier (mirrors
- *      pre-refactor strictness).
- *   4. Empty array with 'no-match' — caller may price CzarLite-only.
+ *      city_to_city). Returned as a single rate.
+ *   3. Empty array with 'no-match' — caller may price CzarLite-only.
+ *
+ * Migration 030 dropped the per-rate weight-break columns, so the
+ * matcher no longer filters on shipment weight.
  *
  * @param {Object} ctx   Shipment context (same shape as matchRate).
  * @param {Array}  rates Candidate rate rows for one carrier + mode.
  * @returns {{
- *   rates:     Array<{ rate: Object, reason: string }>,
- *   reason:    string,        // 'matched' | 'weight-out-of-range'
- *                             // | 'no-candidates' | 'no-match'
- *   offending: Object|null    // a representative rate that failed
- *                             // weight, if reason is weight-out-of-range
+ *   rates:  Array<{ rate: Object, reason: string }>,
+ *   reason: string        // 'matched' | 'no-candidates' | 'no-match'
  * }}
  */
 function matchAllRates(ctx, rates) {
   if (!Array.isArray(rates) || rates.length === 0) {
-    return { rates: [], reason: 'no-candidates', offending: null };
+    return { rates: [], reason: 'no-candidates' };
   }
 
   const context = {
@@ -251,21 +215,12 @@ function matchAllRates(ctx, rates) {
     destZip:       normZip(ctx.destZip),
     originCountry: normCountry(ctx.originCountry) || 'USA',
     destCountry:   normCountry(ctx.destCountry)   || 'USA',
-    weight:        ctx.weight != null ? Number(ctx.weight) : null,
   };
 
-  // Step 1: collect every rate that matches on GEO. Track weight
-  // failures separately so we can distinguish "no rate matched" from
-  // "rates matched but weight was wrong".
+  // Step 1: collect every rate that matches on GEO.
   const matched = [];
-  let weightFailedSample = null;
-
   for (const r of rates) {
     if (!rateMatchesShipment(r, context)) continue;
-    if (!rateAcceptsWeight(r, context.weight)) {
-      if (!weightFailedSample) weightFailedSample = r;
-      continue;
-    }
     matched.push({
       rate:   r,
       reason: `matched:${r.match_type || MATCH_TYPES.CITY}`,
@@ -273,7 +228,7 @@ function matchAllRates(ctx, rates) {
   }
 
   if (matched.length > 0) {
-    return { rates: matched, reason: 'matched', offending: null };
+    return { rates: matched, reason: 'matched' };
   }
 
   // Step 2: carrier-level fallback (same rule as matchRate).
@@ -282,24 +237,13 @@ function matchAllRates(ctx, rates) {
     return type === MATCH_TYPES.CITY && !r.origin && !r.dest;
   });
   if (fallback) {
-    if (!rateAcceptsWeight(fallback, context.weight)) {
-      return { rates: [], reason: 'weight-out-of-range', offending: fallback };
-    }
     return {
-      rates:     [{ rate: fallback, reason: 'matched:carrier-fallback' }],
-      reason:    'matched',
-      offending: null,
+      rates:  [{ rate: fallback, reason: 'matched:carrier-fallback' }],
+      reason: 'matched',
     };
   }
 
-  // Step 3: nothing geo-matched cleanly. If at least one rate matched
-  // geo but failed weight, surface that so the caller can skip the
-  // carrier (mirrors matchRate's pre-refactor strictness).
-  if (weightFailedSample) {
-    return { rates: [], reason: 'weight-out-of-range', offending: weightFailedSample };
-  }
-
-  return { rates: [], reason: 'no-match', offending: null };
+  return { rates: [], reason: 'no-match' };
 }
 
 module.exports = {
@@ -307,5 +251,5 @@ module.exports = {
   matchRate,
   matchAllRates,
   // Exposed for unit tests; not part of the public API.
-  _internal: { rateMatchesShipment, rateAcceptsWeight, normCity, normZip, normCountry },
+  _internal: { rateMatchesShipment, normCity, normZip, normCountry },
 };

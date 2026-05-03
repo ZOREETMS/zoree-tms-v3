@@ -234,30 +234,150 @@ async function syncDeliveredToOms(payload, user) {
     }
   }
 
-  // REQ-20: audit the mirror on the TMS shipment so the change-history
-  // drawer shows the delivered → OMS hop next to the planner's event.
-  try {
-    await history.recordChange({
-      entityType: 'shipment',
-      entityId:   shipmentId,
-      action:     'status',
-      field:      'oms_sync',
-      before:     null,
-      after:      'delivered',
-      user:       user || { email: 'mw-auto-sync' },
-      metadata: {
-        via:             'tms-delivered-auto-sync',
-        omsRowsUpdated:  updated.length,
-        omsRowsSkipped:  skipped.length,
-        orderIds,
-        deliveredAt:     deliveredIso,
-        note:            payload.note || null,
-        podReceivedBy:   payload.podReceivedBy || null,
-        pushedAt:        nowIso,
-      },
-    });
-  } catch (auditErr) {
-    console.error('[omsSync.delivered] history write failed:', auditErr.message);
+  // History row is no longer written here. Caller folds the returned
+  // audit metadata into its own consolidated change_history row so the
+  // planner's "Mark Delivered" produces exactly one row instead of
+  // two side-by-side STATUS entries (the duplicate-OMS-row bug).
+
+  const skippedByReason = skipped.reduce((acc, s) => {
+    const k = s.reason || 'other';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    shipmentId,
+    pushedAt: nowIso,
+    deliveredAt: deliveredIso,
+    note: payload.note || null,
+    podReceivedBy: payload.podReceivedBy || null,
+    via: 'tms-delivered-auto-sync',
+    updated,
+    skipped,
+    skippedByReason,
+  };
+}
+
+// Mirror dock-assignment changes from the TMS shipment back into every
+// linked oms_orders row. Called whenever shipments.dock_door (and the
+// associated dock_time / loading_start / loading_end) is written
+// outside the tender-accept flow — bulk-plan execute, multi-stop route
+// planning, dock-scheduling drag-and-drop, etc.
+//
+// Why a dedicated helper:
+//   - syncTenderAcceptToOms only fires on tender-accept; if the dock is
+//     assigned later the OMS Load & Ship modal would otherwise show
+//     "DOCK # —" because oms_orders.dock_door is never refreshed.
+//   - Keeps the dock-mirror logic in one place so callers (services) do
+//     not embed UPDATE statements inline (Rule 6: services-first).
+//
+// Payload shape:
+//   { shipmentId, orderIds?: [...], dockDoor?, dockTime?,
+//     loadingStart?, loadingEnd? }
+//
+// Behavior:
+//   - Only the supplied dock fields are written; everything else on the
+//     OMS row is preserved.
+//   - If orderIds is omitted the helper looks up linked orders from the
+//     orders table (orders.shipment_id = shipmentId).
+//   - Stage is never advanced or rewound — this is a metadata mirror.
+//   - Best-effort audit row + SHIPMENT_UPDATED broadcast, mirroring the
+//     other sync helpers.
+async function syncDockToOms(payload, user) {
+  const shipmentId = String(payload?.shipmentId || '').trim();
+  if (!shipmentId) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
+
+  // Build the patch from whichever dock fields the caller supplied.
+  // Empty strings and null/undefined are skipped so we never blow away
+  // a value the OMS already had.
+  const nowIso = new Date().toISOString();
+  const dockPatch = { updated_at: nowIso };
+  const setIf = (obj, key, val) => {
+    if (val === undefined || val === null) return;
+    if (typeof val === 'string' && val.trim() === '') return;
+    obj[key] = val;
+  };
+  setIf(dockPatch, 'dock_door',     payload.dockDoor);
+  setIf(dockPatch, 'dock_time',     payload.dockTime);
+  setIf(dockPatch, 'loading_start', payload.loadingStart);
+  setIf(dockPatch, 'loading_end',   payload.loadingEnd);
+
+  // Nothing to mirror? Bail early — keeps callers from having to gate
+  // on "did anything change" themselves.
+  if (Object.keys(dockPatch).length <= 1) {
+    return { shipmentId, pushedAt: nowIso, updated: [], skipped: [], skippedByReason: {}, noop: true };
+  }
+
+  // Resolve order IDs. Caller may pass them explicitly (preferred — avoids
+  // a round-trip), otherwise we look them up via orders.shipment_id.
+  let orderIds = Array.isArray(payload.orderIds) ? payload.orderIds.map(String).filter(Boolean) : [];
+  if (!orderIds.length) {
+    try {
+      const linked = await db.dbSelect('orders', {
+        filters: [['shipment_id', 'eq', shipmentId]],
+        select: 'id', limit: 500,
+      });
+      orderIds = (linked || []).map((r) => String(r.id)).filter(Boolean);
+    } catch (lookupErr) {
+      console.error('[omsSync.dock] order lookup failed:', lookupErr.message);
+      return { shipmentId, pushedAt: nowIso, updated: [], skipped: [], skippedByReason: { lookup_failed: 1 } };
+    }
+  }
+  if (!orderIds.length) {
+    return { shipmentId, pushedAt: nowIso, updated: [], skipped: [], skippedByReason: {}, noop: true };
+  }
+
+  const updated = [];
+  const skipped = [];
+
+  for (const oid of orderIds) {
+    try {
+      const priorRows = await db.dbSelect('oms_orders', {
+        filters: [['id', 'eq', oid]], limit: 1,
+        select: 'id,stage,dock_door,dock_time,loading_start,loading_end',
+      });
+      const prior = Array.isArray(priorRows) && priorRows.length ? priorRows[0] : null;
+      if (!prior) {
+        // TMS-origin order with no OMS row — nothing to mirror.
+        skipped.push({ id: oid, reason: 'no_oms_row', detail: 'no matching oms_orders row (likely TMS-origin order)' });
+        continue;
+      }
+      await db.dbUpdate('oms_orders', oid, dockPatch, null);
+      updated.push(oid);
+    } catch (perOrderErr) {
+      const reason = classifyDbError(perOrderErr);
+      console.error(`[omsSync.dock] row update failed for ${oid} (${reason}):`, perOrderErr.message);
+      skipped.push({ id: oid, reason, detail: perOrderErr.message });
+    }
+  }
+
+  // REQ-20: drop a per-shipment audit row so the Shipment Change History
+  // drawer surfaces that the dock-mirror auto-sync fired. Best-effort.
+  if (updated.length) {
+    try {
+      await history.recordChange({
+        entityType: 'shipment',
+        entityId:   shipmentId,
+        action:     'status',
+        field:      'oms_dock_sync',
+        before:     null,
+        after:      'synced',
+        user:       user || { email: 'mw-auto-sync' },
+        metadata: {
+          via: 'tms-dock-assigned-auto-sync',
+          omsRowsUpdated: updated.length,
+          omsRowsSkipped: skipped.length,
+          orderIds,
+          dockDoor:     payload.dockDoor     || null,
+          dockTime:     payload.dockTime     || null,
+          loadingStart: payload.loadingStart || null,
+          loadingEnd:   payload.loadingEnd   || null,
+          pushedAt: nowIso,
+        },
+      });
+    } catch (auditErr) {
+      console.error('[omsSync.dock] history write failed:', auditErr.message);
+    }
   }
 
   const skippedByReason = skipped.reduce((acc, s) => {
@@ -266,7 +386,24 @@ async function syncDeliveredToOms(payload, user) {
     return acc;
   }, {});
 
+  // Broadcast so the OMS Sales Orders page (OmsLive in zoree-oms.html)
+  // and any open TMS tabs refresh without a manual reload — same channel
+  // the tender-accept and delivered mirrors use.
+  if (updated.length) {
+    try {
+      bus.emit(EVENTS.SHIPMENT_UPDATED, {
+        id:              shipmentId,
+        via:             'tms-dock-assigned-auto-sync',
+        omsRowsUpdated:  updated,
+        omsRowsSkipped:  skipped.map((s) => s.id),
+        pushedAt:        nowIso,
+      });
+    } catch (busErr) {
+      console.error('[omsSync.dock] broadcast failed:', busErr.message);
+    }
+  }
+
   return { shipmentId, pushedAt: nowIso, updated, skipped, skippedByReason };
 }
 
-module.exports = { syncTenderAcceptToOms, syncDeliveredToOms, classifyDbError };
+module.exports = { syncTenderAcceptToOms, syncDeliveredToOms, syncDockToOms, classifyDbError };

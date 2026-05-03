@@ -1,6 +1,7 @@
 import { configureApi } from '../shared/api';
 import { storage } from './storage';
 import { API_BASE } from '../config/env';
+import { configureSupabase } from './supabaseClient';
 
 /**
  * Initialize the shared API client with React Native storage adapter
@@ -9,6 +10,11 @@ import { API_BASE } from '../config/env';
  *
  * Reads the API base from storage (set via Settings screen) first,
  * falling back to the compiled-in default in env.ts.
+ *
+ * QA bug #60: also configures the Supabase client used for Realtime
+ * subscriptions (see useRealtimeData). Falls back to compiled-in
+ * defaults; an explicit URL/key can be plugged in here once a Settings
+ * screen exposes them.
  */
 export function initializeApi(): void {
   const stored = storage.getItem('zoree_api_base');
@@ -17,6 +23,7 @@ export function initializeApi(): void {
     storage,
     apiBase,
   });
+  configureSupabase({});
 }
 
 /**
@@ -35,9 +42,11 @@ export {
   AuthApi,
   DbApi,
   OrdersApi,
+  ShipmentsApi,
   TenderApi,
   OmsApi,
   InvoicesApi,
   MileageApi,
   BulkPlanApi,
+  configureAuthHooks,
 } from '../shared/api';

@@ -1,9 +1,8 @@
 /**
  * Rate edit form — LTL / CzarLite section.
  *
- * Discount %, Discount $ (flat), NMFC freight class, and LTL min/max
- * weight breaks. Weight-break inputs are only enabled when the rate's
- * mode is LTL — mirrors the web modal's UX (lines 405-448).
+ * Discount %, Discount $ (flat), and NMFC freight class. Mirrors the
+ * web modal's UX.
  */
 
 import React, { useMemo } from 'react';
@@ -12,7 +11,6 @@ import RateTextField from './RateTextField';
 import RatePickerField from './RatePickerField';
 import {
   FREIGHT_CLASSES,
-  isLtlMode,
   type RateFormState,
 } from '../../services/rateService';
 import { fontSize, fontWeight, spacing, colors, borderRadius } from '../../theme';
@@ -23,8 +21,6 @@ export interface RateLtlSectionProps {
 }
 
 export default function RateLtlSection({ form, onChange }: RateLtlSectionProps) {
-  const ltl = isLtlMode(form.mode);
-
   const classOptions = useMemo(
     () => FREIGHT_CLASSES.map((c) => ({ value: c, label: `Class ${c}` })),
     [],
@@ -58,33 +54,6 @@ export default function RateLtlSection({ form, onChange }: RateLtlSectionProps) 
         options={classOptions}
         onChange={(v) => onChange('czarliteClass', v)}
       />
-
-      {ltl ? (
-        <View style={styles.row}>
-          <View style={styles.flex1}>
-            <RateTextField
-              label="Min Weight (lbs)"
-              value={form.czarliteMinWt}
-              onChangeText={(v) => onChange('czarliteMinWt', v.replace(/[^0-9]/g, ''))}
-              keyboardType="numeric"
-              placeholder="500"
-            />
-          </View>
-          <View style={styles.flex1}>
-            <RateTextField
-              label="Max Weight (lbs)"
-              value={form.czarliteMaxWt}
-              onChangeText={(v) => onChange('czarliteMaxWt', v.replace(/[^0-9]/g, ''))}
-              keyboardType="numeric"
-              placeholder="9999"
-            />
-          </View>
-        </View>
-      ) : (
-        <Text style={styles.disabledHint}>
-          Weight breaks apply to LTL rates only — switch Mode to LTL to configure.
-        </Text>
-      )}
     </View>
   );
 }
@@ -103,18 +72,5 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: colors.text,
     marginBottom: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  flex1: {
-    flex: 1,
-  },
-  disabledHint: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.regular,
-    color: colors.text3,
-    fontStyle: 'italic',
   },
 });

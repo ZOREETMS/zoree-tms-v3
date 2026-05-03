@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { DbApi } from "../lib/api";
+import { invalidateQuoteCache } from "../services/ordersService";
 
 const PRIORITY_STYLES = {
   High:   { color: "var(--red)",    bg: "rgba(239,68,68,.1)" },
@@ -231,6 +232,9 @@ export default function LanePreferencesPage() {
       }
 
       setEditPref(null);
+      // Lane prefs feed into carrier quote sorting — drop the in-memory
+      // quote cache so the next plan run re-fetches with the new rules.
+      invalidateQuoteCache();
       await refreshData();
     } catch (err) {
       toast(`Failed: ${err.message}`, "error");
@@ -246,6 +250,7 @@ export default function LanePreferencesPage() {
       const newStatus = p.status === "Active" ? "Inactive" : "Active";
       await DbApi.patch("lane_preferences", p.id, { ...p, status: newStatus });
       toast(`${p.id} set to ${newStatus}`, "info");
+      invalidateQuoteCache();
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
     finally { setBusyId(""); }
@@ -258,6 +263,7 @@ export default function LanePreferencesPage() {
     try {
       await DbApi.remove("lane_preferences", p.id);
       toast(`${p.id} deleted`, "info");
+      invalidateQuoteCache();
       await refreshData();
     } catch (err) { toast(`Failed: ${err.message}`, "error"); }
     finally { setBusyId(""); }

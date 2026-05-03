@@ -86,7 +86,6 @@ function buildInitialForm(rate) {
   if (!rate) return {};
   const oLoc = parseLocation(rate.origin);
   const dLoc = parseLocation(rate.dest);
-  const ltl = isLtlMode(rate.mode);
   // Promote the full display lane (base + expiry suffix) into the editable
   // form value so the input shows the same ID the user clicked on in the
   // table. On save we re-append to defend against expiry-date changes.
@@ -123,8 +122,6 @@ function buildInitialForm(rate) {
     serviceLevel: getField(rate, "serviceLevel", "service_level"),
     czarlite: !!rate.czarlite,
     czarliteClass: getField(rate, "czarliteClass", "czarlite_class", "freight_class") || "70",
-    czarliteMinWt: getField(rate, "czarliteMinWt", "czarlite_min_wt", "czar_min_wt") || (ltl ? 500 : ""),
-    czarliteMaxWt: getField(rate, "czarliteMaxWt", "czarlite_max_wt", "czar_max_wt") || (ltl ? 9999 : ""),
   };
 }
 
@@ -166,11 +163,6 @@ function buildPayload(form) {
     service_level: form.serviceLevel || null,
     czarlite: form.czarlite,
     czarlite_class: form.czarliteClass ? Number(form.czarliteClass) : null,
-    // CzarLite weight breaks only apply to LTL rates (see rateMatcher.js).
-    // Persist null on non-LTL so the matcher never skips a TL carrier on
-    // a stray LTL-tariff weight cap.
-    czarlite_min_wt: isLtlMode(form.mode) && form.czarliteMinWt ? Number(form.czarliteMinWt) : null,
-    czarlite_max_wt: isLtlMode(form.mode) && form.czarliteMaxWt ? Number(form.czarliteMaxWt) : null,
   };
 }
 
@@ -280,14 +272,6 @@ export default function EditRateModal({ rate, onClose, onSave, isNew, carriers =
                 setField("mode", next);
                 if (isLtlMode(next)) {
                   setField("czarlite", true);
-                  // Restore LTL CzarLite weight-break defaults if cleared.
-                  if (!form.czarliteMinWt) setField("czarliteMinWt", 500);
-                  if (!form.czarliteMaxWt) setField("czarliteMaxWt", 9999);
-                } else {
-                  // Clear LTL-tariff weight breaks on TL/Flatbed/etc. so
-                  // the matcher doesn't accidentally cap the lane.
-                  setField("czarliteMinWt", "");
-                  setField("czarliteMaxWt", "");
                 }
                 // Suggest a default equipment for the new mode if the
                 // user hasn't already pinned one. Mirrors migration 024
@@ -468,29 +452,11 @@ export default function EditRateModal({ rate, onClose, onSave, isNew, carriers =
                 <span style={{ fontSize: 9, color: "var(--text3)", marginTop: 2 }}>FIXED $ DEDUCTION OFF BASE (APPLIED BEFORE FSC)</span>
               </div>
             </div>
-            <div className="form-row-3" style={{ marginTop: 10 }}>
-              <div className="form-group">
-                <label className="form-label">NMFC FREIGHT CLASS</label>
-                <select value={form.czarliteClass || "70"} onChange={(e) => setField("czarliteClass", e.target.value)}>
-                  {FREIGHT_CLASSES.map((c) => <option key={c} value={c}>CLASS {c}</option>)}
-                </select>
-              </div>
-              {isLtlMode(form.mode) ? (
-                <>
-                  <div className="form-group">
-                    <label className="form-label">MIN WEIGHT (LBS)</label>
-                    <input type="number" value={form.czarliteMinWt || 500} onChange={(e) => setField("czarliteMinWt", e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">MAX WEIGHT (LBS)</label>
-                    <input type="number" value={form.czarliteMaxWt || 9999} onChange={(e) => setField("czarliteMaxWt", e.target.value)} />
-                  </div>
-                </>
-              ) : (
-                <div className="form-group" style={{ gridColumn: "span 2", color: "var(--text3)", fontSize: 11 }}>
-                  Weight breaks apply to LTL rates only — switch MODE to LTL to configure.
-                </div>
-              )}
+            <div className="form-group" style={{ marginTop: 10 }}>
+              <label className="form-label">NMFC FREIGHT CLASS</label>
+              <select value={form.czarliteClass || "70"} onChange={(e) => setField("czarliteClass", e.target.value)}>
+                {FREIGHT_CLASSES.map((c) => <option key={c} value={c}>CLASS {c}</option>)}
+              </select>
             </div>
           </div>
         </div>

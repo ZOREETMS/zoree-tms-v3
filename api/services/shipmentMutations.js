@@ -18,10 +18,17 @@
 
 const db = require('./supabase');
 const history = require('./changeHistory');
+const { bus, EVENTS } = require('./eventBus');
 
 // Shipment statuses where no further orders may be added. Keep in sync
 // with any front-end assertion on shipment lifecycle.
 const LOCKED_STATUSES = new Set(['Delivered', 'Cancelled']);
+
+// Statuses where re-quoting / changing the carrier is a no-op and would
+// just mask the operational reality (the load already shipped or was
+// cancelled). Locked == no carrier change. Same set today as
+// LOCKED_STATUSES, kept separately so the two policies can diverge.
+const CARRIER_CHANGE_LOCKED_STATUSES = new Set(['Delivered', 'Cancelled', 'In Transit']);
 
 function num(v, fallback = 0) {
   const n = Number(v);
@@ -309,4 +316,144 @@ async function recalcShipmentAfterOrderRemoval({
   return { shipment: shipAfter, recalc };
 }
 
-module.exports = { addOrderToShipment, recalcShipmentAfterOrderRemoval, recalcCost, _internal: { LOCKED_STATUSES } };
+// ── Change carrier on an existing shipment ────────────────────────
+// Single writer for the "🔄 Change Carrier" flow. Replaces the previous
+// component-level DbApi.patch("shipments", id, ...) call which bypassed
+// the audit/broadcast pipeline (REQ-02) and produced the stale-display
+// bug where the Shipment Details modal showed the previous carrier
+// after a successful change.
+//
+// Responsibilities:
+//   1. Read the current shipment row (so we can write a real before/after
+//      audit and validate state).
+//   2. Reject the change if the shipment is in a locked status.
+//   3. Write only the carrier + rate-related columns (no opportunistic
+//      schema drift — we do not touch fields outside the allow-list).
+//   4. Record one change_history row per actually-changed field via
+//      recordFieldDiffs so the History tab attributes the carrier
+//      switch to the user that performed it.
+//   5. Emit SHIPMENT_UPDATED on the in-process bus → wsBroadcast, so
+//      every connected TMS client (and the Shipments Page list) re-reads
+//      without a manual refresh.
+//
+// Accepts a partial `payload`; only keys present in ALLOWED_FIELDS are
+// written. Empty / missing fields fall back to the current row, with the
+// exception of `carrier` itself, which is required.
+const ALLOWED_CARRIER_CHANGE_FIELDS = [
+  'carrier',
+  'mode',
+  'total_cost',
+  'rate',
+  'fuel_surcharge',
+  'miles',
+  'service_level',
+  'rate_id',
+  // The next two are what kept the Shipment Details modal showing
+  // stale "Equipment (from rate)", "Rate ID", and "Transit Days" after a
+  // carrier change: changing carriers shifts to a different rate row,
+  // and unless we snapshot the new rate's equipment and recompute the
+  // delivery date, the UI keeps deriving them from the previous rate.
+  'equipment',
+  'delivery_date',
+];
+
+function pickAllowed(payload) {
+  const out = {};
+  for (const key of ALLOWED_CARRIER_CHANGE_FIELDS) {
+    if (payload[key] === undefined) continue;
+    out[key] = payload[key];
+  }
+  return out;
+}
+
+async function changeShipmentCarrier({ shipmentId, payload = {}, user = null, tenantConfig = null }) {
+  if (!shipmentId) { const e = new Error('shipmentId is required'); e.status = 400; throw e; }
+  const carrier = (payload.carrier == null ? '' : String(payload.carrier)).trim();
+  if (!carrier) { const e = new Error('carrier is required'); e.status = 400; throw e; }
+
+  // 1. Read current shipment.
+  const rows = await db.dbSelect('shipments', {
+    filters: [['id', 'eq', shipmentId]], limit: 1,
+  }, tenantConfig);
+  const before = Array.isArray(rows) && rows.length ? rows[0] : null;
+  if (!before) { const e = new Error(`Shipment not found: ${shipmentId}`); e.status = 404; throw e; }
+
+  // 2. Lifecycle gate.
+  if (CARRIER_CHANGE_LOCKED_STATUSES.has(before.status)) {
+    const e = new Error(`Shipment ${shipmentId} is ${before.status}; carrier cannot be changed`);
+    e.status = 409; throw e;
+  }
+
+  // 3. Build the patch — only the allow-listed fields, with the new
+  //    carrier guaranteed present (already validated above).
+  const patch = pickAllowed({ ...payload, carrier });
+
+  const after = await db.dbUpdate('shipments', shipmentId, patch, tenantConfig);
+
+  // 4. Audit — one row per changed field. recordFieldDiffs handles the
+  //    equality normalization so we don't write phantom rows.
+  try {
+    await history.recordFieldDiffs({
+      entityType: 'shipment',
+      entityId:   shipmentId,
+      before,
+      after: { ...before, ...patch },
+      fields: {
+        carrier:        'carrier',
+        mode:           'mode',
+        total_cost:     'total_cost',
+        rate:           'rate',
+        fuel_surcharge: 'fuel_surcharge',
+        miles:          'miles',
+        service_level:  'service_level',
+        rate_id:        'rate_id',
+        equipment:      'equipment',
+        delivery_date:  'delivery_date',
+      },
+      user,
+      metadata: { reason: 'change-carrier', via: 'shipment-change-carrier' },
+    });
+  } catch (auditErr) {
+    console.error('[shipmentMutations] change-carrier history write failed:', auditErr.message);
+  }
+
+  // 5. Real-time fan-out to every TMS client.
+  try {
+    bus.emit(EVENTS.SHIPMENT_UPDATED, {
+      id:           shipmentId,
+      carrier:      patch.carrier,
+      mode:         patch.mode || before.mode,
+      total_cost:   patch.total_cost != null ? patch.total_cost : before.total_cost,
+      via:          'change-carrier',
+    });
+  } catch (busErr) {
+    console.error('[shipmentMutations] change-carrier broadcast failed:', busErr.message);
+  }
+
+  return { shipment: after || { ...before, ...patch }, before, patch };
+}
+
+module.exports = {
+  addOrderToShipment,
+  recalcShipmentAfterOrderRemoval,
+  recalcCost,
+  changeShipmentCarrier,
+  _internal: { LOCKED_STATUSES, CARRIER_CHANGE_LOCKED_STATUSES, ALLOWED_CARRIER_CHANGE_FIELDS },
+};
+ost,
+      via:          'change-carrier',
+    });
+  } catch (busErr) {
+    console.error('[shipmentMutations] change-carrier broadcast failed:', busErr.message);
+  }
+
+  return { shipment: after || { ...before, ...patch }, before, patch };
+}
+
+module.exports = {
+  addOrderToShipment,
+  recalcShipmentAfterOrderRemoval,
+  recalcCost,
+  changeShipmentCarrier,
+  _internal: { LOCKED_STATUSES, CARRIER_CHANGE_LOCKED_STATUSES, ALLOWED_CARRIER_CHANGE_FIELDS },
+};

@@ -22,7 +22,11 @@ const fusionPublisher = require('./services/fusionPublisher');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { matchRate, matchAllRates } = require('./services/rateMatcher');
-const { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign } = require('./services/orderMutations');
+const {
+  apiOrderToDbPatch,
+  cleanupOrphanShipmentAfterUnassign,
+  syncLinkedShipmentForOrderStatus,
+} = require('./services/orderMutations');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
 const orderLinesAudit = require('./services/orderLinesAudit');
@@ -480,6 +484,36 @@ app.post('/api/auth/login', async (req, res) => {
         primaryColor: '#3b82f6', tier: 'enterprise', features: ['*'],
       },
       expiresIn: data.expires_in,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/auth/refresh ─────────────────────────────────────────
+// Mobile-bug 59 fix: clients that get a 401 (Supabase access_token
+// expired after ~1h) call this with their refresh_token instead of
+// forcing the user back to the login screen. Returns the same shape as
+// /api/auth/login so the mobile API client can drop-in replace the
+// stored token.
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const refreshToken = (req.body && req.body.refresh_token) || '';
+    if (!refreshToken) return res.status(400).json({ error: 'refresh_token required' });
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SERVICE_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.access_token) {
+      return res.status(401).json({ error: data.error_description || data.msg || 'Refresh failed' });
+    }
+    res.json({
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    data.expires_at,
+      expires_in:    data.expires_in,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1396,6 +1430,30 @@ app.patch('/api/orders/:id', async (req, res) => {
       }
     }
 
+    // Mobile-bug 58 / 61: when a planner taps "Tender" or
+    // "Tender Accepted" from the order side, the linked shipment must
+    // follow. This mirrors the shipment→order cascade in
+    // shipmentEvents.syncLinkedOrdersForShipmentStatus so the UI never
+    // shows a Tendered order paired with a still-Planned shipment.
+    // Idempotent — no-ops when status didn't change or there is no
+    // linked shipment.
+    const statusChanged = !!before && before.status !== row.status;
+    const cascadeShipmentId = row?.shipment_id || before?.shipment_id || null;
+    if (statusChanged && cascadeShipmentId) {
+      try {
+        await syncLinkedShipmentForOrderStatus({
+          shipmentId:     cascadeShipmentId,
+          newOrderStatus: row.status,
+          user:           u,
+          dbSelect,
+          dbUpdate,
+          history,
+        });
+      } catch (cascadeErr) {
+        console.error('[orders.patch] shipment cascade failed:', cascadeErr.message);
+      }
+    }
+
     // REQ-02: capture per-field diffs for this edit. If the edit
     // unassigned the order from a shipment, log a dedicated 'unassign'
     // event in addition to the field diff (so reports can filter).
@@ -1583,6 +1641,34 @@ app.post('/api/shipments/:id/add-order', async (req, res) => {
   }
 });
 
+// POST /api/shipments/:id/change-carrier — carrier (re)assignment with
+// proper audit + WS broadcast (REQ-02). Replaces the previous
+// component-level DbApi.patch("shipments", id, { carrier, ... }) call,
+// which hit /api/db/shipments/:id (a raw upsert) and therefore skipped
+// change_history rows AND the SHIPMENT_UPDATED broadcast — that's what
+// produced the "Shipment Details still shows the old carrier" bug.
+//   body: { carrier, mode?, total_cost?, rate?, fuel_surcharge?, miles?, service_level?, rate_id? }
+app.post('/api/shipments/:id/change-carrier', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  // REQ-04: same role gate as the other shipment-edit endpoints.
+  const roleC = getUserRole(u);
+  if (!['admin', 'planner', 'dispatcher'].includes(roleC)) {
+    return res.status(403).json({ error: `Role '${roleC}' cannot change shipment carrier. Required: admin, planner, dispatcher.` });
+  }
+  try {
+    const result = await shipmentMutations.changeShipmentCarrier({
+      shipmentId: req.params.id,
+      payload:    req.body || {},
+      user:       u,
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    const status = e.status || 500;
+    res.status(status).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/shipments', async (req, res) => {
   const u = await verifyToken(req,res); if(!u) return;
   try {
@@ -1640,10 +1726,88 @@ app.post('/api/shipments', async (req, res) => {
 app.delete('/api/shipments/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // REQ-04: only admin + planner can delete shipments.
+  const roleD = getUserRole(u);
+  if (!['admin', 'planner'].includes(roleD)) {
+    return res.status(403).json({ error: `Role '${roleD}' cannot delete shipments. Required: admin, planner.` });
+  }
   try {
+    const shipId = req.params.id;
+    // Mobile-bug 57: deleting a shipment must cascade — every order
+    // that pointed at this shipment_id needs to drop back to
+    // Unplanned with shipment_id=NULL. Without this the orders list
+    // shows "Planned" rows that point at a non-existent shipment.
+    // Read first so we know which orders to patch (and so we can log
+    // the cascade in change_history per REQ-02).
+    const linkedOrders = await dbSelect(
+      'orders',
+      `select=id,status&shipment_id=eq.${encodeURIComponent(shipId)}&limit=500`,
+      null,
+    ).catch(() => []);
+
+    if (Array.isArray(linkedOrders) && linkedOrders.length) {
+      const ids = linkedOrders.map((o) => o.id).filter(Boolean);
+      if (ids.length) {
+        const inFilter = ids.map((id) => encodeURIComponent(id)).join(',');
+        const patchRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/orders?id=in.(${inFilter})`,
+          {
+            method: 'PATCH',
+            headers: { ...sbHeaders(null), Prefer: 'return=minimal' },
+            body: JSON.stringify({ shipment_id: null, status: 'Unplanned' }),
+          },
+        );
+        if (!patchRes.ok) {
+          // Don't fail the whole delete — surface a warning the UI can
+          // log so an operator can fix the orphan(s) manually.
+          console.error(
+            `[shipments.delete] cascade patch failed (${patchRes.status}) for ${shipId}: ${await patchRes.text().catch(() => '')}`,
+          );
+        } else {
+          // REQ-02: record each unassign so the audit trail shows why
+          // the orders moved back to Unplanned.
+          for (const ord of linkedOrders) {
+            try {
+              await history.recordChange({
+                entityType: 'order',
+                entityId:   ord.id,
+                action:     'unassign',
+                user:       u,
+                metadata:   { previousShipmentId: shipId, reason: 'shipment-deleted' },
+              });
+            } catch (auditErr) {
+              console.error('[shipments.delete] history failed:', auditErr.message);
+            }
+          }
+        }
+      }
+    }
+
     // Use server-side key for shipment deletes to avoid client-role RLS failures.
-    await dbDelete('shipments', req.params.id, null);
-    res.json({ deleted: true, id: req.params.id });
+    await dbDelete('shipments', shipId, null);
+
+    // REQ-02: log the shipment delete itself.
+    try {
+      await history.recordChange({
+        entityType: 'shipment',
+        entityId:   shipId,
+        action:     'delete',
+        user:       u,
+        metadata:   { unassignedOrderIds: (linkedOrders || []).map((o) => o.id) },
+      });
+    } catch (auditErr) {
+      console.error('[shipments.delete] shipment history failed:', auditErr.message);
+    }
+
+    // REQ-01: tell SSE subscribers so the orders list updates without
+    // a manual refresh.
+    bus.emit(EVENTS.SHIPMENT_DELETED, { id: shipId, unassignedOrderIds: (linkedOrders || []).map((o) => o.id) });
+
+    res.json({
+      deleted: true,
+      id: shipId,
+      unassignedOrders: (linkedOrders || []).length,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2107,7 +2271,7 @@ app.post('/api/ltl/quote', async (req, res) => {
     const rr = await fetch(
       `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&select=` +
         'carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,' +
-        'czarlite_min_wt,czarlite_max_wt,transit_days,' +
+        'transit_days,' +
         // New columns from migration 021 — match_type + structured geo.
         'match_type,origin_zip,dest_zip,origin_country,dest_country,' +
         // Migration 024: trailer this rate was negotiated against.
@@ -2136,7 +2300,6 @@ app.post('/api/ltl/quote', async (req, res) => {
     destZip:       effectiveDestZip,
     originCountry,
     destCountry,
-    weight:        wt,
   };
 
   // Build one LTL quote object from a (possibly null) rate row.
@@ -2191,14 +2354,6 @@ app.post('/api/ltl/quote', async (req, res) => {
   czCarriers.forEach(carrier => {
     const carrierRates = adderRates.filter(r => r.carrier === carrier.name);
     const match = matchAllRates(shipmentCtx, carrierRates);
-
-    if (match.reason === 'weight-out-of-range') {
-      const offending = match.offending || {};
-      const minWt = offending.czarlite_min_wt || 0;
-      const maxWt = offending.czarlite_max_wt || 'Inf';
-      console.log(`[LTL/quote] ${carrier.name}: SKIPPED — weight ${wt}lbs outside range ${minWt}–${maxWt}lbs (rate ${offending.lane || '?'})`);
-      return; // skip this carrier — mirrors pre-refactor behavior
-    }
 
     if (match.rates.length === 0) {
       // No specific rate matched but weight didn't fail either — this
@@ -2678,7 +2833,6 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
           // matcher is fine.
           const tlUrl = `${SUPABASE_URL}/rest/v1/rates?mode=eq.TL&status=eq.Active&select=` +
             'carrier,origin,dest,rate,fsc,transit_days,lane,service_level,miles,' +
-            'czarlite_min_wt,czarlite_max_wt,' +
             // Migration 021 structured columns.
             'match_type,origin_zip,dest_zip,origin_country,dest_country,' +
             // Migration 024: trailer this rate was negotiated against.
@@ -2697,7 +2851,6 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
               destZip:       lane.destZip   || destZip,
               originCountry: (lane.originCountry || 'USA').toUpperCase(),
               destCountry:   (lane.destCountry   || 'USA').toUpperCase(),
-              weight:        wt,
             };
 
             // Group candidate rates by carrier. matchAllRates is
@@ -2715,8 +2868,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
             Object.entries(tlRatesByCarrier).forEach(([carrierName, carrierTlRates]) => {
               const tlMatch = matchAllRates(tlShipmentCtx, carrierTlRates);
               if (!tlMatch.rates.length) {
-                // 'weight-out-of-range' / 'no-match' — skip this
-                // carrier on TL. LTL branch above may still quote.
+                // No rate matched on geo — skip this carrier on TL.
+                // LTL branch above may still quote.
                 return;
               }
 
@@ -2803,12 +2956,21 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
           // Collect all excluded and preferred carriers across matching prefs
           const excluded = new Set();
           const preferred = new Set();
+          // Allowed modes from prefs that name a specific mode. A pref
+          // with mode 'Any' (or blank) doesn't constrain — only when at
+          // least one matching pref names a real mode does mode become
+          // a sort-tier signal.
+          const allowedModes = new Set();
           matchingPrefs.forEach(pref => {
             (pref.excluded || []).forEach(c => excluded.add(c.toUpperCase()));
             (pref.preferred || []).forEach(c => preferred.add(c.toUpperCase()));
+            const m = String(pref.mode || '').trim().toUpperCase();
+            if (m && m !== 'ANY') allowedModes.add(m);
           });
 
-          // Remove excluded carriers
+          // Excluded carriers are an explicit blacklist — drop them.
+          // Mode mismatches are NOT dropped: they remain visible as
+          // fallback options below the preference-matching ones.
           const beforeCount = quotes.length;
           const filtered = quotes.filter(q => {
             const name = (q.carrier || '').toUpperCase();
@@ -2817,26 +2979,46 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
           quotes.length = 0;
           filtered.forEach(q => quotes.push(q));
 
-          // Mark preferred carriers
+          // Tag each remaining quote with sort-tier signals.
+          //   q.preferred       — carrier is in the lane pref's preferred list
+          //   q.matchesLanePref — quote satisfies the lane pref's mode (or
+          //                        no mode constraint exists)
           quotes.forEach(q => {
             const name = (q.carrier || '').toUpperCase();
             q.preferred = preferred.has(name);
+            if (allowedModes.size === 0) {
+              q.matchesLanePref = true;
+            } else {
+              const qMode = String(q.mode || '').trim().toUpperCase();
+              q.matchesLanePref = allowedModes.has(qMode);
+            }
           });
 
-          console.log(`[BulkPlan/rate] Lane prefs applied for ${oCity}→${dCity}: ${beforeCount - quotes.length} excluded, ${quotes.filter(q=>q.preferred).length} preferred`);
+          const modesTag = allowedModes.size > 0
+            ? `, modes=[${[...allowedModes].join(',')}]`
+            : '';
+          console.log(`[BulkPlan/rate] Lane prefs applied for ${oCity}→${dCity}: ${beforeCount - quotes.length} excluded, ${quotes.filter(q=>q.preferred).length} preferred, ${quotes.filter(q=>!q.matchesLanePref).length} below-line${modesTag}`);
         }
       }
 
       // Log all quotes before sorting (include CC flag for debugging)
       console.log(`[BulkPlan/rate] ${laneKey}: ${quotes.length} total quotes:`, quotes.map(q => `${q.carrier} ${q.mode||'?'} $${q.totalCharge} ${q.transitDays||'?'}d cc=${q.ccxlEnabled} ${q.infeasible?'INFEASIBLE':''}`).join(', '));
 
-      // Sort: feasible first, preferred carriers boosted, then by cost/transit
+      // Sort tiers (top → bottom):
+      //   1. Feasible (infeasible always last).
+      //   2. Lane-pref-matching (mode/carrier satisfies the lane pref).
+      //      Quotes that violate the lane pref's mode constraint stay
+      //      visible as fallback options but rank below the matches.
+      //   3. Preferred carriers boosted within each pref-match tier.
+      //   4. Cheapest (or fastest, when optimizeBy=transit).
       const sortBy = optimizeBy === 'transit' ? 'transitDays' : 'totalCharge';
       quotes.sort((a, b) => {
-        // Infeasible always last
         if (a.infeasible && !b.infeasible) return 1;
         if (!a.infeasible && b.infeasible) return -1;
-        // Preferred carriers first (when lane prefs enabled)
+        const aMatch = a.matchesLanePref !== false; // undefined → matches
+        const bMatch = b.matchesLanePref !== false;
+        if (aMatch && !bMatch) return -1;
+        if (!aMatch && bMatch) return 1;
         if (a.preferred && !b.preferred) return -1;
         if (!a.preferred && b.preferred) return 1;
         return (a[sortBy] || 99999) - (b[sortBy] || 99999);
@@ -3300,6 +3482,14 @@ bus.on(EVENTS.SHIPMENT_UPDATED, (payload) => {
   catch (err) { console.error('[WS] shipment broadcast failed:', err.message); }
 });
 
+// Mobile-bug 57: same fan-out for shipment deletes so connected mobile
+// + web clients refresh the orders list (orders cascade to Unplanned
+// when a shipment is deleted).
+bus.on(EVENTS.SHIPMENT_DELETED, (payload) => {
+  try { wsBroadcast(EVENTS.SHIPMENT_DELETED, payload || {}); }
+  catch (err) { console.error('[WS] shipment delete broadcast failed:', err.message); }
+});
+
 // POST /api/notify — called by Middleware after pushing data to TMS
 app.post('/api/notify', (req, res) => {
   const { event, data } = req.body || {};
@@ -3346,3 +3536,76 @@ server.listen(PORT, () => {
 });
 
 module.exports = app;
+/** Broadcast an event to all connected TMS clients */
+function wsBroadcast(event, data) {
+  const msg = JSON.stringify({ event, data, ts: new Date().toISOString() });
+  wsClients.forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  });
+}
+
+// Bridge: any service that emits SHIPMENT_UPDATED on the in-process bus
+// (ship-confirm, POD, manual timeline events) is fan-ed out to every
+// connected browser via the existing WS channel. App.jsx listens on WS
+// and triggers refreshData() on any message, so the Shipments list +
+// open detail modal refresh without a page reload.
+bus.on(EVENTS.SHIPMENT_UPDATED, (payload) => {
+  try { wsBroadcast(EVENTS.SHIPMENT_UPDATED, payload || {}); }
+  catch (err) { console.error('[WS] shipment broadcast failed:', err.message); }
+});
+
+// Mobile-bug 57: same fan-out for shipment deletes so connected mobile
+// + web clients refresh the orders list (orders cascade to Unplanned
+// when a shipment is deleted).
+bus.on(EVENTS.SHIPMENT_DELETED, (payload) => {
+  try { wsBroadcast(EVENTS.SHIPMENT_DELETED, payload || {}); }
+  catch (err) { console.error('[WS] shipment delete broadcast failed:', err.message); }
+});
+
+// POST /api/notify — called by Middleware after pushing data to TMS
+app.post('/api/notify', (req, res) => {
+  const { event, data } = req.body || {};
+  if (!event) return res.status(400).json({ error: 'event required' });
+  wsBroadcast(event, data || {});
+  console.log(`[WS] Broadcast: ${event}`, data ? JSON.stringify(data).slice(0, 100) : '');
+  res.json({ ok: true, clients: wsClients.size });
+});
+
+// ── 404 catch-all (must be AFTER all route definitions) ──────────────────────
+app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
+app.use((err, req, res, next) => { console.error('[Error]', err.message); res.status(500).json({ error: err.message }); });
+
+// ══════════════════════════════════════════════════════════════════
+// Start Server
+// ══════════════════════════════════════════════════════════════════
+server.listen(PORT, () => {
+  console.log(`\n🚛 ZoreeTMS API — Tier 2 running on http://localhost:${PORT}`);
+  console.log(`   ✅ Supabase credentials: SERVER-SIDE ONLY`);
+  console.log(`   ✅ Browser never touches Supabase directly`);
+  console.log(`   ✅ 3-Tier Architecture active`);
+  console.log(`   ✅ WebSocket server active on ws://localhost:${PORT}`);
+  console.log(`   ℹ️  Tender email check: GET http://localhost:${PORT}/health → tenderEmail`);
+  verifySmtpOnStartup().catch(function(err) {
+    console.error('   📧 Tender email: verify error:', err && err.message ? err.message : err);
+  });
+
+  // REQ-31: backend MW queue worker. Defaults ON so OMS→TMS sync
+  // doesn't depend on a browser tab being open. Disable per-env with
+  // MW_QUEUE_AUTO_START=false (e.g. for tests or while debugging the
+  // browser MW). Interval is configurable via MW_QUEUE_INTERVAL_MS.
+  if (String(process.env.MW_QUEUE_AUTO_START || 'true').toLowerCase() !== 'false') {
+    const intervalMs = Number(process.env.MW_QUEUE_INTERVAL_MS) || undefined;
+    mwQueueWorker.start(intervalMs ? { intervalMs } : {});
+    console.log(`   ✅ MW queue worker started (mwQueueWorker)`);
+  } else {
+    console.log(`   ℹ️  MW queue worker NOT auto-started (MW_QUEUE_AUTO_START=false). Use POST /api/mw-queue/start.`);
+  }
+
+  // Fusion (TMS → OIC) outbound publisher. No-op unless OIC_PUBLISH_ENABLED=true.
+  // See api/services/fusionPublisher/index.js and docs/integrations/oic/flows/F3-tms-to-fusion-status.md.
+  fusionPublisher.start();
+  console.log('');
+});
+
+module.exports = app;
+

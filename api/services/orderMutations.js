@@ -33,7 +33,7 @@ function apiOrderToDbPatch(body) {
   // Ship-from / ship-to location NAMES (the free-text "Dallas DC" label that
   // sits above the city/state/zip). Without this, names submitted from
   // NewOrderModal / OrderDetailModal were silently dropped, so the Edit tab
-  // always re-rendered blank. Accept both camelCase (from OrdersApi →
+  // always re-rendered blank. Accept both camelCase (from OrdersApi ->
   // mapDbOrderToApiOrder) and snake_case (from paths that spread a DB patch
   // directly).
   if ("shipFromName" in b || "ship_from_name" in b) patch.ship_from_name = b.shipFromName || b.ship_from_name || null;
@@ -81,5 +81,83 @@ async function cleanupOrphanShipmentAfterUnassign({ previousShipmentId, dbSelect
   return { deleted: true };
 }
 
-module.exports = { apiOrderToDbPatch, cleanupOrphanShipmentAfterUnassign };
+/**
+ * Mirror of services/shipmentEvents.js -> SHIPMENT_STATUS_TO_ORDER_STATUS,
+ * but in the opposite direction. Used by PATCH /api/orders/:id when a
+ * planner taps "Tender" / "Tender Accepted" from the order side (web,
+ * mobile, ZoreeAI) so the linked shipment row doesn't drift.
+ *
+ * Why only Tendered + Tender Accepted:
+ *  - Earlier states (Unplanned, Planned) are produced by the planning
+ *    pipeline, which already writes both rows.
+ *  - Later states (In Transit, Delivered, Cancelled) flow shipment->order
+ *    via shipmentEvents.SHIPMENT_STATUS_TO_ORDER_STATUS - adding them
+ *    here would create a write loop. Keep this map disjoint from that
+ *    one.
+ */
+const ORDER_STATUS_TO_SHIPMENT_STATUS = {
+  'Tendered':        'Tendered',
+  'Tender Accepted': 'Tender Accepted',
+};
 
+const SHIPMENT_TERMINAL_STATUSES = new Set(['Delivered', 'Cancelled']);
+
+/**
+ * Propagate an order's new status to its linked shipment, idempotent
+ * and safe to call from any order writer. Mirrors
+ * shipmentEvents.syncLinkedOrdersForShipmentStatus so audit / history
+ * behaviour is symmetric.
+ */
+async function syncLinkedShipmentForOrderStatus({
+  shipmentId,
+  newOrderStatus,
+  user,
+  dbSelect,
+  dbUpdate,
+  history,
+}) {
+  const id = String(shipmentId || '').trim();
+  if (!id) return { updated: false, skipped: 'no_shipment_id' };
+
+  const targetShipStatus = ORDER_STATUS_TO_SHIPMENT_STATUS[newOrderStatus];
+  if (!targetShipStatus) return { updated: false, skipped: 'no_mapping' };
+
+  const rows = await dbSelect(
+    'shipments',
+    `select=id,status&id=eq.${encodeURIComponent(id)}&limit=1`,
+    null,
+  );
+  const ship = Array.isArray(rows) && rows.length ? rows[0] : null;
+  if (!ship) return { updated: false, skipped: 'not_found' };
+  if (ship.status === targetShipStatus) return { updated: false, skipped: 'already_set' };
+  if (SHIPMENT_TERMINAL_STATUSES.has(ship.status)) return { updated: false, skipped: 'terminal' };
+
+  await dbUpdate('shipments', id, { status: targetShipStatus }, null);
+
+  if (history && typeof history.recordChange === 'function') {
+    try {
+      await history.recordChange({
+        entityType: 'shipment',
+        entityId:   id,
+        action:     'status',
+        field:      'status',
+        before:     ship.status || null,
+        after:      targetShipStatus,
+        user,
+        metadata:   { via: 'order-status-cascade', triggerOrderStatus: newOrderStatus },
+      });
+    } catch (auditErr) {
+      // Audit failures must NOT block the user-visible status change.
+      console.error('[orderMutations] shipment history failed:', auditErr.message);
+    }
+  }
+
+  return { updated: true, skipped: null };
+}
+
+module.exports = {
+  apiOrderToDbPatch,
+  cleanupOrphanShipmentAfterUnassign,
+  syncLinkedShipmentForOrderStatus,
+  ORDER_STATUS_TO_SHIPMENT_STATUS,
+};

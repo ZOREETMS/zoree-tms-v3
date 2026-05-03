@@ -1,7 +1,7 @@
 /**
  * Portable API client for Zoree TMS.
  * Works in both web (localStorage) and React Native (AsyncStorage)
- * by accepting a storage adapter via `configureApi()`.
+ * by accepting a storage adapter via configureApi().
  */
 
 let _storage = {
@@ -32,18 +32,46 @@ function token() {
   return _storage.getItem("zoree_token") || "";
 }
 
+/**
+ * QA bug #59 ("Invalid or expired token") fix:
+ * Hook for callers (AuthContext) to register a token-refresh routine.
+ * When api() sees a 401 and a refresher is registered, it tries to
+ * refresh once and retries the request. Without a refresher, behaviour
+ * is unchanged (throws as before).
+ */
+let _onUnauthorized = null;
+export function configureAuthHooks({ onUnauthorized }) {
+  _onUnauthorized = typeof onUnauthorized === "function" ? onUnauthorized : null;
+}
+
 async function api(path, options = {}) {
   const t = typeof token === "function" ? token() : "";
   const authToken = t instanceof Promise ? await t : t;
 
-  const res = await fetch(`${_apiBase}${path}`, {
+  const send = async (bearer) => fetch(`${_apiBase}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       ...(options.headers || {}),
     },
   });
+
+  let res = await send(authToken);
+
+  // 401 = expired/invalid token. Try a one-shot refresh through the
+  // registered hook; if it returns a fresh token, retry once.
+  if (res.status === 401 && _onUnauthorized && !options._didRetry) {
+    try {
+      const fresh = await _onUnauthorized();
+      if (fresh && typeof fresh === "string") {
+        res = await send(fresh);
+      }
+    } catch {
+      // Treat refresh errors as a refresh-miss; original 401 surfaces below.
+    }
+  }
+
   const text = await res.text();
   let data = {};
   try {
@@ -117,9 +145,6 @@ export const DbApi = {
     return api("/db/dock_loading_durations?q=select=*%26order=mode.asc%26limit=50");
   },
   dockAppointments(date) {
-    // Optional date filter — when present, only return appointments
-    // for that calendar day. Otherwise returns the future-window
-    // backlog so the screen can show upcoming days at a glance.
     const filter = date ? `%26date=eq.${encodeURIComponent(date)}` : '';
     return api(`/db/dock_appointments?q=select=*${filter}%26order=date.asc,start.asc%26limit=200`);
   },
@@ -162,36 +187,57 @@ export const OrdersApi = {
       method: "DELETE",
     });
   },
-  /**
-   * Create a new order via the service-layer endpoint.
-   * Server-side this hits api/server.js POST /api/orders, which runs
-   * the payload through apiOrderToDbPatch — that mapper accepts both
-   * camelCase (destination, originZip, shipMode, …) and snake_case
-   * (dest, origin_zip, ship_mode, …) keys, so callers don't have to
-   * normalise. Returns the created row (DB shape).
-   *
-   * Prefer this over DbApi.upsert('orders', …): the raw upsert path
-   * is field-name-strict, which previously dropped camelCase keys to
-   * NULL and triggered NOT-NULL upsert failures (400) on copy.
-   */
   create(payload) {
     return api("/orders", {
       method: "POST",
       body: JSON.stringify(payload || {}),
     });
   },
-  /**
-   * Patch an existing order via the service-layer endpoint.
-   * Server-side this hits api/server.js PATCH /api/orders/:id, which
-   * also runs through apiOrderToDbPatch and additionally records the
-   * change-history field diffs (REQ-02). Returns the updated row in
-   * the dbToOrderApi camelCase shape.
-   */
   update(id, patch) {
     return api(`/orders/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(patch || {}),
     });
+  },
+};
+
+/**
+ * Service-layer shipments client. Prefer this over DbApi.upsert/patch/
+ * remove for shipments. Mobile-bug 57 + 63 fixes routed through here.
+ */
+export const ShipmentsApi = {
+  list(params = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join("&");
+    return api(`/shipments${qs ? `?${qs}` : ""}`);
+  },
+  get(id) {
+    return api(`/shipments/${encodeURIComponent(id)}`);
+  },
+  create(payload) {
+    return api("/shipments", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
+  update(id, patch) {
+    return api(`/shipments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch || {}),
+    });
+  },
+  /** QA bug #63: status update via /:id/status (validated server-side). */
+  updateStatus(id, status) {
+    return api(`/shipments/${encodeURIComponent(id)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  },
+  /** QA bug #57: cascade-aware delete (server unassigns linked orders). */
+  remove(id) {
+    return api(`/shipments/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 };
 

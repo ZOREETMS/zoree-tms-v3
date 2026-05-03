@@ -1175,7 +1175,11 @@ async function runPullPlanningFlow(){
   });
 
   var { data: tmsOrders } = await tmsDb().from('orders').select('id,shipment_id,status').in('id',ids);
-  var { data: tmsShips }  = await tmsDb().from('shipments').select('id,carrier,pickup_date,delivery_date,status,pro_number,service_level,dock_assigned,dock_time,bol_number').limit(500);
+  // NOTE: column is `dock_door` (migration 20260406_shipments_dock_fields).
+  // The legacy `dock_assigned` was renamed; selecting the old name returned
+  // null forever, which is why the OMS Load & Ship modal showed "DOCK # —"
+  // even when the shipment had a dock assigned.
+  var { data: tmsShips }  = await tmsDb().from('shipments').select('id,carrier,pickup_date,delivery_date,status,pro_number,service_level,dock_door,dock_time,bol_number').limit(500);
 
   var relevantShips = (tmsShips||[]).filter(s=>(tmsOrders||[]).some(t=>t.shipment_id===s.id));
   logEvent('info','← TMS','Received planning data: '+((tmsOrders||[]).length)+' orders, '+relevantShips.length+' shipments', {
@@ -1200,7 +1204,7 @@ async function runPullPlanningFlow(){
         estimated_delivery: ship?.delivery_date || null,
         pro_number:         ship?.pro_number    || null,
         service_level:      ship?.service_level || null,
-        dock_door:          ship?.dock_assigned || null,
+        dock_door:          ship?.dock_door || null,
         bol_number:         ship?.bol_number    || null,
       };
       await omsDb().from('oms_orders').update(omsUpd).eq('id',o.id);
@@ -2171,7 +2175,7 @@ async function processMWQueue() {
             var sid = payload && payload.shipmentId ? String(payload.shipmentId) : '';
             if (!sid) throw new Error('shipmentId required');
             var { data: shipOne, error: shipErr } = await tmsDb().from('shipments')
-              .select('id,status,carrier,mode,service_level,pickup_date,delivery_date,dock_assigned,dock_time,dock_load_start,dock_load_end,bol_number,pro_number,seal_number')
+              .select('id,status,carrier,mode,service_level,pickup_date,delivery_date,dock_door,dock_time,dock_load_start,dock_load_end,bol_number,pro_number,seal_number')
               .eq('id', sid).maybeSingle();
             if (shipErr) throw shipErr;
             result = { shipment: shipOne || null };

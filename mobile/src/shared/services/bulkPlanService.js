@@ -1,18 +1,12 @@
 /**
- * Bulk Plan Service — progressive consolidation + splitting logic.
+ * Bulk Plan Service - progressive consolidation + splitting logic.
  * Port of frontend/src/services/bulkPlanService.js for React Native.
- *
- * Core idea:
- *   1. Rate all orders individually to get baseline costs.
- *   2. Try consolidating all orders in a lane group.
- *   3. Only consolidate if consolidated cost < sum of individual costs.
- *   4. If consolidation fails or is more expensive, try smaller subsets.
  */
 
 import { BulkPlanApi } from '../../lib/api';
 import { buildSingleOrderLane } from '../utils/laneUtils';
 
-/* ── Date helpers ── */
+/* Date helpers */
 
 function addBusinessDays(dateStr, days) {
   const d = new Date(dateStr + 'T12:00:00');
@@ -42,7 +36,7 @@ export function calcDates(quote, dueDate, readyDate) {
   return { pickup, delivery, transit, error: null };
 }
 
-/* ── Rating helper ── */
+/* Rating helper */
 
 async function rateLane(lane, optimizeBy = 'cost') {
   try {
@@ -55,7 +49,7 @@ async function rateLane(lane, optimizeBy = 'cost') {
   }
 }
 
-/* ── Plan builder ── */
+/* Plan builder */
 
 export function buildPlan(lane, bestQuote, laneOrders) {
   const readyDate = laneOrders
@@ -77,12 +71,22 @@ export function buildPlan(lane, bestQuote, laneOrders) {
     destination: lane.destination,
     originZip: lane.originZip,
     destZip: lane.destZip,
+    // REQ-24 + Mobile-bug 54: forward ship-from / ship-to names so
+    // executePlan can persist them on the new shipment row.
+    shipFromName: lane.shipFromName || '',
+    shipToName:   lane.shipToName   || '',
     totalWeight: lane.totalWeight,
     totalPieces: lane.totalPieces,
     orderIds: lane.orderIds,
     carrier: bestQuote.carrier || '',
     mode: bestQuote.mode || 'LTL',
     totalCost: bestQuote.totalCharge || 0,
+    // Mobile-bug 62: include rate/fuel/accessorials so the shipment
+    // row is identical to web's. czarBaseGross = undiscounted base;
+    // czarBase = discounted; fall back across the chain.
+    rate:          bestQuote.czarBaseGross || bestQuote.czarBase || 0,
+    fuelSurcharge: bestQuote.fscCharge || 0,
+    accessorials:  bestQuote.accessorialCharge || 0,
     pickupDate: dates.pickup,
     deliveryDate: dates.delivery,
     transitDays: dates.transit,
@@ -91,10 +95,12 @@ export function buildPlan(lane, bestQuote, laneOrders) {
     miles: bestQuote.pcmilerMiles || bestQuote.miles || null,
     czarliteRate: bestQuote.mode === 'LTL',
     rateId: bestQuote.rateId || null,
+    // Migration 025 - snapshot the rate's equipment.
+    equipment: bestQuote.equipment || null,
   };
 }
 
-/* ── Combinatorics ── */
+/* Combinatorics */
 
 function combinations(arr, k) {
   if (k === 0) return [[]];
@@ -112,7 +118,7 @@ function combinations(arr, k) {
   return result;
 }
 
-/* ── Progressive consolidation ── */
+/* Progressive consolidation */
 
 export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy = 'cost') {
   const orderIds = lane.orderIds;
@@ -125,7 +131,6 @@ export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy 
     return { plans: [plan], consolidated: 0, individual: 1, failed: [] };
   }
 
-  // Rate each order individually for baseline
   const individualQuotes = new Map();
   await Promise.all(
     laneOrders.map(async (order) => {
@@ -137,7 +142,6 @@ export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy 
     }),
   );
 
-  // Try consolidated groups from largest to smallest
   for (let size = orderIds.length; size >= 2; size--) {
     const subsets = combinations(laneOrders, size);
 
@@ -164,7 +168,6 @@ export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy 
       const consolidatedPlan = buildPlan(consolidatedLane, consolidatedQuote, subset);
       if (!consolidatedPlan) continue;
 
-      // Handle remainder orders
       const remainderOrders = laneOrders.filter((o) => !subsetIds.includes(o.id));
       const remainderPlans = [];
       const remainderFailed = [];
@@ -190,7 +193,6 @@ export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy 
     }
   }
 
-  // No consolidation worked — plan all individually
   const individualPlans = [];
   const failed = [];
 
@@ -209,9 +211,6 @@ export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy 
   return { plans: individualPlans, consolidated: 0, individual: individualPlans.length, failed };
 }
 
-/**
- * Plan all lane groups with progressive splitting.
- */
 export async function planAllLanes(lanes, allOrders, optimizeBy = 'cost', onProgress) {
   let allPlans = [];
   let totalConsolidated = 0;

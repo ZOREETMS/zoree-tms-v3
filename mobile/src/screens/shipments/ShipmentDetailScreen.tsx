@@ -17,7 +17,11 @@ import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useData } from '../../state/DataContext';
 import { TenderApi } from '../../lib/api';
-import { copyShipment, deleteShipmentById } from '../../services/shipmentService';
+import {
+  copyShipment,
+  deleteShipmentById,
+  updateShipmentStatus,
+} from '../../services/shipmentService';
 import { formatCurrency } from '../../shared/utils/formatters';
 import {
   borderRadius,
@@ -30,7 +34,12 @@ import type { PlanningTabParamList } from '../../navigation/types';
 
 type DetailRoute = RouteProp<PlanningTabParamList, 'ShipmentDetail'>;
 
-const STATUS_FLOW = ['Planned', 'Tendered', 'Picked Up', 'In Transit', 'Delivered'] as const;
+/**
+ * QA bug #63 fix: align mobile's status flow with the canonical enum
+ * the API enforces. The previous list contained "Picked Up", which
+ * the server rejected with a 400.
+ */
+const STATUS_FLOW = ['Planned', 'Tendered', 'Confirmed', 'In Transit', 'Delivered'] as const;
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '--';
@@ -52,7 +61,7 @@ export default function ShipmentDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<DetailRoute>();
   const { shipmentId } = route.params;
-  const { data, setData, refreshData } = useData() as any;
+  const { data, refreshData } = useData() as any;
 
   const [tenderLoading, setTenderLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -76,7 +85,13 @@ export default function ShipmentDetailScreen() {
         shipmentId: String(shipment.id || shipment.shipment_id || shipment.shipmentId),
         carrierName: carrier,
         origin: shipment.origin_city || shipment.origin || '',
-        destination: shipment.destination_city || shipment.destination || '',
+        // QA bug #55: include `dest` (the actual DB column) in the
+        // fallback chain.
+        destination:
+          shipment.destination ||
+          shipment.dest ||
+          shipment.destination_city ||
+          '',
         pickupDate: shipment.pickup_date || shipment.pickupDate || '',
         deliveryDate: shipment.delivery_date || shipment.deliveryDate || '',
       });
@@ -88,12 +103,6 @@ export default function ShipmentDetailScreen() {
     }
   }, [shipment, shipmentId]);
 
-  /**
-   * Copy this shipment. Mirrors the web "Copy Shipment" path —
-   * creates a fresh planning candidate (no order_ids, no BOL fields,
-   * status reset to Planned). Refreshes the data layer so the new row
-   * appears in the list and navigates back so the user can find it.
-   */
   const handleCopy = useCallback(() => {
     if (!shipment) return;
     Alert.alert(
@@ -120,11 +129,6 @@ export default function ShipmentDetailScreen() {
     );
   }, [shipment, refreshData, navigation]);
 
-  /**
-   * Permanently delete this shipment. Web parity: shipmentService
-   * calls ShipmentsApi.remove which goes through the domain endpoint.
-   * Mobile uses DbApi.remove via deleteShipmentById — same end state.
-   */
   const handleDelete = useCallback(() => {
     if (!shipment) return;
     const id = shipment.id || shipment.shipment_id || shipment.shipmentId;
@@ -153,21 +157,30 @@ export default function ShipmentDetailScreen() {
     );
   }, [shipment, refreshData, navigation]);
 
+  /**
+   * QA bug #63 fix: previously this only mutated local state - the
+   * API was never called. Now we patch through /api/shipments/:id/status
+   * (which validates against the canonical enum + cascades to linked
+   * orders via shipmentEvents) and refresh the data layer.
+   */
   const handleStatusUpdate = useCallback(
-    (newStatus: string) => {
-      if (!shipment) return;
-      const key = shipment.id || shipment.shipment_id || shipment.shipmentId;
-      setData(prev => ({
-        ...prev,
-        shipments: prev.shipments.map((s: any) => {
-          const sKey = s.id || s.shipment_id || s.shipmentId;
-          return String(sKey) === String(key)
-            ? { ...s, status: newStatus }
-            : s;
-        }),
-      }));
+    async (newStatus: string) => {
+      if (!shipment || mutating) return;
+      const key = String(
+        shipment.id || shipment.shipment_id || shipment.shipmentId || '',
+      );
+      if (!key) return;
+      setMutating(true);
+      try {
+        await updateShipmentStatus(key, newStatus);
+        if (refreshData) await refreshData();
+      } catch (e: any) {
+        Alert.alert('Status update failed', e?.message || 'Could not update status');
+      } finally {
+        setMutating(false);
+      }
     },
-    [shipment, setData],
+    [shipment, mutating, refreshData],
   );
 
   if (!shipment) {
@@ -188,9 +201,11 @@ export default function ShipmentDetailScreen() {
     shipment.carrier_name || shipment.carrierName || shipment.carrier || '--';
   const origin =
     shipment.origin_city || shipment.origin || shipment.originCity || '--';
+  // QA bug #55: include `dest` in the fallback chain (DB column name).
   const destination =
-    shipment.destination_city ||
     shipment.destination ||
+    shipment.dest ||
+    shipment.destination_city ||
     shipment.destinationCity ||
     '--';
   const status = shipment.status || 'Planned';
@@ -205,7 +220,6 @@ export default function ShipmentDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -253,13 +267,11 @@ export default function ShipmentDetailScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Carrier Card */}
         <Card style={styles.infoCard}>
           <Text style={styles.cardLabel}>Carrier</Text>
           <Text style={styles.cardValue}>{carrier}</Text>
         </Card>
 
-        {/* Route Card */}
         <Card style={styles.infoCard}>
           <Text style={styles.cardLabel}>Route</Text>
           <View style={styles.routeRow}>
@@ -286,7 +298,6 @@ export default function ShipmentDetailScreen() {
           </View>
         </Card>
 
-        {/* Dates Card */}
         <Card style={styles.infoCard}>
           <View style={styles.rowBetween}>
             <View>
@@ -300,7 +311,6 @@ export default function ShipmentDetailScreen() {
           </View>
         </Card>
 
-        {/* Weight / Pieces / Cost Card */}
         <Card style={styles.infoCard}>
           <View style={styles.metricsRow}>
             <View style={styles.metric}>
@@ -322,7 +332,6 @@ export default function ShipmentDetailScreen() {
           </View>
         </Card>
 
-        {/* Map Placeholder */}
         <Card style={styles.infoCard}>
           <View style={styles.mapPlaceholder}>
             <Ionicons name="map-outline" size={40} color={colors.text3} />
@@ -330,7 +339,6 @@ export default function ShipmentDetailScreen() {
           </View>
         </Card>
 
-        {/* Tender Button */}
         <TouchableOpacity
           style={styles.tenderButton}
           activeOpacity={0.8}
@@ -346,7 +354,6 @@ export default function ShipmentDetailScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Status Update Buttons */}
         <Text style={styles.sectionTitle}>Update Status</Text>
         <View style={styles.statusButtonsRow}>
           {STATUS_FLOW.map((s, i) => {
@@ -361,7 +368,7 @@ export default function ShipmentDetailScreen() {
                   isPast && styles.statusButtonPast,
                 ]}
                 activeOpacity={0.7}
-                disabled={isCurrent}
+                disabled={isCurrent || mutating}
                 onPress={() => handleStatusUpdate(s)}>
                 <Text
                   style={[
@@ -382,27 +389,10 @@ export default function ShipmentDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing['3xl'],
-  },
-  notFoundText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  backLink: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.accent,
-  },
+  safeArea: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing['3xl'] },
+  notFoundText: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: spacing.md },
+  backLink: { fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.accent },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -413,17 +403,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.bg2,
   },
-  headerTitle: {
-    flex: 1,
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
+  headerTitle: { flex: 1, fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   headerSpinner: {
     paddingVertical: spacing.xs,
     alignItems: 'center',
@@ -431,16 +412,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing['5xl'],
-  },
-  infoCard: {
-    marginBottom: spacing.md,
-  },
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.lg, paddingBottom: spacing['5xl'] },
+  infoCard: { marginBottom: spacing.md },
   cardLabel: {
     fontSize: fontSize.xs,
     fontWeight: fontWeight.medium,
@@ -449,55 +423,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: spacing.xs,
   },
-  cardValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-  },
-  routeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  routePoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  routeInfo: {
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  routeLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.regular,
-    color: colors.text3,
-  },
-  routeValue: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-  },
-  routeArrow: {
-    marginHorizontal: spacing.sm,
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  rightAlign: {
-    alignItems: 'flex-end',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metric: {
-    flex: 1,
-  },
-  costValue: {
-    color: colors.green,
-  },
+  cardValue: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.text },
+  routeRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
+  routePoint: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  routeInfo: { marginLeft: spacing.sm, flex: 1 },
+  routeLabel: { fontSize: fontSize.xs, fontWeight: fontWeight.regular, color: colors.text3 },
+  routeValue: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text },
+  routeArrow: { marginHorizontal: spacing.sm },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
+  rightAlign: { alignItems: 'flex-end' },
+  metricsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  metric: { flex: 1 },
+  costValue: { color: colors.green },
   mapPlaceholder: {
     height: 160,
     justifyContent: 'center',
@@ -505,12 +442,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg3,
     borderRadius: borderRadius.md,
   },
-  mapText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.text3,
-    marginTop: spacing.sm,
-  },
+  mapText: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.text3, marginTop: spacing.sm },
   tenderButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -521,22 +453,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xl,
   },
-  tenderButtonText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.white,
-  },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  statusButtonsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
+  tenderButtonText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white },
+  sectionTitle: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: spacing.sm },
+  statusButtonsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   statusButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -545,24 +464,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.bg2,
   },
-  statusButtonCurrent: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  statusButtonPast: {
-    backgroundColor: colors.bg3,
-    borderColor: colors.border2,
-  },
-  statusButtonLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.text2,
-  },
-  statusButtonLabelCurrent: {
-    color: colors.white,
-    fontWeight: fontWeight.semibold,
-  },
-  statusButtonLabelPast: {
-    color: colors.text3,
-  },
+  statusButtonCurrent: { backgroundColor: colors.accent, borderColor: colors.accent },
+  statusButtonPast: { backgroundColor: colors.bg3, borderColor: colors.border2 },
+  statusButtonLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.text2 },
+  statusButtonLabelCurrent: { color: colors.white, fontWeight: fontWeight.semibold },
+  statusButtonLabelPast: { color: colors.text3 },
 });

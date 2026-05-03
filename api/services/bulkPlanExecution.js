@@ -16,6 +16,16 @@
 // multi-lane run from ~12s down to a handful of seconds.
 // ═══════════════════════════════════════════════════════════════════
 
+// Lazy require so the dock-mirror service is only loaded when bulk-plan
+// runs in the API process (keeps test harnesses that import this module
+// in isolation from needing the full Supabase wiring).
+let _omsSync = null;
+function omsSync() {
+  if (_omsSync) return _omsSync;
+  try { _omsSync = require('./omsSync'); } catch (_) { _omsSync = {}; }
+  return _omsSync;
+}
+
 function serviceHeaders(serviceKey, prefer = 'return=representation') {
   return {
     apikey: serviceKey,
@@ -159,6 +169,32 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
   })();
 
   const [patched] = await Promise.all([patchOrdersPromise, bolPromise]);
+
+  // Mirror the dock assignment back into oms_orders so the OMS Load &
+  // Ship modal (`_omsBaseHdr` → `o.dockDoor`) shows the dock instead of
+  // "—". syncTenderAcceptToOms only fires on tender-accept; without
+  // this hop, a dock assigned at bulk-plan time never reaches OMS.
+  // Best-effort: never roll back the shipment if the mirror fails.
+  if (orderIds.length && (plan.dockDoor || plan.dockTime || plan.loadingStart || plan.loadingEnd)) {
+    try {
+      const sync = omsSync().syncDockToOms;
+      if (typeof sync === 'function') {
+        await sync({
+          shipmentId:   shipId,
+          orderIds,
+          dockDoor:     plan.dockDoor     || null,
+          dockTime:     plan.dockTime     || null,
+          loadingStart: plan.loadingStart || null,
+          loadingEnd:   plan.loadingEnd   || null,
+        }, { email: 'bulk-plan-execute' });
+      }
+    } catch (omsErr) {
+      // Non-fatal — log and continue. The shipment + order patch already
+      // succeeded; the OMS mirror can be retried by the middleware pull.
+      console.warn('[bulkPlanExecution] OMS dock mirror failed for', shipId, '-', omsErr.message);
+    }
+  }
+
   return {
     shipment: created,
     ordersUpdated: patched.ordersUpdated,

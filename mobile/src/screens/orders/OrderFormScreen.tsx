@@ -30,12 +30,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import { saveOrder } from '../../services/ordersService';
 import {
+  customerOptions,
+  locationOptions,
+} from '../../services/optionsService';
+import {
   EMPTY_ORDER,
   ORDER_STATUSES,
   SHIP_MODES,
   SERVICE_LEVELS,
 } from '../../shared/constants/orderConstants';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
+import SelectField from '../../components/common/SelectField';
+import DateField from '../../components/common/DateField';
 import type { PlanningTabParamList } from '../../navigation/types';
 
 type FormRoute = RouteProp<PlanningTabParamList, 'OrderForm'>;
@@ -75,6 +81,14 @@ export default function OrderFormScreen() {
   );
   const [saving, setSaving] = useState(false);
 
+  // Dropdown options derived from already-loaded DataContext rows.
+  // Memoised so the picker FlatLists don't re-key on every form
+  // keystroke. customerOptions is sourced from existing orders (no
+  // dedicated `customers` table is loaded on mobile today); origin /
+  // destination come from the locations master.
+  const customers = useMemo(() => customerOptions(data.orders), [data.orders]);
+  const locations = useMemo(() => locationOptions(data.locations), [data.locations]);
+
   const updateField = (key: string, value: any) =>
     setForm((p: any) => ({ ...p, [key]: value }));
 
@@ -93,7 +107,19 @@ export default function OrderFormScreen() {
         navigation.replace('OrderDetail', { orderId: saved?.id || form.id });
       }
     } catch (e: any) {
-      Alert.alert('Could not save order', e?.message || 'Unknown error');
+      // Distinguish a fetch-level network error (RN raises a generic
+      // "Network request failed" with no status) from a server-side
+      // 4xx / 5xx so the user actually knows whether to check their
+      // connection or fix their input. Without this, QA bug #90 / #91
+      // bottom out at the same opaque alert and the user can't tell
+      // which it is.
+      const raw = String(e?.message || 'Unknown error');
+      const isNetwork = /Network request failed|Failed to fetch|TypeError: Network/i.test(raw);
+      const title = isNetwork ? 'Cannot reach server' : 'Could not save order';
+      const body = isNetwork
+        ? 'The app could not reach the TMS API. Check your Wi-Fi, then verify the API base URL in Settings.'
+        : raw;
+      Alert.alert(title, body);
     } finally {
       setSaving(false);
     }
@@ -136,22 +162,36 @@ export default function OrderFormScreen() {
         >
           {/* Customer & Lane */}
           <Text style={styles.sectionTitle}>Customer & Lane</Text>
-          <FormInput
+          {/* QA bug #86: Customer must be a dropdown of existing
+              customers; allow free-text fallback so first-time
+              customers still save. Options come from optionsService
+              (distinct customer names on prior orders). */}
+          <SelectField
             label="Customer"
-            value={form.customer}
-            onChangeText={(v: string) => updateField('customer', v)}
+            value={form.customer || ''}
+            onChange={(v) => updateField('customer', v)}
+            options={customers}
+            placeholder="Select or type a customer"
+            modalTitle="Select Customer"
           />
-          <FormInput
+          {/* QA bug #87: Origin / Destination dropdowns sourced from
+              the locations master. allowCustom keeps ad-hoc lanes
+              workable (e.g. one-off pickups not yet in the master). */}
+          <SelectField
             label="Origin"
-            value={form.origin}
-            onChangeText={(v: string) => updateField('origin', v)}
+            value={form.origin || ''}
+            onChange={(v) => updateField('origin', v)}
+            options={locations}
             placeholder="City, ST ZIP"
+            modalTitle="Select Origin"
           />
-          <FormInput
+          <SelectField
             label="Destination"
-            value={form.destination}
-            onChangeText={(v: string) => updateField('destination', v)}
+            value={form.destination || ''}
+            onChange={(v) => updateField('destination', v)}
+            options={locations}
             placeholder="City, ST ZIP"
+            modalTitle="Select Destination"
           />
           <View style={styles.row}>
             <View style={styles.flex}>
@@ -213,11 +253,16 @@ export default function OrderFormScreen() {
             value={form.commodity}
             onChangeText={(v: string) => updateField('commodity', v)}
           />
+          {/* QA bug #88: Ship Mode chip row must include "None" so
+              users can clear the mode. SHIP_MODES now starts with ''
+              (mapped to label "None") — matching the SERVICE_LEVELS
+              pattern below so both rows behave the same way. The
+              empty-string value persists as NULL in ship_mode. */}
           <Text style={styles.label}>Ship Mode</Text>
           <ChipRow
-            options={SHIP_MODES}
-            value={form.shipMode}
-            onChange={(v) => updateField('shipMode', v)}
+            options={SHIP_MODES.map((s) => s || 'None')}
+            value={form.shipMode || 'None'}
+            onChange={(v) => updateField('shipMode', v === 'None' ? '' : v)}
           />
           <Text style={styles.label}>Service Level</Text>
           <ChipRow
@@ -228,23 +273,27 @@ export default function OrderFormScreen() {
             }
           />
 
-          {/* Schedule */}
+          {/* Schedule — QA bug #89: Ready / Due Date now use a
+              calendar picker (DateField) instead of free-text. Due
+              must be >= Ready, enforced via DateField's `min` so the
+              user can't pick an earlier due date in the modal. */}
           <Text style={styles.sectionTitle}>Schedule</Text>
           <View style={styles.row}>
             <View style={styles.flex}>
-              <FormInput
+              <DateField
                 label="Ready Date"
-                value={form.readyDate}
-                onChangeText={(v: string) => updateField('readyDate', v)}
-                placeholder="YYYY-MM-DD"
+                value={form.readyDate || ''}
+                onChange={(v) => updateField('readyDate', v)}
+                modalTitle="Pick Ready Date"
               />
             </View>
             <View style={styles.flex}>
-              <FormInput
+              <DateField
                 label="Due Date"
-                value={form.dueDate}
-                onChangeText={(v: string) => updateField('dueDate', v)}
-                placeholder="YYYY-MM-DD"
+                value={form.dueDate || ''}
+                onChange={(v) => updateField('dueDate', v)}
+                modalTitle="Pick Due Date"
+                min={form.readyDate || undefined}
               />
             </View>
           </View>

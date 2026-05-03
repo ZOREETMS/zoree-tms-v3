@@ -1,17 +1,17 @@
 // ═══════════════════════════════════════════════════════════════════
-// In-process Event Bus — used by REQ-01 auto order sync.
+// In-process Event Bus - used by REQ-01 auto order sync.
 // Allows any service (OMS ingest, bulk plan, etc.) to broadcast
 // events to SSE subscribers without adding a message broker.
 //
 // This is a singleton: the first require() creates the emitter,
 // every subsequent require() returns the same instance.
-// Keep emitter names stable — they are part of the public SSE contract.
+// Keep emitter names stable - they are part of the public SSE contract.
 // ═══════════════════════════════════════════════════════════════════
 
 const { EventEmitter } = require('events');
 
 const bus = new EventEmitter();
-// Reasonable upper bound — each SSE client is one listener.
+// Reasonable upper bound - each SSE client is one listener.
 bus.setMaxListeners(200);
 
 // Event name constants (import these instead of string literals)
@@ -24,6 +24,10 @@ const EVENTS = {
   // channel in server.js so the TMS Shipments page (and any open detail
   // modal) refresh live when a WMS ship-confirm or POD flips the status.
   SHIPMENT_UPDATED: 'shipment.updated',
+  // Mobile-bug 57: emitted when DELETE /api/shipments/:id finishes its
+  // order-cascade. Lets the SSE/WS bridge refresh the Shipments + Orders
+  // lists on every connected client without a manual reload.
+  SHIPMENT_DELETED: 'shipment.deleted',
 };
 
 module.exports = { bus, EVENTS };

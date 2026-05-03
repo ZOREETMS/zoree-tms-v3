@@ -1,11 +1,5 @@
 /**
  * Unit tests for mobile/src/services/shipmentService.ts.
- *
- * Covers ID generation, blank form, payload mapping, validation, and
- * mutations (createShipment / copyShipment / deleteShipmentById /
- * deriveShipmentEquipment).
- *
- * DbApi is mocked so tests never hit the network.
  */
 
 import {
@@ -17,14 +11,21 @@ import {
   deleteShipmentById,
   deriveShipmentEquipment,
   generateShipmentId,
+  updateShipmentStatus,
   validateShipmentForm,
 } from '../shipmentService';
-import { DbApi } from '../../lib/api';
+import { DbApi, ShipmentsApi } from '../../lib/api';
 
 jest.mock('../../lib/api', () => ({
   DbApi: {
     upsert: jest.fn(),
     remove: jest.fn(),
+  },
+  // QA bug #57 + #63: deleteShipmentById and updateShipmentStatus now
+  // route through the service-layer ShipmentsApi (not the raw DbApi).
+  ShipmentsApi: {
+    remove: jest.fn(),
+    updateStatus: jest.fn(),
   },
 }));
 
@@ -36,7 +37,6 @@ describe('generateShipmentId', () => {
   it('produces unique-ish ids across rapid calls', () => {
     const ids = new Set();
     for (let i = 0; i < 50; i++) ids.add(generateShipmentId());
-    // 50 random 4-digit numbers will almost certainly produce >40 unique values.
     expect(ids.size).toBeGreaterThan(40);
   });
 });
@@ -196,9 +196,10 @@ describe('copyShipment', () => {
     expect(out.id).toMatch(/^SHP-\d{4}-\d{4}$/);
     expect(out.id).not.toBe('SHP-2025-0001');
     expect(out.status).toBe('Planned');
-    expect(out.delivery_date).toBe('');
+    // QA bug #56 fix: delivery_date now null (not '') so Postgres
+    // accepts the upsert. Empty string was rejected as a date value.
+    expect(out.delivery_date).toBeNull();
     expect(out.equipment).toBe('Dry Van 53ft');
-    // Forbidden carryovers:
     expect((out as any).order_ids).toBeUndefined();
     expect((out as any).bol_type).toBeUndefined();
     expect((out as any).master_shipment_id).toBeUndefined();
@@ -211,13 +212,40 @@ describe('deleteShipmentById', () => {
 
   it('rejects empty id', async () => {
     await expect(deleteShipmentById('')).rejects.toThrow(/id is required/);
-    expect(DbApi.remove).not.toHaveBeenCalled();
+    expect(ShipmentsApi.remove).not.toHaveBeenCalled();
   });
 
-  it('calls DbApi.remove on shipments table', async () => {
-    (DbApi.remove as jest.Mock).mockResolvedValue({ ok: true });
+  // QA bug #57 fix: routed through ShipmentsApi.remove (service-layer
+  // endpoint) instead of DbApi.remove, so the server can cascade
+  // orders back to Unplanned with shipment_id=null.
+  it('calls ShipmentsApi.remove (server-side cascade)', async () => {
+    (ShipmentsApi.remove as jest.Mock).mockResolvedValue({ ok: true });
     await deleteShipmentById('SHP-2026-0001');
-    expect(DbApi.remove).toHaveBeenCalledWith('shipments', 'SHP-2026-0001');
+    expect(ShipmentsApi.remove).toHaveBeenCalledWith('SHP-2026-0001');
+    expect(DbApi.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateShipmentStatus', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('rejects empty id', async () => {
+    await expect(updateShipmentStatus('', 'Tendered')).rejects.toThrow(/id is required/);
+    expect(ShipmentsApi.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty status', async () => {
+    await expect(updateShipmentStatus('SHP-1', '')).rejects.toThrow(/status is required/);
+    expect(ShipmentsApi.updateStatus).not.toHaveBeenCalled();
+  });
+
+  // QA bug #63: routes through the service-layer status endpoint
+  // (PATCH /api/shipments/:id/status) which validates against the
+  // canonical enum AND fires the order cascade in shipmentEvents.
+  it('calls ShipmentsApi.updateStatus with id + status', async () => {
+    (ShipmentsApi.updateStatus as jest.Mock).mockResolvedValue({ ok: true });
+    await updateShipmentStatus('SHP-2026-0001', 'Tendered');
+    expect(ShipmentsApi.updateStatus).toHaveBeenCalledWith('SHP-2026-0001', 'Tendered');
   });
 });
 

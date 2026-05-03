@@ -1,0 +1,64 @@
+-- ─────────────────────────────────────────────────────────────────
+-- Migration 030 — drop CzarLite weight-break columns from `rates`
+--
+-- Removes:
+--   • rates.czarlite_min_wt
+--   • rates.czarlite_max_wt
+--
+-- Why:
+--   These columns gated LTL rate matching on shipment weight via
+--   api/services/rateMatcher.js → rateAcceptsWeight(). In practice the
+--   guard caused two recurring problems:
+--     1. Editing a rate could not clear the values — EditRateModal kept
+--        snapping empty inputs back to 500 / 9999 (the LTL defaults
+--        seeded by `applyRateFieldChange` and the `value || 9999`
+--        fallback on the input itself). The values were therefore
+--        un-deletable from the UI.
+--     2. The matcher silently rejected an LTL rate whenever the
+--        consolidated shipment weight was 1 lb over `czarlite_max_wt`
+--        (e.g. SHP-2026-6458 — two 5,000-lb orders consolidated to
+--        10,000 lb on a rate capped at 9,999 lb). The downstream effect
+--        was the wrong rate snapshotted on the shipment row, with the
+--        breakdown columns (rate / fuel_surcharge / accessorials)
+--        landing at 0 because no quote was returned to populate them.
+--
+-- The single `LTL_MAX = 15,000 lb` ceiling in api/server.js stays as
+-- the only weight gate on the LTL rating path. Per-rate weight windows
+-- are no longer modelled.
+--
+-- Impact analysis:
+--   • Read paths — api/server.js dropped the columns from its SELECT
+--     lists (LTL quote at line ~2274 and TL rate-shop at ~2845), and
+--     api/services/rateMatcher.js dropped `rateAcceptsWeight` along
+--     with the `weight-out-of-range` return path.
+--   • Write paths — frontend EditRateModal, rateUploadService,
+--     mobile rateService, and the CSV export in
+--     frontend/src/services/rateService.js no longer reference these
+--     columns. The CSV template and import dictionary lost their
+--     `CzarLite Min/Max Weight` columns; uploads of older templates
+--     that include those headers will be ignored as unmapped (the
+--     upload analyzer already surfaces unmapped headers to the user).
+--   • UI — RateManagementPage's CzarLite badge no longer renders the
+--     "MIN–MAX LBS" sub-line; the badge now shows just CZARLITE +
+--     class.
+--   • Historical scripts:
+--       - scripts/seed_req31_demo_rates.sql had columns trimmed from
+--         its INSERT lists.
+--       - scripts/diag-rate.js dropped the per-row min/max log fields.
+--       - scripts/fix_tl_rates_clear_czarlite_weight_breaks.sql is left
+--         in place as a historical record; it referenced the columns
+--         intentionally and will fail to run against the new schema,
+--         which is expected.
+--
+-- Backout:
+--   ALTER TABLE rates ADD COLUMN czarlite_min_wt INTEGER;
+--   ALTER TABLE rates ADD COLUMN czarlite_max_wt INTEGER;
+-- The original values are preserved in the
+-- `rates_czarlite_wt_backup_20260422` table created by
+-- scripts/fix_tl_rates_clear_czarlite_weight_breaks.sql for the TL
+-- rows it touched, but no full snapshot exists for LTL rows — restore
+-- from the most recent DB backup if a full revert is required.
+-- ─────────────────────────────────────────────────────────────────
+
+ALTER TABLE rates DROP COLUMN IF EXISTS czarlite_min_wt;
+ALTER TABLE rates DROP COLUMN IF EXISTS czarlite_max_wt;

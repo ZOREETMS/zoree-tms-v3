@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import { DbApi } from '../lib/api';
 import { useAuth } from './AuthContext';
+import { useRealtimeData } from './useRealtimeData';
 
 export interface TmsData {
   orders: any[];
@@ -21,12 +22,12 @@ export interface TmsData {
   invoices: any[];
   routeTemplates: any[];
   /**
-   * Equipment master rows (trailer types). Optional in callers — when
+   * Equipment master rows (trailer types). Optional in callers - when
    * absent or empty, services like rateService / equipmentService fall
    * back to SEED_EQUIPMENT.
    */
   equipmentTypes: any[];
-  /** Fleet vehicles. Empty → FleetScreen falls back to its in-file seed. */
+  /** Fleet vehicles. Empty -> FleetScreen falls back to its in-file seed. */
   vehicles: any[];
 }
 
@@ -125,6 +126,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setData(emptyData);
     }
   }, [isAuthenticated, refreshData]);
+
+  // QA bug #60 + #63: subscribe to Supabase Realtime so a status
+  // change made on web (or by a planning batch on the server) shows
+  // up on this device without a manual pull-to-refresh. The hook
+  // no-ops when supabaseClient isn't configured, so unauthenticated /
+  // dev builds keep working.
+  useRealtimeData({
+    enabled: isAuthenticated,
+    onChange: refreshData,
+  });
 
   return (
     <DataContext.Provider value={{ data, setData, loading, error, refreshData }}>

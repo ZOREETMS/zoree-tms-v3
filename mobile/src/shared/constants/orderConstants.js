@@ -62,8 +62,13 @@ export const ORDER_STATUSES = [
  * Ship modes the planner recognises. Kept in lock-step with the web
  * NewOrderModal options so an order created on mobile and one created
  * on web are interchangeable to the planner.
+ *
+ * The leading empty string represents "None" (i.e. let the planner
+ * pick / no preference). It maps to NULL in the DB and is rendered as
+ * the literal "None" by ChipRow consumers — see SERVICE_LEVELS for the
+ * same pattern.
  */
-export const SHIP_MODES = ['TL', 'LTL', 'Parcel', 'Intermodal'];
+export const SHIP_MODES = ['', 'TL', 'LTL', 'Parcel', 'Intermodal'];
 
 /**
  * Service-level options. Free-text on the DB side (REQ-10), but

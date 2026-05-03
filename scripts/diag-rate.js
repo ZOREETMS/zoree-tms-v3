@@ -48,7 +48,7 @@ function extractCity(s) {
     String(r.dest||'').toLowerCase().includes(dCity.toLowerCase())
   );
   console.log(`LTL matching ${oCity}->${dCity}:`, ltlMatch.length);
-  ltlMatch.forEach(r => console.log(' -', r.carrier, r.origin, '->', r.dest, 'min_wt=', r.czarlite_min_wt, 'max_wt=', r.czarlite_max_wt));
+  ltlMatch.forEach(r => console.log(' -', r.carrier, r.origin, '->', r.dest, 'fsc=', r.fsc));
 
   console.log('\n=== Carrier flags');
   const carriers = await q('carriers', `select=name,czarlite_enabled,carrierconnect_enabled,pcmiler_enabled&limit=100`);

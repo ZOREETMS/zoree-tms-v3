@@ -272,6 +272,17 @@ export const ShipmentsApi = {
       body: JSON.stringify({ orderId }),
     });
   },
+  // Carrier (re)assignment for an existing shipment. Goes through the
+  // dedicated endpoint so the backend writes change_history rows and
+  // broadcasts SHIPMENT_UPDATED — the previous DbApi.patch("shipments",
+  // ...) path skipped both, which left the Shipment Details modal showing
+  // the previous carrier after a change.
+  changeCarrier(shipmentId, payload) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/change-carrier`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+  },
   // Record a manual timeline event (Picked Up / Delivered / Exception / ...).
   // The backend transitions shipment + linked order status where applicable
   // and writes change_history rows on both sides.

@@ -178,12 +178,6 @@ describe('buildInitialRateForm', () => {
     expect(f.fsc).toBe('18.5'); // % stripped
     expect(f.czarlite).toBe(true);
   });
-
-  it('seeds LTL czar weight defaults from the source row', () => {
-    const f = buildInitialRateForm({ mode: 'LTL', czarlite_min_wt: 1000, czarlite_max_wt: 5000 });
-    expect(f.czarliteMinWt).toBe('1000');
-    expect(f.czarliteMaxWt).toBe('5000');
-  });
 });
 
 describe('buildRatePayload', () => {
@@ -239,15 +233,6 @@ describe('buildRatePayload', () => {
     expect(filled.exp).toBe('2026-12-31');
   });
 
-  it('persists CzarLite weight breaks only on LTL mode', () => {
-    const tl = buildRatePayload({ ...base, mode: 'TL', czarliteMinWt: '500', czarliteMaxWt: '9999' });
-    expect(tl.czarlite_min_wt).toBeNull();
-    expect(tl.czarlite_max_wt).toBeNull();
-
-    const ltl = buildRatePayload({ ...base, mode: 'LTL', czarliteMinWt: '500', czarliteMaxWt: '9999' });
-    expect(ltl.czarlite_min_wt).toBe(500);
-    expect(ltl.czarlite_max_wt).toBe(9999);
-  });
 });
 
 describe('validateRateForm', () => {
@@ -313,25 +298,14 @@ describe('applyRateFieldChange', () => {
     expect(next.lane).toBe('L1');
     expect(next).not.toBe(base);
     // Should not have triggered the mode-flip side effects.
-    expect(next.czarliteMinWt).toBe(base.czarliteMinWt);
     expect(next.equipment).toBe(base.equipment);
   });
 
-  it('switching to LTL enables CzarLite and seeds default weight breaks', () => {
+  it('switching to LTL enables CzarLite', () => {
     const next = applyRateFieldChange({ ...base, mode: 'TL' }, 'mode', 'LTL');
     expect(next.mode).toBe('LTL');
     expect(next.czarlite).toBe(true);
-    expect(next.czarliteMinWt).toBe('500');
-    expect(next.czarliteMaxWt).toBe('9999');
     expect(next.equipment).toBe('LTL');
-  });
-
-  it('switching away from LTL clears the LTL-only weight breaks', () => {
-    const ltlState = applyRateFieldChange({ ...base, mode: 'TL' }, 'mode', 'LTL');
-    const back = applyRateFieldChange(ltlState, 'mode', 'TL');
-    expect(back.mode).toBe('TL');
-    expect(back.czarliteMinWt).toBe('');
-    expect(back.czarliteMaxWt).toBe('');
   });
 
   it('does not overwrite a pinned equipment value when mode flips', () => {

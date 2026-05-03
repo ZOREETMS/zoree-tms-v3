@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { DbApi } from "../lib/api";
 import EditRateModal from "../components/EditRateModal";
+import RateUploadModal from "../components/RateUploadModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import {
   buildRateLaneId,
@@ -86,31 +87,23 @@ function CzarLiteBadge({ r, carriers }) {
     return <span className="text-muted text-sm">{"\u2014"}</span>;
   }
   const cls = r.czarliteClass || r.czarlite_class || r.freight_class || "";
-  const minWt = r.czarliteMinWt || r.czar_min_wt || r.czarlite_min_wt || 0;
-  const maxWt = r.czarliteMaxWt || r.czar_max_wt || r.czarlite_max_wt || 0;
-  const wRange = (minWt || 0).toLocaleString() + "\u2013" + (maxWt || 99999).toLocaleString() + " LBS";
   return (
-    <div>
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          fontSize: 10,
-          fontWeight: 700,
-          background: "linear-gradient(135deg,#312e81,#4f46e5)",
-          color: "#fff",
-          padding: "2px 8px",
-          borderRadius: 20,
-          whiteSpace: "nowrap",
-        }}
-      >
-        CZARLITE{cls ? ` \u00B7 CLASS ${cls}` : ""}
-      </span>
-      <div style={{ fontSize: 10, color: "#6366f1", marginTop: 3 }}>
-        {wRange}
-      </div>
-    </div>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 10,
+        fontWeight: 700,
+        background: "linear-gradient(135deg,#312e81,#4f46e5)",
+        color: "#fff",
+        padding: "2px 8px",
+        borderRadius: 20,
+        whiteSpace: "nowrap",
+      }}
+    >
+      CZARLITE{cls ? ` \u00B7 CLASS ${cls}` : ""}
+    </span>
   );
 }
 
@@ -136,6 +129,7 @@ export default function RateManagementPage() {
   const [editRate, setEditRate] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // rate row pending delete confirmation
   const [deleting, setDeleting] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // Auto-open rate detail when navigating with ?q= (e.g. from shipment rate_id link)
   useEffect(() => {
@@ -311,6 +305,26 @@ export default function RateManagementPage() {
     }
   }
 
+  function handleUploadComplete({ inserted = 0, updated = 0, skipped = 0, failed = [] }) {
+    // The upload service did the writes; the page only refreshes context
+    // and surfaces a single status toast. No business logic in the view.
+    const total = inserted + updated;
+    if (total > 0) {
+      const parts = [];
+      if (inserted) parts.push(`${inserted} added`);
+      if (updated)  parts.push(`${updated} updated`);
+      if (skipped)  parts.push(`${skipped} skipped`);
+      if (failed.length) parts.push(`${failed.length} failed`);
+      toast(`Rates imported: ${parts.join(", ")}`, failed.length ? "info" : "success");
+    } else if (failed.length) {
+      toast(`Import failed for ${failed.length} row(s)`, "error");
+    } else {
+      toast("No rates imported", "info");
+    }
+    invalidateQuoteCache();
+    if (refreshData) refreshData();
+  }
+
   async function confirmDeleteRate() {
     if (!deleteTarget?.id) return;
     setDeleting(true);
@@ -342,7 +356,7 @@ export default function RateManagementPage() {
             <button className="btn btn-secondary btn-sm" onClick={() => { downloadRateTemplate(); toast("Rate template downloaded", "success"); }}>
               Download Template
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => toast("Upload panel coming soon", "info")}>
+            <button className="btn btn-primary btn-sm" onClick={() => setUploadOpen(true)}>
               Upload Rates (Excel)
             </button>
             <ExportButton
@@ -705,6 +719,14 @@ export default function RateManagementPage() {
         carriers={carriers}
         equipmentTypes={equipmentTypes}
         existingLanes={rates.map((r) => r.lane).filter(Boolean)}
+      />
+
+      {/* Bulk rate upload modal — Excel/CSV import for the rates table. */}
+      <RateUploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onComplete={handleUploadComplete}
+        existingRates={rates}
       />
 
       {/* Delete confirmation */}

@@ -63,14 +63,13 @@ export function getMatchTypeBadge(value) {
 }
 
 /* ── CzarLite applicability ──────────────────────────────────────
- * CzarLite is an LTL-tariff concept (class + weight breaks). The
- * matcher (api/services/rateMatcher.js → rateAcceptsWeight) and the
- * Edit Rate modal already gate CzarLite columns on mode === 'LTL';
- * UI surfaces (badge, stats counter, "CzarLite only" filter, row
- * highlight on the rate-management table) must do the same so a
- * carrier-level `czarlite_enabled` flag — set legitimately for the
- * carrier's LTL business — does not bleed CzarLite styling into
- * TL/Flatbed/Intermodal/Drayage rate rows.
+ * CzarLite is an LTL-tariff concept (class). The Edit Rate modal
+ * already gates CzarLite columns on mode === 'LTL'; UI surfaces
+ * (badge, stats counter, "CzarLite only" filter, row highlight on
+ * the rate-management table) must do the same so a carrier-level
+ * `czarlite_enabled` flag — set legitimately for the carrier's LTL
+ * business — does not bleed CzarLite styling into TL/Flatbed/
+ * Intermodal/Drayage rate rows.
  *
  * Single source of truth: change the rule here, never inline the
  * mode comparison in components.
@@ -335,8 +334,6 @@ const RATE_TEMPLATE_COLUMNS = [
   { header: "Miles", example: "2015" },
   { header: "CzarLite (Y/N)", example: "N" },
   { header: "CzarLite Freight Class", example: "" },
-  { header: "CzarLite Min Weight", example: "" },
-  { header: "CzarLite Max Weight", example: "" },
 ];
 
 function escapeCSVField(value) {
@@ -408,8 +405,6 @@ export function exportRatesCSV(rates) {
         r.miles,
         r.czarlite ? "Y" : "N",
         r.czarlite_class,
-        r.czarlite_min_wt,
-        r.czarlite_max_wt,
       ]
         .map(escapeCSVField)
         .join(",")

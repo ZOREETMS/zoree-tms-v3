@@ -23,6 +23,7 @@ import {
 import {
   recordShipmentEvent,
   deleteShipmentById,
+  changeShipmentCarrier,
 } from "./shipmentService";
 import { unplanOrdersForShipmentRemoval } from "./shipmentOrderService";
 import {
@@ -158,18 +159,16 @@ async function changeCarrierAction(p, { shipments }) {
     throw new Error(`No rate available for carrier "${carrierName}" on this lane — configure a rate first`);
   }
 
-  await DbApi.patch("shipments", p.shipmentId, {
-    carrier: chosen.carrier,
-    mode: chosen.mode || ship.mode,
-    total_cost:    chosen.totalCharge || 0,
-    rate:          chosen.czarBaseGross || chosen.czarBase || 0,
-    fuel_surcharge: chosen.fscCharge || 0,
-    accessorials: chosen.accessorialCharge || 0,
-    miles:         chosen.miles || chosen.pcmilerMiles || ship.miles || null,
-    service_level: chosen.serviceLevel || ship.service_level || null,
-    rate_id:       chosen.rateId || ship.rate_id || null,
-    equipment:     chosen.equipment || ship.equipment || null,
-  });
+  // Route through the same audited service the Change Carrier modal
+  // uses (frontend/src/services/shipmentService.js → POST
+  // /api/shipments/:id/change-carrier). That endpoint writes one
+  // change_history row per actually-changed field via
+  // shipmentMutations.recordFieldDiffs and broadcasts SHIPMENT_UPDATED.
+  // The previous DbApi.patch("shipments", ...) call here hit the raw
+  // /db/shipments upsert, which is the path that left AI-driven carrier
+  // changes invisible in the History tab — the exact bug we're fixing.
+  // CLAUDE_RULES §3/§4: services never bypass the audited service.
+  await changeShipmentCarrier(p.shipmentId, chosen, ship);
   return `Carrier for ${p.shipmentId} changed from ${prevCarrier} → ${chosen.carrier} · re-rated $${(chosen.totalCharge || 0).toLocaleString()}`;
 }
 

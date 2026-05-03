@@ -1,57 +1,52 @@
 /**
- * Mobile shipment service — orchestration layer for manual shipment
+ * Mobile shipment service - orchestration layer for manual shipment
  * create / copy / delete on the mobile shipments screens.
  *
- * Pure service layer: calls DbApi, returns plain data, no React
- * state, no UI side-effects.
- *
- * Web parity reference: frontend/src/services/shipmentService.js.
- * Mobile keeps the form state shape simpler than web (plain
- * city/state/zip strings instead of the canonical Location type) —
- * the boundary mapping into DB columns happens in `buildShipmentPayload`.
+ * Pure service layer: calls DbApi/ShipmentsApi, returns plain data,
+ * no React state, no UI side-effects.
  */
 
-import { DbApi } from '../lib/api';
+import { DbApi, ShipmentsApi } from '../lib/api';
 
-/* ── ID + form helpers ────────────────────────────────────────────── */
+/**
+ * Treat null/empty/whitespace as missing, otherwise return the
+ * trimmed value. Used to scrub copy/create payloads before they hit
+ * Supabase - Postgres rejects '' for date columns with a 400, which
+ * is what surfaced as QA bug #56.
+ */
+function nullIfBlank(v: any): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s.length ? s : null;
+}
 
-/** Generate a unique shipment id (`SHP-YYYY-NNNN`). */
+/* ID + form helpers */
+
 export function generateShipmentId(): string {
   return `SHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 export interface ShipmentFormState {
-  // Origin location
   shipFromName: string;
   originCity: string;
   originState: string;
   originZip: string;
-  // Destination location
   shipToName: string;
   destCity: string;
   destState: string;
   destZip: string;
-  // Mode + carrier
   mode: string;
   carrier: string;
   equipment: string;
-  // Freight
   weight: string;
   pieces: string;
   total_cost: string;
-  // Dates
   pickup_date: string;
   delivery_date: string;
-  // Service + notes
   service_level: string;
   notes: string;
 }
 
-/**
- * Blank form state used by the create modal. Mirrors the shape
- * `frontend/src/services/shipmentService.js → buildBlankShipment`
- * produces, but stays string-shaped for predictable mobile inputs.
- */
 export function buildBlankShipment(): ShipmentFormState {
   return {
     shipFromName: '',
@@ -75,11 +70,6 @@ export function buildBlankShipment(): ShipmentFormState {
   };
 }
 
-/**
- * Compose origin / dest free-text strings from city/state/zip parts —
- * matches the format produced by the web's NewShipmentModal so a
- * shipment created on mobile reads identically on web.
- */
 export function composeOriginDest(form: ShipmentFormState): { origin: string; dest: string } {
   const origin =
     [form.originCity, form.originState?.toUpperCase()].filter(Boolean).join(', ') +
@@ -90,12 +80,6 @@ export function composeOriginDest(form: ShipmentFormState): { origin: string; de
   return { origin, dest };
 }
 
-/**
- * Build the database row from the form state. Pulled out of
- * `createShipment` so tests can assert the shape without mocking
- * network calls and so future call sites (e.g. an edit flow) can
- * reuse the field-mapping logic.
- */
 export function buildShipmentPayload(form: ShipmentFormState): Record<string, any> {
   const { origin, dest } = composeOriginDest(form);
   const equipmentRaw = (form.equipment || '').trim();
@@ -120,18 +104,11 @@ export function buildShipmentPayload(form: ShipmentFormState): Record<string, an
   };
 }
 
-/* ── Validation ───────────────────────────────────────────────────── */
-
 export interface ValidationResult {
   ok: boolean;
   error?: string;
 }
 
-/**
- * Pre-save check. The web modal enforces origin + dest only;
- * mobile follows the same rule so a shipment created here doesn't
- * have to round-trip through validation that the web wouldn't apply.
- */
 export function validateShipmentForm(form: ShipmentFormState): ValidationResult {
   const { origin, dest } = composeOriginDest(form);
   if (!origin) return { ok: false, error: 'Origin city is required.' };
@@ -139,14 +116,8 @@ export function validateShipmentForm(form: ShipmentFormState): ValidationResult 
   return { ok: true };
 }
 
-/* ── Mutations ────────────────────────────────────────────────────── */
+/* Mutations */
 
-/**
- * Create a new shipment from the form state. Generates the id,
- * normalizes numeric fields, and writes the row via DbApi.upsert.
- * Returns the created shipment so the caller can update local cache
- * without re-fetching.
- */
 export async function createShipment(form: ShipmentFormState): Promise<any> {
   const id = generateShipmentId();
   const payload = { id, ...buildShipmentPayload(form) };
@@ -155,9 +126,8 @@ export async function createShipment(form: ShipmentFormState): Promise<any> {
 }
 
 /**
- * Copy an existing shipment with a new id and reset status. Mirrors
- * web `copyShipment`: drops order_ids / bol fields / tender state so
- * the copy is a fresh planning candidate, not a tied-back duplicate.
+ * QA bug #56 fix: previously delivery_date: '' was sent which Postgres
+ * rejects for date columns. nullIfBlank scrubs all optional values.
  */
 export async function copyShipment(source: any): Promise<any> {
   if (!source || typeof source !== 'object') {
@@ -165,50 +135,55 @@ export async function copyShipment(source: any): Promise<any> {
   }
   const id = generateShipmentId();
   const today = new Date().toISOString().slice(0, 10);
-  const copy = {
+  const copy: Record<string, any> = {
     id,
     origin: source.origin || '',
     dest: source.dest || '',
-    origin_zip: source.origin_zip || null,
-    dest_zip: source.dest_zip || null,
-    ship_from_name: source.ship_from_name || null,
-    ship_to_name: source.ship_to_name || null,
+    origin_zip: nullIfBlank(source.origin_zip),
+    dest_zip: nullIfBlank(source.dest_zip),
+    ship_from_name: nullIfBlank(source.ship_from_name ?? source.shipFromName),
+    ship_to_name: nullIfBlank(source.ship_to_name ?? source.shipToName),
     mode: source.mode || 'LTL',
     carrier: source.carrier || '',
-    weight: source.weight || 0,
-    pieces: source.pieces || 0,
-    total_cost: source.total_cost || 0,
-    miles: source.miles || 0,
-    rate: source.rate || 0,
-    fuel_surcharge: source.fuel_surcharge || 0,
+    weight: Number(source.weight) || 0,
+    pieces: parseInt(source.pieces, 10) || 0,
+    total_cost: Number(source.total_cost) || 0,
+    miles: Number(source.miles) || 0,
+    rate: Number(source.rate) || 0,
+    fuel_surcharge: Number(source.fuel_surcharge) || 0,
+    accessorials: Number(source.accessorials) || 0,
     service_level: source.service_level || 'Standard',
-    equipment: source.equipment ?? null,
+    equipment: nullIfBlank(source.equipment),
     notes: source.notes || '',
     pickup_date: today,
-    delivery_date: '',
+    delivery_date: null,
     status: 'Planned',
-    // intentionally NOT copied: order_ids, bol_type / bol_number,
-    // master_shipment_id, tender_* — see web copyShipment for rationale.
   };
   await DbApi.upsert('shipments', copy);
   return copy;
 }
 
-/** Permanently delete a shipment row. */
+/**
+ * QA bug #57 fix: routed through ShipmentsApi.remove which goes to
+ * /api/shipments/:id (server-side cascade) so linked orders flip
+ * back to Unplanned with shipment_id=null.
+ */
 export async function deleteShipmentById(id: string): Promise<any> {
   if (!id) throw new Error('deleteShipmentById: id is required');
-  return DbApi.remove('shipments', id);
+  return ShipmentsApi.remove(id);
 }
 
 /**
- * Resolve the trailer/equipment to display for a shipment, falling
- * back to the source rate when the shipment row was planned before
- * migration 025 carried equipment forward.
- *
- * Web parity reference: shipmentService.deriveShipmentEquipment.
- * Pure helper — no I/O — so it composes cleanly into list/detail
- * render code.
+ * QA bug #63 fix: status update via the service-layer status endpoint
+ * which validates against the canonical enum and runs the
+ * shipment->order cascade in shipmentEvents.
  */
+export async function updateShipmentStatus(id: string, status: string): Promise<any> {
+  if (!id) throw new Error('updateShipmentStatus: id is required');
+  if (!status) throw new Error('updateShipmentStatus: status is required');
+  return ShipmentsApi.updateStatus(id, status);
+}
+
 export function deriveShipmentEquipment(
   shipment: any,
   rateRow: any,

@@ -201,8 +201,6 @@ export interface RateFormState {
   serviceLevel: string;
   czarlite: boolean;
   czarliteClass: string;
-  czarliteMinWt: string;
-  czarliteMaxWt: string;
 }
 
 /**
@@ -213,7 +211,6 @@ export function buildInitialRateForm(rate?: any): RateFormState {
   const r = rate || {};
   const oLoc = parseLocation(r.origin);
   const dLoc = parseLocation(r.dest);
-  const ltl = isLtlMode(r.mode);
   return {
     lane: r.lane || '',
     mode: r.mode || 'TL',
@@ -243,8 +240,6 @@ export function buildInitialRateForm(rate?: any): RateFormState {
     serviceLevel: String(getField(r, 'serviceLevel', 'service_level') || ''),
     czarlite: !!r.czarlite,
     czarliteClass: String(getField(r, 'czarliteClass', 'czarlite_class', 'freight_class') || '70'),
-    czarliteMinWt: String(getField(r, 'czarliteMinWt', 'czarlite_min_wt', 'czar_min_wt') || (ltl ? 500 : '')),
-    czarliteMaxWt: String(getField(r, 'czarliteMaxWt', 'czarlite_max_wt', 'czar_max_wt') || (ltl ? 9999 : '')),
   };
 }
 
@@ -259,8 +254,6 @@ export function buildInitialRateForm(rate?: any): RateFormState {
  *    free-text strings — so we rebuild them from the structured form.
  *  - `rate` / `fsc` get formatted as strings ("$X.XX" / "X.X%") to
  *    match the web's DB convention.
- *  - CzarLite weight breaks are persisted as null on non-LTL modes so
- *    the planner doesn't accidentally cap a TL lane at LTL volumes.
  */
 export function buildRatePayload(form: RateFormState): Record<string, any> {
   const origin = [form.originCity, form.originState?.toUpperCase()].filter(Boolean).join(', ')
@@ -270,7 +263,6 @@ export function buildRatePayload(form: RateFormState): Record<string, any> {
 
   const rateNum = parseFloat(String(form.rate).replace(/[^0-9.]/g, ''));
   const fscNum = parseFloat(String(form.fsc).replace(/[^0-9.]/g, ''));
-  const ltl = isLtlMode(form.mode);
 
   return {
     lane: form.lane,
@@ -297,8 +289,6 @@ export function buildRatePayload(form: RateFormState): Record<string, any> {
     service_level: form.serviceLevel || null,
     czarlite: form.czarlite,
     czarlite_class: form.czarliteClass ? Number(form.czarliteClass) : null,
-    czarlite_min_wt: ltl && form.czarliteMinWt ? Number(form.czarliteMinWt) : null,
-    czarlite_max_wt: ltl && form.czarliteMaxWt ? Number(form.czarliteMaxWt) : null,
   };
 }
 
@@ -308,10 +298,7 @@ export function buildRatePayload(form: RateFormState): Record<string, any> {
  * Apply a single field change to the form, keeping mode-dependent
  * fields consistent. Mirrors the inline mode-flip logic in the web
  * EditRateModal:
- *   - switching to LTL turns CzarLite on and restores default weight
- *     breaks (500 / 9999) so the planner has a working LTL window
- *   - switching away clears the LTL-tariff weight breaks so the
- *     planner doesn't accidentally cap a TL lane at LTL volumes
+ *   - switching to LTL turns CzarLite on
  *   - if no equipment is pinned, suggest a default trailer for the
  *     new mode (DEFAULT_EQUIPMENT_BY_MODE)
  *
@@ -327,14 +314,8 @@ export function applyRateFieldChange<K extends keyof RateFormState>(
   if (key !== 'mode') return next;
 
   const upper = String(value).toUpperCase();
-  const isLtl = upper === 'LTL';
-  if (isLtl) {
+  if (upper === 'LTL') {
     next.czarlite = true;
-    if (!next.czarliteMinWt) next.czarliteMinWt = '500';
-    if (!next.czarliteMaxWt) next.czarliteMaxWt = '9999';
-  } else {
-    next.czarliteMinWt = '';
-    next.czarliteMaxWt = '';
   }
   if (!next.equipment && DEFAULT_EQUIPMENT_BY_MODE[upper]) {
     next.equipment = DEFAULT_EQUIPMENT_BY_MODE[upper];

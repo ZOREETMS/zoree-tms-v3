@@ -6,9 +6,20 @@
  * notes) — line-item editing intentionally skipped. The web modal's line
  * editor is a separate component that hasn't been ported to mobile yet.
  *
- * Pure presentation + a save handler. Persistence is done via DbApi
- * inline because the order edit is the only place this is wired today;
- * if more places need it, lift into mobile/src/services/ordersService.ts.
+ * History (QA bug #92, "DB update failed (400)"):
+ *   - Previously this saved via `DbApi.patch('orders', id, patch)` →
+ *     /api/db/orders/:id → raw PostgREST update. That path sends the
+ *     body straight to Supabase, so a status value like 'Consolidated'
+ *     (which our local list contained but the DB constraint
+ *     `chk_orders_status_controlled` does NOT) bounced as a 400 with
+ *     no useful context. It also bypassed REQ-02 change-history.
+ *   - Now we call `OrdersApi.update`, which routes through the
+ *     service-layer endpoint (PATCH /api/orders/:id). That endpoint
+ *     normalises camelCase + snake_case via `apiOrderToDbPatch` and
+ *     records per-field history diffs server-side.
+ *   - We also import the canonical ORDER_STATUSES list from
+ *     shared/constants so we can never re-introduce a status value
+ *     the DB doesn't accept.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -26,19 +37,13 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { DbApi } from '../../lib/api';
+import { OrdersApi } from '../../lib/api';
+import { ORDER_STATUSES, SHIP_MODES } from '../../shared/constants/orderConstants';
+import { useData } from '../../state/DataContext';
+import { customerOptions, locationOptions } from '../../services/optionsService';
+import SelectField from '../common/SelectField';
+import DateField from '../common/DateField';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
-
-const ORDER_STATUSES = [
-  'Unplanned',
-  'Planned',
-  'Consolidated',
-  'Tendered',
-  'Delivered',
-  'Cancelled',
-];
-
-const MODE_OPTIONS = ['', 'TL', 'LTL', 'Parcel', 'Intermodal', 'Air'];
 
 export interface OrderEditModalProps {
   visible: boolean;
@@ -51,89 +56,87 @@ export interface OrderEditModalProps {
 interface FormState {
   customer: string;
   status: string;
-  originCity: string;
-  originState: string;
+  origin: string;
   originZip: string;
-  destCity: string;
-  destState: string;
+  destination: string;
   destZip: string;
   weight: string;
   pieces: string;
   shipMode: string;
   commodity: string;
-  ready: string;
-  due: string;
+  readyDate: string;
+  dueDate: string;
   notes: string;
 }
 
-function parseCity(str: string): { city: string; state: string; zip: string } {
-  if (!str) return { city: '', state: '', zip: '' };
-  let s = str;
-  let zip = '';
-  const m = s.match(/(\d{5})/);
-  if (m) {
-    zip = m[1];
-    s = s.replace(m[1], '').replace(/,?\s*$/, '').trim();
-  }
-  const parts = s.split(',');
-  return { city: (parts[0] || '').trim(), state: (parts[1] || '').trim(), zip };
-}
-
+/**
+ * Hydrate the form from whichever shape the order arrived in.
+ *
+ * Bulk-plan rows go through GET /api/orders → dbToOrderApi (camelCase
+ * keys: `destination`, `originZip`, `readyDate`, etc), but historic
+ * call sites — and the OMS push path — sometimes hand us the
+ * snake_case row directly. Read both, prefer camelCase, fall back to
+ * snake_case so we don't render a half-blank modal on legacy callers.
+ */
 function buildInitialForm(order: any | null): FormState {
   if (!order) {
     return {
-      customer: '', status: 'Unplanned',
-      originCity: '', originState: '', originZip: '',
-      destCity: '', destState: '', destZip: '',
-      weight: '', pieces: '', shipMode: '', commodity: '',
-      ready: '', due: '', notes: '',
+      customer: '',
+      status: 'Unplanned',
+      origin: '',
+      originZip: '',
+      destination: '',
+      destZip: '',
+      weight: '',
+      pieces: '',
+      shipMode: '',
+      commodity: '',
+      readyDate: '',
+      dueDate: '',
+      notes: '',
     };
   }
-  const op = parseCity(order.origin || '');
-  const dp = parseCity(order.dest || order.destination || '');
   return {
     customer: order.customer || '',
     status: order.status || 'Unplanned',
-    originCity: op.city,
-    originState: op.state,
-    originZip: order.origin_zip || op.zip || '',
-    destCity: dp.city,
-    destState: dp.state,
-    destZip: order.dest_zip || dp.zip || '',
+    origin: order.origin || '',
+    originZip: order.originZip || order.origin_zip || '',
+    destination: order.destination || order.dest || '',
+    destZip: order.destZip || order.dest_zip || '',
     weight: order.weight != null ? String(order.weight) : '',
     pieces: order.pieces != null ? String(order.pieces) : '',
-    shipMode: order.ship_mode || order.shipMode || '',
+    shipMode: order.shipMode || order.ship_mode || '',
     commodity: order.commodity || '',
-    ready: order.ready || order.pickup_date || order.ready_date || '',
-    due: order.due || order.delivery_date || order.due_date || '',
+    readyDate: order.readyDate || order.ready || '',
+    dueDate: order.dueDate || order.due || '',
     notes: order.notes || '',
   };
 }
 
+/**
+ * Convert form state → camelCase patch payload accepted by
+ * OrdersApi.update. We keep this as a pure function so the test suite
+ * can assert the shape without mocking network calls.
+ *
+ * Numbers coerce to 0 on empty/non-numeric input so the orders.weight
+ * NOT NULL column is never sent NaN.
+ */
 function buildPatch(f: FormState): Record<string, any> {
-  const newOrigin = [f.originCity, f.originState?.toUpperCase()]
-    .filter(Boolean)
-    .join(', ') + (f.originZip ? ' ' + f.originZip : '');
-  const newDest = [f.destCity, f.destState?.toUpperCase()]
-    .filter(Boolean)
-    .join(', ') + (f.destZip ? ' ' + f.destZip : '');
-
-  const patch: Record<string, any> = {
+  return {
     customer: f.customer || null,
     status: f.status || null,
-    origin: newOrigin || null,
-    dest: newDest || null,
+    origin: f.origin || null,
+    destination: f.destination || null,
+    originZip: f.originZip || null,
+    destZip: f.destZip || null,
     weight: Number(f.weight) || 0,
-    pieces: Number(f.pieces) || 0,
-    ship_mode: f.shipMode || null,
+    pieces: parseInt(f.pieces, 10) || 0,
+    shipMode: f.shipMode || null,
     commodity: f.commodity || null,
-    ready: f.ready || null,
-    due: f.due || null,
+    readyDate: f.readyDate || null,
+    dueDate: f.dueDate || null,
     notes: f.notes || null,
   };
-  if (f.originZip) patch.origin_zip = f.originZip;
-  if (f.destZip) patch.dest_zip = f.destZip;
-  return patch;
 }
 
 export default function OrderEditModal({
@@ -142,6 +145,7 @@ export default function OrderEditModal({
   onClose,
   onSaved,
 }: OrderEditModalProps) {
+  const { data } = useData();
   const [form, setForm] = useState<FormState>(() => buildInitialForm(order));
   const [busy, setBusy] = useState(false);
 
@@ -159,16 +163,33 @@ export default function OrderEditModal({
     [order],
   );
 
+  // Dropdown sources are the same as OrderFormScreen's, so pickers
+  // behave the same way regardless of which entry point the user took
+  // to edit an order.
+  const customers = useMemo(() => customerOptions(data.orders), [data.orders]);
+  const locations = useMemo(() => locationOptions(data.locations), [data.locations]);
+
   async function handleSave() {
     if (!orderId) return;
     setBusy(true);
     try {
       const patch = buildPatch(form);
-      await DbApi.patch('orders', orderId, patch);
+      // OrdersApi.update → PATCH /api/orders/:id (service-layer
+      // endpoint). This does NOT include 'Consolidated' as a valid
+      // status (it's not in chk_orders_status_controlled), and the
+      // server records change-history field diffs (REQ-02).
+      await OrdersApi.update(orderId, patch);
       if (onSaved) await onSaved(orderId);
       onClose();
     } catch (e: any) {
-      Alert.alert('Save failed', e?.message || 'Could not save order');
+      const raw = String(e?.message || 'Could not save order');
+      const isNetwork = /Network request failed|Failed to fetch|TypeError: Network/i.test(raw);
+      Alert.alert(
+        isNetwork ? 'Cannot reach server' : 'Save failed',
+        isNetwork
+          ? 'The app could not reach the TMS API. Check your Wi-Fi, then verify the API base URL in Settings.'
+          : raw,
+      );
     } finally {
       setBusy(false);
     }
@@ -206,7 +227,14 @@ export default function OrderEditModal({
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <SectionLabel label="Order Identity" />
-            <Field label="Customer" value={form.customer} onChange={(v) => set('customer', v)} />
+            <SelectField
+              label="Customer"
+              value={form.customer}
+              onChange={(v) => set('customer', v)}
+              options={customers}
+              placeholder="Select or type a customer"
+              modalTitle="Select Customer"
+            />
 
             <Text style={styles.fieldLabel}>STATUS</Text>
             <View style={styles.chipRow}>
@@ -221,50 +249,38 @@ export default function OrderEditModal({
             </View>
 
             <SectionLabel label="Lane" />
-            <Field label="Origin City" value={form.originCity} onChange={(v) => set('originCity', v)} />
-            <View style={styles.row}>
-              <View style={styles.flex1}>
-                <Field
-                  label="State"
-                  value={form.originState}
-                  onChange={(v) => set('originState', v.toUpperCase())}
-                  placeholder="IL"
-                  maxLength={2}
-                />
-              </View>
-              <View style={styles.flex1}>
-                <Field
-                  label="ZIP"
-                  value={form.originZip}
-                  onChange={(v) => set('originZip', v)}
-                  placeholder="60601"
-                  maxLength={5}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-            <Field label="Dest City" value={form.destCity} onChange={(v) => set('destCity', v)} />
-            <View style={styles.row}>
-              <View style={styles.flex1}>
-                <Field
-                  label="State"
-                  value={form.destState}
-                  onChange={(v) => set('destState', v.toUpperCase())}
-                  placeholder="TX"
-                  maxLength={2}
-                />
-              </View>
-              <View style={styles.flex1}>
-                <Field
-                  label="ZIP"
-                  value={form.destZip}
-                  onChange={(v) => set('destZip', v)}
-                  placeholder="75201"
-                  maxLength={5}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
+            <SelectField
+              label="Origin"
+              value={form.origin}
+              onChange={(v) => set('origin', v)}
+              options={locations}
+              placeholder="City, ST ZIP"
+              modalTitle="Select Origin"
+            />
+            <Field
+              label="Origin ZIP"
+              value={form.originZip}
+              onChange={(v) => set('originZip', v.replace(/[^0-9]/g, ''))}
+              placeholder="60601"
+              maxLength={5}
+              keyboardType="numeric"
+            />
+            <SelectField
+              label="Destination"
+              value={form.destination}
+              onChange={(v) => set('destination', v)}
+              options={locations}
+              placeholder="City, ST ZIP"
+              modalTitle="Select Destination"
+            />
+            <Field
+              label="Destination ZIP"
+              value={form.destZip}
+              onChange={(v) => set('destZip', v.replace(/[^0-9]/g, ''))}
+              placeholder="75201"
+              maxLength={5}
+              keyboardType="numeric"
+            />
 
             <SectionLabel label="Freight" />
             <View style={styles.row}>
@@ -287,35 +303,38 @@ export default function OrderEditModal({
             </View>
             <Text style={styles.fieldLabel}>MODE</Text>
             <View style={styles.chipRow}>
-              {MODE_OPTIONS.map((m) => (
+              {SHIP_MODES.map((m) => (
                 <Chip
-                  key={m || 'auto'}
-                  label={m || 'Auto'}
+                  key={m || 'none'}
+                  label={m || 'None'}
                   active={form.shipMode === m}
                   onPress={() => set('shipMode', m)}
                 />
               ))}
             </View>
-            <Field label="Commodity" value={form.commodity} onChange={(v) => set('commodity', v)} />
+            <Field
+              label="Commodity"
+              value={form.commodity}
+              onChange={(v) => set('commodity', v)}
+            />
 
             <SectionLabel label="Dates" />
             <View style={styles.row}>
               <View style={styles.flex1}>
-                <Field
+                <DateField
                   label="Ready Date"
-                  value={form.ready}
-                  onChange={(v) => set('ready', v)}
-                  placeholder="YYYY-MM-DD"
-                  keyboardType="numeric"
+                  value={form.readyDate}
+                  onChange={(v) => set('readyDate', v)}
+                  modalTitle="Pick Ready Date"
                 />
               </View>
               <View style={styles.flex1}>
-                <Field
+                <DateField
                   label="Due Date"
-                  value={form.due}
-                  onChange={(v) => set('due', v)}
-                  placeholder="YYYY-MM-DD"
-                  keyboardType="numeric"
+                  value={form.dueDate}
+                  onChange={(v) => set('dueDate', v)}
+                  modalTitle="Pick Due Date"
+                  min={form.readyDate || undefined}
                 />
               </View>
             </View>

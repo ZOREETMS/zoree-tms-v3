@@ -1,4 +1,5 @@
 import { DbApi } from "../lib/api";
+import { invalidateQuoteCache } from "./ordersService";
 
 function hasKey(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj || {}, key);
@@ -109,11 +110,18 @@ function buildCarrierPayload(editCarrier) {
 
 export async function saveCarrierRecord(editCarrier) {
   const payload = buildCarrierPayload(editCarrier);
+  let result;
   if (editCarrier?.id) {
-    return patchWithColumnFallback("carriers", editCarrier.id, payload);
+    result = await patchWithColumnFallback("carriers", editCarrier.id, payload);
+  } else {
+    const row = { id: "CAR-" + Date.now(), ...payload };
+    result = await upsertWithColumnFallback("carriers", row);
   }
-  const row = { id: "CAR-" + Date.now(), ...payload };
-  return upsertWithColumnFallback("carriers", row);
+  // Carrier flags (czarlite_enabled, carrierconnect_enabled, scac, status)
+  // gate which carriers can produce LTL/TL quotes — drop the cached quote
+  // sets so the next plan run re-rates with the new carrier config.
+  invalidateQuoteCache();
+  return result;
 }
 
 // Hard delete. The carriers table has no inbound FKs, so removing a row
@@ -123,5 +131,7 @@ export async function saveCarrierRecord(editCarrier) {
 // removes the row outright per the user's instruction.
 export async function deleteCarrierRecord(carrierId) {
   if (!carrierId) throw new Error("carrierId is required");
-  return DbApi.remove("carriers", carrierId);
+  const result = await DbApi.remove("carriers", carrierId);
+  invalidateQuoteCache();
+  return result;
 }

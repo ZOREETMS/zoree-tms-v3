@@ -20,6 +20,7 @@
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.60.2",
     "@tanstack/react-query": "^5.99.0",
     "playwright": "^1.58.2",
     "puppeteer": "^24.40.0",

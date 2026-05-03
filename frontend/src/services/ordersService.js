@@ -680,10 +680,15 @@ export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate, 
     const fa = isFeasible(a) ? 0 : 1;
     const fb = isFeasible(b) ? 0 : 1;
     if (fa !== fb) return fa - fb; // feasible first
-    // Lane-preference winners (server flagged q.preferred=true) sort
-    // ahead of cheaper non-preferred quotes — matches the server-side
-    // comparator at api/server.js so the radio defaults to the preferred
-    // carrier instead of the cheapest one.
+    // Lane-preference matching tier: quotes that satisfy the lane pref
+    // (mode etc.) rank above quotes that don't. Non-matching quotes are
+    // not hidden — they show as fallback options below. Mirrors the
+    // server-side comparator at api/server.js.
+    const aMatch = a.matchesLanePref !== false;
+    const bMatch = b.matchesLanePref !== false;
+    if (aMatch && !bMatch) return -1;
+    if (!aMatch && bMatch) return 1;
+    // Preferred carriers boosted within each pref-match tier.
     if (a.preferred && !b.preferred) return -1;
     if (!a.preferred && b.preferred) return 1;
     return (a.totalCharge || 0) - (b.totalCharge || 0); // then cheapest

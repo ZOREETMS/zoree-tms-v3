@@ -47,7 +47,7 @@ INSERT INTO rates (
   dest,   dest_zip,   dest_country,
   rate, unit, fsc, discount, discount_flat,
   service_level, transit_days, miles,
-  czarlite, czarlite_class, czarlite_min_wt, czarlite_max_wt,
+  czarlite, czarlite_class,
   eff, exp
 )
 SELECT
@@ -56,7 +56,7 @@ SELECT
   'DALLAS, TX',   NULL, 'USA',
   '$0.00', 'per cwt', '22.0%', 58, NULL,
   'Standard', 4, 966,
-  TRUE, 70, 500, 9999,
+  TRUE, 70,
   '2026-01-01', '2026-12-31'
 WHERE NOT EXISTS (
   SELECT 1 FROM rates WHERE lane = 'AVRT-CHI-DAL-LTL-CZ-STD'
@@ -69,7 +69,7 @@ INSERT INTO rates (
   dest,   dest_zip,   dest_country,
   rate, unit, fsc, discount, discount_flat,
   service_level, transit_days, miles,
-  czarlite, czarlite_class, czarlite_min_wt, czarlite_max_wt,
+  czarlite, czarlite_class,
   eff, exp
 )
 SELECT
@@ -78,7 +78,7 @@ SELECT
   'DALLAS, TX 75201',  '75201', 'USA',
   '$2.20', 'per mile', '21.0%', NULL, NULL,
   'Standard', 2, 925,
-  FALSE, NULL, NULL, NULL,
+  FALSE, NULL,
   '2026-01-01', '2026-12-31'
 WHERE NOT EXISTS (
   SELECT 1 FROM rates WHERE lane = 'JBHT-60601-75201-TL-STD'

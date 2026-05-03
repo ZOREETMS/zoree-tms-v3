@@ -62,6 +62,14 @@ export default function FreightInvoicesPage() {
     setModalOpen(true);
   }
 
+  // Open the existing-invoice details modal when a row is clicked.
+  // The InvoiceModal already supports edit mode when invoice.num is set.
+  function openExistingInvoice(inv) {
+    if (!inv) return;
+    setEditInvoice(inv);
+    setModalOpen(true);
+  }
+
   async function handleSave(form) {
     setBusy(true);
     try {
@@ -233,6 +241,7 @@ export default function FreightInvoicesPage() {
           onApprove={handleApprove}
           onDispute={handleDispute}
           onSendToAp={handleSendToAp}
+          onOpenInvoice={openExistingInvoice}
         />
       </div>
 

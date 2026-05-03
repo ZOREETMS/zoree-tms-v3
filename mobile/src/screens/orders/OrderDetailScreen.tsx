@@ -11,7 +11,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
-import { DbApi, OrdersApi } from '../../lib/api';
+import { OrdersApi } from '../../lib/api';
 import { copyOrder } from '../../services/ordersService';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -36,7 +36,6 @@ export default function OrderDetailScreen() {
     [data.orders, orderId],
   );
 
-  // Fetch order lines on mount
   useEffect(() => {
     if (!orderId || orderId === 'new') return;
     setLinesLoading(true);
@@ -46,12 +45,6 @@ export default function OrderDetailScreen() {
       .finally(() => setLinesLoading(false));
   }, [orderId]);
 
-  /**
-   * Copy this order. Mirrors the web "Copy Order" action in
-   * OrderDetailModal — creates a new Unplanned order with the same
-   * customer / lane / line items, then navigates to the new order so
-   * the user can edit it before planning.
-   */
   const handleCopy = useCallback(() => {
     if (!order) return;
     Alert.alert(
@@ -66,8 +59,6 @@ export default function OrderDetailScreen() {
             try {
               const created = await copyOrder(order);
               await refreshData();
-              // Replace the current detail screen with the new order so
-              // the back button still returns to the orders list.
               navigation.replace('OrderDetail', { orderId: created.id });
             } catch (e: any) {
               Alert.alert('Copy failed', e?.message || 'Could not copy order');
@@ -80,6 +71,10 @@ export default function OrderDetailScreen() {
     );
   }, [order, navigation, refreshData]);
 
+  /**
+   * Status change. QA bug #58 + #61 fix: route through OrdersApi.update
+   * (PATCH /api/orders/:id) so the server-side cascade fires.
+   */
   const changeStatus = useCallback(
     async (newStatus: string) => {
       if (!order) return;
@@ -94,7 +89,7 @@ export default function OrderDetailScreen() {
             onPress: async () => {
               setUpdating(true);
               try {
-                await DbApi.patch('orders', id, { status: newStatus });
+                await OrdersApi.update(id, { status: newStatus });
                 await refreshData();
               } catch (e: any) {
                 Alert.alert('Error', e.message || 'Failed to update status');
@@ -130,7 +125,6 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -144,19 +138,12 @@ export default function OrderDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Order Info Card */}
         <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Order Information</Text>
 
           <InfoRow label="Customer" value={order.customer || order.customer_name || '--'} />
-          <InfoRow
-            label="Origin"
-            value={order.origin || order.origin_city || '--'}
-          />
-          <InfoRow
-            label="Destination"
-            value={order.destination || order.destination_city || '--'}
-          />
+          <InfoRow label="Origin" value={order.origin || order.origin_city || '--'} />
+          <InfoRow label="Destination" value={order.destination || order.destination_city || '--'} />
           <InfoRow label="Ready Date" value={readyDate} />
           <InfoRow label="Due Date" value={dueDate} />
           <InfoRow
@@ -201,12 +188,9 @@ export default function OrderDetailScreen() {
           {(order.preferredCarrier || order.preferred_carrier) ? (
             <InfoRow label="Preferred Carrier" value={order.preferredCarrier || order.preferred_carrier} />
           ) : null}
-          {order.notes ? (
-            <InfoRow label="Notes" value={order.notes} />
-          ) : null}
+          {order.notes ? <InfoRow label="Notes" value={order.notes} /> : null}
         </Card>
 
-        {/* Order Lines */}
         <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Order Lines</Text>
           {linesLoading ? (
@@ -237,16 +221,11 @@ export default function OrderDetailScreen() {
           )}
         </Card>
 
-        {/* Action Buttons */}
         <View style={styles.actions}>
           <ActionButton
             label="Edit"
             icon="create-outline"
             color={colors.accent}
-            // Edit opens OrderFormScreen pre-populated from this
-            // order. The previous handler navigated back to
-            // OrderDetail with `edit: true`, but OrderDetailScreen
-            // never read that flag — so the button silently no-op'd.
             onPress={() => navigation.navigate('OrderForm', { orderId: order.id })}
             disabled={updating}
           />
@@ -290,8 +269,6 @@ export default function OrderDetailScreen() {
   );
 }
 
-/* ---------- Reusable sub-components ---------- */
-
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoRow}>
@@ -331,30 +308,11 @@ function ActionButton({
   );
 }
 
-/* ---------- Styles ---------- */
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.bg,
-  },
-  notFound: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  backLink: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.accent,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
+  notFound: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: spacing.md },
+  backLink: { fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.accent },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -364,32 +322,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backBtn: {
-    marginRight: spacing.md,
-    padding: spacing.xs,
-  },
-  headerCenter: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing['5xl'],
-  },
-  infoCard: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
+  backBtn: { marginRight: spacing.md, padding: spacing.xs },
+  headerCenter: { flex: 1, marginRight: spacing.sm },
+  headerTitle: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text },
+  scrollContent: { padding: spacing.lg, paddingBottom: spacing['5xl'] },
+  infoCard: { marginBottom: spacing.lg },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: spacing.md },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -398,11 +336,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  infoLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.text2,
-  },
+  infoLabel: { fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.text2 },
   infoValue: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
@@ -411,13 +345,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginLeft: spacing.md,
   },
-  shipmentLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-    marginLeft: spacing.md,
-  },
+  shipmentLink: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, marginLeft: spacing.md },
   shipmentLinkText: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
@@ -425,9 +353,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     flexShrink: 1,
   },
-  linesLoader: {
-    marginVertical: spacing.lg,
-  },
+  linesLoader: { marginVertical: spacing.lg },
   emptyLines: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.regular,
@@ -435,41 +361,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: spacing.lg,
   },
-  lineItem: {
-    paddingVertical: spacing.md,
-  },
-  lineItemBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  lineItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  lineItemName: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.text,
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  lineItemQty: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.text2,
-  },
-  lineItemMeta: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.regular,
-    color: colors.text3,
-    marginTop: spacing.xs,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
+  lineItem: { paddingVertical: spacing.md },
+  lineItemBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  lineItemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  lineItemName: { fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.text, flex: 1, marginRight: spacing.sm },
+  lineItemQty: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text2 },
+  lineItemMeta: { fontSize: fontSize.sm, fontWeight: fontWeight.regular, color: colors.text3, marginTop: spacing.xs },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   actionBtn: {
     flex: 1,
     minWidth: '45%',
@@ -482,13 +380,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     backgroundColor: colors.bg2,
   },
-  actionBtnDisabled: {
-    opacity: 0.5,
-  },
-  actionBtnLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-  },
+  actionBtnDisabled: { opacity: 0.5 },
+  actionBtnLabel: { fontSize: fontSize.md, fontWeight: fontWeight.semibold },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255,255,255,0.6)',

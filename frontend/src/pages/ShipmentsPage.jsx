@@ -13,7 +13,7 @@ import { getHereApiKey, hereRasterTileUrl, resolveHereApiKey } from "../config/h
 import "leaflet/dist/leaflet.css";
 import TenderResultModal from "../components/shipments/TenderResultModal";
 import NewShipmentModal from "../components/shipments/NewShipmentModal";
-import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations, recordShipmentEvent, deriveShipmentEquipment } from "../services/shipmentService";
+import { createShipment, copyShipment, deleteShipmentById, updateShipmentLocations, recordShipmentEvent, deriveShipmentEquipment, changeShipmentCarrier } from "../services/shipmentService";
 import LocationFieldsEditor from "../components/LocationFieldsEditor";
 import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
@@ -278,18 +278,42 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     const chosen = carrierQuotes[selectedCarrierIdx];
     if (!chosen) return;
     try {
-      await DbApi.patch("shipments", ds.id, {
-        carrier: chosen.carrier,
-        mode: chosen.mode || ds.mode,
-        total_cost: chosen.totalCharge || 0,
-        rate: chosen.czarBaseGross || chosen.czarBase || 0,
-        fuel_surcharge: chosen.fscCharge || 0,
-        miles: chosen.miles || ds.miles,
-        service_level: chosen.serviceLevel || ds.service_level,
-      });
+      // Service layer owns the API call (CLAUDE_RULES #3 / #4). The
+      // dedicated /change-carrier endpoint writes change_history rows
+      // and broadcasts SHIPMENT_UPDATED — neither of which the previous
+      // generic /db/shipments PATCH did. The response carries the new
+      // shipment row so we can update the modal in place rather than
+      // closing it and racing a background refresh.
+      const { shipment: nextShip, patch } = await changeShipmentCarrier(ds.id, chosen, ds);
       setShowChangeCarrier(false);
-      onClose();
-      if (onChangeCarrier) onChangeCarrier();
+
+      const merged = { ...ds, ...(nextShip || {}), ...(patch || {}) };
+      // Keep the resolved display name (`_carrier`) and the raw column
+      // (`carrier`) in lock-step so every read site in the modal — the
+      // header chip, the Carrier InfoBox, the badge — flips immediately.
+      merged._carrier = (nextShip && nextShip.carrier) || chosen.carrier;
+      merged.carrier  = (nextShip && nextShip.carrier) || chosen.carrier;
+
+      if (typeof onShipmentPatched === "function") {
+        // Updates the parent's detailShipment state in place AND triggers
+        // a background refreshData() — the modal stays open and the user
+        // sees the new carrier without a reopen-and-pray cycle.
+        onShipmentPatched(merged);
+      } else if (typeof onChangeCarrier === "function") {
+        // Fallback for any older wiring that still expects the
+        // close-and-refresh dance.
+        onClose();
+        onChangeCarrier();
+      }
+      // The audited /change-carrier endpoint just wrote one
+      // change_history row per actually-changed field (carrier, mode,
+      // total_cost, …). The History tab here is loaded by reloadHistory,
+      // which is keyed on [ds.id] and therefore does NOT re-run when
+      // onShipmentPatched merges the new shipment row in place. Without
+      // this explicit refetch the user sees the stale "1 EVENT" snapshot
+      // from when the modal opened — which is exactly what made it look
+      // like Change Carrier wasn't being captured at all.
+      reloadHistory();
     } catch (err) {
       alert("Failed: " + err.message);
     }
@@ -642,9 +666,13 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             )}
             {historyRows.map((row, i) => {
               // historyService.shapeHistoryRows already produced: { type, action,
-              // user, userRole, ts, tsRaw, changes: [{field, before, after}],
+              // user, userRole, ts, tsRaw, changes: [{ label, old, new }],
               // metadata }. Edits are bucketed so multiple field changes in
-              // the same request become a single entry.
+              // the same request become a single entry. Note: the change
+              // objects use { label, old, new } — NOT { field, before, after }.
+              // An earlier version of this renderer read the wrong keys and
+              // silently dropped every EDIT summary, so a Change Carrier
+              // landed in the DB but the row rendered as a bare "EDIT".
               const action = (row.action || row.type || "").toLowerCase();
               const icon =
                 action === "tender" ? "📤"
@@ -665,7 +693,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                 : "#475569";
               const changes = Array.isArray(row.changes) ? row.changes : [];
               const changeSummary = changes
-                .map((c) => c.field ? `${c.field}: ${c.before ?? "—"} → ${c.after ?? "—"}` : null)
+                .map((c) => {
+                  if (!c) return null;
+                  const label = c.label || c.field; // historyService emits `label`; tolerate `field` for any future caller
+                  if (!label) return null;
+                  const oldVal = c.old ?? c.before;
+                  const newVal = c.new ?? c.after;
+                  return `${label}: ${oldVal ?? "—"} → ${newVal ?? "—"}`;
+                })
                 .filter(Boolean)
                 .join(" · ");
               const meta = row.metadata && typeof row.metadata === "object"
@@ -817,7 +852,12 @@ export default function ShipmentsPage() {
     const linkedOrders = (orders || []).filter(
       (o) => String(o.shipment_id || "") === String(fresh.id || "")
     );
-    const nextCarrier = fresh.carrier || detailShipment._carrier || "";
+    // Use the same resolver the row map uses, so the modal's display
+    // name and the list's display name can never diverge. Crucially this
+    // never falls back to the OLD detailShipment._carrier — that fallback
+    // was the bug that pinned the previous carrier in the modal after a
+    // change-carrier write.
+    const nextCarrier = resolveCarrierName(fresh);
     // Only patch when something actually moved, otherwise React bails
     // the diff and we avoid re-rendering the heavy modal body.
     const statusChanged      = fresh.status        !== detailShipment.status;

@@ -175,3 +175,99 @@ export async function recordShipmentEvent(shipmentId, event) {
     date: event.date || new Date().toISOString().slice(0, 10),
   });
 }
+
+/**
+ * Compute a shipment delivery date from a pickup date and a transit-days
+ * count. Used when a rate quote provides transitDays but no explicit
+ * deliveryDate (TL quotes do not populate deliveryDate — only LTL does).
+ *
+ * Returns an ISO yyyy-mm-dd string, or null if the inputs are unusable.
+ * Exported so the carrier-change flow and any future re-quote flow share
+ * the same arithmetic instead of each hand-rolling a date math snippet.
+ */
+export function computeDeliveryDate(pickupDate, transitDays) {
+  if (!pickupDate) return null;
+  const days = Number(transitDays);
+  if (!Number.isFinite(days) || days <= 0) return null;
+  const d = new Date(pickupDate);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() + Math.round(days));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Change the carrier (and the rate fields that move with it) on an
+ * existing shipment. Single source of truth for the shape mapping
+ * between a rate-engine quote and the shipment columns the API expects.
+ *
+ * Rationale:
+ *   - The previous flow PATCHed shipments directly from the
+ *     ShipmentDetailModal component, which violated CLAUDE_RULES #3 / #4
+ *     (no API calls from components, services own logic).
+ *   - The raw PATCH bypassed shipService.updateShipment so no
+ *     change_history rows were written for the carrier change and no
+ *     SHIPMENT_UPDATED broadcast went out — which is what produced the
+ *     stale-carrier display bug after a change.
+ *   - Beyond the carrier itself, switching to another carrier almost
+ *     always lands on a different rate row. Equipment, rate_id, and the
+ *     transit window all belong to that new rate. We forward them in
+ *     the same patch so the Shipment Details modal does not keep
+ *     deriving "Equipment (from rate)", "Rate ID", and "Transit Days"
+ *     from the previous rate.
+ *
+ * @param {string} shipmentId
+ * @param {Object} quote      Rate-engine quote (carrier, mode, totalCharge,
+ *                            rateId, equipment, transitDays, deliveryDate, …)
+ * @param {Object} [current]  Current shipment row, used as the fallback
+ *                            for fields the quote does not provide and
+ *                            as the pickup date for transit-day math.
+ * @returns {Promise<{shipment:Object, before:Object, patch:Object}>}
+ */
+export async function changeShipmentCarrier(shipmentId, quote, current = {}) {
+  if (!shipmentId) throw new Error("changeShipmentCarrier: shipmentId is required");
+  if (!quote || !quote.carrier) throw new Error("changeShipmentCarrier: quote.carrier is required");
+
+  const payload = {
+    carrier:        quote.carrier,
+    mode:           quote.mode           || current.mode           || null,
+    total_cost:     quote.totalCharge    != null ? quote.totalCharge : (current.total_cost || 0),
+    rate:           quote.czarBaseGross  != null ? quote.czarBaseGross
+                  : quote.czarBase       != null ? quote.czarBase
+                  : (current.rate || 0),
+    fuel_surcharge: quote.fscCharge      != null ? quote.fscCharge : (current.fuel_surcharge || 0),
+    miles:          quote.miles          != null ? quote.miles : current.miles,
+    service_level:  quote.serviceLevel   || current.service_level  || null,
+  };
+  // rate_id — switching carriers points at a different rates row. The
+  // backend allow-list accepts null, but the rate engine should always
+  // provide one; only forward when present so we never null-out a real
+  // pointer because of an upstream omission.
+  if (quote.rateId) payload.rate_id = quote.rateId;
+
+  // Equipment is snapshotted onto the shipment row (migration 025). When
+  // the quote brings equipment along, snapshot the new value so the
+  // modal's deriveShipmentEquipment() returns "Equipment" (from
+  // shipment) with the right trailer instead of "Equipment (from rate)"
+  // pointing at the old rate. Empty / missing equipment passes through
+  // as null so we never strand the column on a stale value from the
+  // previous carrier.
+  if (quote.equipment !== undefined) {
+    const eq = typeof quote.equipment === "string" ? quote.equipment.trim() : quote.equipment;
+    payload.equipment = eq || null;
+  }
+
+  // Delivery date — prefer the quote's explicit deliveryDate (LTL path
+  // populates it), otherwise compute from pickup + transitDays (TL path
+  // leaves deliveryDate empty). This keeps the Transit Days InfoBox in
+  // the modal honest after a carrier change.
+  const pickup = current.pickup_date || null;
+  const explicit = (quote.deliveryDate || "").trim();
+  if (explicit) {
+    payload.delivery_date = explicit;
+  } else {
+    const computed = computeDeliveryDate(pickup, quote.transitDays);
+    if (computed) payload.delivery_date = computed;
+  }
+
+  return ShipmentsApi.changeCarrier(shipmentId, payload);
+}

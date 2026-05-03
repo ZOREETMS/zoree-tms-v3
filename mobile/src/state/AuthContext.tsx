@@ -5,8 +5,9 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { AuthApi } from '../lib/api';
+import { AuthApi, configureAuthHooks } from '../lib/api';
 import { storage } from '../lib/storage';
+import { API_BASE } from '../config/env';
 
 interface User {
   id?: string;
@@ -22,9 +23,85 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ token: string; user: User }>;
   logout: () => void;
+  /**
+   * Force-refresh the access token using the stored refresh_token.
+   * Returns the new bearer token, or null if refresh failed (caller
+   * should re-prompt login). Mobile-bug 59.
+   */
+  refreshAccessToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * Mobile-bug 59 fix lives entirely client-side: hit the same Supabase
+ * endpoint /auth/v1/token?grant_type=refresh_token that server.js
+ * /api/auth/login uses, swap the access_token + refresh_token, retry
+ * the original request.
+ */
+const SUPABASE_URL = 'https://ljbeihotrmyqthxptcgp.supabase.co';
+const SUPABASE_ANON_KEY = '';
+
+/**
+ * Refresh the Supabase access_token using the stored refresh_token.
+ * Returns the new access_token (and side-effects: writes new tokens
+ * to storage). Pure function-shaped so configureAuthHooks can call it
+ * directly without any React context.
+ */
+async function performTokenRefresh(): Promise<string | null> {
+  const refreshToken = storage.getItem('zoree_refresh_token');
+  if (!refreshToken) return null;
+  try {
+    // Try the server-side proxy first. Older API builds don't have it
+    // and will 404 - fall through to the direct Supabase call.
+    const proxyBase = (typeof API_BASE === 'string' ? API_BASE : '').replace(/\/+$/, '');
+    if (proxyBase) {
+      const r = await fetch(`${proxyBase}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(() => ({}));
+        if (data?.access_token) {
+          await storage.setItem('zoree_token', data.access_token);
+          if (data.refresh_token) {
+            await storage.setItem('zoree_refresh_token', data.refresh_token);
+          }
+          return data.access_token;
+        }
+      }
+    }
+  } catch {
+    // proxy unreachable - try Supabase direct as a last resort.
+  }
+
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      },
+    );
+    if (!r.ok) return null;
+    const data = await r.json().catch(() => ({}));
+    if (data?.access_token) {
+      await storage.setItem('zoree_token', data.access_token);
+      if (data.refresh_token) {
+        await storage.setItem('zoree_refresh_token', data.refresh_token);
+      }
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -34,6 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function boot() {
       try {
         await storage.init();
+        // Mobile-bug 59: register the 401 -> refresh hook BEFORE any
+        // API call so a stale token at boot (e.g. user opened the app
+        // after an hour) recovers transparently.
+        configureAuthHooks({ onUnauthorized: performTokenRefresh });
+
         const t = storage.getItem('zoree_token');
         if (!t) {
           setBooting(false);
@@ -53,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch {
         await storage.removeItem('zoree_token');
+        await storage.removeItem('zoree_refresh_token');
         await storage.removeItem('zoree_user');
         setUser(null);
       } finally {
@@ -70,15 +153,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async login(email: string, password: string) {
         const data = await AuthApi.login(email, password);
         await storage.setItem('zoree_token', data.token);
+        if (data.refresh_token) {
+          await storage.setItem('zoree_refresh_token', data.refresh_token);
+        }
         await storage.setItem('zoree_user', JSON.stringify(data.user || null));
         setUser(data.user || null);
         return data;
       },
       async logout() {
         await storage.removeItem('zoree_token');
+        await storage.removeItem('zoree_refresh_token');
         await storage.removeItem('zoree_user');
         setUser(null);
       },
+      refreshAccessToken: performTokenRefresh,
     }),
     [user, booting],
   );

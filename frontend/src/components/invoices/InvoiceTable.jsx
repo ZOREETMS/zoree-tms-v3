@@ -54,7 +54,25 @@ function SortHeader({ label, col, sortCol, sortAsc, onSort }) {
 export default function InvoiceTable({
   invoices, sortCol, sortAsc, onSort,
   onApprove, onDispute, onSendToAp,
+  onOpenInvoice,
 }) {
+  // Action-column buttons live inside a row that is itself clickable
+  // (to open the invoice detail modal). Stop propagation so an action
+  // click doesn't also trigger the row's open handler.
+  function actionClick(handler, ...args) {
+    return (e) => {
+      e.stopPropagation();
+      handler?.(...args);
+    };
+  }
+
+  function rowKeyDown(e, inv) {
+    if (!onOpenInvoice) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpenInvoice(inv);
+    }
+  }
   const columns = [
     { label: "Invoice #", col: "num" },
     { label: "Carrier", col: "carrier" },
@@ -95,7 +113,15 @@ export default function InvoiceTable({
               </tr>
             )}
             {invoices.map((inv) => (
-              <tr key={inv.num}>
+              <tr
+                key={inv.num}
+                onClick={onOpenInvoice ? () => onOpenInvoice(inv) : undefined}
+                onKeyDown={(e) => rowKeyDown(e, inv)}
+                tabIndex={onOpenInvoice ? 0 : undefined}
+                role={onOpenInvoice ? "button" : undefined}
+                aria-label={onOpenInvoice ? `Open invoice ${inv.num}` : undefined}
+                style={onOpenInvoice ? { cursor: "pointer" } : undefined}
+              >
                 <td>
                   <span className="mono" style={{ color: "var(--accent)" }}>
                     {inv.num}
@@ -131,20 +157,22 @@ export default function InvoiceTable({
                     </div>
                   )}
                 </td>
-                <td style={{ whiteSpace: "nowrap" }}>
-                  {/* REQ-06: manual override is always available to admin/finance */}
+                <td style={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                  {/* REQ-06: manual override is always available to admin/finance.
+                      stopPropagation on the cell keeps action clicks from also
+                      opening the row's detail modal. */}
                   {inv.status !== "Approved" && (
-                    <button className="btn btn-success btn-sm" onClick={() => onApprove(inv.num)} style={{ marginRight: 4 }}>
+                    <button className="btn btn-success btn-sm" onClick={actionClick(onApprove, inv.num)} style={{ marginRight: 4 }}>
                       Approve
                     </button>
                   )}
                   {inv.status !== "Rejected" && inv.status !== "Disputed" && (
-                    <button className="btn btn-danger btn-sm" onClick={() => onDispute(inv.num)} style={{ marginRight: 4 }}>
+                    <button className="btn btn-danger btn-sm" onClick={actionClick(onDispute, inv.num)} style={{ marginRight: 4 }}>
                       Reject
                     </button>
                   )}
                   {inv.status === "Approved" && !inv.sentToApAt && onSendToAp && (
-                    <button className="btn btn-primary btn-sm" onClick={() => onSendToAp(inv.num)} style={{ background: "#059669", borderColor: "#059669" }}>
+                    <button className="btn btn-primary btn-sm" onClick={actionClick(onSendToAp, inv.num)} style={{ background: "#059669", borderColor: "#059669" }}>
                       Send to AP
                     </button>
                   )}
