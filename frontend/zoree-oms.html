@@ -1286,197 +1286,12 @@ var ZoreeMiddleware = {
   },
 
   async _execDirect(cmd, payload) {
+    // Direct OMS↔TMS execution is permanently disabled. The switch that
+    // lived here was unreachable dead code — _dispatch() must be used
+    // instead, which routes via mw_requests → server-side mwQueueWorker
+    // → handlePushShip / handlePushPod / handlePushOrder for an
+    // audited, single-writer flow (CLAUDE_RULES §1 / §4).
     throw new Error('Direct OMS↔TMS execution is disabled. Route through middleware queue via _dispatch().');
-    switch(cmd) {
-      case 'PUSH_ORDER_TO_TMS': {
-        // REQ-01: route through the TMS ingest endpoint so the server
-        // stamps sync_source='oms', auto_synced_at, writes
-        // change_history, and broadcasts the SSE event that drives the
-        // TMS Orders page auto-refresh. The previous silent direct-DB
-        // upsert fallback skipped the services layer (rule violation)
-        // and left the TMS UI stale. We now FAIL LOUDLY so the operator
-        // sees the ingest outage instead of silently diverging.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
-        var ingestKey = localStorage.getItem('zoree_tms_ingest_key') || '';
-        var resp;
-        try {
-          resp = await fetch(tmsApi + '/ingest/oms-orders', {
-            method: 'POST',
-            headers: Object.assign(
-              { 'Content-Type': 'application/json' },
-              ingestKey ? { 'X-API-Key': ingestKey } : {}
-            ),
-            body: JSON.stringify({ orders: [payload] }),
-          });
-        } catch (networkErr) {
-          throw new Error(
-            'TMS ingest unreachable at ' + tmsApi + ' — order NOT pushed. ' +
-            'Check the TMS API is running and zoree_tms_api_base is set correctly. ' +
-            'Original error: ' + networkErr.message
-          );
-        }
-        var body = await resp.json().catch(function(){ return {}; });
-        if (!resp.ok) {
-          throw new Error(
-            'TMS ingest returned ' + resp.status + ' — order NOT pushed. ' +
-            (body.error || '')
-          );
-        }
-        return { tmsOrderId: payload.id, ingestResponse: body, via: 'tms-ingest' };
-      }
-      case 'PULL_TMS_PLANNING': {
-        var ids = payload.omsOrderIds || [];
-        if (!ids.length) return { mapped: [], ships: [] };
-        var [or, sr] = await Promise.all([
-          this._tmsDb().from('orders').select('id,shipment_id,status').in('id', ids),
-          this._tmsDb().from('shipments').select('id,carrier,pickup_date,delivery_date,pickup,delivery,status,mode,trailer,pro_number,bol_number').order('created_at',{ascending:false}).limit(500),
-        ]);
-        if (or.error) throw or.error;
-        var ships = sr.data || [];
-        var mapped = (or.data||[]).map(t => {
-          var s = t.shipment_id ? ships.find(x=>x.id===t.shipment_id) : null;
-          return { omsOrderId:t.id, tmsShipmentId:t.shipment_id||null, carrier:s?.carrier||null,
-            pickupDate:s?.pickup_date||s?.pickup||null, deliveryDate:s?.delivery_date||s?.delivery||null,
-            proNumber:s?.pro_number||null, bolNumber:s?.bol_number||null,
-            tmsStatus:t.status||null, shipStatus:s?.status||null };
-        });
-        return { mapped, ships };
-      }
-      case 'PUSH_SHIP_STATUS': {
-        // REQ-23: the warehouse ship-confirm MUST flow through the TMS
-        // ingest endpoint so the service layer can atomically transition
-        // shipment → In Transit AND every linked order → Shipped, record
-        // change_history on both sides, and broadcast SSE for the live
-        // TMS pages.
-        //
-        // We removed the previous silent "direct-DB fallback" because it
-        // wrote only the shipments row — leaving linked orders stuck in
-        // 'Tender Accepted' (ORD-841629, ORD-897755). That split write
-        // violates the no-duplicate-source-of-truth and
-        // no-skipping-services-layer rules. If the ingest endpoint is
-        // unreachable we now FAIL LOUDLY so the warehouse operator (and
-        // ops) see the problem instead of silently desyncing data.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
-        var ingestKey = localStorage.getItem('zoree_tms_ingest_key') || '';
-        var body = {
-          shipmentId: payload.tmsShipmentId,
-          orderIds: payload.orderIds || null,
-          shippedAt: payload.shippedAt,
-          sealNumber: payload.sealNumber || null,
-          source: 'oms-wms',
-        };
-        var resp;
-        try {
-          resp = await fetch(tmsApi + '/ingest/oms-ship-confirm', {
-            method: 'POST',
-            headers: Object.assign(
-              { 'Content-Type': 'application/json' },
-              ingestKey ? { 'X-API-Key': ingestKey } : {}
-            ),
-            body: JSON.stringify(body),
-          });
-        } catch (networkErr) {
-          throw new Error(
-            'TMS ingest unreachable at ' + tmsApi + ' — ship-confirm NOT applied. ' +
-            'Check the TMS API is running and zoree_tms_api_base is set correctly. ' +
-            'Original error: ' + networkErr.message
-          );
-        }
-        var respBody = await resp.json().catch(function(){ return {}; });
-        if (!resp.ok) {
-          throw new Error(
-            'TMS ingest returned ' + resp.status + ' — ship-confirm NOT applied. ' +
-            (respBody.error || '')
-          );
-        }
-        return { via: 'tms-ingest', result: respBody };
-      }
-      case 'PUSH_POD_STATUS': {
-        // Proof-of-Delivery MUST flow through the TMS ingest endpoint so
-        // the service layer atomically transitions shipment → Delivered
-        // AND every linked order → Delivered, stamps delivery_date,
-        // records change_history on both sides, and broadcasts SSE for
-        // the live TMS pages. A previous direct-DB write here left
-        // linked orders stranded — the same class of bug we hit on
-        // ship-confirm. If ingest is unreachable we FAIL LOUDLY.
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
-        var ingestKey = localStorage.getItem('zoree_tms_ingest_key') || '';
-        var podBody = {
-          shipmentId: payload.tmsShipmentId,
-          deliveredAt: payload.deliveredAt,
-          source: 'oms-wms',
-        };
-        var podResp;
-        try {
-          podResp = await fetch(tmsApi + '/ingest/oms-pod', {
-            method: 'POST',
-            headers: Object.assign(
-              { 'Content-Type': 'application/json' },
-              ingestKey ? { 'X-API-Key': ingestKey } : {}
-            ),
-            body: JSON.stringify(podBody),
-          });
-        } catch (networkErr) {
-          throw new Error(
-            'TMS ingest unreachable at ' + tmsApi + ' — POD NOT applied. ' +
-            'Check the TMS API is running and zoree_tms_api_base is set correctly. ' +
-            'Original error: ' + networkErr.message
-          );
-        }
-        var podRespBody = await podResp.json().catch(function(){ return {}; });
-        if (!podResp.ok) {
-          throw new Error(
-            'TMS ingest returned ' + podResp.status + ' — POD NOT applied. ' +
-            (podRespBody.error || '')
-          );
-        }
-        return { via: 'tms-ingest', result: podRespBody };
-      }
-      case 'PULL_TMS_ITEMS': {
-        var { data, error } = await this._tmsDb().from('items').select('*').limit(1000);
-        if (error) throw error;
-        var items = (data||[]).map(t => ({id:t.id, desc:t.description||t.name||t.id,
-          wt:parseFloat(t.weight_unit)||parseFloat(t.weight)||0,
-          val:parseFloat(t.value_unit)||parseFloat(t.value)||0,
-          fc:t.freight_class||null, nmfc:t.nmfc||null, hazmat:t.hazmat||false}));
-        return { items };
-      }
-      // REQ-21: fetch a single TMS shipment's full tender-accept details
-      // (BOL / PRO / Seal / dock fields / service level / dates) so the
-      // OMS order's "TMS Plan" tab can show them. Routed through the
-      // TMS HTTP API only — the direct-Supabase fallback was removed
-      // because it duplicated the read path (services-layer bypass) and
-      // masked API outages instead of surfacing them.
-      case 'PULL_TMS_SHIPMENT_DETAILS': {
-        var sid = payload && payload.shipmentId;
-        if (!sid) return { shipment: null };
-        var tmsApi = (localStorage.getItem('zoree_tms_api_base') || 'http://localhost:3010/api').replace(/\/$/, '');
-        var resp;
-        try {
-          resp = await fetch(tmsApi + '/shipments/' + encodeURIComponent(sid), {
-            method: 'GET', headers: { 'Content-Type': 'application/json' },
-          });
-        } catch (networkErr) {
-          throw new Error(
-            'TMS API unreachable at ' + tmsApi + ' — cannot pull shipment ' + sid + '. ' +
-            'Original error: ' + networkErr.message
-          );
-        }
-        if (resp.status === 404) return { shipment: null, via: 'tms-api' };
-        var body = await resp.json().catch(function(){ return {}; });
-        if (!resp.ok) {
-          throw new Error(
-            'TMS API returned ' + resp.status + ' for shipment ' + sid + '. ' +
-            (body.error || '')
-          );
-        }
-        var found = body && body.id ? body
-          : (Array.isArray(body) ? body.find(function(s){ return s.id === sid; }) : null)
-          || (body && (body.shipment || null));
-        return { shipment: found || null, via: 'tms-api' };
-      }
-      default: throw new Error('Unknown cmd: ' + cmd);
-    }
   },
 
   // ─── Internal: Middleware-only dispatch ──────────────────────────────────
@@ -1842,13 +1657,23 @@ async function saveOrder(o){
     tendered_at:o.tenderedAt||null, picked_at:o.pickedAt||null,
     carton_count:o.cartons||null, pallet_count:o.pallets||null, packed_weight:o.packWt||null,
     label_type:o.labelType||null, packing_slip:o.packingSlip||null, packed_at:o.packedAt||null,
-    dock_door:o.dockDoor||null, stage_lane:o.stageLane||null, carrier_eta:o.dockETA||null, staged_at:o.stagedAt||null,
     ship_date:o.shipDate||null, ship_time:o.shipTime||null, seal_number:o.sealNum||null,
     driver_signature:o.driverSign||null, pieces_loaded:o.piecesLoaded||null, shipped_at:o.shippedAt||null,
     delivered_at:o.deliveredAt||null, pod_received_by:o.podRecv||null,
     pod_condition:o.podCond||null, pod_notes:o.podNotes||null,
     reserved_at:o.reservedAt||null,
   };
+  // TMS-owned staging fields — only include in the upsert when the OMS
+  // actually has a value in memory. Writing `null` here would clobber a
+  // DB value that the TMS legitimately set (e.g. dock_door assigned via
+  // bulk-plan, tender accept, or DockSchedulingPage). Omitting the key
+  // from the payload leaves the column untouched in the UPDATE clause.
+  // (loading_start / loading_end already follow this pattern by virtue
+  // of not being in this payload at all.)
+  if (o.dockDoor)  row.dock_door  = o.dockDoor;
+  if (o.stageLane) row.stage_lane = o.stageLane;
+  if (o.dockETA)   row.carrier_eta = o.dockETA;
+  if (o.stagedAt)  row.staged_at  = o.stagedAt;
   var{error}=await db().from('oms_orders').upsert(row,{onConflict:'id'});
   if(error)throw error;
 }
@@ -3697,17 +3522,4 @@ function closeOrderDetail() {
 
       close();
       if (openOnCreate) openOnCreate(mapped);
-      if (typeof toast === 'function') toast('✓ Location created — synced to TMS', 'tok');
-    } catch (ex) {
-      err.textContent = (ex && ex.message) || 'Failed to save location';
-      err.style.display = 'block';
-    } finally {
-      btn.disabled = false; btn.textContent = 'Save Location';
-    }
-  });
-})();
-
-</script>
-<!-- ORDER DETAIL DRAWER -->
-<div id="ord-detail-drawer" style="position:fixed;top:0;right:-440px;width:420px;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:3000;transition:right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column">
-  <div style=
+      if (typeof toast === 'function') toast('✓ Location created

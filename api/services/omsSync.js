@@ -260,9 +260,14 @@ async function syncDeliveredToOms(payload, user) {
 
 // Mirror dock-assignment changes from the TMS shipment back into every
 // linked oms_orders row. Called whenever shipments.dock_door (and the
-// associated dock_time / loading_start / loading_end) is written
-// outside the tender-accept flow — bulk-plan execute, multi-stop route
-// planning, dock-scheduling drag-and-drop, etc.
+// associated loading_start / loading_end) is written outside the
+// tender-accept flow — bulk-plan execute, multi-stop route planning,
+// dock-scheduling drag-and-drop, etc.
+//
+// NB: shipments has a `dock_time` text column ("06:00–08:00" window)
+// but oms_orders does NOT — the OMS modals derive their window from
+// loading_start / loading_end. Caller may pass dockTime; we accept it
+// silently for forward-compat but never write it to oms_orders.
 //
 // Why a dedicated helper:
 //   - syncTenderAcceptToOms only fires on tender-accept; if the dock is
@@ -298,7 +303,8 @@ async function syncDockToOms(payload, user) {
     obj[key] = val;
   };
   setIf(dockPatch, 'dock_door',     payload.dockDoor);
-  setIf(dockPatch, 'dock_time',     payload.dockTime);
+  // dock_time is intentionally NOT written — column doesn't exist on
+  // oms_orders. The window is rendered from loading_start/loading_end.
   setIf(dockPatch, 'loading_start', payload.loadingStart);
   setIf(dockPatch, 'loading_end',   payload.loadingEnd);
 
@@ -334,7 +340,7 @@ async function syncDockToOms(payload, user) {
     try {
       const priorRows = await db.dbSelect('oms_orders', {
         filters: [['id', 'eq', oid]], limit: 1,
-        select: 'id,stage,dock_door,dock_time,loading_start,loading_end',
+        select: 'id,stage,dock_door,loading_start,loading_end',
       });
       const prior = Array.isArray(priorRows) && priorRows.length ? priorRows[0] : null;
       if (!prior) {

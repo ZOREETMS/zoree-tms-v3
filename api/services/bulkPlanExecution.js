@@ -174,8 +174,10 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
   // Ship modal (`_omsBaseHdr` → `o.dockDoor`) shows the dock instead of
   // "—". syncTenderAcceptToOms only fires on tender-accept; without
   // this hop, a dock assigned at bulk-plan time never reaches OMS.
+  // Gate on the columns oms_orders actually has: dock_door,
+  // loading_start, loading_end. dock_time has no OMS counterpart.
   // Best-effort: never roll back the shipment if the mirror fails.
-  if (orderIds.length && (plan.dockDoor || plan.dockTime || plan.loadingStart || plan.loadingEnd)) {
+  if (orderIds.length && (plan.dockDoor || plan.loadingStart || plan.loadingEnd)) {
     try {
       const sync = omsSync().syncDockToOms;
       if (typeof sync === 'function') {
@@ -183,7 +185,6 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
           shipmentId:   shipId,
           orderIds,
           dockDoor:     plan.dockDoor     || null,
-          dockTime:     plan.dockTime     || null,
           loadingStart: plan.loadingStart || null,
           loadingEnd:   plan.loadingEnd   || null,
         }, { email: 'bulk-plan-execute' });

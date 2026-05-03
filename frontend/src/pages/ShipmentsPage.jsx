@@ -840,11 +840,55 @@ export default function ShipmentsPage() {
   const [message, setMessage] = useState({ text: "", type: "" });
   const [detailShipment, setDetailShipment] = useState(null);
 
+  // Direct WS subscription for the open modal — belt-and-suspenders
+  // alongside the outlet-context sync below. The standard chain is:
+  // backend bus.emit(SHIPMENT_UPDATED) → server.js wsBroadcast → App.jsx
+  // onMessage → refreshData → setData → outlet context → the useEffect
+  // below picks up the new status and re-derives detailShipment. That's
+  // five hops; any one of them being slow or stalled (WS reconnect
+  // window, Supabase replica lag, render batching) leaves the open
+  // modal showing stale rungs (e.g. "Tender Accepted" filled while the
+  // OMS ship-confirm already moved status to "In Transit"). Subscribing
+  // directly here folds the WS payload's own status fields into
+  // detailShipment immediately, so the rungs flip the moment the
+  // message arrives — no API roundtrip required.
+  useEffect(() => {
+    if (!detailShipment?.id) return;
+    let unsub = () => {};
+    let cancelled = false;
+    import("../lib/wsClient.js").then(({ connect, onMessage }) => {
+      if (cancelled) return;
+      connect(); // idempotent — App.jsx already connected at mount
+      unsub = onMessage((msg) => {
+        if (!msg || msg.event !== "shipment.updated") return;
+        const payload = msg.data || {};
+        if (!payload.id || payload.id !== detailShipment.id) return;
+        // Merge the WS-supplied fields into the live snapshot so the
+        // status badge, the rungs (isPickedUp / isInTransit), and the
+        // dates flip without waiting for the parent's refreshData →
+        // outlet-context cascade. The reloadHistory effect re-fires on
+        // every detailShipment change because it's keyed on [ds.id]
+        // through useCallback, so the History tab catches up too.
+        setDetailShipment((prev) => {
+          if (!prev || prev.id !== payload.id) return prev;
+          return { ...prev,
+            status:        payload.status        ?? prev.status,
+            shipped_at:    payload.shipped_at    ?? prev.shipped_at,
+            delivered_at:  payload.delivered_at  ?? prev.delivered_at,
+            pickup_date:   payload.pickup_date   ?? prev.pickup_date,
+            delivery_date: payload.delivery_date ?? prev.delivery_date,
+          };
+        });
+      });
+    });
+    return () => { cancelled = true; unsub(); };
+  }, [detailShipment?.id]);
+
   // Re-hydrate the open detail modal whenever the outlet `shipments` /
   // `orders` lists change (e.g. WMS ship-confirm → App.jsx WS refresh).
-  // Without this, `detailShipment` stays a frozen snapshot and the
-  // Picked Up / In Transit rungs don't light up until the user closes
-  // and reopens the modal.
+  // This is the slow path that catches everything (carrier/cost/linked
+  // orders/etc.); the WS subscription above is the fast path for status
+  // and date fields.
   useEffect(() => {
     if (!detailShipment?.id) return;
     const fresh = (shipments || []).find((s) => s.id === detailShipment.id);
