@@ -440,20 +440,3 @@ module.exports = {
   changeShipmentCarrier,
   _internal: { LOCKED_STATUSES, CARRIER_CHANGE_LOCKED_STATUSES, ALLOWED_CARRIER_CHANGE_FIELDS },
 };
-ost,
-      via:          'change-carrier',
-    });
-  } catch (busErr) {
-    console.error('[shipmentMutations] change-carrier broadcast failed:', busErr.message);
-  }
-
-  return { shipment: after || { ...before, ...patch }, before, patch };
-}
-
-module.exports = {
-  addOrderToShipment,
-  recalcShipmentAfterOrderRemoval,
-  recalcCost,
-  changeShipmentCarrier,
-  _internal: { LOCKED_STATUSES, CARRIER_CHANGE_LOCKED_STATUSES, ALLOWED_CARRIER_CHANGE_FIELDS },
-};
