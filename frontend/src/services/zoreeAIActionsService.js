@@ -19,6 +19,7 @@ import {
   unplanOrderFromShipment,
   copyOrder,
   cancelOrder as cancelOrderService,
+  validateAndFailPastDueOrders,
 } from "./ordersService";
 import {
   recordShipmentEvent,
@@ -73,6 +74,21 @@ async function planOrder(p, { orders }) {
     }
     return ord;
   });
+
+  // Match UI guard (OrdersPage.openPlanModal): past-due orders are flipped
+  // to "Planning Failed" with a note, never rated. Without this, a chat-driven
+  // plan succeeds while the UI plan refuses the same order — REQ-02 audit trail
+  // and order state diverge between surfaces.
+  const { failed: pastDue } = await validateAndFailPastDueOrders(planOrders);
+  if (pastDue.length > 0) {
+    const ids = pastDue.map((o) => o.id).join(", ");
+    const dueList = pastDue.map((o) => `${o.id} (${o.due})`).join(", ");
+    throw new Error(
+      pastDue.length === 1
+        ? `Order ${ids} failed planning — due date ${pastDue[0].due} is in the past`
+        : `Orders failed planning — due dates in the past: ${dueList}`
+    );
+  }
 
   const result = await planOrdersAsSingleShipment(planOrders, { carrier: p.carrier });
   if (!result.ok) throw new Error(result.errorMessage || "Failed to plan orders");

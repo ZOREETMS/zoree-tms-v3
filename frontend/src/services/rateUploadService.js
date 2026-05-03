@@ -20,7 +20,7 @@
 
 import * as XLSX from "xlsx";
 import { DbApi } from "../lib/api";
-import { normalizeMatchType } from "./rateService";
+import { normalizeMatchType, SERVICE_LEVEL_OPTIONS } from "./rateService";
 
 /* ─────────────────────────────────────────────────────────────
  * Header → DB column mapping
@@ -42,6 +42,9 @@ const HEADER_ALIASES = {
   dest_country:    ["destination country", "dest country", "dest_country", "destcountry"],
   carrier:         ["carrier", "carrier name"],
   mode:            ["mode", "transport mode"],
+  // Migration 024 — equipment is a soft-FK to equipment_types.name. Keep
+  // the alias list permissive so a hand-saved Excel sheet still imports.
+  equipment:       ["equipment", "equipment type", "trailer", "trailer type"],
   rate:            ["rate", "rate amount", "rate ($)"],
   unit:            ["rate unit", "unit"],
   fsc:             ["fsc %", "fsc", "fsc_pct", "fuel surcharge"],
@@ -161,6 +164,23 @@ function normalizeUnit(raw) {
   return "per mile";
 }
 
+/**
+ * Match a free-text service-level value to the canonical option set
+ * (`SERVICE_LEVEL_OPTIONS`). Case-insensitive: "EXPRESS" / "express" /
+ * "Express" all collapse to "Express". Returns the canonical option
+ * verbatim when matched so EditRateModal's dropdown round-trips the
+ * value; falls back to the trimmed input when there is no match (so
+ * tenant-specific labels are not silently dropped) and `null` for empties.
+ */
+function normalizeServiceLevel(raw) {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  const hit = SERVICE_LEVEL_OPTIONS.find((opt) => opt.toLowerCase() === lower);
+  return hit || s;
+}
+
 function buildLocationString(city, state, zip) {
   const parts = [];
   if (city) parts.push(String(city).trim());
@@ -211,6 +231,9 @@ export function normalizeUploadedRow(rawRow, headerMap) {
     origin,
     dest,
     carrier: String(f.carrier || "").trim(),
+    // Migration 024 — soft-FK to equipment_types.name. Mirror EditRateModal's
+    // empty→null convention so the planner falls back via the equipment master.
+    equipment: f.equipment ? String(f.equipment).trim() : null,
     status:  String(f.status || "Active").trim() || "Active",
     rate:    rateNum != null ? `$${rateNum.toFixed(2)}` : "",
     unit:    normalizeUnit(f.unit),
@@ -221,7 +244,10 @@ export function normalizeUploadedRow(rawRow, headerMap) {
     exp: toIsoDateOrNull(f.exp),
     miles:        toNumberOrNull(f.miles),
     transit_days: toNumberOrNull(f.transit_days),
-    service_level: f.service_level ? String(f.service_level).trim() : null,
+    // Title-case the value through `normalizeServiceLevel` so a CSV with
+    // "EXPRESS" survives the round-trip into EditRateModal's dropdown
+    // (whose options are case-sensitive Title Case).
+    service_level: normalizeServiceLevel(f.service_level),
     czarlite: cz,
     czarlite_class:  toNumberOrNull(f.czarlite_class),
   };

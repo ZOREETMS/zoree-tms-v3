@@ -136,3 +136,13 @@ dist
 .pnp.*
 .claude/worktrees/
 .claude/settings.local.json
+
+# Emergency snapshots and stray backups (e.g. server.js.corrupted-2026-05-03,
+# server.js.bak). Git history already preserves prior versions — keep these
+# local, don't commit them. The .githooks/pre-commit hook also rejects them.
+*.corrupted-*
+*.bak
+*.orig
+*.swp
+*~
+

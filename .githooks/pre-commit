@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# Zoree TMS — pre-commit guard
+#
+# Catches the corruption patterns that have hit this repo:
+#   1. NUL bytes (0x00) in text files — a footprint of in-place writes that
+#      didn't truncate properly. Caused api/server.js to fail node --check
+#      after the 2026-05-03 cleanup.
+#   2. HTML files with unbalanced <script> tags — caused the OMS login to
+#      die silently after frontend/zoree-oms.html was truncated mid-string.
+#   3. JS files that fail node --check — last line of defense against
+#      shipping syntactically broken server code.
+#   4. Stray backup files (*.bak, *.orig, *.corrupted-*) — git history is
+#      the backup, the working tree is not.
+#
+# Bypass with `git commit --no-verify` (only if you know what you're doing).
+# Install once with `npm install` (auto-wired via the root `prepare` script)
+# or manually: `git config core.hooksPath .githooks`.
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+# Color helpers — fall back to plain text when stderr isn't a TTY (e.g. CI).
+if [ -t 2 ] && command -v tput >/dev/null 2>&1; then
+  RED=$(tput setaf 1); YELLOW=$(tput setaf 3); GREEN=$(tput setaf 2); RESET=$(tput sgr0)
+else
+  RED=''; YELLOW=''; GREEN=''; RESET=''
+fi
+
+FAIL=0
+fail() { printf '%s✗ %s%s\n' "$RED" "$*" "$RESET" >&2; FAIL=1; }
+info() { printf '%s%s%s\n' "$YELLOW" "$*" "$RESET" >&2; }
+ok()   { printf '%s✓ %s%s\n' "$GREEN" "$*" "$RESET" >&2; }
+
+# Files staged for commit (Added, Copied, Modified, Renamed — skip Deleted).
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
+[ "${#STAGED[@]}" -eq 0 ] && exit 0
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-file checks
+# ─────────────────────────────────────────────────────────────────────────────
+
+check_backup_file() {
+  local f=$1
+  case "$f" in
+    *.bak|*.orig|*.swp|*.corrupted-*|*~)
+      fail "$f — backup/scratch file should not be committed (use git history instead)."
+      return 1 ;;
+  esac
+  return 0
+}
+
+# Returns 0 if the file is treated as binary (and should skip text checks).
+is_binary_extension() {
+  case "$1" in
+    *.png|*.jpg|*.jpeg|*.gif|*.ico|*.webp|*.bmp|*.tiff) return 0 ;;
+    *.pdf|*.zip|*.tgz|*.gz|*.tar|*.7z|*.rar)            return 0 ;;
+    *.woff|*.woff2|*.ttf|*.otf|*.eot)                   return 0 ;;
+    *.mp3|*.mp4|*.mov|*.avi|*.webm|*.wav)               return 0 ;;
+    *.exe|*.dll|*.so|*.dylib|*.class|*.o|*.a)           return 0 ;;
+    *.xlsx|*.xls|*.docx|*.doc|*.pptx|*.ppt)             return 0 ;;
+  esac
+  return 1
+}
+
+check_no_nul_bytes() {
+  local f=$1 staged=$2
+  is_binary_extension "$f" && return 0
+  if LC_ALL=C grep -q $'\x00' "$staged"; then
+    fail "$f — contains NUL bytes (0x00). File looks truncated/corrupted at the byte level."
+    return 1
+  fi
+  return 0
+}
+
+check_html_script_balance() {
+  local f=$1 staged=$2
+  case "$f" in *.html|*.htm) ;; *) return 0 ;; esac
+
+  local open close
+  open=$(grep -o '<script[ >]' "$staged" | wc -l | tr -d ' ')
+  close=$(grep -o '</script>' "$staged" | wc -l | tr -d ' ')
+  if [ "$open" != "$close" ]; then
+    fail "$f — <script> tags unbalanced (open=$open, close=$close). File likely truncated."
+    return 1
+  fi
+
+  # File should end with one of these — not mid-statement.
+  local last
+  last=$(awk 'NF {line=$0} END{print line}' "$staged")
+  case "$last" in
+    *'</html>'*|*'</body>'*|*'</script>'*|*'-->'|*'>'|'')
+      ;;
+    *)
+      fail "$f — last non-blank line doesn't look like a closing tag: '${last:0:80}'"
+      return 1 ;;
+  esac
+  return 0
+}
+
+check_js_syntax() {
+  local f=$1 staged=$2
+  # Plain JS only — JSX/TSX needs Babel/TS, which we don't want as a hook dep.
+  case "$f" in *.js|*.mjs|*.cjs) ;; *) return 0 ;; esac
+
+  if ! command -v node >/dev/null 2>&1; then
+    info "node not on PATH — skipping syntax check for $f"
+    return 0
+  fi
+
+  local errfile="$TMP/syntaxerr.$$"
+  if ! node --check "$staged" 2>"$errfile"; then
+    fail "$f — node --check failed:"
+    sed 's/^/    /' "$errfile" >&2
+    return 1
+  fi
+  return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Run all checks
+# ─────────────────────────────────────────────────────────────────────────────
+
+for f in "${STAGED[@]}"; do
+  # Stop early on backup files — the rest of the checks are noise.
+  if ! check_backup_file "$f"; then continue; fi
+
+  # Snapshot the staged blob so partial-staged files are checked correctly.
+  staged="$TMP/$(printf '%s' "$f" | tr '/' '_')"
+  if ! git show ":$f" > "$staged" 2>/dev/null; then
+    continue   # Could be a submodule or a binary git can't show — skip.
+  fi
+
+  check_no_nul_bytes      "$f" "$staged" || true
+  check_html_script_balance "$f" "$staged" || true
+  check_js_syntax           "$f" "$staged" || true
+done
+
+if [ "$FAIL" -eq 1 ]; then
+  echo >&2
+  printf '%sCommit blocked.%s Fix the issues above, or pass --no-verify to bypass.\n' "$RED" "$RESET" >&2
+  exit 1
+fi
+
+ok "pre-commit checks passed (${#STAGED[@]} file$([ "${#STAGED[@]}" -eq 1 ] || echo s))"
+exit 0

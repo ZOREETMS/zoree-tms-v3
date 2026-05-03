@@ -308,6 +308,15 @@ export async function duplicateRate(rate) {
 
 /* ── CSV template / export ──────────────────────────────────── */
 
+/**
+ * Canonical service-level set. Single source of truth for both the
+ * EditRateModal dropdown and the rate-upload normalizer (CLAUDE_RULES
+ * §10 — no hardcoded values per UI). When a row is imported with
+ * "EXPRESS" or "express", the upload service title-cases it back to
+ * one of these so the modal dropdown can round-trip the value.
+ */
+export const SERVICE_LEVEL_OPTIONS = ["Standard", "Express", "Expedited", "Economy"];
+
 const RATE_TEMPLATE_COLUMNS = [
   { header: "Lane ID", example: "CHI-LAX-001" },
   { header: "Match Type", example: "city_to_city" },
@@ -321,6 +330,10 @@ const RATE_TEMPLATE_COLUMNS = [
   { header: "Destination Country", example: "USA" },
   { header: "Carrier", example: "XPO Logistics" },
   { header: "Mode", example: "TL" },
+  // Migration 024 added rates.equipment as a soft-FK to equipment_types.name.
+  // Keep this column in the template so the same field round-trips through
+  // download → fill in → upload (and through export of existing rates).
+  { header: "Equipment", example: "Dry Van 53ft" },
   { header: "Rate", example: "2500.00" },
   { header: "Rate Unit", example: "flat" },
   { header: "FSC %", example: "18.5" },
@@ -392,6 +405,7 @@ export function exportRatesCSV(rates) {
         r.dest_country || "USA",
         r.carrier,
         r.mode,
+        r.equipment || "",
         r.rate,
         r.unit,
         r.fsc,

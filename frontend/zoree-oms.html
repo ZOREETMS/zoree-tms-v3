@@ -3522,4 +3522,16 @@ function closeOrderDetail() {
 
       close();
       if (openOnCreate) openOnCreate(mapped);
-      if (typeof toast === 'function') toast('✓ Location created
+      if (typeof toast === 'function') toast('✓ Location created — synced to TMS', 'tok');
+    } catch (ex) {
+      err.textContent = (ex && ex.message) || 'Failed to save location';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Location';
+    }
+  });
+})();
+
+</script>
+</body>
+</html>

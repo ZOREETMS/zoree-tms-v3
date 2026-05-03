@@ -18,7 +18,7 @@ const DEV_API_BASE = Platform.select({
   default: `http://${LOCAL_IP}:3001/api`,
 });
 
-const PROD_API_BASE = 'https://calculators-military-carrying-jamie.trycloudflare.com/api';
+const PROD_API_BASE = 'https://usgs-developing-bean-oecd.trycloudflare.com/api';
 
 export const API_BASE = __DEV__ ? DEV_API_BASE : PROD_API_BASE;
 

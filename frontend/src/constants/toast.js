@@ -10,8 +10,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOAST_DURATIONS = Object.freeze({
-  /** Default auto-dismiss for informational / error / success toasts. */
-  DEFAULT: 5000,
+  /**
+   * Default auto-dismiss for informational / error / success toasts.
+   * 8s gives the reader time to absorb action confirmations like
+   * "Copied SHP-2026-1234 → SHP-2026-9999" without feeling sticky.
+   * Bumped from 5s after user feedback that messages dismissed too fast.
+   */
+  DEFAULT: 8000,
 
   /** Short-lived progress pings ("Planning 8 orders..."). */
   SHORT: 3500,

@@ -29,6 +29,7 @@ import { deriveOmsSyncStatus } from "../utils/omsSyncStatus";
 import OmsSyncPill from "../components/shipments/OmsSyncPill";
 import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
 import { buildLaneKey } from "../utils/laneUtils";
+import { TOAST_DURATIONS } from "../constants/toast";
 import ExportButton from "../components/ui/ExportButton";
 import { useRowSelection } from "../hooks/useRowSelection";
 import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
@@ -953,7 +954,10 @@ export default function ShipmentsPage() {
 
   function toast(text, type = "info") {
     setMessage({ text, type });
-    setTimeout(() => setMessage({ text: "", type: "" }), 4000);
+    // Single source of truth for toast hold time — see constants/toast.js.
+    // Lets the user actually read action confirmations like
+    // "Shipment copied as SHP-2026-9999" before they vanish.
+    setTimeout(() => setMessage({ text: "", type: "" }), TOAST_DURATIONS.DEFAULT);
   }
 
   async function unassignOrder(orderId, shipmentId) {

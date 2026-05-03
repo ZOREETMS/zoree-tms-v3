@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -128,13 +128,37 @@ export default function BulkPlanScreen() {
         }
       />
 
-      {/* Plan Button */}
+      {/* Plan & Create Shipments button.
+          QA bug #53 fix: previously this fired executePlan immediately
+          on tap, with the label "Plan N Orders" — no confirmation step
+          and no hint that the action would create shipments. The button
+          now mirrors the web BulkPlanPage label "Plan & Create
+          Shipments" AND surfaces an Alert.alert confirm so the planner
+          can back out before the rate engine runs (which on a large
+          selection costs real CzarLite/CCXL quotes). */}
       {selectionSummary.count > 0 && (
         <TouchableOpacity
           style={styles.planBtn}
           activeOpacity={0.8}
           disabled={busy}
-          onPress={() => executePlan('cost')}
+          onPress={() => {
+            const orderWord = selectionSummary.count === 1 ? 'order' : 'orders';
+            const laneWord = lanes.length === 1 ? 'lane' : 'lanes';
+            Alert.alert(
+              'Plan & Create Shipments',
+              `This will rate ${selectionSummary.count} ${orderWord} across ${lanes.length} ${laneWord} and create the resulting shipments. Continue?`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Plan & Create',
+                  // Same dispatch as before, just gated on the user
+                  // saying yes. executePlan is the existing hook from
+                  // useBulkPlan — no behaviour change beyond the gate.
+                  onPress: () => executePlan('cost'),
+                },
+              ],
+            );
+          }}
         >
           {busy ? (
             <View style={styles.planBtnContent}>
@@ -145,7 +169,7 @@ export default function BulkPlanScreen() {
             <View style={styles.planBtnContent}>
               <Ionicons name="rocket-outline" size={20} color={colors.white} />
               <Text style={styles.planBtnText}>
-                Plan {selectionSummary.count} Order{selectionSummary.count !== 1 ? 's' : ''}
+                Plan & Create Shipments ({selectionSummary.count})
               </Text>
             </View>
           )}

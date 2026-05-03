@@ -37,6 +37,18 @@ export function buildBlankShipment() {
 }
 
 /**
+ * Normalize a value bound for a Postgres `date` column. The HTML date
+ * input emits "" when blank, but PG rejects empty strings on `date`
+ * columns (SQLSTATE 22007). Any blank/whitespace value becomes NULL so
+ * the upsert succeeds.
+ */
+function normalizeDate(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  return value;
+}
+
+/**
  * Create a new shipment in the database.
  * @param {Object} shipmentData - The shipment fields from the form.
  * @returns {Object} The created shipment with generated ID.
@@ -53,6 +65,8 @@ export async function createShipment(shipmentData) {
     pieces: parseInt(shipmentData.pieces) || 0,
     total_cost: parseFloat(shipmentData.total_cost) || 0,
     equipment: equipment || null,
+    pickup_date: normalizeDate(shipmentData.pickup_date),
+    delivery_date: normalizeDate(shipmentData.delivery_date),
     status: "Planned",
   };
   // Routed through the dedicated endpoint so the backend records a
@@ -70,27 +84,60 @@ export async function createShipment(shipmentData) {
 export async function copyShipment(sourceShipment) {
   const id = generateShipmentId();
   const today = new Date().toISOString().slice(0, 10);
+  const s = sourceShipment || {};
 
   const copy = {
     id,
-    origin: sourceShipment.origin || "",
-    dest: sourceShipment.dest || "",
-    mode: sourceShipment.mode || "LTL",
-    carrier: sourceShipment.carrier || "",
-    weight: sourceShipment.weight || 0,
-    pieces: sourceShipment.pieces || 0,
-    total_cost: sourceShipment.total_cost || 0,
-    miles: sourceShipment.miles || 0,
-    rate: sourceShipment.rate || 0,
-    fuel_surcharge: sourceShipment.fuel_surcharge || 0,
-    service_level: sourceShipment.service_level || "Standard",
-    equipment: sourceShipment.equipment ?? null,
-    notes: sourceShipment.notes || "",
-    pickup_date: today,
-    delivery_date: "",
-    status: "Planned",
-    // Do not copy: order_ids, bol_type, master_shipment_id, tender fields
-    copiedFrom: sourceShipment.id || null,
+    // ── Lane / location ─────────────────────────────────────────────
+    origin:         s.origin || "",
+    dest:           s.dest || "",
+    origin_zip:     s.origin_zip || null,
+    dest_zip:       s.dest_zip || null,
+    ship_from_name: s.ship_from_name || null,
+    ship_to_name:   s.ship_to_name || null,
+    miles:          s.miles || 0,
+
+    // ── Freight characteristics ─────────────────────────────────────
+    mode:      s.mode || "LTL",
+    weight:    s.weight || 0,
+    pieces:    s.pieces || 0,
+    commodity: s.commodity || null,
+    hazmat:    s.hazmat || false,
+
+    // ── Carrier / rate snapshot ─────────────────────────────────────
+    // rate_id is preserved so the Shipment Details modal continues to
+    // resolve the same rate row for derived fields (transit days,
+    // equipment fallback, etc.). The carrier/cost columns mirror the
+    // source so the copy lands as an exact rate-confirmed duplicate
+    // ready for the planner.
+    carrier:         s.carrier || "",
+    service_level:   s.service_level || "Standard",
+    equipment:       s.equipment ?? null,
+    rate_id:         s.rate_id || null,
+    total_cost:      s.total_cost || 0,
+    rate:            s.rate || 0,
+    fuel_surcharge:  s.fuel_surcharge || 0,
+    accessorials:    s.accessorials || 0,
+    discount_pct:    s.discount_pct ?? null,
+    discount_amount: s.discount_amount ?? null,
+
+    // ── Reset on copy ───────────────────────────────────────────────
+    // Operational/instance-unique fields are intentionally NOT carried
+    // forward: pro_number, bol_number, seal_number, dock_door,
+    // dock_time, loading_start, loading_end, order_ids, bol_type,
+    // master_shipment_id, tender_*. These belong to the original
+    // execution and would be misleading (or violate uniqueness) on
+    // the copy. Pickup date is reset to today and delivery date is
+    // left NULL (Postgres `date` rejects "" — SQLSTATE 22007) so the
+    // planner can re-quote a fresh window.
+    pickup_date:   today,
+    delivery_date: null,
+    status:        "Planned",
+    notes:         s.notes || "",
+
+    // Audit metadata (stripped before DB write by POST /api/shipments;
+    // surfaces on the change_history "create" row as `copiedFrom`).
+    copiedFrom: s.id || null,
   };
 
   await ShipmentsApi.create(copy);

@@ -3536,5 +3536,3 @@ server.listen(PORT, () => {
 });
 
 module.exports = app;
-/** Broadcast an event to all connected TMS clients */
-
