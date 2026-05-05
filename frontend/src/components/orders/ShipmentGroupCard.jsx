@@ -44,7 +44,20 @@ export default function ShipmentGroupCard({ group, groupIdx, onSelectQuote }) {
         {quotes.map((quote, i) => {
           if (!(quote.transitDays > 0)) return null;
           const isSelected = selectedIdx === i;
-          const isExp = (quote.serviceLevel || "").toLowerCase().includes("express");
+          // TMS bug #65: the canonical TMS service-level value is
+          // "Expedited" (see ordersService.normalizeServiceLevel), so an
+          // includes("express") check missed every Expedited quote and
+          // they all rendered as STD. Match against the actual
+          // vocabulary — "expedit" covers both "Expedited" and the OMS-
+          // legacy "Expedite", "express" stays for any rate-table rows
+          // that still use that label, and a bare "EXP" code is also
+          // accepted so quotes coming straight from the rates table
+          // without normalisation aren't mis-tagged.
+          const svc = String(quote.serviceLevel || "").toLowerCase().trim();
+          const isExp =
+            svc === "exp" ||
+            svc.includes("expedit") ||
+            svc.includes("express");
           const svcTag = isExp ? "EXP" : "STD";
           const rMode = quote.mode || "TL";
           const dates = calcDates(quote, earliestDue, readyDate);

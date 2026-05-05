@@ -6,8 +6,8 @@ import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFA
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
 import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes, subscribeOrderChanges, normalizeMode, commonModeConstraint, normalizeServiceLevel, commonServiceLevelConstraint } from "../services/ordersService";
 import { emptyLocation, locationFromOrderOrigin, locationFromOrderDest, locationsToShipmentPatch } from "../types/location";
-import { getOrderHistory } from "../services/historyService";
-import { assignDockToPlan } from "../services/dockService";
+import { getOrderHistory, clearOrderHistory } from "../services/historyService";
+import { assignDockToPlan, getInitialLoadDuration } from "../services/dockService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
 import { useRealtimeOrders } from "../hooks/useRealtimeOrders";
@@ -15,8 +15,14 @@ import { useOrdersPollingFallback } from "../hooks/useOrdersPollingFallback";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
+import OrderImportModal from "../components/orders/OrderImportModal";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 import AddToShipmentModal from "../components/orders/AddToShipmentModal";
+// TMS bug #3: Cross-Dock modal opened from PlanConfirmationModal.
+import CrossDockModal from "../components/orders/CrossDockModal";
+// TMS bug #4: helper for converting the manual entry form into the
+// quote shape the executor consumes.
+import { manualFormToQuote, validateManualForm } from "../components/orders/ManualPlanForm";
 import { addOrderToShipment as addOrderToShipmentSvc } from "../services/shipmentOrderService";
 // REQ-27 / REQ-28 shared primitives
 import Toast from "../components/ui/Toast";
@@ -209,6 +215,8 @@ export default function OrdersPage() {
 
   /* ── New Order Modal state ── */
   const [showNewOrder, setShowNewOrder] = useState(false);
+  /* ── Import Orders Modal state ── */
+  const [showImportOrders, setShowImportOrders] = useState(false);
   // REQ-03: which order the user is trying to attach to a shipment (null = modal closed)
   const [addToShipOrder, setAddToShipOrder] = useState(null);
 
@@ -249,6 +257,9 @@ export default function OrdersPage() {
   /* ── Plan Confirmation Modal state ── */
   const [planModal, setPlanModal] = useState(null);
   const [planSummary, setPlanSummary] = useState(null); // after shipment creation
+  // TMS bug #3: Cross-Dock modal — null when closed, holds { lane, siblings }
+  // when open. Opened from the Cross-Dock button on PlanConfirmationModal.
+  const [crossDockModal, setCrossDockModal] = useState(null);
 
   // Thin wrapper so existing call sites stay backward-compatible. Pass
   // `opts = { durationMs, dismissible }` for custom behaviour. REQ-27
@@ -565,6 +576,12 @@ export default function OrdersPage() {
     chk("ship_mode", o.ship_mode || o.shipMode || "", f.shipMode, "Ship Mode");
     // REQ-10: capture service-level edits for change_history.
     chk("service_level", o.service_level || o.serviceLevel || "", f.serviceLevel, "Service Level");
+    // TMS bug #2: ref_num + po_number edits were silently dropped — the
+    // form had inputs but the patch never included them, so the PATCH
+    // /api/orders/:id never saw a diff and recordFieldDiffs had nothing
+    // to write. Capture them here so they land in change_history.
+    chk("ref_num",  o.ref_num   || o.refNum     || "", f.refNum, "Reference #");
+    chk("po_number", o.po_number || o.po_num || o.poNum || "", f.poNum, "PO Number");
     chk("commodity", o.commodity, f.commodity, "Commodity");
     chk("ready", o.ready, f.ready, "Ready Date");
     chk("due", o.due, f.due, "Due Date");
@@ -591,6 +608,13 @@ export default function OrdersPage() {
         // REQ-10: persist the order's service-level selection so the planner
         // can honour it.
         service_level: (f.serviceLevel || "").trim() || null,
+        // TMS bug #2: include Reference # and PO Number so edits to those
+        // fields actually persist (and trigger change_history rows). The
+        // backend's apiOrderToDbPatch already maps refNum/poNum → ref_num
+        // /po_number; we send the snake_case names directly here for
+        // symmetry with the rest of this patch object.
+        ref_num:   (f.refNum || "").trim() || null,
+        po_number: (f.poNum  || "").trim() || null,
         commodity: f.commodity || null,
         incoterms: (f.incoterms || "").trim() || null,
         ready: f.ready || null, due: f.due || null,
@@ -892,7 +916,14 @@ export default function OrdersPage() {
     setPlanModal({
       order: o, siblings: sibs, lane: baseLane,
       quotes: [], selectedIdx: 0, busy: true, error: "",
-      maxWt: firstMaxWt, util: firstUtil, loadDuration: 120, equipType: firstEquip,
+      maxWt: firstMaxWt, util: firstUtil,
+      loadDuration: getInitialLoadDuration({ mode: laneModeConstraint, equipType: firstEquip }),
+      // Tracks whether the user manually picked a duration in the dock
+      // reservation dropdown. False means "still derived from the lane /
+      // chosen carrier mode" — confirmPlan re-derives in that case so a
+      // quote-mode change after modal-open doesn't strand a stale seed.
+      loadDurationOverridden: false,
+      equipType: firstEquip,
       shipmentGroups,
       reserveDock: dockSchedulingOn,
       dockSchedulingEnabled: dockSchedulingOn,
@@ -1000,9 +1031,18 @@ export default function OrdersPage() {
 
       const firstQuotes = finalGroups[0]?.quotes || [];
       const firstBest = finalGroups[0]?.bestQuote || null;
+      // Re-seed the displayed dock duration from the bestQuote's mode
+      // now that rates are back. The pre-rate seed used the lane's mode
+      // estimate, which can disagree with what bestQuote actually picks
+      // (e.g. lane was LTL-shaped but TL was cheaper). Skip if the user
+      // has already touched the duration dropdown.
+      const reseededDuration = firstBest
+        ? getInitialLoadDuration({ mode: firstBest.mode, equipType: finalGroups[0]?.equipType })
+        : null;
       setPlanModal((prev) => prev ? {
         ...prev, quotes: firstQuotes, bestQuote: firstBest, busy: false,
         shipmentGroups: finalGroups,
+        loadDuration: (prev.loadDurationOverridden || !reseededDuration) ? prev.loadDuration : reseededDuration,
         ratingElapsedMs: Date.now() - ratingStart,
       } : null);
     } catch (err) {
@@ -1013,7 +1053,29 @@ export default function OrdersPage() {
   async function confirmPlan() {
     if (!planModal) return;
     const { lane, shipmentGroups, siblings, reserveDock, dockDoor, dockStartTime, loadDuration } = planModal;
-    const groups = shipmentGroups || [{ lane, quotes: planModal.quotes, selectedIdx: planModal.selectedIdx, bestQuote: planModal.bestQuote, orders: siblings }];
+    // TMS bug #4: manual-plan path — synthesize a single-quote group from
+    // the manual entry form and route through the same group/plan/execute
+    // pipeline as the auto-rate path. Validates the form first so the
+    // user gets a toast instead of a silent no-op.
+    if (planModal.manualMode) {
+      const manualErr = validateManualForm(planModal.manualForm);
+      if (manualErr) { toast(`Manual plan: ${manualErr}`, "error"); return; }
+      const manualQuote = manualFormToQuote(planModal.manualForm);
+      const synthesizedGroups = [{
+        lane,
+        orders: siblings,
+        quotes: [manualQuote],
+        selectedIdx: 0,
+        bestQuote: manualQuote,
+        equipType: planModal.equipType,
+        maxWt: planModal.maxWt,
+        util: planModal.util,
+      }];
+      // Mutate the modal once so the rest of confirmPlan reads the
+      // synthesized group via shipmentGroups, no second branch needed.
+      planModal.shipmentGroups = synthesizedGroups;
+    }
+    const groups = planModal.shipmentGroups || shipmentGroups || [{ lane, quotes: planModal.quotes, selectedIdx: planModal.selectedIdx, bestQuote: planModal.bestQuote, orders: siblings }];
     const dockEnabled = reserveDock !== false; // default true
 
     // Build a plan for each shipment group
@@ -1045,8 +1107,17 @@ export default function OrdersPage() {
 
       // Assign dock via service when reservation is enabled
       if (dockEnabled) {
+        // Recompute duration from the chosen carrier's mode unless the
+        // user explicitly overrode the dropdown. The seed at modal-open
+        // is based on the lane's mode estimate; if the user picks a
+        // quote of a different mode (e.g. lane looked LTL but TL was
+        // cheaper) the seed is stale and would book a wrong-length
+        // window — the SHP-2026-6812 bug.
+        const effectiveDuration = planModal.loadDurationOverridden
+          ? loadDuration
+          : getInitialLoadDuration({ mode: chosen.mode, equipType: sg.equipType });
         assignDockToPlan(plan, {
-          dockDoor, startTime: dockStartTime, loadDuration,
+          dockDoor, startTime: dockStartTime, loadDuration: effectiveDuration,
           groupIndex: gi, groupCount: groups.length,
           existingShipments: shipments,
           dockConfigs: warehouseDockConfigs,
@@ -1204,6 +1275,13 @@ export default function OrdersPage() {
             selectedRows={rows.filter((o) => selectedOrders.has(o.id))}
             label="Export Orders"
           />
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowImportOrders(true)}
+            title="Bulk-import orders from a CSV or Excel file"
+          >
+            📥 Import Orders
+          </button>
           <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ New Order</button>
         </div>
       </div>
@@ -1534,18 +1612,93 @@ export default function OrdersPage() {
         onClearLines={async (id) => { await clearOrderLines(id); setDetailLines([]); toast("Lines cleared", "success"); }}
         busy={detailBusy}
         changeLog={orderChangeLog[detailOrder?.id] || []}
-        onClearHistory={() => setOrderChangeLog((prev) => ({ ...prev, [detailOrder?.id]: [] }))}
+        onClearHistory={async () => {
+          // TMS bug #1: persistent Clear History. We call the backend to
+          // record a cleared_at marker, then reload from server so the
+          // UI reflects the post-clear state (instead of a transient
+          // empty-then-repopulate flicker on reopen).
+          const oid = detailOrder?.id;
+          if (!oid) return;
+          try {
+            await clearOrderHistory(oid);
+            await reloadOrderHistory(oid);
+            toast(`History cleared for ${oid}`, "success");
+          } catch (err) {
+            toast(`Could not clear history: ${err.message}`, "error");
+          }
+        }}
         itemMaster={itemMaster} carriers={carriers} toast={toast}
       />
 
       <PlanConfirmationModal planModal={planModal} onModalChange={setPlanModal}
-        onConfirm={confirmPlan} onClose={() => setPlanModal(null)} />
+        onConfirm={confirmPlan} onClose={() => setPlanModal(null)}
+        carriers={carriers}
+        // TMS bug #4: toggle manual mode — when on, the modal renders
+        // ManualPlanForm in place of the quote list and confirmPlan
+        // builds a manual quote.
+        onManualPlan={() => setPlanModal((prev) => prev ? {
+          ...prev,
+          manualMode: !prev.manualMode,
+          manualForm: prev.manualForm || {
+            mode: prev.lane?.modeConstraint || "TL",
+            serviceLevel: prev.lane?.serviceLevelConstraint || "Standard",
+          },
+          error: null,
+        } : null)}
+        // TMS bug #3: open the Cross-Dock modal with the current lane.
+        onCrossDock={() => {
+          if (!planModal) return;
+          setCrossDockModal({ lane: planModal.lane, siblings: planModal.siblings || [] });
+        }}
+      />
+
+      {/* TMS bug #3: Cross-Dock modal. On confirm, stamp a structured
+          note onto every order in the plan so the dispatcher / receiving
+          team see the cross-dock intent on the BOL and order details. */}
+      <CrossDockModal
+        show={!!crossDockModal}
+        lane={crossDockModal?.lane}
+        warehouseDockConfigs={warehouseDockConfigs}
+        onCancel={() => setCrossDockModal(null)}
+        onConfirm={async ({ note }) => {
+          const targets = crossDockModal?.siblings || [];
+          try {
+            for (const o of targets) {
+              const next = [o.notes, note].filter(Boolean).join(" | ");
+              await saveOrderService(o.id, { notes: next });
+            }
+            await refreshData();
+            toast(
+              `Cross-dock note applied to ${targets.length} order${targets.length !== 1 ? "s" : ""}. Continue with carrier selection.`,
+              "success",
+            );
+          } catch (err) {
+            toast(`Cross-Dock failed: ${err.message}`, "error");
+          } finally {
+            setCrossDockModal(null);
+          }
+        }}
+      />
 
       <PlanSummaryModal summary={planSummary} onClose={() => setPlanSummary(null)} />
 
       <NewOrderModal show={showNewOrder} form={newOrderForm} onFormChange={setNewOrderForm}
         lines={newOrderLines} onLinesChange={setNewOrderLines} onSubmit={createOrder}
         onClose={() => setShowNewOrder(false)} carriers={carriers} busy={detailBusy} itemMaster={itemMaster} />
+
+      <OrderImportModal
+        open={showImportOrders}
+        onClose={() => setShowImportOrders(false)}
+        onComplete={({ created, failed }) => {
+          if (created > 0) {
+            toast(`Imported ${created} order${created === 1 ? "" : "s"}`, "success");
+            refreshData?.();
+          }
+          if (failed?.length) {
+            toast(`${failed.length} row${failed.length === 1 ? "" : "s"} failed — see details`, "error");
+          }
+        }}
+      />
 
       {addToShipOrder && (
         <AddToShipmentModal

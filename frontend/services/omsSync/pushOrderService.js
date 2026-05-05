@@ -87,6 +87,38 @@
     return zip ? (head + ' ' + zip).trim() : head;
   }
 
+  // Bug #66: oms_orders carries the service-level under the legacy
+  // `priority` column (the form label is "Service Level" but the DB
+  // column was never renamed). The middleware sync was reading every
+  // other field from `o` but silently skipping this one — so a TMS
+  // order synced from an OMS row marked "Expedited" (or the legacy
+  // "Expedite") landed with service_level = NULL.
+  //
+  // Mirror the canonical alias map used by the in-app OMS push
+  // (zoree-oms.html → normalizeOmsServiceLevel) so the two surfaces
+  // can never disagree. Inline because pushOrderService.js is loaded
+  // as a vanilla IIFE script — no ESM imports available.
+  var SVC_LEVEL_ALIASES = {
+    STANDARD: 'Standard', STD: 'Standard',
+    EXPEDITE: 'Expedited', EXPEDITED: 'Expedited', EXPRESS: 'Expedited', EXP: 'Expedited',
+    CRITICAL: 'Time-Critical',
+    'TIME-CRITICAL': 'Time-Critical',
+    'TIME CRITICAL': 'Time-Critical',
+    ECONOMY: 'Economy', ECON: 'Economy',
+    GUARANTEED: 'Guaranteed', GTD: 'Guaranteed',
+    'WHITE GLOVE': 'White Glove',
+    'WHITE-GLOVE': 'White Glove',
+    WG: 'White Glove',
+  };
+  function normalizeOmsServiceLevel(v) {
+    if (v === null || v === undefined) return null;
+    var raw = String(v).trim();
+    if (!raw) return null;
+    var key = raw.replace(/\s+/g, ' ').toUpperCase();
+    if (SVC_LEVEL_ALIASES[key]) return SVC_LEVEL_ALIASES[key];
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  }
+
   function mapOmsOrderToTmsRow(o, custMap, locMap) {
     var lines = o.oms_order_lines || [];
     var totals = totalsFromLines(lines);
@@ -140,6 +172,11 @@
       line_count:         lines.length,
       origin_zip:         shipFromZip || null,
       dest_zip:           shipToZip   || null,
+      // Bug #66: forward Service Level from oms_orders.priority (the
+      // legacy column the form writes) through to TMS orders. Falls
+      // back to the canonical service_level column for OMS rows
+      // created by future schema work where the form is renamed.
+      service_level:      normalizeOmsServiceLevel(o.priority || o.service_level),
       // Sync provenance (migration 005) — flags the row as OMS-origin so the
       // TMS UI can render the "OMS-synced" badge and filter on it.
       sync_source:        'oms',
@@ -322,7 +359,7 @@
 
   ns.services.omsSync.pushOrder = {
     run: runPushOrder,
-    // Exposed for unit testing — pure helpers.
+    // Exposed for unit testing - pure helpers.
     _internals: {
       buildCustomerMap:            buildCustomerMap,
       buildLocationMap:            buildLocationMap,

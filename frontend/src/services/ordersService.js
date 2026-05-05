@@ -963,6 +963,14 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
                 totalCost: subBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
                 czarliteRate: subBest.mode === "LTL", serviceLevel: subBest.serviceLevel || "Standard",
                 miles: subBest.miles || null, rateId: subBest.rateId || null,
+                // Mirror confirmPlan/buildPlan — without these the shipment
+                // row lands with rate/fuel_surcharge/accessorials = 0 even
+                // when the matched rate had a non-zero FSC, so the Shipment
+                // Details modal renders "Fuel Surcharge $0" against a 10%
+                // rate (e.g. SHP-2026-9818).
+                rate:          subBest.czarBaseGross || subBest.czarBase || 0,
+                fuelSurcharge: subBest.fscCharge || 0,
+                accessorials:  subBest.accessorialCharge || 0,
                 // Migration 025: snapshot the chosen rate's equipment onto the plan.
                 equipment: subBest.equipment || null,
               });
@@ -993,6 +1001,9 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
               totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
               czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
               miles: indBest.miles || null, rateId: indBest.rateId || null,
+              rate:          indBest.czarBaseGross || indBest.czarBase || 0,
+              fuelSurcharge: indBest.fscCharge || 0,
+              accessorials:  indBest.accessorialCharge || 0,
               equipment: indBest.equipment || null,
             };
           }));
@@ -1019,6 +1030,9 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
               totalCost: indBest.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
               czarliteRate: indBest.mode === "LTL", serviceLevel: indBest.serviceLevel || "Standard",
               miles: indBest.miles || null, rateId: indBest.rateId || null,
+              rate:          indBest.czarBaseGross || indBest.czarBase || 0,
+              fuelSurcharge: indBest.fscCharge || 0,
+              accessorials:  indBest.accessorialCharge || 0,
               equipment: indBest.equipment || null,
             };
           }));
@@ -1039,6 +1053,9 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
             totalCost: bestQuote.totalCharge || 0, pickupDate: dates.pickup, deliveryDate: dates.delivery,
             czarliteRate: bestQuote.mode === "LTL", serviceLevel: bestQuote.serviceLevel || "Standard",
             miles: bestQuote.miles || null, rateId: bestQuote.rateId || null,
+            rate:          bestQuote.czarBaseGross || bestQuote.czarBase || 0,
+            fuelSurcharge: bestQuote.fscCharge || 0,
+            accessorials:  bestQuote.accessorialCharge || 0,
             equipment: bestQuote.equipment || null,
           });
         }

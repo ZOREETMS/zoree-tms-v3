@@ -25,6 +25,29 @@ export function extractTime(value) {
 }
 
 /**
+ * Initial load-duration (minutes) for the plan-confirmation modal.
+ * Derives from an explicit mode if the lane has one, otherwise falls
+ * back to the equipment type the planner selected. Always routed
+ * through getLoadDuration() so the dock_loading_durations row (e.g.
+ * LTL=90 set in Planning Parameters) is honored — without this, the
+ * modal would have to either hardcode a value or know about the
+ * dockLoadingDurationsService cache itself (Rule 6 — services-first).
+ *
+ * @param {{ mode?: string, equipType?: string }} [args]
+ * @returns {number} minutes
+ */
+export function getInitialLoadDuration({ mode, equipType } = {}) {
+  const m = String(mode || "").trim();
+  if (m) return getLoadDuration(m);
+  // Equipment-type fallback. EQUIPMENT_TYPES key "LTL Truck" is the
+  // only LTL-mode equipment in constants/orders.js; everything else
+  // (Dry Van, Flatbed, Reefer, …) is TL.
+  const e = String(equipType || "").trim();
+  if (/^LTL\b/i.test(e)) return getLoadDuration("LTL");
+  return getLoadDuration("TL");
+}
+
+/**
  * Parse a shipment's dock fields into a normalized { start, duration } object.
  * Handles all persisted formats: loading_start/end datetimes, dock_time ranges.
  *

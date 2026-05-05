@@ -26,7 +26,6 @@ export default function BulkPlanScreen() {
   const [search, setSearch] = useState('');
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
 
-  // Navigate to results when available
   React.useEffect(() => {
     if (results) {
       navigation.navigate('BulkPlanResults', { results });
@@ -63,26 +62,23 @@ export default function BulkPlanScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Bulk Plan</Text>
         <Text style={styles.subtitle}>{unplannedOrders.length} unplanned orders</Text>
       </View>
 
-      {/* KPIs */}
       <View style={styles.kpiRow}>
         <KpiCard label="Selected" value={String(selectionSummary.count)} icon="checkbox-outline" color={colors.accent} />
         <KpiCard label="Weight" value={`${(selectionSummary.weight / 1000).toFixed(1)}K`} icon="scale-outline" color={colors.cyan} />
         <KpiCard label="Lanes" value={String(lanes.length)} icon="git-merge-outline" color={colors.purple} />
       </View>
 
-      {/* Lane summary when orders selected */}
       {lanes.length > 0 && (
         <View style={styles.lanesSummary}>
           {lanes.slice(0, 3).map((lane) => (
             <View key={lane.laneKey} style={styles.laneChip}>
               <Text style={styles.laneChipText} numberOfLines={1}>
-                {lane.orderIds.length} orders • {classifyLoadType(lane.totalWeight)}
+                {lane.orderIds.length} orders - {classifyLoadType(lane.totalWeight)}
               </Text>
             </View>
           ))}
@@ -92,7 +88,6 @@ export default function BulkPlanScreen() {
         </View>
       )}
 
-      {/* Search + Select All */}
       <View style={styles.searchRow}>
         <View style={styles.searchWrap}>
           <SearchBar value={search} onChangeText={setSearch} placeholder="Search orders..." />
@@ -109,7 +104,6 @@ export default function BulkPlanScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Error */}
       {error ? (
         <View style={styles.errorBanner}>
           <Ionicons name="alert-circle" size={16} color={colors.red} />
@@ -117,7 +111,6 @@ export default function BulkPlanScreen() {
         </View>
       ) : null}
 
-      {/* Order List */}
       <FlatList
         data={filteredOrders}
         renderItem={renderItem}
@@ -128,14 +121,8 @@ export default function BulkPlanScreen() {
         }
       />
 
-      {/* Plan & Create Shipments button.
-          QA bug #53 fix: previously this fired executePlan immediately
-          on tap, with the label "Plan N Orders" — no confirmation step
-          and no hint that the action would create shipments. The button
-          now mirrors the web BulkPlanPage label "Plan & Create
-          Shipments" AND surfaces an Alert.alert confirm so the planner
-          can back out before the rate engine runs (which on a large
-          selection costs real CzarLite/CCXL quotes). */}
+      {/* QA bug #53 fix: Plan & Create Shipments button now confirms
+          before firing executePlan, mirroring web's BulkPlanPage label. */}
       {selectionSummary.count > 0 && (
         <TouchableOpacity
           style={styles.planBtn}
@@ -151,9 +138,6 @@ export default function BulkPlanScreen() {
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Plan & Create',
-                  // Same dispatch as before, just gated on the user
-                  // saying yes. executePlan is the existing hook from
-                  // useBulkPlan — no behaviour change beyond the gate.
                   onPress: () => executePlan('cost'),
                 },
               ],
@@ -176,7 +160,6 @@ export default function BulkPlanScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Mid-plan order editor — surfaced from the per-card pencil. */}
       <OrderEditModal
         visible={!!editingOrder}
         order={editingOrder}

@@ -243,6 +243,14 @@ export const OrdersApi = {
   history(id, limit = 200) {
     return api(`/orders/${encodeURIComponent(id)}/history?limit=${limit}`);
   },
+  // TMS bug #1: persistent Clear History — records a cleared_at marker
+  // server-side so subsequent history() calls only return rows newer
+  // than the marker. The audit ledger is preserved.
+  clearHistory(id) {
+    return api(`/orders/${encodeURIComponent(id)}/history/clear`, {
+      method: "POST",
+    });
+  },
 };
 
 export const ShipmentsApi = {
@@ -263,6 +271,12 @@ export const ShipmentsApi = {
   // REQ-02: fetch change_history rows for a given shipment.
   history(id, limit = 200) {
     return api(`/shipments/${encodeURIComponent(id)}/history?limit=${limit}`);
+  },
+  // TMS bug #1: persistent Clear History (shipment-side parity with OrdersApi).
+  clearHistory(id) {
+    return api(`/shipments/${encodeURIComponent(id)}/history/clear`, {
+      method: "POST",
+    });
   },
   // REQ-03: manually attach an order to a shipment. Backend recalculates
   // weight, pieces, and total_cost (proportional to weight).
@@ -447,6 +461,17 @@ export const BulkPlanApi = {
     return api("/bulk-plan/execute", {
       method: "POST",
       body: JSON.stringify({ plans }),
+    });
+  },
+  // Bulk-create orders from a parsed CSV/XLSX upload. Backend route at
+  // api/server.js → POST /api/bulk-plan/import. Each `orders[i]` requires
+  // { customer, origin, destination } and accepts optional weight, pieces,
+  // commodity, readyDate, dueDate. Server returns
+  // { created, orders, errors } where errors is per-row.
+  import(orders) {
+    return api("/bulk-plan/import", {
+      method: "POST",
+      body: JSON.stringify({ orders }),
     });
   },
 };

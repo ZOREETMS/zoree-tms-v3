@@ -1,22 +1,10 @@
-// ═══════════════════════════════════════════════════════════════════
-// Supabase Service — Tier 3 connector
-// This is the ONLY file that knows about Supabase credentials.
-// All other code calls these functions — no raw Supabase calls elsewhere.
-// Multi-tenant: pass tenantId to scope all queries.
-// ═══════════════════════════════════════════════════════════════════
-
 const { createClient } = require('@supabase/supabase-js');
-
-// ── Singleton client pool (one per tenant in production) ───────────
 const _clients = {};
 
 function getClient(tenantConfig = null) {
-  // In production: each tenant has their own Supabase project URL + key
-  // In development: one project, queries scoped by tenant_id column
   const url = tenantConfig?.supabaseUrl  || process.env.SUPABASE_URL;
   const key = tenantConfig?.supabaseKey  || process.env.SUPABASE_SERVICE_KEY
                                          || process.env.SUPABASE_ANON_KEY;
-
   const cacheKey = url;
   if (!_clients[cacheKey]) {
     _clients[cacheKey] = createClient(url, key, {
@@ -26,25 +14,22 @@ function getClient(tenantConfig = null) {
   return _clients[cacheKey];
 }
 
-// ── Generic query helpers ──────────────────────────────────────────
-
 async function dbSelect(table, query = {}, tenantConfig = null) {
   const db = getClient(tenantConfig);
   let q = db.from(table).select(query.select || '*');
-
   if (query.filters) {
     query.filters.forEach(([col, op, val]) => {
       if (op === 'eq')  q = q.eq(col, val);
       if (op === 'in')  q = q.in(col, val);
+      if (op === 'gt')  q = q.gt(col, val);
+      if (op === 'lt')  q = q.lt(col, val);
       if (op === 'gte') q = q.gte(col, val);
       if (op === 'lte') q = q.lte(col, val);
       if (op === 'ilike') q = q.ilike(col, val);
     });
   }
-
   if (query.order) q = q.order(query.order.col, { ascending: query.order.asc ?? false });
   if (query.limit) q = q.limit(query.limit);
-
   const { data, error } = await q;
   if (error) throw new Error(`[DB] ${table} select failed: ${error.message}`);
   return data || [];
@@ -71,8 +56,6 @@ async function dbDelete(table, id, tenantConfig = null) {
   return { deleted: true, id };
 }
 
-// ── Auth helpers ───────────────────────────────────────────────────
-
 async function signIn(email, password, tenantConfig = null) {
   const db = getClient(tenantConfig);
   const { data, error } = await db.auth.signInWithPassword({ email, password });
@@ -87,12 +70,4 @@ async function verifyToken(token, tenantConfig = null) {
   return user;
 }
 
-module.exports = {
-  getClient,
-  dbSelect,
-  dbUpsert,
-  dbUpdate,
-  dbDelete,
-  signIn,
-  verifyToken,
-};
+module.exports = { getClient, dbSelect, dbUpsert, dbUpdate, dbDelete, signIn, verifyToken };

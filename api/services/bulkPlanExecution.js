@@ -35,11 +35,103 @@ function serviceHeaders(serviceKey, prefer = 'return=representation') {
   };
 }
 
+// Migration 031: snapshot of the consolidated commodity at plan time.
+// Mirrors frontend/src/utils/shipmentFromOrders.js#deriveCommodityFromOrders
+// (DISTINCT non-empty commodity values joined with ", ", alphabetically
+// ordered for determinism so the snapshot matches the backfill output).
+//
+// Kept in this file (not pulled into a shared helper) because the plan
+// is the only server-side write path that needs it — the copy path
+// reuses the source's already-snapshotted column. Inlining here avoids
+// growing the surface area for a one-line aggregation.
+function deriveCommodityFromOrderRows(orderRows) {
+  if (!Array.isArray(orderRows) || orderRows.length === 0) return null;
+  const unique = new Set();
+  for (const o of orderRows) {
+    const c = o && typeof o.commodity === 'string' ? o.commodity.trim() : '';
+    if (c) unique.add(c);
+  }
+  if (unique.size === 0) return null;
+  return [...unique].sort().join(', ');
+}
+
+// Fetch the commodity column for every order in a plan in a single
+// PostgREST round-trip (`id=in.(...)`), aggregate, and return the
+// snapshot string. Returns null on empty input or any fetch error so
+// the caller can fall through to inserting commodity = NULL — never
+// fails the plan over a snapshot read.
+async function fetchCommoditySnapshot(orderIds, dbSelect) {
+  if (!Array.isArray(orderIds) || orderIds.length === 0) return null;
+  try {
+    const idList = orderIds
+      .filter(Boolean)
+      .map((id) => encodeURIComponent(id))
+      .join(',');
+    if (!idList) return null;
+    const rows = await dbSelect('orders', `select=commodity&id=in.(${idList})`, null);
+    return deriveCommodityFromOrderRows(rows);
+  } catch (_) {
+    return null;
+  }
+}
+
+// Migration 032: snapshot of consolidated order_lines at plan time so
+// the Shipment Details modal renders a Line Items table on Copy
+// Shipment (which drops order_ids) and on detached shipments. Element
+// shape matches what frontend/src/pages/ShipmentsPage.jsx reads from
+// the per-order fetch path:
+//   { order_id, line_num, item_id, description,
+//     qty_ordered, unit_weight, total_weight }
+// Sorted (order_id, line_num) for determinism with the SQL backfill
+// in migration 032 (jsonb_agg ORDER BY ol.order_id, ol.line_num).
+async function fetchLineItemsSnapshot(orderIds, dbSelect) {
+  if (!Array.isArray(orderIds) || orderIds.length === 0) return [];
+  try {
+    const idList = orderIds
+      .filter(Boolean)
+      .map((id) => encodeURIComponent(id))
+      .join(',');
+    if (!idList) return [];
+    const rows = await dbSelect(
+      'order_lines',
+      `select=order_id,line_num,item_id,description,qty_ordered,unit_weight,total_weight`
+        + `&order_id=in.(${idList})&order=order_id.asc,line_num.asc`,
+      null,
+    );
+    if (!Array.isArray(rows)) return [];
+    // Normalize null/undefined fields to the shape the modal expects.
+    // Defensive defaults match the modal's `|| 0` / `|| ""` reads.
+    return rows.map((r) => ({
+      order_id:     r.order_id     || null,
+      line_num:     r.line_num     || null,
+      item_id:      r.item_id      || null,
+      description:  r.description  || '',
+      qty_ordered:  r.qty_ordered  || 0,
+      unit_weight:  r.unit_weight  || 0,
+      total_weight: r.total_weight || 0,
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
 async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImpl }) {
   const year = new Date().getFullYear();
   const shipId = `SHP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
   const bolId = `BOL-${shipId}`;
   const orderIds = Array.isArray(plan.orderIds) ? plan.orderIds.slice() : [];
+
+  // Migrations 031 + 032: snapshot consolidated commodity AND line
+  // items at plan time so the Shipment Details modal renders both on
+  // Copy Shipment (which drops order_ids) and on detached/standalone
+  // shipments. Two independent PostgREST round-trips, parallelized
+  // via Promise.all so we don't pay them serially. Both helpers
+  // swallow errors and fall through to empty snapshots so a snapshot
+  // read never breaks plan execution.
+  const [commoditySnapshot, lineItemsSnapshot] = await Promise.all([
+    fetchCommoditySnapshot(orderIds, dbSelect),
+    fetchLineItemsSnapshot(orderIds, dbSelect),
+  ]);
 
   const shipRow = {
     id: shipId,
@@ -78,6 +170,16 @@ async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImp
     // without re-joining to the rate row. NULL when the matched rate
     // didn't carry an equipment value (legacy / non-LTL/TL modes).
     equipment: plan.equipment || null,
+    // Migration 031: commodity snapshot from the plan's orderIds.
+    // Backs the Shipment Details modal's terminal fallback so Copy
+    // Shipment (which intentionally drops order_ids) and detached
+    // shipments still render Commodity instead of "—".
+    commodity: commoditySnapshot,
+    // Migration 032: line_items snapshot from the plan's orderIds.
+    // Same rationale as commodity — the modal's Line Items table
+    // would render empty on Copy Shipment without this snapshot,
+    // since the copy intentionally doesn't carry order_ids forward.
+    line_items: lineItemsSnapshot,
     // Fold the BOL number in at insert time so we don't need a follow-up PATCH.
     bol_number: bolId,
   };

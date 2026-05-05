@@ -29,6 +29,8 @@ const {
 } = require('./services/orderMutations');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
+// TMS bug #1: persistent Clear History per (order|shipment) entity.
+const historyClears = require('./services/changeHistoryClears');
 const orderLinesAudit = require('./services/orderLinesAudit');
 const { buildOrderLineId } = require('./services/orderLineIds');
 const shipmentMutations = require('./services/shipmentMutations');
@@ -38,9 +40,15 @@ const createInvoicesRouter = require('./routes/invoices');
 const locationsRouter = require('./routes/locations');  // REQ-29 / REQ-30
 
 // Fields on orders we record diffs for (label used in change_history.field).
+//
+// TMS bug #2 fix: include service_level so edits to the Service Level
+// dropdown in the Edit tab produce a History row. ref_num and po_number
+// were already listed; the missing piece for those two was the frontend
+// patch builder (see frontend/src/pages/OrdersPage.jsx#saveOrderEdit).
 const ORDER_HISTORY_FIELDS = {
   customer: 'customer', origin: 'origin', dest: 'destination',
   weight: 'weight', pieces: 'pieces', ship_mode: 'shipMode',
+  service_level: 'serviceLevel',
   commodity: 'commodity', incoterms: 'incoterms', ref_num: 'refNum',
   po_number: 'poNum', ready: 'readyDate', due: 'dueDate', status: 'status',
   shipment_id: 'shipmentId', origin_zip: 'originZip', dest_zip: 'destZip',
@@ -1374,6 +1382,16 @@ function dbToOrderApi(r) {
     pieces:          r.pieces,
     commodity:       r.commodity,
     incoterms:       r.incoterms   || null,
+    // TMS bug: Reference # / PO Number edits were saved to DB but never
+    // round-tripped to the UI because this mapper omitted them. Expose
+    // both snake_case and camelCase aliases so consumers reading either
+    // shape (OrderDetailModal reads o.ref_num / o.po_number; OrdersPage
+    // edit-form init at line ~505 also accepts o.refNum / o.poNum) get
+    // the persisted value back. Companion migration: 034_orders_add_ref_num.
+    ref_num:         r.ref_num    || null,
+    refNum:          r.ref_num    || null,
+    po_number:       r.po_number  || null,
+    poNum:           r.po_number  || null,
     readyDate:       r.ready       || null,
     dueDate:         r.due         || null,
     status:          r.status      || 'Unplanned',
@@ -1580,6 +1598,55 @@ app.get('/api/shipments/:id/history', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 200, 1000);
     const rows = await history.getHistory('shipment', req.params.id, { limit });
     res.json({ entity: 'shipment', id: req.params.id, rows, total: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// TMS bug #1: Clear History endpoints.
+//
+// Records a cleared_at marker via the changeHistoryClears service so the
+// History tab stops surfacing rows older than the marker — without
+// destroying the immutable change_history ledger. Audit-compliant by
+// design: DBAs can still query change_history directly.
+//
+// Role gate mirrors the order/shipment edit gate (admin + planner).
+// We deliberately do NOT widen this to viewers/customers.
+app.post('/api/orders/:id/history/clear', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  const role = getUserRole(u);
+  if (!['admin', 'planner'].includes(role)) {
+    return res.status(403).json({ error: `Role '${role}' cannot clear order history. Required: admin, planner.` });
+  }
+  try {
+    const marker = await historyClears.recordClear({
+      entityType: 'order',
+      entityId:   req.params.id,
+      user:       u,
+      metadata:   { source: 'order-detail-modal' },
+    });
+    res.json({ entity: 'order', id: req.params.id, clearedAt: marker?.cleared_at || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/shipments/:id/history/clear', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  const role = getUserRole(u);
+  if (!['admin', 'planner'].includes(role)) {
+    return res.status(403).json({ error: `Role '${role}' cannot clear shipment history. Required: admin, planner.` });
+  }
+  try {
+    const marker = await historyClears.recordClear({
+      entityType: 'shipment',
+      entityId:   req.params.id,
+      user:       u,
+      metadata:   { source: 'shipment-detail-modal' },
+    });
+    res.json({ entity: 'shipment', id: req.params.id, clearedAt: marker?.cleared_at || null });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

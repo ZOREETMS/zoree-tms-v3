@@ -27,9 +27,13 @@ const FIELD_LABELS = {
   ship_mode: "Ship Mode",
   commodity: "Commodity",
   incoterms: "Incoterms",
-  ref_num: "Ref #",
-  po_num: "PO #",
-  po_number: "PO #",
+  ref_num: "Reference #",
+  po_num: "PO Number",
+  po_number: "PO Number",
+  // TMS bug #2: service_level diffs land in change_history with this column
+  // name (see ORDER_HISTORY_FIELDS in api/server.js). Without an entry
+  // here the History tab would render the raw "service_level".
+  service_level: "Service Level",
   ready: "Ready Date",
   due: "Due Date",
   status: "Status",
@@ -184,4 +188,31 @@ export async function getShipmentHistory(shipmentId, opts = {}) {
     console.error("[historyService] getShipmentHistory failed:", e.message);
     return [];
   }
+}
+
+/**
+ * TMS bug #1: persistent Clear History.
+ * Asks the backend to record a cleared_at marker so subsequent calls to
+ * getOrderHistory() return only rows newer than the marker. Returns the
+ * server's clearedAt ISO string on success, throws on failure so the UI
+ * can surface a toast.
+ *
+ * @param {string} orderId
+ * @returns {Promise<string>}  ISO-8601 timestamp of the new marker.
+ */
+export async function clearOrderHistory(orderId) {
+  if (!orderId) throw new Error("orderId is required");
+  const res = await OrdersApi.clearHistory(orderId);
+  return res?.clearedAt || new Date().toISOString();
+}
+
+/**
+ * TMS bug #1: persistent Clear History (shipment-side parity).
+ * @param {string} shipmentId
+ * @returns {Promise<string>}
+ */
+export async function clearShipmentHistory(shipmentId) {
+  if (!shipmentId) throw new Error("shipmentId is required");
+  const res = await ShipmentsApi.clearHistory(shipmentId);
+  return res?.clearedAt || new Date().toISOString();
 }

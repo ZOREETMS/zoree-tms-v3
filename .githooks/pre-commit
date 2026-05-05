@@ -68,8 +68,13 @@ is_binary_extension() {
 check_no_nul_bytes() {
   local f=$1 staged=$2
   is_binary_extension "$f" && return 0
-  if LC_ALL=C grep -q $'\x00' "$staged"; then
-    fail "$f — contains NUL bytes (0x00). File looks truncated/corrupted at the byte level."
+  # `grep $'\x00'` is unreliable — shells strip NUL from args, so the
+  # pattern degenerates to '' and matches every file. Count bytes via tr
+  # instead, which is portable across bash on Linux/macOS/Git Bash.
+  local nuls
+  nuls=$(LC_ALL=C tr -cd '\000' < "$staged" | wc -c | tr -d ' ')
+  if [ "$nuls" -gt 0 ]; then
+    fail "$f — contains $nuls NUL byte(s) (0x00). File looks truncated/corrupted at the byte level."
     return 1
   fi
   return 0

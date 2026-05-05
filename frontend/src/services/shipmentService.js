@@ -1,4 +1,4 @@
-import { DbApi, ShipmentsApi } from "../lib/api";
+import { DbApi, OrdersApi, ShipmentsApi } from "../lib/api";
 import { emptyLocation, locationsToShipmentPatch } from "../types/location";
 
 /**
@@ -77,6 +77,71 @@ export async function createShipment(shipmentData) {
 }
 
 /**
+ * Migration 032: snapshot the source shipment's line items so the
+ * Copy Shipment lands with a populated Line Items table even though
+ * the copy intentionally does not create new orders.
+ *
+ * Reads via OrdersApi.lines for each linked order (same endpoint the
+ * modal already uses on every open), flattens, and normalizes to the
+ * shape stored in `shipments.line_items` JSONB:
+ *   { order_id, line_num, item_id, description,
+ *     qty_ordered, unit_weight, total_weight }
+ *
+ * Sorted (order_id, line_num) so the copied JSONB matches the
+ * deterministic ordering the SQL backfill produces (jsonb_agg
+ * ORDER BY ol.order_id, ol.line_num) and the modal's per-order
+ * grouping. Failures fall through to [] so the copy never breaks
+ * over a snapshot read.
+ */
+async function buildLineItemsSnapshot(linkedOrders) {
+  if (!Array.isArray(linkedOrders) || linkedOrders.length === 0) return [];
+  try {
+    const perOrder = await Promise.all(
+      linkedOrders.map((o) =>
+        OrdersApi.lines(o.id)
+          .then((res) => (Array.isArray(res) ? res : res?.lines || res?.data || []))
+          .catch(() => [])
+      )
+    );
+    const flat = perOrder.flat();
+    const normalized = flat.map((l) => ({
+      order_id:     l.order_id     || null,
+      line_num:     l.line_num     || null,
+      item_id:      l.item_id      || null,
+      description:  l.description  || "",
+      qty_ordered:  l.qty_ordered  || 0,
+      unit_weight:  l.unit_weight  || l.unit_value  || 0,
+      total_weight: l.total_weight || l.total_value || 0,
+    }));
+    // Match the SQL backfill's ORDER BY (order_id, line_num).
+    normalized.sort((a, b) => {
+      const aOrd = String(a.order_id || "");
+      const bOrd = String(b.order_id || "");
+      if (aOrd !== bOrd) return aOrd < bOrd ? -1 : 1;
+      return Number(a.line_num || 0) - Number(b.line_num || 0);
+    });
+    return normalized;
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * Compute the source shipment's transit window in days. Used by
+ * copyShipment to project the same window onto the copy's new pickup
+ * date so the Transit Days InfoBox keeps rendering a real value
+ * instead of "—".
+ */
+function transitDaysFromShipment(s) {
+  if (!s || !s.pickup_date || !s.delivery_date) return null;
+  const d1 = new Date(s.pickup_date);
+  const d2 = new Date(s.delivery_date);
+  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) return null;
+  const days = Math.round((d2 - d1) / 86_400_000);
+  return days > 0 ? days : null;
+}
+
+/**
  * Copy an existing shipment with a new ID and reset status.
  * @param {Object} sourceShipment - The shipment to copy.
  * @returns {Object} The newly created copy.
@@ -85,6 +150,17 @@ export async function copyShipment(sourceShipment) {
   const id = generateShipmentId();
   const today = new Date().toISOString().slice(0, 10);
   const s = sourceShipment || {};
+
+  // Project the source's transit window forward onto today's pickup so
+  // the Transit Days InfoBox stays populated on the copy. Falls back to
+  // NULL if the source has no usable window (modal will render "—").
+  const projectedDelivery = computeDeliveryDate(today, transitDaysFromShipment(s));
+
+  // Migration 032: snapshot the source's line items now (before the
+  // shipment insert) so they ship in the same payload — the modal
+  // reads `shipments.line_items` as a fallback whenever no orders are
+  // linked, which is exactly the post-copy state.
+  const lineItemsSnapshot = await buildLineItemsSnapshot(s._linkedOrders);
 
   const copy = {
     id,
@@ -98,40 +174,75 @@ export async function copyShipment(sourceShipment) {
     miles:          s.miles || 0,
 
     // ── Freight characteristics ─────────────────────────────────────
-    mode:      s.mode || "LTL",
-    weight:    s.weight || 0,
-    pieces:    s.pieces || 0,
-    commodity: s.commodity || null,
-    hazmat:    s.hazmat || false,
+    // NOTE: `hazmat` is NOT a shipments column (lives on orders /
+    // locations). Writing it here returns PGRST204.
+    mode:   s.mode || "LTL",
+    weight: s.weight || 0,
+    pieces: s.pieces || 0,
+    // Migration 031: commodity snapshot. Prefer the page-hydrated
+    // `_commodity` (live aggregation from currently-linked orders) so
+    // the copy reflects the freshest reality, then fall through to the
+    // stored snapshot column. The copy intentionally drops order_ids,
+    // so without this snapshot the modal would render "—" forever
+    // even though the source had a clear commodity value.
+    commodity: s._commodity || s.commodity || null,
+    // Migration 032: line items snapshot. Built from the source's
+    // currently-linked orders' order_lines (live read just above).
+    // Falls back to the source's own snapshot column if it had one
+    // and the live read returned empty (e.g. the source itself was a
+    // copy with no linked orders). The modal reads this column as
+    // its fallback whenever no orders are linked — see the Line
+    // Items useEffect in ShipmentsPage.jsx.
+    line_items: lineItemsSnapshot.length > 0
+      ? lineItemsSnapshot
+      : (Array.isArray(s.line_items) ? s.line_items : []),
 
     // ── Carrier / rate snapshot ─────────────────────────────────────
     // rate_id is preserved so the Shipment Details modal continues to
     // resolve the same rate row for derived fields (transit days,
-    // equipment fallback, etc.). The carrier/cost columns mirror the
-    // source so the copy lands as an exact rate-confirmed duplicate
-    // ready for the planner.
-    carrier:         s.carrier || "",
-    service_level:   s.service_level || "Standard",
-    equipment:       s.equipment ?? null,
-    rate_id:         s.rate_id || null,
-    total_cost:      s.total_cost || 0,
-    rate:            s.rate || 0,
-    fuel_surcharge:  s.fuel_surcharge || 0,
-    accessorials:    s.accessorials || 0,
-    discount_pct:    s.discount_pct ?? null,
-    discount_amount: s.discount_amount ?? null,
+    // equipment fallback, discount %, etc.). The carrier/cost columns
+    // mirror the source so the copy lands as an exact rate-confirmed
+    // duplicate ready for the planner. discount_pct / discount_amount
+    // are NOT shipment columns — they live on `rates` and are derived
+    // at render time via summarizeDiscount(rateRow).
+    carrier:        s.carrier || "",
+    service_level:  s.service_level || "Standard",
+    equipment:      s.equipment ?? null,
+    rate_id:        s.rate_id || null,
+    total_cost:     s.total_cost || 0,
+    rate:           s.rate || 0,
+    fuel_surcharge: s.fuel_surcharge || 0,
+    accessorials:   s.accessorials || 0,
+
+    // ── Operational scheduling (carried forward) ────────────────────
+    // Dock + loading-window fields are real shipment columns
+    // (migrations 20260406_shipments_dock_fields and
+    // 20260324120000_shipments_loading_times). Carrying them forward
+    // gives the copy a usable starting schedule the planner can edit
+    // — the alternative (blank) defeats the purpose of "copy".
+    dock_door:     s.dock_door     || null,
+    dock_time:     s.dock_time     || null,
+    loading_start: s.loading_start || null,
+    loading_end:   s.loading_end   || null,
 
     // ── Reset on copy ───────────────────────────────────────────────
-    // Operational/instance-unique fields are intentionally NOT carried
-    // forward: pro_number, bol_number, seal_number, dock_door,
-    // dock_time, loading_start, loading_end, order_ids, bol_type,
+    // Identifier-unique / carrier-assigned fields are NOT carried
+    // forward: pro_number (carrier-assigned at tender), seal_number
+    // (set at trailer load), order_ids (linkage), bol_type,
     // master_shipment_id, tender_*. These belong to the original
-    // execution and would be misleading (or violate uniqueness) on
-    // the copy. Pickup date is reset to today and delivery date is
-    // left NULL (Postgres `date` rejects "" — SQLSTATE 22007) so the
-    // planner can re-quote a fresh window.
+    // execution and would either violate uniqueness or be misleading.
+    //
+    // bol_number — auto-stamped from the new shipment id, mirroring
+    // bulkPlanExecution.js (`bol_number: BOL-<shipId>`), so the
+    // BOL/Carrier Ref InfoBox renders immediately on the copy
+    // instead of "—".
+    //
+    // pickup_date resets to today; delivery_date is projected from
+    // the source's transit window (or NULL if it had none — Postgres
+    // `date` rejects "", SQLSTATE 22007).
+    bol_number:    `BOL-${id}`,
     pickup_date:   today,
-    delivery_date: null,
+    delivery_date: projectedDelivery,
     status:        "Planned",
     notes:         s.notes || "",
 
@@ -141,6 +252,11 @@ export async function copyShipment(sourceShipment) {
   };
 
   await ShipmentsApi.create(copy);
+  // Per product decision: the copy does NOT create new orders or
+  // re-link the source's orders. The new shipment lands without
+  // ASSOCIATED ORDER / LINE ITEMS until the user attaches orders
+  // to it via the existing flow. (See chat history 2026-05-03 — the
+  // earlier order-duplication path was reverted.)
   return copy;
 }
 

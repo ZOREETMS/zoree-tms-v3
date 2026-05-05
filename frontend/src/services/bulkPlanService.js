@@ -9,8 +9,14 @@
  *   5. Always maximize the largest group that is both rate-able AND cheaper.
  */
 
-import { BulkPlanApi } from "../lib/api";
+import { BulkPlanApi, DbApi } from "../lib/api";
 import { buildSingleOrderLane, buildLaneGroups } from "../utils/laneUtils";
+// TMS bug #64: AI-driven plans need to populate dock_door / dock_time /
+// loading_start / loading_end the same way the manual Plan flow does so
+// the resulting shipment isn't half-empty in the UI. Reuse the shared
+// dock assignment service rather than re-implementing the round-robin
+// + occupancy logic here (CLAUDE_RULES §4 — services-first).
+import { assignDockToPlan } from "./dockService";
 
 /* ── Date helpers ── */
 
@@ -136,6 +142,18 @@ export function buildPlan(lane, bestQuote, laneOrders) {
  *                                              or when the preferred carrier has
  *                                              no quote on this lane.
  * @param {string}   [options.optimizeBy="cost"]
+ * @param {boolean}  [options.assignDock=true]
+ *   TMS bug #64: when true (default) the planner auto-assigns a dock door
+ *   + loading window using the shared dockService — same logic the manual
+ *   confirmPlan flow runs. Pass `false` to preserve the legacy
+ *   no-dock-fields behaviour.
+ * @param {Array}    [options.existingShipments]
+ *   Optional pre-fetched shipments to feed dock occupancy. If omitted,
+ *   the service fetches via DbApi.shipments() so AI / single-shot
+ *   callers don't need to plumb this through.
+ * @param {Array}    [options.dockConfigs]
+ *   Optional pre-fetched warehouse dock configs. Same fallback rules as
+ *   existingShipments.
  * @returns {Promise<{ ok: boolean, errorMessage: string, shipment: Object|null, plan: Object|null }>}
  */
 export async function planOrdersAsSingleShipment(orders, options = {}) {
@@ -177,10 +195,46 @@ export async function planOrdersAsSingleShipment(orders, options = {}) {
       plan: null,
     };
   }
+  // TMS bug #64: reject zero-cost quotes so a malformed rate row never
+  // produces a "shipment created with $0 Est. Cost" surprise. The manual
+  // Plan flow ignores these via the feasibility filter; the AI flow used
+  // to silently accept them.
+  if (!(Number(chosenQuote.totalCharge) > 0)) {
+    return {
+      ok: false,
+      errorMessage: "Best quote returned $0 — the rate row is missing pricing. Plan failed before creating a shipment.",
+      shipment: null,
+      plan: null,
+    };
+  }
 
   const plan = buildPlan(lane, chosenQuote, orders);
   if (!plan) {
     return { ok: false, errorMessage: "Could not compute pickup/delivery dates for this lane", shipment: null, plan: null };
+  }
+
+  // TMS bug #64: assign a dock door + loading window so the resulting
+  // shipment row carries dock_door / dock_time / loading_start /
+  // loading_end. Without this the AI / single-shot path produced a
+  // shipment with empty dock fields the manual flow always populates.
+  // Failures here are non-fatal — the plan still executes (the dock can
+  // be edited later) but we surface a console warning so we notice.
+  if (options.assignDock !== false) {
+    try {
+      let { existingShipments, dockConfigs } = options;
+      if (!Array.isArray(existingShipments)) {
+        existingShipments = await DbApi.shipments().catch(() => []);
+      }
+      if (!Array.isArray(dockConfigs)) {
+        dockConfigs = await DbApi.warehouseDockConfigs().catch(() => []);
+      }
+      assignDockToPlan(plan, {
+        existingShipments,
+        dockConfigs,
+      });
+    } catch (dockErr) {
+      console.warn("[planOrdersAsSingleShipment] dock assignment failed:", dockErr?.message);
+    }
   }
 
   // Execute via the same backend endpoint regular planning uses, so the

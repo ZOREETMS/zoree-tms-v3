@@ -195,10 +195,27 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     setLocEdit(false);
   }
 
-  // Load line items for all linked orders
+  // Load line items for the modal's Line Items table.
+  //
+  // Two paths (post-migration 032):
+  //   1. Linked orders present → live-fetch from /orders/:id/lines
+  //      per linked order. Authoritative — picks up post-plan edits
+  //      to any order's lines without waiting for a re-snapshot.
+  //   2. No linked orders BUT ds.line_items has entries → render
+  //      directly from the snapshot column. This is the Copy Shipment
+  //      / detached-shipment case: the copy intentionally doesn't
+  //      duplicate orders, so there's nothing to live-fetch, and
+  //      without the snapshot fallback the table would render
+  //      "No line items" even though the source had a full freight
+  //      composition.
   useEffect(() => {
     const ids = linked.map((o) => o.id).filter(Boolean);
-    if (!ids.length) { setLinesLoading(false); return; }
+    if (!ids.length) {
+      const snap = Array.isArray(ds.line_items) ? ds.line_items : [];
+      setLines(snap);
+      setLinesLoading(false);
+      return;
+    }
     Promise.all(ids.map((oid) =>
       OrdersApi.lines(oid)
         .then((res) => (Array.isArray(res) ? res : res?.lines || res?.data || []))
@@ -744,10 +761,12 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
           <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onNavigate(`/documents?shipmentId=${encodeURIComponent(ds.id)}`); onClose(); }}>📄 Documents</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/messaging`); }}>📧 Contact Carrier</button>
           {/* REQ-18: Send-to-WMS is only meaningful after the carrier has
-             accepted the tender. Pre-accept, the button is hidden. The
-             effective display status flips to "Confirmed" (or beyond) once
-             the carrier portal records an accept response. */}
-          {["Confirmed", "Tender Accepted", "In Transit", "Delivered"].includes(displayStatus) && (
+             accepted the tender. Pre-accept (Planned / Tendered / Tender
+             Rejected) the button is hidden. effectiveShipmentStatus()
+             promotes a Tendered+accept-in-notes shipment to "Tender
+             Accepted", so isTenderAccepted captures portal-side accepts
+             even before the DB status row is rewritten. */}
+          {isTenderAccepted && (
             <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/messaging"); }}>📨 Send to WMS</button>
           )}
         </div>

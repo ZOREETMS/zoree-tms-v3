@@ -1,8 +1,22 @@
 import { EQUIPMENT_TYPES, DEFAULT_EQUIP } from "../../constants/orders";
 import ShipmentGroupCard from "./ShipmentGroupCard";
 import DockReservationSection from "./DockReservationSection";
+// TMS bug #4: inline manual-plan form rendered when manualMode is on.
+import ManualPlanForm, { validateManualForm } from "./ManualPlanForm";
+// Reseed the dock-loading duration when the planner picks a quote whose
+// mode differs from the lane's initial estimate, so the modal display
+// matches what the resulting shipment will actually be booked for.
+import { getInitialLoadDuration } from "../../services/dockService";
 
-export default function PlanConfirmationModal({ planModal, onModalChange, onConfirm, onClose }) {
+export default function PlanConfirmationModal({
+  planModal, onModalChange, onConfirm, onClose,
+  // TMS bugs #3 + #4: callbacks that the parent uses to switch into
+  // Manual or Cross-Dock flows. Both are optional so existing callers
+  // that don't pass them (none today) just see the original layout.
+  onManualPlan,
+  onCrossDock,
+  carriers = [],
+}) {
   if (!planModal) return null;
 
   const { lane, siblings, busy, error, maxWt, util, loadDuration, equipType, shipmentGroups, reserveDock, dockSchedulingEnabled } = planModal;
@@ -15,12 +29,40 @@ export default function PlanConfirmationModal({ planModal, onModalChange, onConf
   const totalOrders = groups.reduce((s, g) => s + (g.lane?.orderIds?.length || 0), 0);
   const hasAnyQuotes = groups.some((g) => g.quotes?.some((q) => q.transitDays > 0));
 
+  // TMS bug #4: when manualMode is on we render ManualPlanForm in place
+  // of the auto-fetched quote list and route Confirm through the manual
+  // path. The form state lives on planModal so the parent can read it
+  // back at confirm time without prop drilling.
+  const manualMode = !!planModal.manualMode;
+  const manualForm = planModal.manualForm || {};
+  const manualValidationError = manualMode ? validateManualForm(manualForm) : null;
+  const confirmDisabled = manualMode
+    ? (busy || !!manualValidationError)
+    : (busy || !hasAnyQuotes);
+
   function handleSelectQuote(groupIdx, quoteIdx) {
     onModalChange((prev) => {
       if (!prev) return null;
       const updated = [...(prev.shipmentGroups || groups)];
       updated[groupIdx] = { ...updated[groupIdx], selectedIdx: quoteIdx };
-      return { ...prev, shipmentGroups: updated };
+      // Reseed the displayed loading duration from the newly chosen
+      // quote's mode, but only when the user hasn't manually overridden
+      // it via the dropdown. Use group 0 as the source of truth for the
+      // single-modal-display since `loadDuration` is a top-level field;
+      // multi-group plans with mixed modes get per-group durations
+      // applied at confirm time regardless of what's shown here.
+      let nextDuration = prev.loadDuration;
+      if (!prev.loadDurationOverridden) {
+        const displayGroup = updated[0] || updated[groupIdx];
+        const displayQuote = displayGroup?.quotes?.[displayGroup.selectedIdx];
+        if (displayQuote) {
+          nextDuration = getInitialLoadDuration({
+            mode: displayQuote.mode,
+            equipType: displayGroup.equipType,
+          });
+        }
+      }
+      return { ...prev, shipmentGroups: updated, loadDuration: nextDuration };
     });
   }
 
@@ -84,16 +126,62 @@ export default function PlanConfirmationModal({ planModal, onModalChange, onConf
           )}
           {error && <div style={{ padding: "10px 14px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, color: "#991b1b", fontSize: 12, marginBottom: 8 }}>{error}</div>}
 
-          {!busy && groups.map((group, idx) => (
-            <ShipmentGroupCard key={idx} group={group} groupIdx={idx} onSelectQuote={handleSelectQuote} />
-          ))}
+          {/* TMS bug #4: manual-plan path replaces the quote list with
+              an inline form. Submit goes through the same onConfirm
+              handler — the parent inspects planModal.manualMode to
+              build the right plan. */}
+          {manualMode ? (
+            <ManualPlanForm
+              form={manualForm}
+              onFormChange={(updater) =>
+                onModalChange((prev) => {
+                  if (!prev) return null;
+                  const next = typeof updater === "function" ? updater(prev.manualForm || {}) : updater;
+                  return { ...prev, manualForm: next };
+                })
+              }
+              carriers={carriers}
+            />
+          ) : (
+            !busy && groups.map((group, idx) => (
+              <ShipmentGroupCard key={idx} group={group} groupIdx={idx} onSelectQuote={handleSelectQuote} />
+            ))
+          )}
+
+          {manualMode && manualValidationError && (
+            <div style={{ padding: "8px 12px", background: "#fef3c7", border: "1px solid #fbbf24", color: "#92400e", borderRadius: 8, fontSize: 12 }}>
+              {manualValidationError}
+            </div>
+          )}
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={() => onClose()} disabled={busy}>Cancel</button>
-          <button className="btn btn-secondary">✏️ Manual Plan</button>
-          <button className="btn btn-secondary" style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }}>🔄 Cross-Dock</button>
-          <button className="btn btn-primary" disabled={busy || !hasAnyQuotes} onClick={onConfirm} style={{ background: "linear-gradient(135deg,#059669,#10b981)", border: "none" }}>
-            {busy ? "Creating..." : `✅ Confirm & Create ${totalShipments > 1 ? totalShipments + " Shipments" : "Shipment"}`}
+          {/* TMS bug #4: toggle into manual entry mode. Disabled when no
+              callback is wired (defensive — keeps the button visibly
+              non-functional rather than throwing). */}
+          <button
+            className="btn btn-secondary"
+            disabled={busy || !onManualPlan}
+            onClick={onManualPlan ? () => onManualPlan() : undefined}
+            style={manualMode ? { background: "rgba(99,102,241,.12)", borderColor: "rgba(99,102,241,.3)", color: "var(--accent)" } : undefined}
+            title={manualMode ? "Currently in manual mode — click again to return to auto rates" : "Bypass rate engine and enter values manually"}
+          >
+            ✏️ {manualMode ? "Manual Mode" : "Manual Plan"}
+          </button>
+          {/* TMS bug #3: Cross-Dock opens a modal that captures the
+              waypoint info. The modal itself lives in OrdersPage so it
+              has access to warehouse-dock configs. */}
+          <button
+            className="btn btn-secondary"
+            disabled={busy || !onCrossDock}
+            onClick={onCrossDock ? () => onCrossDock() : undefined}
+            style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }}
+            title="Designate a cross-dock waypoint for this shipment"
+          >
+            🔄 Cross-Dock
+          </button>
+          <button className="btn btn-primary" disabled={confirmDisabled} onClick={onConfirm} style={{ background: "linear-gradient(135deg,#059669,#10b981)", border: "none" }}>
+            {busy ? "Creating..." : manualMode ? "✅ Create Manual Shipment" : `✅ Confirm & Create ${totalShipments > 1 ? totalShipments + " Shipments" : "Shipment"}`}
           </button>
         </div>
       </div>

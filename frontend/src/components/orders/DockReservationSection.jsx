@@ -22,7 +22,7 @@ export default function DockReservationSection({ dockEnabled, dockDoor, dockStar
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: dockEnabled ? 1 : 0.4, pointerEvents: dockEnabled ? "auto" : "none" }}>
         <span style={{ fontSize: 11, color: "var(--text3)" }}>Loading Duration</span>
-        <select value={loadDuration} onChange={(e) => onModalChange((p) => p ? { ...p, loadDuration: Number(e.target.value) } : null)} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 11 }}>
+        <select value={loadDuration} onChange={(e) => onModalChange((p) => p ? { ...p, loadDuration: Number(e.target.value), loadDurationOverridden: true } : null)} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 11 }}>
           {LOAD_DURATION_OPTIONS.map((d) => <option key={d} value={d}>{d} min</option>)}
         </select>
       </div>
