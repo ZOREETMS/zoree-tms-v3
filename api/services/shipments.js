@@ -6,6 +6,10 @@ const db = require('./supabase');
 const history = require('./changeHistory');
 const { syncLinkedOrdersForShipmentStatus, SHIPMENT_STATUS_TO_ORDER_STATUS } =
   require('./shipmentEvents');
+// Lazy-required to avoid a circular load with omsSync (which itself
+// imports shipment helpers in some paths). Resolved at call time so the
+// dock-mirror only fires when actually triggered by updateShipment().
+function omsSync() { return require('./omsSync'); }
 
 function dbToShipment(r) {
   return {
@@ -29,6 +33,8 @@ function dbToShipment(r) {
     notes:              r.notes          || null,
     loadingStart:       r.loading_start  || null,
     loadingEnd:         r.loading_end    || null,
+    dockDoor:           r.dock_door      || null,
+    dockTime:           r.dock_time      || null,
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
   };
@@ -57,6 +63,8 @@ function shipmentToDb(s) {
     notes:            s.notes           || null,
     loading_start:    s.loadingStart    || null,
     loading_end:      s.loadingEnd      || null,
+    dock_door:        s.dockDoor        || null,
+    dock_time:        s.dockTime        || null,
   };
 }
 
@@ -120,6 +128,50 @@ async function updateShipment(id, updates, tenantConfig = null, context = {}) {
   const merged   = { ...existing, ...updates, id };
   const row = await db.dbUpdate('shipments', id, shipmentToDb(merged), tenantConfig);
   const next = dbToShipment(row || merged);
+
+  // ── Dock-assignment mirror ─────────────────────────────────────────
+  // When dock_door / dock_time / loading_start / loading_end change
+  // outside the bulk-plan/tender-accept paths (e.g. dock-scheduling
+  // edit), mirror the new window into linked oms_orders so the OMS
+  // Load & Ship modal stays in sync. Best-effort — never roll back the
+  // shipment update if the mirror fails.
+  const dockFields = ['dockDoor', 'dockTime', 'loadingStart', 'loadingEnd'];
+  const dockChanged = dockFields.some((k) => (existing[k] || null) !== (next[k] || null));
+  if (dockChanged) {
+    for (const field of dockFields) {
+      const before = existing[field] || null;
+      const after  = next[field]     || null;
+      if (before === after) continue;
+      try {
+        await history.recordChange({
+          entityType: 'shipment',
+          entityId:   id,
+          action:     'update',
+          field,
+          before,
+          after,
+          user:       context.user || null,
+          metadata:   { via: context.via || 'shipment-update' },
+        });
+      } catch (auditErr) {
+        console.error('[shipments] dock history failed:', auditErr.message);
+      }
+    }
+    try {
+      const sync = omsSync().syncDockToOms;
+      if (typeof sync === 'function') {
+        await sync({
+          shipmentId:   id,
+          dockDoor:     next.dockDoor     || null,
+          dockTime:     next.dockTime     || null,
+          loadingStart: next.loadingStart || null,
+          loadingEnd:   next.loadingEnd   || null,
+        }, context.user || null);
+      }
+    } catch (mirrorErr) {
+      console.error('[shipments] dock OMS mirror failed:', mirrorErr.message);
+    }
+  }
 
   // Detect a status transition that the sync map cares about and
   // propagate it to linked orders via the single-source-of-truth helper

@@ -34,6 +34,15 @@ const historyClears = require('./services/changeHistoryClears');
 const orderLinesAudit = require('./services/orderLinesAudit');
 const { buildOrderLineId } = require('./services/orderLineIds');
 const shipmentMutations = require('./services/shipmentMutations');
+// QA bug #101 / #102 fix: PATCH /api/shipments/:id/status was defined
+// only in routes/shipments.js but that router was never mounted, so
+// the mobile Confirm / Tender / In-Transit / Delivered taps all hit
+// Express's default 404 ("Route not found") and surfaced as
+// "Status update failed". We now reach into the same shipService
+// updateShipment that the router file used, but expose the endpoint
+// inline so the existing /api/shipments/* inline routes stay
+// authoritative for the paths they already serve.
+const shipService = require('./services/shipments');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
@@ -1524,6 +1533,22 @@ app.post('/api/orders', async (req, res) => {
   try {
     const id = req.body?.id || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const row = await dbUpsert('orders', { id, ...apiOrderToDbPatch(req.body || {}) }, null);
+
+    // QA bug #91 ("New order creation is failing and order is not
+    // getting created") fix: PostgREST's upsert can return an empty
+    // payload when the row write was silently discarded (RLS denial,
+    // etc.). dbUpsert previously returned `undefined` in that case and
+    // we still 201'd, so the mobile thought the create succeeded but
+    // no row appeared. Validate the response carries an id before
+    // confirming success — surfaces a concrete error to the form
+    // instead of a phantom-success.
+    if (!row || !row.id) {
+      console.error('[orders.create] dbUpsert returned no row for id', id);
+      return res.status(500).json({
+        error: 'Order create did not return a row. The write may have been blocked by row-level security or a constraint.',
+      });
+    }
+
     // REQ-01: broadcast to SSE subscribers so orders appear in TMS
     // without any manual refresh, regardless of which path created them.
     bus.emit(EVENTS.ORDER_CREATED, {
@@ -1733,6 +1758,55 @@ app.post('/api/shipments/:id/change-carrier', async (req, res) => {
   } catch (e) {
     const status = e.status || 500;
     res.status(status).json({ ok: false, error: e.message });
+  }
+});
+
+// PATCH /api/shipments/:id/status — quick status transition used by the
+// mobile detail screen for the Tender / Confirm / In-Transit / Delivered
+// chip row (QA bugs #101, #102). Validates against the canonical enum
+// (kept in lock-step with chk_shipments_status_controlled — see
+// migrations/036_shipments_status_add_tender_accepted.sql) and routes
+// through shipService.updateShipment so the order cascade in
+// shipmentEvents fires and a status row lands in change_history.
+app.patch('/api/shipments/:id/status', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  const role = getUserRole(u);
+  if (!['admin', 'planner', 'dispatcher'].includes(role)) {
+    return res.status(403).json({
+      error: `Role '${role}' cannot update shipment status. Required: admin, planner, dispatcher.`,
+    });
+  }
+  const { status } = req.body || {};
+  // Mirrors the VALID list in routes/shipments.js so behaviour stays
+  // identical if/when that router is eventually mounted.
+  const VALID = [
+    'Planned',
+    'Tendered',
+    'Tender Accepted',
+    'Tender Rejected',
+    'Confirmed',
+    'In Transit',
+    'Delivered',
+    'Cancelled',
+    'Exception',
+  ];
+  if (!VALID.includes(status)) {
+    return res.status(400).json({
+      error: `Invalid status. Must be one of: ${VALID.join(', ')}`,
+    });
+  }
+  try {
+    const shipment = await shipService.updateShipment(
+      req.params.id,
+      { status },
+      req.tenant || null,
+      { user: u, via: 'shipment-status-patch' },
+    );
+    res.json(shipment);
+  } catch (e) {
+    const code = e.status || 500;
+    res.status(code).json({ error: e.message });
   }
 });
 

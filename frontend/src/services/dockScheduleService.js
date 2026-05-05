@@ -3,8 +3,9 @@
  * Pure service layer — no React state, no UI side-effects.
  */
 
-import { DbApi } from "../lib/api";
+import { DbApi, ShipmentsApi } from "../lib/api";
 import { DOCK_DOORS } from "../constants/docks";
+import { buildDockFields } from "./dockService";
 
 const DEFAULT_CONFIG = {
   num_doors: 6,
@@ -61,6 +62,40 @@ export function buildDockConfig(row) {
     startHour: row.start_hour ?? DEFAULT_CONFIG.start_hour,
     endHour: row.end_hour ?? DEFAULT_CONFIG.end_hour,
   };
+}
+
+/**
+ * Persist a dock-board appointment edit back to its underlying shipment row.
+ * Without this, dock door / time changes made on the Dock Scheduling page
+ * only updated local React state — the schedule board reflected the new
+ * door but the shipment record (and Shipment Details, OMS Load & Ship,
+ * exports) kept the old value.
+ *
+ * Routes through ShipmentsApi.update (PATCH /api/shipments/:id) so the
+ * backend writes change_history rows and mirrors the dock window into
+ * linked oms_orders via syncDockToOms (CLAUDE_RULES §3/§4 — services-first,
+ * no raw DbApi.patch on shipments).
+ *
+ * @param {string} shipmentId   - id of the shipment whose dock to update
+ * @param {object} opts
+ * @param {string} opts.door       - "Door 1", "Door 6", …
+ * @param {string} opts.start      - "HH:mm" loading-window start
+ * @param {number} opts.duration   - minutes
+ * @param {string} [opts.pickupDate] - shipment pickup date (yyyy-mm-dd)
+ * @returns {Promise<object>} updated shipment row from the API
+ */
+export async function persistShipmentDockAssignment(shipmentId, { door, start, duration, pickupDate }) {
+  if (!shipmentId) throw new Error("persistShipmentDockAssignment: shipmentId is required");
+  if (!door)       throw new Error("persistShipmentDockAssignment: door is required");
+  if (!start)      throw new Error("persistShipmentDockAssignment: start is required");
+
+  const fields = buildDockFields({ door, startTime: start, duration: duration || 90, pickupDate });
+  return ShipmentsApi.update(shipmentId, {
+    dockDoor:     fields.dockDoor,
+    dockTime:     fields.dockTime,
+    loadingStart: fields.loadingStart,
+    loadingEnd:   fields.loadingEnd,
+  });
 }
 
 /**

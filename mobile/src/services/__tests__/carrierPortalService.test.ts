@@ -183,7 +183,11 @@ describe('saveTenderResponse', () => {
     await expect(saveTenderResponse({ id: 'A' }, { action: 'maybe' as any })).rejects.toThrow(/accept.*reject/);
   });
 
-  it('on accept: writes notes marker, status Tendered, pro_number, pickup_date', async () => {
+  // QA #61 (2026-05-05): on accept, shipment status now flips to
+  // 'Tender Accepted' so it tracks the linked orders. Until migration
+  // 036 widened the shipments status CHECK constraint we kept it at
+  // 'Tendered' as a workaround — that is no longer required.
+  it('on accept: writes notes marker, status Tender Accepted, pro_number, pickup_date', async () => {
     (DbApi.patch as jest.Mock).mockResolvedValue({ ok: true });
     await saveTenderResponse(
       { id: 'SHP-1', carrier: 'JB Hunt', notes: 'orig note' },
@@ -193,7 +197,7 @@ describe('saveTenderResponse', () => {
       'shipments',
       'SHP-1',
       expect.objectContaining({
-        status: 'Tendered',
+        status: 'Tender Accepted',
         pro_number: 'PRO-9',
         pickup_date: '2026-04-30',
         pickup: '2026-04-30',

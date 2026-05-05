@@ -17,7 +17,6 @@ import {
   Text,
   ScrollView,
   TextInput,
-  Switch,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -38,10 +37,18 @@ import {
   ORDER_STATUSES,
   SHIP_MODES,
   SERVICE_LEVELS,
+  INCOTERMS,
 } from '../../shared/constants/orderConstants';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 import SelectField from '../../components/common/SelectField';
 import DateField from '../../components/common/DateField';
+// QA bug #107 — line-items editor replaces the standalone Weight /
+// Pieces inputs in the Freight section. See orders/LineItemsEditor for
+// the rollup contract (weight/pieces are derived from the lines list).
+import LineItemsEditor, {
+  rollupLineTotals,
+} from '../../components/orders/LineItemsEditor';
+import { OrdersApi } from '../../shared/api';
 import type { PlanningTabParamList } from '../../navigation/types';
 
 type FormRoute = RouteProp<PlanningTabParamList, 'OrderForm'>;
@@ -76,10 +83,45 @@ export default function OrderFormScreen() {
           // doesn't choke on a number value.
           weight: existing.weight != null ? String(existing.weight) : '',
           pieces: existing.pieces != null ? String(existing.pieces) : '',
+          // QA bug #107 — `lines` is hydrated lazily for edits via
+          // OrdersApi.lines (effect below). Start with whatever was
+          // already on the cached order, otherwise empty.
+          lines: Array.isArray(existing.lines) ? existing.lines : [],
         }
       : { ...EMPTY_ORDER },
   );
   const [saving, setSaving] = useState(false);
+
+  // QA bug #107: when editing an existing order, fetch its current
+  // line items so the editor opens populated. New orders skip this —
+  // their lines start empty and the user adds them inline.
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!isEdit || !orderId) return;
+    OrdersApi.lines(orderId)
+      .then((rows: any[]) => {
+        if (cancelled || !Array.isArray(rows)) return;
+        setForm((p: any) => ({
+          ...p,
+          lines: rows.map((r: any, i: number) => ({
+            line_num: r.line_num ?? i + 1,
+            item_id: r.item_id || '',
+            description: r.description || '',
+            qty_ordered: Number(r.qty_ordered ?? r.qty ?? 0) || 0,
+            unit_weight: Number(r.unit_weight ?? r.unitWt ?? 0) || 0,
+            total_weight: Number(r.total_weight ?? r.totalWt ?? 0) || 0,
+          })),
+        }));
+      })
+      .catch(() => {
+        // Swallow: the user can still edit the rest of the order if
+        // the lines fetch flaked. The detail screen has its own
+        // editor as a recovery path.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, orderId]);
 
   // Dropdown options derived from already-loaded DataContext rows.
   // Memoised so the picker FlatLists don't re-key on every form
@@ -96,7 +138,54 @@ export default function OrderFormScreen() {
     if (saving) return;
     setSaving(true);
     try {
-      const saved = await saveOrder(form, orderId || null);
+      // QA bug #107: weight + pieces are now derived from the line
+      // items rather than entered directly. Roll them up into the
+      // form payload so the planner-facing header stays populated
+      // (validateOrderPayload still requires weight > 0). If the user
+      // hasn't added any lines, the existing weight/pieces values
+      // (preserved from the EMPTY_ORDER strings or a hydrated edit)
+      // are kept as-is so we don't accidentally zero-out an order
+      // that already had a header value before this change shipped.
+      const lines = Array.isArray(form.lines) ? form.lines : [];
+      let payloadForm = form;
+      if (lines.length > 0) {
+        const { totalWeight, totalPieces } = rollupLineTotals(lines);
+        payloadForm = {
+          ...form,
+          weight: String(totalWeight || 0),
+          pieces: String(totalPieces || 0),
+        };
+      }
+      const saved = await saveOrder(payloadForm, orderId || null);
+      // QA bug #107: persist the line items alongside the order. The
+      // POST /api/orders/:id/lines endpoint replaces all lines (delete
+      // + insert), so sending an empty array on edit also clears
+      // them — which matches the user-visible state of the editor.
+      const targetId = saved?.id || orderId || payloadForm.id;
+      if (targetId) {
+        try {
+          await OrdersApi.saveLines(
+            String(targetId),
+            lines.map((l: any, i: number) => ({
+              line_num: l.line_num || i + 1,
+              item_id: l.item_id || null,
+              description: l.description || '',
+              qty_ordered: Number(l.qty_ordered) || 0,
+              unit_weight: Number(l.unit_weight) || 0,
+              total_weight: Number(l.total_weight) || 0,
+            })),
+          );
+        } catch (linesErr: any) {
+          // Don't fail the whole save just because the lines write
+          // flaked — the order itself is already saved. Surface a
+          // soft warning so the user knows to retry from the detail
+          // screen's lines editor.
+          console.warn(
+            '[OrderFormScreen] Order saved but lines write failed:',
+            linesErr?.message,
+          );
+        }
+      }
       await refreshData();
       // After create: route the user to the new order's detail view
       // so they can plan / tender / copy. After edit: pop back to
@@ -114,7 +203,10 @@ export default function OrderFormScreen() {
       // bottom out at the same opaque alert and the user can't tell
       // which it is.
       const raw = String(e?.message || 'Unknown error');
-      const isNetwork = /Network request failed|Failed to fetch|TypeError: Network/i.test(raw);
+      // Catch both the raw fetch errors RN can surface and the
+      // friendlier rewrite produced by the shared api() wrapper
+      // (#90: "Cannot reach server. Check your connection ...").
+      const isNetwork = /Network request failed|Failed to fetch|TypeError: Network|Cannot reach server/i.test(raw);
       const title = isNetwork ? 'Cannot reach server' : 'Could not save order';
       const body = isNetwork
         ? 'The app could not reach the TMS API. Check your Wi-Fi, then verify the API base URL in Settings.'
@@ -193,6 +285,55 @@ export default function OrderFormScreen() {
             placeholder="City, ST ZIP"
             modalTitle="Select Destination"
           />
+          {/* QA bug #106: Ship-from Name / Ship-to Name removed; the
+              mobile new-order flow now collects City + State per side
+              (the canonical orders.origin / orders.dest column already
+              stores "City, ST ZIP" — saveOrder composes that string
+              from the camelCase camel fields below in
+              ordersService.buildOrderSavePayload). The DB columns
+              ship_from_name / ship_to_name remain editable on the web. */}
+          <View style={styles.row}>
+            <View style={styles.flex}>
+              <FormInput
+                label="Origin City"
+                value={form.originCity}
+                onChangeText={(v: string) => updateField('originCity', v)}
+                autoCapitalize="words"
+              />
+            </View>
+            <View style={styles.flex}>
+              <FormInput
+                label="Origin State"
+                value={form.originState}
+                onChangeText={(v: string) =>
+                  updateField('originState', v.toUpperCase())
+                }
+                autoCapitalize="characters"
+                maxLength={2}
+              />
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.flex}>
+              <FormInput
+                label="Dest City"
+                value={form.destCity}
+                onChangeText={(v: string) => updateField('destCity', v)}
+                autoCapitalize="words"
+              />
+            </View>
+            <View style={styles.flex}>
+              <FormInput
+                label="Dest State"
+                value={form.destState}
+                onChangeText={(v: string) =>
+                  updateField('destState', v.toUpperCase())
+                }
+                autoCapitalize="characters"
+                maxLength={2}
+              />
+            </View>
+          </View>
           <View style={styles.row}>
             <View style={styles.flex}>
               <FormInput
@@ -211,47 +352,23 @@ export default function OrderFormScreen() {
               />
             </View>
           </View>
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <FormInput
-                label="Ship-from Name"
-                value={form.shipFromName}
-                onChangeText={(v: string) => updateField('shipFromName', v)}
-              />
-            </View>
-            <View style={styles.flex}>
-              <FormInput
-                label="Ship-to Name"
-                value={form.shipToName}
-                onChangeText={(v: string) => updateField('shipToName', v)}
-              />
-            </View>
-          </View>
 
-          {/* Freight */}
+          {/* Freight — QA bug #107: standalone Weight / Pieces inputs
+              removed from this section. Users now build the freight
+              from a Line Items list (item dropdown + qty + unit
+              weight); buildOrderSavePayload rolls those up into the
+              order's weight/pieces header so the planner sees the
+              same totals it always has. */}
           <Text style={styles.sectionTitle}>Freight</Text>
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <FormInput
-                label="Weight (lbs)"
-                value={String(form.weight ?? '')}
-                onChangeText={(v: string) => updateField('weight', v)}
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.flex}>
-              <FormInput
-                label="Pieces"
-                value={String(form.pieces ?? '')}
-                onChangeText={(v: string) => updateField('pieces', v)}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
           <FormInput
             label="Commodity"
             value={form.commodity}
             onChangeText={(v: string) => updateField('commodity', v)}
+          />
+          <LineItemsEditor
+            lines={form.lines || []}
+            items={data.items || []}
+            onChange={(next: any[]) => updateField('lines', next)}
           />
           {/* QA bug #88: Ship Mode chip row must include "None" so
               users can clear the mode. SHIP_MODES now starts with ''
@@ -298,29 +415,29 @@ export default function OrderFormScreen() {
             </View>
           </View>
 
-          {/* References */}
+          {/* References — QA bug #109: Ref # was not required by the
+              planner / OMS workflow, so it has been removed from the
+              mobile form. The orders.ref_num column stays in the DB
+              (web edit path still surfaces it) — we just don't
+              collect it here. PO # is now full-width in the row. */}
           <Text style={styles.sectionTitle}>References</Text>
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <FormInput
-                label="PO #"
-                value={form.poNum}
-                onChangeText={(v: string) => updateField('poNum', v)}
-              />
-            </View>
-            <View style={styles.flex}>
-              <FormInput
-                label="Ref #"
-                value={form.refNum}
-                onChangeText={(v: string) => updateField('refNum', v)}
-              />
-            </View>
-          </View>
           <FormInput
+            label="PO #"
+            value={form.poNum}
+            onChangeText={(v: string) => updateField('poNum', v)}
+          />
+          {/* QA bug #108: Incoterms is now a controlled dropdown
+              sourced from INCOTERMS in orderConstants. Free-text was
+              causing inconsistent values between mobile and web; the
+              two surfaces now share the same canonical list. */}
+          <SelectField
             label="Incoterms"
-            value={form.incoterms}
-            onChangeText={(v: string) => updateField('incoterms', v)}
-            placeholder="e.g. FOB, DAP"
+            value={form.incoterms || ''}
+            onChange={(v) => updateField('incoterms', v)}
+            options={INCOTERMS.map((t) => ({ value: t, label: t }))}
+            placeholder="Select Incoterms"
+            modalTitle="Select Incoterms"
+            allowCustom={false}
           />
 
           {/* Status (edit-only — new orders default to Unplanned) */}
@@ -335,48 +452,30 @@ export default function OrderFormScreen() {
             </>
           )}
 
-          {/* Carrier preferences */}
-          <Text style={styles.sectionTitle}>Carrier Preferences</Text>
-          <FormInput
-            label="Preferred Carrier"
-            value={form.preferredCarrier}
-            onChangeText={(v: string) => updateField('preferredCarrier', v)}
-          />
-          <FormInput
-            label="Excluded Carrier"
-            value={form.excludedCarrier}
-            onChangeText={(v: string) => updateField('excludedCarrier', v)}
-          />
+          {/* QA bug #111: Carrier Preferences, Flags, and Notes
+              sections are not part of the mobile new-order workflow —
+              dispatchers set those on the web planner. Underlying
+              columns (preferred_carrier, excluded_carrier, hazmat,
+              no_consolidate, no_contract_rate, dedicated_equip, notes)
+              remain in the DB and are still editable on web; we just
+              stop collecting them here. EMPTY_ORDER keeps the keys so
+              the API contract (camelCase payload) stays unchanged. */}
 
-          {/* Flags */}
-          <Text style={styles.sectionTitle}>Flags</Text>
-          <SwitchRow
-            label="Hazmat"
-            value={!!form.hazmat}
-            onValueChange={(v: boolean) => updateField('hazmat', v)}
-          />
-          <SwitchRow
-            label="Do Not Consolidate"
-            value={!!form.noConsolidate}
-            onValueChange={(v: boolean) => updateField('noConsolidate', v)}
-          />
-          <SwitchRow
-            label="No Contract Rate"
-            value={!!form.noContractRate}
-            onValueChange={(v: boolean) => updateField('noContractRate', v)}
-          />
-          <SwitchRow
-            label="Dedicated Equipment"
-            value={!!form.dedicatedEquip}
-            onValueChange={(v: boolean) => updateField('dedicatedEquip', v)}
-          />
-
-          {/* Notes */}
-          <Text style={styles.sectionTitle}>Notes</Text>
+          {/* QA bug #110: Special Instructions captures freight-specific
+              handling notes for the carrier (e.g. lift-gate required,
+              call before delivery). Persists to orders.notes — the
+              same column the OMS push service writes its
+              special_instructions field into (see
+              services/omsSync/pushOrderService.js), so a value entered
+              here lines up with what the OMS already sends. Renaming
+              the DB column would be a REQ-02 audited migration; the
+              UI relabel is the right scope for this QA item. */}
+          <Text style={styles.sectionTitle}>Special Instructions</Text>
           <FormInput
-            label="Notes"
+            label="Special Instructions"
             value={form.notes}
             onChangeText={(v: string) => updateField('notes', v)}
+            placeholder="e.g. lift-gate required, call before delivery"
             multiline
             numberOfLines={4}
             style={styles.notesInput}
@@ -401,28 +500,6 @@ function FormInput({ label, value, onChangeText, style, ...props }: any) {
         onChangeText={onChangeText}
         placeholderTextColor={colors.text3}
         {...props}
-      />
-    </View>
-  );
-}
-
-function SwitchRow({
-  label,
-  value,
-  onValueChange,
-}: {
-  label: string;
-  value: boolean;
-  onValueChange: (v: boolean) => void;
-}) {
-  return (
-    <View style={styles.switchRow}>
-      <Text style={styles.switchLabel}>{label}</Text>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: colors.border, true: `${colors.accent}80` }}
-        thumbColor={value ? colors.accent : colors.bg2}
       />
     </View>
   );
@@ -544,17 +621,4 @@ const styles = StyleSheet.create({
     color: colors.text2,
   },
   chipTextActive: { color: colors.white, fontWeight: fontWeight.semibold },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  switchLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.text,
-  },
 });

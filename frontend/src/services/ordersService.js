@@ -694,15 +694,15 @@ export async function fetchCarrierQuotes(lane, calcDatesFn, dueDate, readyDate, 
     return (a.totalCharge || 0) - (b.totalCharge || 0); // then cheapest
   });
 
-  // After sorting, the first feasible-and-cheapest quote is the "best"
-  // from the constrained pool. Recompute so bestQuote stays consistent
-  // with the filter — but only promote a feasible quote; if none are
-  // feasible, fall back to the cheapest so the caller's existing
-  // dates.error path can surface a clear failure reason.
-  if (modeConstraint || slConstraint) {
-    const firstFeasible = sortedQuotes.find(isFeasible);
-    workingBest = firstFeasible || sortedQuotes[0] || null;
-  }
+  // After sorting, the first feasible-and-cheapest quote is the "best".
+  // Always promote feasible-first (not only under constraints) — bulk
+  // planners use bestQuote directly, and the rule is: prefer the cheapest
+  // FEASIBLE carrier; only fall back to the cheapest infeasible quote so
+  // the caller's dates.warning / dates.error path can surface a clear
+  // failure reason. The Plan modal pre-selects bestQuote too, so this
+  // also makes the modal's default selection a sane on-time pick.
+  const firstFeasible = sortedQuotes.find(isFeasible);
+  workingBest = firstFeasible || sortedQuotes[0] || null;
 
   return { quotes: sortedQuotes, bestQuote: workingBest };
 }
@@ -952,8 +952,12 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
             failures.addMany(bestSubset, FAILURE_CODES.NO_CARRIER_QUOTE);
           } else {
             const dates = calcDates(subBest, subDueD, subReadyD);
-            if (dates.error) {
-              failures.addMany(bestSubset, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+            // Bulk / Plan-Selected fail orders when the chosen quote can't
+            // honour ready/due — `error` (no transit) OR `warning` (transit
+            // overshoots due date). Only the single Plan modal allows the
+            // user to override an infeasible carrier.
+            if (dates.error || dates.warning) {
+              failures.addMany(bestSubset, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error || dates.warning);
             } else {
               lanePlans.push({
                 laneKey: subsetLane.laneKey, origin: subsetLane.origin, destination: subsetLane.destination,
@@ -989,8 +993,8 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
               return null;
             }
             const dates = calcDates(indBest, order.due || "", order.ready || "");
-            if (dates.error) {
-              failures.add(order.id, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+            if (dates.error || dates.warning) {
+              failures.add(order.id, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error || dates.warning);
               return null;
             }
             return {
@@ -1018,8 +1022,8 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
               return null;
             }
             const dates = calcDates(indBest, order.due || "", order.ready || "");
-            if (dates.error) {
-              failures.add(order.id, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+            if (dates.error || dates.warning) {
+              failures.add(order.id, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error || dates.warning);
               return null;
             }
             return {
@@ -1041,9 +1045,15 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
       } else {
         // Dates compatible or single order — plan as-is
         const dates = calcDates(bestQuote, dueD, readyD);
-        if (dates.error) {
-          // REQ-28: the single best quote's transit doesn't honour ready/due.
-          failures.addMany(sg.orders, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error);
+        if (dates.error || dates.warning) {
+          // REQ-28 + feasibility rule: the single best quote's transit
+          // doesn't honour ready/due. Fail every order in this group with
+          // DATES_INCOMPATIBLE so Bulk Plan / Plan Selected surface a
+          // clear reason in the results panel. The user can re-plan a
+          // failed order through the single Plan modal and pick an
+          // infeasible carrier manually if the SLA is intentionally
+          // being relaxed.
+          failures.addMany(sg.orders, FAILURE_CODES.DATES_INCOMPATIBLE, dates.error || dates.warning);
         } else {
           lanePlans.push({
             laneKey: sg.lane.laneKey, origin: sg.lane.origin, destination: sg.lane.destination,

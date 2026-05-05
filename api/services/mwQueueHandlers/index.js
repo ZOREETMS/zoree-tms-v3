@@ -11,11 +11,13 @@
 const { handlePushOrder } = require('./pushOrderHandler');
 const { handlePushShip }  = require('./pushShipHandler');
 const { handlePushPod }   = require('./pushPodHandler');
+const { handlePullTmsShipmentDetails } = require('./pullTmsShipmentDetailsHandler');
 
 const HANDLERS = Object.freeze({
-  PUSH_ORDER_TO_TMS: handlePushOrder,
-  PUSH_SHIP_STATUS:  handlePushShip,
-  PUSH_POD_STATUS:   handlePushPod,
+  PUSH_ORDER_TO_TMS:          handlePushOrder,
+  PUSH_SHIP_STATUS:           handlePushShip,
+  PUSH_POD_STATUS:            handlePushPod,
+  PULL_TMS_SHIPMENT_DETAILS:  handlePullTmsShipmentDetails,
 });
 
 /**

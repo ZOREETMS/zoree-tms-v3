@@ -52,7 +52,21 @@ router.patch('/:id', requireRole('admin', 'planner', 'dispatcher'), async (req, 
 router.patch('/:id/status', requireRole('admin', 'planner', 'dispatcher'), async (req, res, next) => {
   try {
     const { status } = req.body;
-    const VALID = ['Planned','Tendered','Confirmed','In Transit','Delivered','Cancelled','Exception'];
+    // Keep this list in lock-step with the DB constraint
+    // chk_shipments_status_controlled (see
+    // api/migrations/036_shipments_status_add_tender_accepted.sql).
+    // 'Tender Accepted' (QA #61) added 2026-05-05.
+    const VALID = [
+      'Planned',
+      'Tendered',
+      'Tender Accepted',
+      'Tender Rejected',
+      'Confirmed',
+      'In Transit',
+      'Delivered',
+      'Cancelled',
+      'Exception',
+    ];
     if (!VALID.includes(status)) {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${VALID.join(', ')}` });
     }

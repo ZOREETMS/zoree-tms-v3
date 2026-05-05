@@ -229,10 +229,13 @@ function resolveAcceptedFields(shipment: any, response: TenderResponse) {
 /**
  * Persist a tender response on the shipment row. Mirrors web logic:
  *   - notes gets a [CP_RESPONSE] marker line with the payload
- *   - on accept: status stays "Tendered" (web UI surfaces accepted via
- *     the marker, the DB enum doesn't permit "Confirmed" everywhere),
- *     carrier pro number + dock door + loading window + pickup/delivery
- *     dates are written to shipments
+ *   - on accept: status flips to "Tender Accepted" (QA #61 — until
+ *     migration 036 widened the shipments status CHECK constraint we
+ *     used to leave it at "Tendered" because "Tender Accepted" was
+ *     rejected at the DB level; that's what produced the QA report
+ *     "Order shows Tender Accepted but Shipment doesn't"), carrier
+ *     pro number + dock door + loading window + pickup/delivery dates
+ *     are written to shipments
  *   - on reject: status flips to "Tender Rejected"
  *   - on accept, linked orders flip to "Tender Accepted" and inherit
  *     the same dock + dates so the OMS warehouse modals (REQ-24) read
@@ -270,7 +273,11 @@ export async function saveTenderResponse(
 
   if (normalized.action === 'accept') {
     const accepted = resolveAcceptedFields(shipment, normalized);
-    patch.status = 'Tendered';
+    // QA #61: write the shipment to 'Tender Accepted' so it tracks
+    // the linked orders (which flip to the same value below). Allowed
+    // by migration 036 — the historical 'Tendered' fallback is
+    // obsolete.
+    patch.status = 'Tender Accepted';
     patch.pro_number = normalized.proNumber || null;
 
     if (accepted.pickupDate) {

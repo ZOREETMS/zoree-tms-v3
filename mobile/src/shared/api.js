@@ -44,20 +44,105 @@ export function configureAuthHooks({ onUnauthorized }) {
   _onUnauthorized = typeof onUnauthorized === "function" ? onUnauthorized : null;
 }
 
+/**
+ * QA bug #90 ("Network request failed" on order save) fix:
+ * Naked fetch on iOS / RN throws a TypeError("Network request failed")
+ * the moment the app loses network for a few hundred ms — even if
+ * connectivity comes back immediately. The user sees the failure with
+ * no recourse. We now:
+ *
+ *   - Cap each request at 15s via AbortController so a hung connection
+ *     fails fast instead of locking the form spinner forever.
+ *   - Retry once on transient network errors (fetch threw OR HTTP 502 /
+ *     503 / 504). One retry is enough to cover the common case
+ *     (cellular hand-off, LTE blip) without doubling load on real
+ *     outages.
+ *   - Surface a friendlier error message ("Cannot reach server. Check
+ *     your connection and try again.") so callers don't have to parse
+ *     fetch's opaque TypeError.
+ *
+ * Auth refresh path (#59) is preserved unchanged.
+ */
+const REQUEST_TIMEOUT_MS = 15000;
+const TRANSIENT_HTTP_STATUSES = new Set([502, 503, 504]);
+
+function isTransientFetchError(err) {
+  if (!err) return false;
+  const msg = String(err.message || err).toLowerCase();
+  // RN / iOS / Android each phrase the offline error slightly
+  // differently — treat any of these as retryable.
+  return (
+    msg.includes("network request failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network error") ||
+    msg.includes("typeerror") ||
+    err.name === "AbortError"
+  );
+}
+
+async function fetchWithTimeout(url, init, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function api(path, options = {}) {
   const t = typeof token === "function" ? token() : "";
   const authToken = t instanceof Promise ? await t : t;
 
-  const send = async (bearer) => fetch(`${_apiBase}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const send = async (bearer) =>
+    fetchWithTimeout(
+      `${_apiBase}${path}`,
+      {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+          ...(options.headers || {}),
+        },
+      },
+      REQUEST_TIMEOUT_MS,
+    );
 
-  let res = await send(authToken);
+  // First attempt. If fetch itself throws (offline) we fall through to
+  // the retry block. HTTP errors (4xx/5xx) come back as a Response and
+  // are handled below.
+  let res;
+  let firstErr = null;
+  try {
+    res = await send(authToken);
+  } catch (err) {
+    firstErr = err;
+  }
+
+  // Transient retry: one retry on network throw OR a 5xx that's
+  // typically caused by an upstream blip. Keeps real 4xx errors
+  // (validation, auth) on the fast path — those don't get retried.
+  if (
+    (firstErr && isTransientFetchError(firstErr)) ||
+    (res && TRANSIENT_HTTP_STATUSES.has(res.status))
+  ) {
+    try {
+      res = await send(authToken);
+      firstErr = null;
+    } catch (retryErr) {
+      firstErr = retryErr;
+    }
+  }
+
+  if (firstErr) {
+    // Surface a human-readable error instead of "TypeError: Network
+    // request failed". Callers (OrderFormScreen, etc.) already pass
+    // err.message into Alert.alert, so this is what the user sees.
+    if (isTransientFetchError(firstErr)) {
+      throw new Error("Cannot reach server. Check your connection and try again.");
+    }
+    throw firstErr;
+  }
 
   // 401 = expired/invalid token. Try a one-shot refresh through the
   // registered hook; if it returns a fresh token, retry once.

@@ -268,6 +268,18 @@ export const ShipmentsApi = {
   remove(id) {
     return api(`/shipments/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
+  // Audited PATCH for shipment field updates. Goes through
+  // /api/shipments/:id (shipService.updateShipment) so dock-field
+  // changes write change_history rows and trigger the OMS dock mirror —
+  // the previous DbApi.patch("shipments", ...) path skipped both.
+  // Payload uses camelCase keys (dockDoor, dockTime, loadingStart,
+  // loadingEnd, …) matching api/services/shipments.js mappers.
+  update(id, payload) {
+    return api(`/shipments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload || {}),
+    });
+  },
   // REQ-02: fetch change_history rows for a given shipment.
   history(id, limit = 200) {
     return api(`/shipments/${encodeURIComponent(id)}/history?limit=${limit}`);

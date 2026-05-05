@@ -1,25 +1,34 @@
 /**
  * Order constants — shared by OrderFormScreen, OrderDetailScreen, and
  * any future bulk-action UI that needs the same blank order shape or
- * controlled value lists. Centralising these here satisfies the rule
- * "no hardcoded data in UI" — screens import from this module rather
- * than inlining their own status / mode strings.
- */
-
-/**
- * Default shape used when the user starts a brand-new order via
- * Dashboard → Quick Actions → New Order. Field names match the API
- * camelCase contract (apiOrderToDbPatch tolerates both casings, but
- * we standardise on camelCase here so the form pre-population path
- * for an existing order — which comes back from GET /api/orders in
- * dbToOrderApi shape — is symmetrical with the create path).
+ * controlled value lists.
+ *
+ * QA bug #106 + #107 fix:
+ *   #106 — Ship From/To Name fields removed from the mobile new-order
+ *          flow; replaced by City + State per side. The DB columns
+ *          ship_from_name / ship_to_name remain (web edit path still
+ *          surfaces them), but mobile no longer collects them so they
+ *          stay null on mobile-created orders. New camelCase keys
+ *          originCity / originState / destCity / destState carry the
+ *          values used to compose the canonical origin/dest string the
+ *          orders table already stores.
+ *   #107 — Standalone weight/pieces removed from the freight section.
+ *          Replaced by a `lines` array (line_num, item_id, description,
+ *          qty_ordered, unit_weight, total_weight) — same shape as
+ *          POST /api/orders/:id/lines accepts. Weight + pieces are now
+ *          rolled up from the lines client-side at save time so the
+ *          planner still sees a populated header.
  */
 export const EMPTY_ORDER = {
   id: '',
   customer: '',
   origin: '',
   destination: '',
+  originCity: '',
+  originState: '',
   originZip: '',
+  destCity: '',
+  destState: '',
   destZip: '',
   shipFromName: '',
   shipToName: '',
@@ -41,44 +50,20 @@ export const EMPTY_ORDER = {
   noContractRate: false,
   dedicatedEquip: false,
   notes: '',
+  lines: [],
 };
 
-/**
- * Controlled status values. Mirrors the orders.status check
- * constraint after migration 014 (tender_accepted) and 017 (shipped).
- * Source-of-truth for the UI dropdown; do not free-text statuses.
- */
 export const ORDER_STATUSES = [
-  'Unplanned',
-  'Planned',
-  'Tendered',
-  'Tender Accepted',
-  'Shipped',
-  'Delivered',
-  'Cancelled',
+  'Unplanned', 'Planned', 'Tendered', 'Tender Accepted',
+  'Shipped', 'Delivered', 'Cancelled',
 ];
 
-/**
- * Ship modes the planner recognises. Kept in lock-step with the web
- * NewOrderModal options so an order created on mobile and one created
- * on web are interchangeable to the planner.
- *
- * The leading empty string represents "None" (i.e. let the planner
- * pick / no preference). It maps to NULL in the DB and is rendered as
- * the literal "None" by ChipRow consumers — see SERVICE_LEVELS for the
- * same pattern.
- */
 export const SHIP_MODES = ['', 'TL', 'LTL', 'Parcel', 'Intermodal'];
 
-/**
- * Service-level options. Free-text on the DB side (REQ-10), but
- * the UI should offer the canonical list so planning constraints stay
- * matchable against the rates table.
- */
 export const SERVICE_LEVELS = [
-  '',
-  'Standard',
-  'Guaranteed',
-  'Expedited',
-  'White Glove',
+  '', 'Standard', 'Guaranteed', 'Expedited', 'White Glove',
+];
+
+export const INCOTERMS = [
+  'EXW','FCA','CPT','CIP','DAP','DPU','DDP','FAS','FOB','CFR','CIF',
 ];

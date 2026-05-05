@@ -36,7 +36,7 @@ export function calcDates(quote, dueDate, readyDate) {
   const today = new Date().toISOString().slice(0, 10);
   const transit = quote.transitDays || null;
   if (!transit) {
-    return { pickup: null, delivery: null, transit: null, error: "No transit time available" };
+    return { pickup: null, delivery: null, transit: null, error: "No transit time available", warning: null };
   }
   const minPickup = today > (readyDate || "") ? today : (readyDate || today);
   let pickup = minPickup;
@@ -45,7 +45,17 @@ export function calcDates(quote, dueDate, readyDate) {
     if (idealPickup >= minPickup) pickup = idealPickup;
   }
   const delivery = addBusinessDays(pickup, transit);
-  return { pickup, delivery, transit, error: null };
+  // Feasibility: latestReady + transit must land on/before dueDate. If the
+  // earliest possible pickup (today/ready) plus transit overshoots dueDate,
+  // the quote can NOT meet the SLA. Surface as `warning` (distinct from
+  // `error`, which means no transit time at all). Bulk paths treat warning
+  // as a hard failure (DATES_INCOMPATIBLE); the single Plan modal keeps
+  // the override path open by ignoring warning.
+  let warning = null;
+  if (dueDate && delivery > dueDate) {
+    warning = `Delivery ${delivery} after due ${dueDate} (transit ${transit}d)`;
+  }
+  return { pickup, delivery, transit, error: null, warning };
 }
 
 /* ── Rating helper ── */
@@ -82,7 +92,11 @@ export function buildPlan(lane, bestQuote, laneOrders) {
     .reverse()[0] || "";
 
   const dates = calcDates(bestQuote, dueDate, readyDate);
-  if (dates.error) return null;
+  // Reject on `error` (no transit time) AND `warning` (transit can't meet
+  // due date). Bulk / AI / progressive-split planners must never plant a
+  // shipment that will deliver late — only the user-driven Plan modal can
+  // override an infeasible carrier (see OrdersPage.confirmPlan).
+  if (dates.error || dates.warning) return null;
 
   return {
     laneKey: lane.laneKey,

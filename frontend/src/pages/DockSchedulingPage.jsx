@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { DOCK_DOORS, DEFAULT_DOCK_CONFIG } from "../constants/docks";
 // API calls go through dockScheduleService (services layer)
 import { parseLoadingWindow } from "../services/dockService";
-import { getDockConfigForWarehouse, saveDockConfig } from "../services/dockScheduleService";
+import { getDockConfigForWarehouse, saveDockConfig, persistShipmentDockAssignment } from "../services/dockScheduleService";
 import DockLegend from "../components/dock-scheduling/DockLegend";
 import DockGrid from "../components/dock-scheduling/DockGrid";
 import AppointmentCard from "../components/dock-scheduling/AppointmentCard";
@@ -138,9 +138,31 @@ export default function DockSchedulingPage() {
     });
   }
 
-  function saveAppt() {
+  async function saveAppt() {
     if (!editAppt) return;
     const appt = { ...editAppt, date: dockDate, id: editAppt.id || "DA-" + Date.now() };
+
+    // Shipment-tied appointment: persist dock fields back to the shipment
+    // row so Shipment Details / OMS / exports see the new door. Local
+    // appointments state isn't authoritative for these — the next render
+    // will rebuild them from refreshed shipments.
+    if (appt.shipmentId) {
+      try {
+        await persistShipmentDockAssignment(appt.shipmentId, {
+          door:       appt.door,
+          start:      appt.start,
+          duration:   appt.duration,
+          pickupDate: appt.date,
+        });
+        await refreshData();
+        setEditAppt(null);
+      } catch (err) {
+        alert(`Failed to update shipment dock: ${err.message}`);
+      }
+      return;
+    }
+
+    // Ad-hoc (non-shipment) appointment — keep the local-state path.
     setAppointments((prev) => {
       const existing = prev.findIndex((a) => a.id === appt.id);
       if (existing >= 0) { const next = [...prev]; next[existing] = appt; return next; }

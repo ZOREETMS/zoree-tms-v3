@@ -97,18 +97,56 @@ export function buildOrderCopyPayload(source: any, newId: string) {
 }
 
 /**
+ * QA bug #106 helper: compose a "City, ST ZIP" address string from
+ * the new mobile City + State + ZIP form fields. Mirrors the web's
+ * LocationFieldsEditor canonicalisation so origin / dest values are
+ * indistinguishable between mobile and web on the saved row.
+ *
+ * Returns null when nothing useful was supplied (so the caller can
+ * fall through to whatever the dropdown picked).
+ */
+export function composeAddress(
+  city: string | null | undefined,
+  state: string | null | undefined,
+  zip: string | null | undefined,
+): string | null {
+  const c = String(city || '').trim();
+  const s = String(state || '').trim().toUpperCase();
+  const z = String(zip || '').trim();
+  if (!c && !s && !z) return null;
+  let head = '';
+  if (c && s) head = `${c}, ${s}`;
+  else if (c) head = c;
+  else if (s) head = s;
+  return (head + (z ? ` ${z}` : '')).trim() || null;
+}
+
+/**
  * Build the payload for a save (create or edit) coming from
  * OrderFormScreen. The form holds form-friendly strings (e.g. weight
  * as a typed text value); coerce to API-shape primitives here so the
  * UI doesn't have to know about the wire contract.
+ *
+ * QA bug #106: if the user typed values into the new City/State
+ * inputs, those override whatever was pre-populated by the
+ * Origin/Destination dropdown. The orders table stores origin/dest
+ * as a free-text "City, ST ZIP" string, so we compose the typed
+ * fields into that same shape. ship_from_name / ship_to_name remain
+ * pass-through for back-compat with web-edited orders, but the
+ * mobile form no longer collects them.
  */
 export function buildOrderSavePayload(form: any) {
   const f = form || {};
+  const composedOrigin = composeAddress(f.originCity, f.originState, f.originZip);
+  const composedDest = composeAddress(f.destCity, f.destState, f.destZip);
   return {
     id: f.id || undefined,
     customer: trimOrNull(f.customer),
-    origin: trimOrNull(f.origin),
-    destination: trimOrNull(f.destination ?? f.dest),
+    // Prefer the explicitly-typed City/State address; fall back to
+    // the dropdown value so users who only used the picker still
+    // produce a populated origin/destination column.
+    origin: composedOrigin || trimOrNull(f.origin),
+    destination: composedDest || trimOrNull(f.destination ?? f.dest),
     originZip: trimOrNull(f.originZip),
     destZip: trimOrNull(f.destZip),
     shipFromName: trimOrNull(f.shipFromName),
@@ -212,14 +250,39 @@ export async function copyOrder(source: any): Promise<any> {
 }
 
 /**
+ * Strip null / undefined / empty-string fields from a save payload.
+ *
+ * QA bug #92 ("DB update failed (400)") fix: the form always emits
+ * every field via trimOrNull, so empty inputs come through as null.
+ * On EDIT that PATCHes the existing row, sending null for an unchanged
+ * blank input causes PostgREST to attempt to write null into a
+ * NOT-NULL column (or trip a CHECK constraint), returning 400. By
+ * omitting unset keys on edit we let PostgREST keep the column's
+ * existing value.
+ *
+ * Boolean fields are deliberately preserved — `false` is meaningful
+ * (it's how the user un-checks Hazmat / Do Not Consolidate / etc.).
+ * The `id` field is also preserved so the server can echo it.
+ */
+function omitUnsetFields(payload: any): any {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(payload || {})) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === 'string' && v.length === 0) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
  * Save an order from the form screen. Routes to OrdersApi.create for
  * new rows and OrdersApi.update for edits. Validation runs first so
  * we don't bother the server with obviously-bad payloads.
  *
  * @param form     Form state (UI-shape, mostly camelCase strings)
  * @param orderId  Pass for edits; omit for create
- * @returns        The saved order row (server response when present,
- *                 otherwise the locally-built payload).
+ * @returns        The saved order row from the server. Throws if the
+ *                 server response is empty / missing an id — see #91.
  * @throws         Validation Error with `.fields` listing the missing
  *                 / invalid fields, OR a network error from the API.
  */
@@ -233,9 +296,22 @@ export async function saveOrder(form: any, orderId?: string | null): Promise<any
     throw err;
   }
   if (isEdit) {
-    const updated = await OrdersApi.update(orderId as string, payload);
-    return updated || { ...payload, id: orderId };
+    // #92: omit unset fields so PostgREST does not try to write null
+    // into NOT-NULL columns or violate the status CHECK constraint.
+    const editPayload = omitUnsetFields(payload);
+    const updated = await OrdersApi.update(orderId as string, editPayload);
+    if (!updated || !updated.id) {
+      throw new Error('Order update did not return a row. Please retry.');
+    }
+    return updated;
   }
   const created = await OrdersApi.create(payload);
-  return created || payload;
+  // #91: refuse to report success when the server returned nothing —
+  // previously we fell back to `payload` and the form thought the
+  // create worked even though no row was written. Surface a concrete
+  // error so the form can show it and the user can retry.
+  if (!created || !created.id) {
+    throw new Error('Order create did not return a row. Please retry.');
+  }
+  return created;
 }

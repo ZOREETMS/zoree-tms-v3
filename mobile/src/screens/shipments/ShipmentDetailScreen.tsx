@@ -38,6 +38,12 @@ type DetailRoute = RouteProp<PlanningTabParamList, 'ShipmentDetail'>;
  * QA bug #63 fix: align mobile's status flow with the canonical enum
  * the API enforces. The previous list contained "Picked Up", which
  * the server rejected with a 400.
+ *
+ * Note (2026-05-05): the QA report on #63 has been deferred pending
+ * a decision on whether 'Picked Up' should become a first-class
+ * shipment status. The shipment-lifecycle design doc currently
+ * treats it as order-only, with the timeline event mapping directly
+ * to 'In Transit' (see api/services/shipmentEvents.js EVENT_MAP).
  */
 const STATUS_FLOW = ['Planned', 'Tendered', 'Confirmed', 'In Transit', 'Delivered'] as const;
 
@@ -103,6 +109,15 @@ export default function ShipmentDetailScreen() {
     }
   }, [shipment, shipmentId]);
 
+  /**
+   * QA bug #100 fix: previously the copy succeeded silently and the
+   * user was bounced back to the list with no feedback, leading them
+   * to retry-tap and create accidental duplicates. We now hold on the
+   * detail screen until the user dismisses a success Alert that
+   * surfaces the new shipment id, then navigate back. The new id is
+   * read from copyShipment's return value (the freshly-built row),
+   * with a defensive fallback if the service ever changes its shape.
+   */
   const handleCopy = useCallback(() => {
     if (!shipment) return;
     Alert.alert(
@@ -115,9 +130,21 @@ export default function ShipmentDetailScreen() {
           onPress: async () => {
             setMutating(true);
             try {
-              await copyShipment(shipment);
+              const created = await copyShipment(shipment);
               if (refreshData) await refreshData();
-              navigation.goBack();
+              const newId =
+                created?.id ||
+                created?.shipment_id ||
+                created?.shipmentId ||
+                '';
+              Alert.alert(
+                'Shipment copied',
+                newId
+                  ? `Shipment copied successfully\n${newId}`
+                  : 'Shipment copied successfully.',
+                [{ text: 'OK', onPress: () => navigation.goBack() }],
+                { cancelable: false },
+              );
             } catch (e: any) {
               Alert.alert('Copy failed', e?.message || 'Could not copy shipment');
             } finally {
