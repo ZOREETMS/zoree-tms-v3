@@ -255,13 +255,15 @@ const ALLOWED = [
   'trial_signups',
 ];
 
-const rolePermissionService = createRolePermissionService({ dbSelect, dbUpsert });
+const rolePermissionService = createRolePermissionService({ dbSelect, dbUpsert, dbDelete });
 const {
   ROLE_FEATURES,
   getTenantId,
   getUserRole,
   loadRolePermissions,
   saveRolePermissions,
+  createRole: createRolePerm,
+  deleteRole: deleteRolePerm,
   canWriteTable,
 } = rolePermissionService;
 
@@ -572,6 +574,8 @@ app.use('/api/roles', createRolesRouter({
   getUserRole,
   loadRolePermissions,
   saveRolePermissions,
+  createRole: createRolePerm,
+  deleteRole: deleteRolePerm,
   roleFeatures: ROLE_FEATURES,
 }));
 

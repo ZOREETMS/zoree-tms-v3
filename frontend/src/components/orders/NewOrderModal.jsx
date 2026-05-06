@@ -72,7 +72,7 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
               <label style={labelSt}>Mode</label>
               <select value={form.shipMode || ""} onChange={(e) => upd("shipMode", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
                 <option value="">— TMS selects —</option>
-                {["TL","LTL","Intermodal","Flatbed","Reefer","Partial","Expedite","Air Freight"].map((m) => <option key={m} value={m}>{m}</option>)}
+                {["TL","LTL","Intermodal","Flatbed","Reefer","Parcel","Expedite","Air Freight"].map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             <div>

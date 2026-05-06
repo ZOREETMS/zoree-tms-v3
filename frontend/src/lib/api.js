@@ -115,6 +115,17 @@ export const AuthApi = {
       body: JSON.stringify({ permissions }),
     });
   },
+  createRole({ roleKey, displayName, description, defaultLevel } = {}) {
+    return api("/roles", {
+      method: "POST",
+      body: JSON.stringify({ roleKey, displayName, description, defaultLevel }),
+    });
+  },
+  deleteRole(role) {
+    return api(`/roles/${encodeURIComponent(role)}`, {
+      method: "DELETE",
+    });
+  },
 };
 
 export const DbApi = {
