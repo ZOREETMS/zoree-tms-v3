@@ -3,7 +3,7 @@
  * Pure service layer — no React state, no toasts, no UI side-effects.
  */
 
-import { DbApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
+import { DbApi, ShipmentsApi, OrdersApi, BulkPlanApi, MileageApi } from "../lib/api";
 import { buildAddressString } from "../types/location";
 // REQ-28: per-order planning failure reasons. Enum lives in types/; the
 // collector module owns the "how we accumulate + attribute failures"
@@ -572,8 +572,11 @@ export async function unplanOrderFromShipment(id, orders, shipments) {
         message = `Order ${id} unplanned. Shipment ${shipmentId} deleted.`;
       }
     } else {
-      // Other orders remain — update the shipment's order_ids to remove this order
-      await DbApi.patch("shipments", shipmentId, { order_ids: updatedOrderIds });
+      // Other orders remain — update the shipment's order_ids to remove this order.
+      // Bug #38 follow-up: route through the audited PATCH endpoint;
+      // shipmentToDb maps `consolidatedOrders` → `order_ids` on the
+      // way into the DB.
+      await ShipmentsApi.update(shipmentId, { consolidatedOrders: updatedOrderIds });
       message = `Order ${id} unplanned and removed from shipment ${shipmentId}.`;
     }
   }

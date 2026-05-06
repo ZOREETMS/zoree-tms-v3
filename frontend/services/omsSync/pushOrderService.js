@@ -172,11 +172,12 @@
       line_count:         lines.length,
       origin_zip:         shipFromZip || null,
       dest_zip:           shipToZip   || null,
-      // Bug #66: forward Service Level from oms_orders.priority (the
-      // legacy column the form writes) through to TMS orders. Falls
-      // back to the canonical service_level column for OMS rows
-      // created by future schema work where the form is renamed.
-      service_level:      normalizeOmsServiceLevel(o.priority || o.service_level),
+      // Bug #66 / Bug #33: the OMS column was renamed priority → service_level
+      // (migration 20260505_oms_orders_rename_priority_to_service_level) so
+      // the field name matches the TMS side end-to-end. The legacy
+      // `priority` fallback is kept defensively for any pre-migration row
+      // still in flight; normalizeOmsServiceLevel handles either input.
+      service_level:      normalizeOmsServiceLevel(o.service_level || o.priority),
       // Sync provenance (migration 005) — flags the row as OMS-origin so the
       // TMS UI can render the "OMS-synced" badge and filter on it.
       sync_source:        'oms',

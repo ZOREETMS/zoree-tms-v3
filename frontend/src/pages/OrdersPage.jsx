@@ -8,6 +8,7 @@ import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, f
 import { emptyLocation, locationFromOrderOrigin, locationFromOrderDest, locationsToShipmentPatch } from "../types/location";
 import { getOrderHistory, clearOrderHistory } from "../services/historyService";
 import { assignDockToPlan, getInitialLoadDuration } from "../services/dockService";
+import { DOCK_DOORS, DEFAULT_DOCK_START } from "../constants/docks";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import { getDockConfigForWarehouse } from "../services/dockScheduleService";
 import { useRealtimeOrders } from "../hooks/useRealtimeOrders";
@@ -927,6 +928,15 @@ export default function OrdersPage() {
       shipmentGroups,
       reserveDock: dockSchedulingOn,
       dockSchedulingEnabled: dockSchedulingOn,
+      // Bug #44 / #46: seed dockDoor + dockStartTime to the same defaults
+      // the DockReservationSection dropdowns display. Without this, a user
+      // who confirms without touching the dropdowns hits the auto-assign
+      // branch in assignDockToPlan (which picks the door with least
+      // occupancy and bumps the start time past every existing booking),
+      // so a confirmed "Door 1 / 07:00" silently lands as "Door 3 /
+      // 08:00–09:00" on the resulting shipment row.
+      dockDoor:      DOCK_DOORS[0],
+      dockStartTime: DEFAULT_DOCK_START,
     });
     setDetailOrder(null);
     const ratingStart = Date.now();

@@ -136,20 +136,27 @@ export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, grou
   let start;
   if (dockDoor) {
     door = dockDoor;
-    // Check if the chosen start time conflicts with existing appointments
+    // Bug #44 / #46: respect the user's selected start time. Previously
+    // this branch silently bumped the start forward when the door had
+    // existing occupancy (e.g. user picked 07:00, door already booked
+    // 06:00–07:30, code rewrote start to 07:30 — and a confirmed
+    // 07:00 / Door 1 plan landed on the shipment as 07:30 / Door 1
+    // because the planner trusted what they typed). The conflict is
+    // now surfaced as a soft `dockIssue` so the user can decide,
+    // instead of being silently overridden.
+    start = startTime || DEFAULT_DOCK_START;
     const occupancy = buildDoorOccupancy(existingShipments);
     const doorKey = `${plan.pickupDate || ""}|${(plan.origin || "").toLowerCase().trim()}|${door}`;
     const occupiedMins = occupancy[doorKey] || 0;
-    const requestedStart = startTime || DEFAULT_DOCK_START;
-    const [rh, rm] = requestedStart.split(":").map(Number);
+    const [rh, rm] = start.split(":").map(Number);
     const requestedOffset = (rh - 6) * 60 + (rm || 0);
-    // If requested slot overlaps, push to next available
     if (requestedOffset < occupiedMins) {
-      const h = 6 + Math.floor(occupiedMins / 60);
-      const m = occupiedMins % 60;
-      start = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-    } else {
-      start = requestedStart;
+      const conflictUntil = (() => {
+        const h = 6 + Math.floor(occupiedMins / 60);
+        const m = occupiedMins % 60;
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      })();
+      plan.dockIssue = `${door} on ${plan.pickupDate} at ${plan.origin} is booked through ${conflictUntil} — your ${start} window may overlap.`;
     }
   } else {
     // Auto-assign: find the door with the least occupied time

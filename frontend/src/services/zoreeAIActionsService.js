@@ -13,7 +13,7 @@
  * timeline events, and side-effects as a click-driven one.
  */
 
-import { DbApi, OrdersApi, BulkPlanApi } from "../lib/api";
+import { ShipmentsApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import { planOrdersAsSingleShipment } from "./bulkPlanService";
 import {
   unplanOrderFromShipment,
@@ -26,7 +26,8 @@ import {
   deleteShipmentById,
   changeShipmentCarrier,
 } from "./shipmentService";
-import { unplanOrdersForShipmentRemoval } from "./shipmentOrderService";
+import { unplanOrdersForShipmentRemoval, confirmOrdersForShipment } from "./shipmentOrderService";
+import { propagateTenderAcceptance } from "./tenderAcceptanceNotifier";
 import {
   gatherOrderDetails,
   sendTenderEmailIfAvailable,
@@ -138,7 +139,10 @@ async function updateShipmentStatusAction(p, { shipments }) {
     return `Shipment ${p.shipmentId} status changed from ${prev} → ${p.newStatus} (timeline event recorded)`;
   }
 
-  await DbApi.patch("shipments", p.shipmentId, { status: p.newStatus });
+  // Bug #38 follow-up: route through the audited PATCH endpoint so
+  // status-history rows land in change_history (and the linked-order
+  // cascade fires inside shipService.updateShipment).
+  await ShipmentsApi.update(p.shipmentId, { status: p.newStatus });
   return `Shipment ${p.shipmentId} status changed from ${prev} → ${p.newStatus}`;
 }
 
@@ -304,11 +308,13 @@ async function tenderShipmentAction(p, { shipments, orders, carriers }) {
     ),
   ];
 
+  // Bug #38 follow-up: audited PATCH route, same as the manual UI
+  // tender flow in ShipmentsPage.
   await Promise.all([
-    DbApi.patch("shipments", ship.id, { status: "Tendered", carrier: carrierName }),
+    ShipmentsApi.update(ship.id, { status: "Tendered", carrier: carrierName }),
     ...(isMbol
       ? children.map((c) =>
-          DbApi.patch("shipments", c.id, { status: "Tendered", carrier: carrierName })
+          ShipmentsApi.update(c.id, { status: "Tendered", carrier: carrierName })
         )
       : []),
   ]);
@@ -350,6 +356,87 @@ async function tenderShipmentAction(p, { shipments, orders, carriers }) {
   const emailStatus = emailSent ? `email sent to ${emailTo}` : "email skipped (no carrier email on file)";
   const mbolNote = isMbol ? ` · ${children.length} CBOL(s) tendered` : "";
   return `Shipment ${ship.id} tendered to ${carrierName} · ${emailStatus}${mbolNote}`;
+}
+
+/* ── Action: TENDER_ACCEPT ──────────────────────────────────────
+ *
+ * Carrier-side accept driven from chat. Fixes Bug #62: previously the
+ * chat falling through to UPDATE_SHIPMENT_STATUS only patched the raw
+ * status column (and for "Confirmed" it was silently downgraded back
+ * to "Tendered" by an api/server.js workaround that has since been
+ * removed). The shipment never actually moved out of Tendered, so the
+ * UI kept showing the Accept/Reject buttons even though chat said
+ * "✅ Tender Confirmed."
+ *
+ * Mirrors ShipmentsPage.confirmAcceptTender end-to-end so a chat-
+ * driven accept produces the same row state, the same linked-order
+ * updates, the same OMS mirror, and the same WS broadcast. Per
+ * CLAUDE_RULES §4 it routes through the existing services
+ * (confirmOrdersForShipment + propagateTenderAcceptance) — no new
+ * cross-system logic is added here.
+ */
+async function tenderAcceptAction(p, { shipments, orders }) {
+  const ship = findShipment(shipments, p.shipmentId);
+
+  // Match the UI guard — only a Tendered shipment can be accepted.
+  // The chat may emit ASCII variants of the status string, so trim
+  // and compare case-insensitively.
+  const raw = String(ship.status || "").trim();
+  if (raw !== "Tendered") {
+    throw new Error(`Cannot accept tender for ${ship.id}: status is ${raw || "empty"} (must be Tendered)`);
+  }
+
+  // 1. Move shipment status to "Tender Accepted" — the canonical post-
+  //    accept value (migration 036). Cascades to linked CBOLs when
+  //    this is a master shipment, mirroring ShipmentsPage.
+  // Bug #38 follow-up: audited PATCH route. Status transition writes a
+  // change_history row that the Shipment Timeline picks up, and the
+  // linked-order cascade fires inside shipService.updateShipment.
+  await ShipmentsApi.update(ship.id, { status: "Tender Accepted" });
+  const isMbol = ship.bol_type === "MBOL";
+  const children = isMbol
+    ? shipments.filter((s) => s.master_shipment_id === ship.id && s.bol_type === "CBOL")
+    : [];
+  if (isMbol && children.length) {
+    await Promise.all(
+      children.map((c) => ShipmentsApi.update(c.id, { status: "Tender Accepted" }))
+    );
+  }
+
+  // 2. Move linked orders to "Tender Accepted".
+  const linkedOrders = await confirmOrdersForShipment(ship, shipments, orders);
+
+  // 3. OMS mirror + WS broadcast (REQ-24 / REQ-13 parity with the UI).
+  //    Carrier-supplied fields default to whatever is already on the
+  //    shipment row — a chat accept doesn't have access to the form
+  //    dialog the planner would otherwise fill in.
+  let propagation = null;
+  try {
+    propagation = await propagateTenderAcceptance({
+      shipment: ship,
+      response: {
+        proNumber:         ship.pro_number || "",
+        carrierPickupDate: ship.pickup_date || "",
+        serviceLevel:      ship.service_level || "",
+        bolNumber:         ship.bol_number || "",
+        sealNumber:        ship.seal_number || "",
+        dockDoor:          ship.dock_door || "",
+        dockLoadStart:     "",
+        dockLoadEnd:       "",
+        notes:             p.note || `Accepted via ZoreeAI chat`,
+      },
+      orderIds: linkedOrders.map((o) => o.id),
+    });
+  } catch (_propErr) {
+    /* swallow — the DB writes above already committed; OMS mirror is
+       best-effort, identical to the UI accept path. */
+  }
+
+  const omsNote = propagation && propagation.omsResult && propagation.omsResult.sent
+    ? "OMS synced"
+    : "OMS push best-effort";
+  const mbolNote = isMbol ? ` · ${children.length} CBOL(s) accepted` : "";
+  return `Shipment ${ship.id} tender accepted · ${linkedOrders.length} order(s) updated · ${omsNote}${mbolNote}`;
 }
 
 /* ── Action: GET_RATES ─────────────────────────────────────────── */
@@ -478,6 +565,7 @@ export async function executeChatAction(actionData, ctx = {}) {
     case "ADD_SHIPMENT_EVENT":    return addShipmentEventAction(params, safeCtx);
     case "COPY_ORDER":            return copyOrderAction(params, safeCtx);
     case "TENDER_SHIPMENT":       return tenderShipmentAction(params, safeCtx);
+    case "TENDER_ACCEPT":         return tenderAcceptAction(params, safeCtx);
     case "GET_RATES":             return getRatesAction(params);
     default: throw new Error(`Unknown action: ${action}`);
   }

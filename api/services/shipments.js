@@ -35,36 +35,104 @@ function dbToShipment(r) {
     loadingEnd:         r.loading_end    || null,
     dockDoor:           r.dock_door      || null,
     dockTime:           r.dock_time      || null,
+    // Bug #40 follow-up: service_level + seal_number were absent from
+    // this round-trip mapper, so any caller routing through
+    // updateShipment() with those keys saw them silently dropped. They
+    // are part of the canonical shipment shape (service_level since
+    // migration 013, seal_number since migration 015) — adding them
+    // here lets the audited path handle the same payloads the legacy
+    // DbApi.patch sites used to send. REQ-24 location columns
+    // (origin_zip / dest_zip / ship_from_name / ship_to_name) join
+    // the round trip for the same reason — updateShipmentLocations
+    // (frontend/src/services/shipmentService.js) writes them through
+    // this path now.
+    serviceLevel:       r.service_level  || null,
+    sealNumber:         r.seal_number    || null,
+    originZip:          r.origin_zip     || null,
+    destZip:            r.dest_zip       || null,
+    shipFromName:       r.ship_from_name || null,
+    shipToName:         r.ship_to_name   || null,
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
   };
 }
 
+// Bug #40 follow-up: snake_case → camelCase rename map for incoming
+// updates. Keys not in this map pass through untouched (e.g. `status`,
+// `carrier`, `notes` are spelled the same in both shapes). Used by
+// updateShipment so a snake_case key from a legacy caller correctly
+// overrides the existing camelCase value during merge instead of being
+// dragged behind it.
+const SHIPMENT_DB_TO_APP = Object.freeze({
+  pickup_date:    'pickupDate',
+  delivery_date:  'deliveryDate',
+  total_cost:     'cost',
+  bol_number:     'bolNumber',
+  pro_number:     'proNumber',
+  tracking_number:'trackingNumber',
+  order_ids:      'consolidatedOrders',
+  spot_rate:      'spotRate',
+  czarlite_rate:  'czarliteRate',
+  loading_start:  'loadingStart',
+  loading_end:    'loadingEnd',
+  dock_door:      'dockDoor',
+  dock_time:      'dockTime',
+  service_level:  'serviceLevel',
+  seal_number:    'sealNumber',
+  origin_zip:     'originZip',
+  dest_zip:       'destZip',
+  ship_from_name: 'shipFromName',
+  ship_to_name:   'shipToName',
+  dest:           'destination',
+});
+function normalizeShipmentUpdates(updates) {
+  if (!updates || typeof updates !== 'object') return {};
+  const out = {};
+  for (const [k, v] of Object.entries(updates)) {
+    out[SHIPMENT_DB_TO_APP[k] || k] = v;
+  }
+  return out;
+}
+
 function shipmentToDb(s) {
-  const cost = parseFloat(String(s.cost || '0').replace(/[$,]/g, '')) || 0;
+  // Bug #40 follow-up: tolerate both app-shape (camelCase) and DB-shape
+  // (snake_case) inputs. Some legacy callers (createShipment via
+  // NewShipmentModal, locationsToShipmentPatch helpers) hand the row
+  // straight through with snake_case keys; others (the migrated
+  // ShipmentsApi.update callers) pass canonical camelCase. Falling back
+  // through both shapes per key means a single mapper handles every
+  // caller without silently nulling fields it doesn't recognize.
+  const pick = (camel, snake) => (s[camel] !== undefined && s[camel] !== null && s[camel] !== '' ? s[camel] : s[snake]);
+  const cost = parseFloat(String(s.cost || s.total_cost || '0').replace(/[$,]/g, '')) || 0;
   return {
     id:               s.id,
     carrier:          s.carrier         || '',
     mode:             s.mode            || 'TL',
     origin:           s.origin,
-    dest:             s.destination,
+    dest:             s.destination     || s.dest,
     weight:           parseInt(String(s.weight || 0).replace(/,/g, '')) || 0,
     pieces:           parseInt(s.pieces) || 0,
     status:           s.status          || 'Planned',
-    pickup_date:      s.pickupDate      || null,
-    delivery_date:    s.deliveryDate    || null,
+    pickup_date:      pick('pickupDate', 'pickup_date')         || null,
+    delivery_date:    pick('deliveryDate', 'delivery_date')     || null,
     total_cost:       cost,
-    bol_number:       s.bolNumber       || null,
-    pro_number:       s.proNumber       || null,
-    tracking_number:  s.trackingNumber  || null,
-    order_ids:        s.consolidatedOrders || [],
-    spot_rate:        !!s.spotRate,
-    czarlite_rate:    !!s.czarliteRate,
+    bol_number:       pick('bolNumber', 'bol_number')           || null,
+    pro_number:       pick('proNumber', 'pro_number')           || null,
+    tracking_number:  pick('trackingNumber', 'tracking_number') || null,
+    order_ids:        s.consolidatedOrders || s.order_ids || [],
+    spot_rate:        !!(s.spotRate     ?? s.spot_rate),
+    czarlite_rate:    !!(s.czarliteRate ?? s.czarlite_rate),
     notes:            s.notes           || null,
-    loading_start:    s.loadingStart    || null,
-    loading_end:      s.loadingEnd      || null,
-    dock_door:        s.dockDoor        || null,
-    dock_time:        s.dockTime        || null,
+    loading_start:    pick('loadingStart', 'loading_start')     || null,
+    loading_end:      pick('loadingEnd',   'loading_end')       || null,
+    dock_door:        pick('dockDoor',     'dock_door')         || null,
+    dock_time:        pick('dockTime',     'dock_time')         || null,
+    service_level:    pick('serviceLevel', 'service_level')     || null,
+    seal_number:      pick('sealNumber',   'seal_number')       || null,
+    origin_zip:       pick('originZip',    'origin_zip')        || null,
+    dest_zip:         pick('destZip',      'dest_zip')          || null,
+    ship_from_name:   pick('shipFromName', 'ship_from_name')    || null,
+    ship_to_name:     pick('shipToName',   'ship_to_name')      || null,
   };
 }
 
@@ -125,7 +193,14 @@ async function createShipment(payload, tenantConfig = null) {
 
 async function updateShipment(id, updates, tenantConfig = null, context = {}) {
   const existing = await getShipment(id, tenantConfig);
-  const merged   = { ...existing, ...updates, id };
+  // Bug #40 follow-up: normalize the incoming `updates` to canonical
+  // camelCase before merging. `existing` is camelCase (from
+  // dbToShipment), so a snake_case update key would otherwise sit
+  // alongside the existing camelCase one in `merged` and lose the
+  // tie-breaker in shipmentToDb. Normalizing once here keeps the rest
+  // of the function simple.
+  const normalizedUpdates = normalizeShipmentUpdates(updates);
+  const merged   = { ...existing, ...normalizedUpdates, id };
   const row = await db.dbUpdate('shipments', id, shipmentToDb(merged), tenantConfig);
   const next = dbToShipment(row || merged);
 
@@ -213,4 +288,107 @@ async function updateShipment(id, updates, tenantConfig = null, context = {}) {
   return next;
 }
 
-module.exports = { listShipments, getShipment, createShipment, updateShipment, estimateCost };
+// ────────────────────────────────────────────────────────────────────
+// recordRawPatchAudit — Bug #40: legacy DbApi.patch("shipments", …)
+// call sites bypass updateShipment() and write directly via dbUpdate,
+// so a status='Tendered' transition produced no change_history row and
+// the Shipment Timeline had no source for the "Tendered to Carrier"
+// timestamp (it rendered "Confirmed").
+//
+// Routing every legacy caller through updateShipment is risky because
+// shipmentToDb does not yet know about all DB columns (service_level,
+// seal_number, …) — delegating would silently drop those fields.
+//
+// Instead, the generic /api/db/:table/:id PATCH handler calls this
+// helper AFTER the raw dbUpdate succeeds. We replay the same audit +
+// OMS-mirror logic that updateShipment runs, but driven by a DB-shape
+// (snake_case) patch body and the existing/updated DB rows. Best-
+// effort: the patch is already committed — audit failures must not
+// roll back the user's update.
+// ────────────────────────────────────────────────────────────────────
+async function recordRawPatchAudit({ id, before, after, user, via }) {
+  if (!id || !before || !after) return;
+  const ctxVia = via || 'db-patch';
+
+  // 1. Status change → write the same status row updateShipment writes.
+  if ((before.status || null) !== (after.status || null)) {
+    try {
+      await history.recordChange({
+        entityType: 'shipment',
+        entityId:   id,
+        action:     'status',
+        field:      'status',
+        before:     before.status || null,
+        after:      after.status,
+        user:       user || null,
+        metadata:   { via: ctxVia },
+      });
+    } catch (auditErr) {
+      console.error('[shipments] raw-patch status history failed:', auditErr.message);
+    }
+
+    // Cascade to linked orders for the same status transitions
+    // updateShipment cares about (Tendered, In Transit, Delivered, …).
+    if (SHIPMENT_STATUS_TO_ORDER_STATUS[after.status]) {
+      try {
+        await syncLinkedOrdersForShipmentStatus({
+          shipmentId: id,
+          newStatus:  after.status,
+          user:       user || null,
+          via:        ctxVia,
+        });
+      } catch (syncErr) {
+        console.error('[shipments] raw-patch order sync failed:', syncErr.message);
+      }
+    }
+  }
+
+  // 2. Dock-field changes → audit per field and trigger the OMS dock
+  //    mirror. Mirrors the dockChanged branch in updateShipment.
+  const DOCK_FIELDS_DB = ['dock_door', 'dock_time', 'loading_start', 'loading_end'];
+  const dockChanged = DOCK_FIELDS_DB.some((k) => (before[k] || null) !== (after[k] || null));
+  if (dockChanged) {
+    for (const dbField of DOCK_FIELDS_DB) {
+      const beforeVal = before[dbField] || null;
+      const afterVal  = after[dbField]  || null;
+      if (beforeVal === afterVal) continue;
+      try {
+        // Translate DB column → camelCase app field for the audit row,
+        // matching what updateShipment writes (so the History tab and
+        // dock OMS mirror see a single, consistent shape).
+        const camelMap = {
+          dock_door: 'dockDoor', dock_time: 'dockTime',
+          loading_start: 'loadingStart', loading_end: 'loadingEnd',
+        };
+        await history.recordChange({
+          entityType: 'shipment',
+          entityId:   id,
+          action:     'update',
+          field:      camelMap[dbField] || dbField,
+          before:     beforeVal,
+          after:      afterVal,
+          user:       user || null,
+          metadata:   { via: ctxVia },
+        });
+      } catch (auditErr) {
+        console.error('[shipments] raw-patch dock history failed:', auditErr.message);
+      }
+    }
+    try {
+      const sync = omsSync().syncDockToOms;
+      if (typeof sync === 'function') {
+        await sync({
+          shipmentId:   id,
+          dockDoor:     after.dock_door     || null,
+          dockTime:     after.dock_time     || null,
+          loadingStart: after.loading_start || null,
+          loadingEnd:   after.loading_end   || null,
+        }, user || null);
+      }
+    } catch (mirrorErr) {
+      console.error('[shipments] raw-patch dock OMS mirror failed:', mirrorErr.message);
+    }
+  }
+}
+
+module.exports = { listShipments, getShipment, createShipment, updateShipment, estimateCost, recordRawPatchAudit };

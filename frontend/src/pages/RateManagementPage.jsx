@@ -35,9 +35,18 @@ const MODE_BADGES = {
 };
 
 /* ---------- Format rate display ---------- */
-function formatRate(r) {
+function formatRate(r, carriers = []) {
   // CzarLite rates are computed on-demand when an order requests them — don't show DB value
-  if (r.czarlite) return "\u2014";
+  // Bug #100: previously this checked `r.czarlite` directly, which hid
+  // the rate column for any row with the boolean stuck at true even
+  // when the row's mode (TL / Flatbed / Intermodal / Drayage) made
+  // CzarLite inapplicable. Result: a TL rate row with a stale
+  // czarlite=true flag rendered "\u2014" in the list view while the edit
+  // modal still showed "$3.00" (confusing planners). Routing through
+  // isCzarLiteApplicable (rateService.js \u2014 the canonical "is this row
+  // LTL + CzarLite-eligible" rule used by the badge column and the
+  // filters) keeps the dash limited to rows where it actually applies.
+  if (isCzarLiteApplicable(r, carriers)) return "\u2014";
   const raw = r.rate || r.rate_per_mile || 0;
   const num = typeof raw === "string" ? parseFloat(raw.replace(/[$,]/g, "")) : raw;
   if (!num) return "$0.00";
@@ -637,7 +646,7 @@ export default function RateManagementPage() {
                       </span>
                     </td>
                     <td className="mono fw-700" style={czApplies ? { color: "#6366f1" } : { color: "var(--green)" }}>
-                      {formatRate(r)}
+                      {formatRate(r, carriers)}
                     </td>
                     <td className="text-sm" style={{ color: "var(--text3)" }}>{formatUnit(r)}</td>
                     <td className="mono text-sm">

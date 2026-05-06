@@ -1204,19 +1204,55 @@ app.patch('/api/db/:table/:id', async (req, res) => {
     return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot edit ${req.params.table}` });
   }
   try {
-    // ── Workaround: DB constraint chk_shipments_status_controlled does not yet include
-    // 'Confirmed'. The UI display function already renders Tendered+notes.action=accept
-    // as "Confirmed", so we keep status as 'Tendered' and let notes carry the acceptance.
+    // ── Bug #62 (was: AI tender accept UI mismatch). The previous
+    // workaround here remapped `status: 'Confirmed'` → `'Tendered'`
+    // because the chk_shipments_status_controlled CHECK predated
+    // 'Confirmed'/'Tender Accepted'. Migration 036 widened the
+    // whitelist to include both, so the rewrite is no longer needed —
+    // and was actively masking the AI accept bug (the AI patched
+    // 'Confirmed', the server silently downgraded it to 'Tendered',
+    // displayStatus stayed at 'Tendered', the UI kept showing
+    // Accept/Reject).
     let body = req.body;
-    if (req.params.table === 'shipments' && body.status === 'Confirmed') {
-      body = { ...body, status: 'Tendered' };
-      console.log('[PATCH shipments] Mapping status Confirmed → Tendered (constraint workaround)');
+
+    // ── Bug #40: capture the existing shipment row before the update ──
+    // so the audit helper below can diff status / dock fields. We can't
+    // delegate to shipService.updateShipment because shipmentToDb does
+    // not currently round-trip every DB column (service_level,
+    // seal_number, …) and would silently drop them. So we keep the raw
+    // dbUpdate path and invoke recordRawPatchAudit() afterwards.
+    let shipmentBefore = null;
+    if (req.params.table === 'shipments') {
+      try {
+        const beforeRows = await dbSelect('shipments', `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`);
+        shipmentBefore = beforeRows && beforeRows[0] ? beforeRows[0] : null;
+      } catch (_e) { /* best-effort; audit will no-op without before */ }
     }
+
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpdate(req.params.table, req.params.id, body, null);
     if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
       invalidateLaneRateCaches();
     }
+
+    // Bug #40: write the same change_history row updateShipment would
+    // have written, so the Shipment Timeline can render the "Tendered
+    // to Carrier" timestamp (and dock-field changes flow through to
+    // the OMS Load & Ship modal). Best-effort — never fail the PATCH.
+    if (req.params.table === 'shipments' && shipmentBefore && row) {
+      try {
+        await shipService.recordRawPatchAudit({
+          id:     req.params.id,
+          before: shipmentBefore,
+          after:  row,
+          user,
+          via:    'db-patch',
+        });
+      } catch (auditErr) {
+        console.error('[PATCH /api/db/shipments] audit failed:', auditErr.message);
+      }
+    }
+
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1802,6 +1838,43 @@ app.patch('/api/shipments/:id/status', async (req, res) => {
       { status },
       req.tenant || null,
       { user: u, via: 'shipment-status-patch' },
+    );
+    res.json(shipment);
+  } catch (e) {
+    const code = e.status || 500;
+    res.status(code).json({ error: e.message });
+  }
+});
+
+// ── PATCH /api/shipments/:id — audited generic shipment update ──
+//
+// Bug #38: this endpoint was defined in api/routes/shipments.js but
+// that router is never mounted in server.js, so every call to
+// ShipmentsApi.update() (frontend) returned 404 — silently for the
+// dock-scheduling save path, which then surfaced as "dock door not
+// reflected on the shipment" because the PATCH never reached the DB.
+//
+// Mirrors the route in routes/shipments.js so we keep one canonical
+// behaviour: validates role, delegates to shipService.updateShipment
+// (which writes change_history rows for status/dock changes, fires
+// the OMS dock mirror, and cascades linked-order status). Body uses
+// app-shape camelCase keys (dockDoor, dockTime, loadingStart,
+// loadingEnd, …) per the shipmentToDb mapper.
+app.patch('/api/shipments/:id', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  const role = getUserRole(u);
+  if (!['admin', 'planner', 'dispatcher'].includes(role)) {
+    return res.status(403).json({
+      error: `Role '${role}' cannot update shipments. Required: admin, planner, dispatcher.`,
+    });
+  }
+  try {
+    const shipment = await shipService.updateShipment(
+      req.params.id,
+      req.body,
+      req.tenant || null,
+      { user: u, via: 'shipment-patch' },
     );
     res.json(shipment);
   } catch (e) {

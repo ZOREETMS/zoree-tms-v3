@@ -1443,10 +1443,12 @@ var ZoreeMiddleware = {
         // REQ-11: carry mode + service level across so the TMS planner can
         // honour them (see REQ-09 / REQ-10).
         shipMode: omsOrder.mode || null,
-        // Bugs #33 + #66: priority is the OMS-legacy column; the dropdown
-        // now stores TMS-canonical values directly. Either way, push the
-        // normalized value so a future OMS schema change cannot regress.
-        serviceLevel: normalizeOmsServiceLevel(omsOrder.priority || omsOrder.serviceLevel || omsOrder.service_level),
+        // Bugs #33 + #66: the OMS column was renamed priority → service_level
+        // (migration 20260505_oms_orders_rename_priority_to_service_level) so
+        // OMS and TMS now use the same field name end-to-end. Legacy
+        // `priority` fallback retained defensively for any pre-migration
+        // row still in flight; normalizer collapses either input.
+        serviceLevel: normalizeOmsServiceLevel(omsOrder.service_level || omsOrder.serviceLevel || omsOrder.priority),
         // Fix: the ready-to-ship date was being populated from the due
         // date, so TMS saw ready==due every time. Use the OMS "Ready to
         // Ship Date" field (o.ready) as the primary source and fall
@@ -1639,7 +1641,11 @@ function dbOrder(r){
     shipToState: r.ship_to_state || '',
     destZip:     r.dest_zip      || '',
     ready:r.ready_date||'', due:r.required_date||'', mode:r.ship_mode||'', inco:r.incoterms||'FOB Origin',
-    priority:(r.priority==='Standard'?'':r.priority)||'', comm:r.commodity||'', notes:r.special_instructions||'',
+    // OMS column was renamed priority → service_level (Bug #33). The
+    // in-app field name stays `priority` for now to avoid touching every
+    // render site; only the DB column read is updated. `r.priority` is a
+    // pre-migration fallback for any row still in flight.
+    priority:(((r.service_level||r.priority)==='Standard')?'':(r.service_level||r.priority))||'', comm:r.commodity||'', notes:r.special_instructions||'',
     stage:r.stage||1, hold:r.on_hold||false, holdReason:r.hold_reason||'',
     reservedAt:r.reserved_at, tmsId:r.tms_order_id, tmsShipId:r.tms_shipment_id,
     carrier:r.carrier||'', serviceLevel:r.service_level||'', tmsReleasedAt:r.tms_released_at, tmsPlannedAt:r.tms_planned_at,
@@ -1677,7 +1683,10 @@ async function saveOrder(o){
     ship_to_state: o.shipToState || null,
     required_date:o.due||null,
     ready_date:   o.ready||null, ship_mode:o.mode||null,
-    incoterms:o.inco||'FOB Origin', priority:o.priority||'Standard',
+    // Bug #33: DB column renamed priority → service_level. In-app field
+    // name `priority` is retained as the form-state key; only the row
+    // assembled for the upsert uses the new column name.
+    incoterms:o.inco||'FOB Origin', service_level:o.priority||'Standard',
     commodity:o.comm||null, special_instructions:o.notes||null,
     stage:o.stage, on_hold:o.hold||false, hold_reason:o.holdReason||null,
     tms_order_id:o.tmsId||null, tms_shipment_id:o.tmsShipId||null,
@@ -3083,8 +3092,21 @@ async function copyOrder(id){
   try{
     await saveOrder(copy);
     if(Array.isArray(copy.lines)&&copy.lines.length) await saveLines(newId, copy.lines);
-    orders.push(copy);
-    ro();updateBadges();updatePipelineCounts();
+    // REQ-15 / Bug #19: previously this path called `orders.push(copy)`
+    // and re-rendered. That race-conditioned with the Supabase Realtime
+    // subscription on oms_orders (registered in _startOmsTableRealtime):
+    // saveOrder triggers an INSERT event \u2192 _omsLiveSyncRefresh fires \u2192
+    // loadFromDB() refetches BEFORE saveLines has run \u2192 the refetched
+    // order lands in `orders` with `lines=[]`. The subsequent local
+    // push then duplicates the row, and `orders.find(...)` returns the
+    // empty-lines version, so opening the copied order shows no lines
+    // until a manual reload pulls the real DB state.
+    //
+    // The fix is to wait for saveLines to commit, then force a single
+    // authoritative refetch so the in-memory order has the lines that
+    // were just inserted into oms_order_lines.
+    await loadFromDB();
+    ro(); updateBadges(); updatePipelineCounts();
     toast('\u{1F4CB} Copied to new order '+newId+' (Draft)','tok');
   }catch(e){toast('\u274C Copy failed: '+e.message,'ter');console.error('[copyOrder]',e);}
 }

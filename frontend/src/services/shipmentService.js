@@ -1,4 +1,4 @@
-import { DbApi, OrdersApi, ShipmentsApi } from "../lib/api";
+import { OrdersApi, ShipmentsApi } from "../lib/api";
 import { emptyLocation, locationsToShipmentPatch } from "../types/location";
 
 /**
@@ -270,8 +270,14 @@ export async function deleteShipmentById(shipmentId) {
  * Takes two canonical Location objects ({name, city, state, zip}) and
  * writes the composed origin/dest strings, zip columns, and name
  * columns in a single PATCH. UI components MUST go through this
- * function — they must not call DbApi.patch("shipments", ...) directly
+ * function — they must not call ShipmentsApi.update directly
  * (CLAUDE_RULES #3 / #4 — no API calls from components).
+ *
+ * Bug #38 follow-up: routes through ShipmentsApi.update so the audited
+ * /api/shipments/:id path writes change_history rows and runs the OMS
+ * dock mirror. `locationsToShipmentPatch` returns DB-shape (snake_case)
+ * keys; the audited path normalizes them to camelCase via
+ * `normalizeShipmentUpdates` in api/services/shipments.js.
  *
  * @param {string} shipmentId
  * @param {{name:string,city:string,state:string,zip:string}} fromLoc
@@ -280,7 +286,7 @@ export async function deleteShipmentById(shipmentId) {
 export async function updateShipmentLocations(shipmentId, fromLoc, toLoc) {
   if (!shipmentId) throw new Error("updateShipmentLocations: shipmentId is required");
   const patch = locationsToShipmentPatch(fromLoc, toLoc);
-  return DbApi.patch("shipments", shipmentId, patch);
+  return ShipmentsApi.update(shipmentId, patch);
 }
 
 /**

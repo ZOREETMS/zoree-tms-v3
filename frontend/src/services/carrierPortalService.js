@@ -1,4 +1,4 @@
-import { DbApi } from "../lib/api";
+import { DbApi, ShipmentsApi } from "../lib/api";
 import { resolveCarrierName } from "../utils/carrierPortal";
 
 const RESPONSE_MARKER = "[CP_RESPONSE]";
@@ -206,23 +206,28 @@ export async function saveTenderResponse(shipment, responseData, extra = {}) {
   };
 
   const notes = buildNotesWithResponse(shipment.notes, normalized);
+  // Bug #38 follow-up: shipment patch goes through the audited
+  // ShipmentsApi.update / shipService.updateShipment path. Keys are in
+  // app-shape (camelCase); shipmentToDb maps them onto canonical DB
+  // columns. The legacy redundant `pickup` key (no such column;
+  // patchTableWithFallback used to retry-strip it) is dropped — only
+  // pickupDate is needed.
   const patch = { notes };
 
   if (normalized.action === "accept") {
     // Keep DB status within allowed enum (some environments do not allow "Confirmed" in shipments.status).
     // UI will still show "Confirmed" through effectiveShipmentStatus() when accept response marker is present.
     patch.status = "Tendered";
-    patch.pro_number = normalized.proNumber || null;
+    patch.proNumber = normalized.proNumber || null;
     if (normalized.carrierPickupDate) {
-      patch.pickup_date = normalized.carrierPickupDate;
-      patch.pickup = normalized.carrierPickupDate;
+      patch.pickupDate = normalized.carrierPickupDate;
     }
   }
   if (normalized.action === "reject") {
     patch.status = "Tender Rejected";
   }
 
-  await patchTableWithFallback("shipments", shipment.id, patch);
+  await ShipmentsApi.update(shipment.id, patch);
 
   if (normalized.action === "accept" && Array.isArray(extra.orders) && extra.orders.length) {
     const pickupVal =

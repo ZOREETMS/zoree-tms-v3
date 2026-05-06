@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
-import { DbApi, TenderApi, OrdersApi, BulkPlanApi } from "../lib/api";
+import { DbApi, ShipmentsApi, TenderApi, OrdersApi, BulkPlanApi } from "../lib/api";
 import { sendTenderEmailIfAvailable, gatherOrderDetails, withMergedTenderNotes } from "../services/tenderService";
 import { effectiveShipmentStatus } from "../services/carrierPortalService";
 import { getShipmentHistory } from "../services/historyService";
@@ -91,35 +91,12 @@ function statusColor(status) {
   return "#f59e0b";
 }
 
-function parseMissingColumn(errorMessage) {
-  const msg = String(errorMessage || "");
-  const patterns = [
-    /column\s+"?([a-zA-Z0-9_]+)"?\s+does\s+not\s+exist/i,
-    /Could not find the ['"]([a-zA-Z0-9_]+)['"] column/i,
-    /unknown column ['"]?([a-zA-Z0-9_]+)['"]?/i,
-  ];
-  for (const p of patterns) {
-    const m = msg.match(p);
-    if (m) return m[1];
-  }
-  return "";
-}
-
-async function patchShipmentWithFallback(shipmentId, payload) {
-  const patch = { ...payload };
-  const maxAttempts = Math.max(1, Object.keys(patch).length + 2);
-  for (let i = 0; i < maxAttempts; i += 1) {
-    try {
-      return await DbApi.patch("shipments", shipmentId, patch);
-    } catch (err) {
-      const missing = parseMissingColumn(err.message);
-      if (!missing || !Object.prototype.hasOwnProperty.call(patch, missing)) throw err;
-      delete patch[missing];
-      if (!Object.keys(patch).length) throw err;
-    }
-  }
-  return DbApi.patch("shipments", shipmentId, patch);
-}
+// `patchShipmentWithFallback` and `parseMissingColumn` were removed in
+// the Bug #38 follow-up. They were a workaround for the raw
+// /api/db/shipments/:id path (snake-case PostgREST errors when a
+// column was missing) — irrelevant now that confirmAcceptTender goes
+// through ShipmentsApi.update, which only sends keys shipmentToDb
+// recognizes and so cannot trip a "column does not exist" error.
 
 // CP_RESPONSE notes serialization is owned by services/tenderService —
 // withMergedTenderNotes preserves carrier-supplied fields (driver,
@@ -1114,10 +1091,16 @@ export default function ShipmentsPage() {
 
       // Perf: run independent work in parallel — master PATCH, child PATCHes,
       // and the best-effort order-details fetch don't depend on each other.
+      // Bug #38 follow-up: route through ShipmentsApi.update so the
+      // audited /api/shipments/:id path writes the change_history rows
+      // for the Planned → Tendered transition. The legacy
+      // DbApi.patch("shipments", …) here only landed in the timeline
+      // because of the choke-point audit hook added in Bug #40 — going
+      // through the dedicated route is the cleaner long-term shape.
       const [, , orderDetails] = await Promise.all([
-        DbApi.patch("shipments", row.id, { status: "Tendered", carrier: carrierName }),
+        ShipmentsApi.update(row.id, { status: "Tendered", carrier: carrierName }),
         isMbol
-          ? Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Tendered", carrier: carrierName })))
+          ? Promise.all(children.map((c) => ShipmentsApi.update(c.id, { status: "Tendered", carrier: carrierName })))
           : Promise.resolve(),
         gatherOrderDetails(allLinkedOrders),
       ]);
@@ -1250,31 +1233,32 @@ export default function ShipmentsPage() {
         internalNotes: internalNotes || "",
         respondedAtIso: new Date().toISOString(),
       };
-      // 1. Update shipment in DB. Use canonical column names — see
-      // 20260406_shipments_dock_fields (dock_door, dock_time) and
-      // 20260324120000 (loading_start, loading_end). dock_time is kept
-      // as the human-readable window string for display parity.
+      // 1. Update shipment in DB through the audited PATCH route
+      //    (Bug #38). Payload is the app-shape (camelCase) that
+      //    shipmentToDb maps onto the canonical DB columns. Service
+      //    level + seal number were added to the round-trip in the
+      //    Bug #40 follow-up so they survive this hop.
       const loadingStartFull = combineDateTime(carrierPickupDate, dockLoadStart);
       const loadingEndFull   = combineDateTime(carrierPickupDate, dockLoadEnd);
-      await patchShipmentWithFallback(row.id, {
-        status: "Tendered",
-        pro_number: proNumber || null,
-        pickup_date: carrierPickupDate || null,
-        delivery_date: deliveryDate || null,
-        service_level: serviceLevel || null,
-        bol_number: bolNumber || null,
-        dock_door: dockDoor || null,
-        dock_time: dockLoadStart && dockLoadEnd ? `${dockLoadStart}–${dockLoadEnd}` : (dockLoadStart || null),
-        loading_start: loadingStartFull || null,
-        loading_end:   loadingEndFull   || null,
+      await ShipmentsApi.update(row.id, {
+        status:       "Tendered",
+        proNumber:    proNumber || null,
+        pickupDate:   carrierPickupDate || null,
+        deliveryDate: deliveryDate || null,
+        serviceLevel: serviceLevel || null,
+        bolNumber:    bolNumber || null,
+        dockDoor:     dockDoor || null,
+        dockTime:     dockLoadStart && dockLoadEnd ? `${dockLoadStart}–${dockLoadEnd}` : (dockLoadStart || null),
+        loadingStart: loadingStartFull || null,
+        loadingEnd:   loadingEndFull   || null,
         // REQ-22: persist trailer seal on the shipment row.
-        seal_number: sealNumber || null,
-        notes: withMergedTenderNotes(row.notes, responseAddition),
+        sealNumber:   sealNumber || null,
+        notes:        withMergedTenderNotes(row.notes, responseAddition),
       });
       // 1b. If MBOL, cascade Confirmed to child CBOLs
       if (row.bol_type === "MBOL") {
         const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
-        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Tendered" })));
+        await Promise.all(children.map((c) => ShipmentsApi.update(c.id, { status: "Tendered" })));
       }
       // 2. Update linked orders (master + children)
       const linkedOrders = await confirmOrdersForShipment(row, shipments, orders);
@@ -1333,11 +1317,13 @@ export default function ShipmentsPage() {
     if (!window.confirm(`Reject tender for ${row.id}? Shipment will return to Planned.`)) return;
     setBusyId(row.id);
     try {
-      await DbApi.patch("shipments", row.id, { status: "Planned" });
+      // Bug #38 follow-up: audited PATCH route. Same rationale as the
+      // tender path above.
+      await ShipmentsApi.update(row.id, { status: "Planned" });
       // If MBOL, cascade reject to child CBOLs
       if (row.bol_type === "MBOL") {
         const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
-        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Planned" })));
+        await Promise.all(children.map((c) => ShipmentsApi.update(c.id, { status: "Planned" })));
       }
       toast(`Tender rejected for ${row.id}`, "success");
       await refreshData();
@@ -1352,11 +1338,12 @@ export default function ShipmentsPage() {
     if (!window.confirm(`Withdraw tender for ${row.id}?`)) return;
     setBusyId(row.id);
     try {
-      await DbApi.patch("shipments", row.id, { status: "Planned" });
+      // Bug #38 follow-up: audited PATCH route.
+      await ShipmentsApi.update(row.id, { status: "Planned" });
       // If MBOL, cascade withdraw to child CBOLs
       if (row.bol_type === "MBOL") {
         const children = shipments.filter((s) => s.master_shipment_id === row.id && s.bol_type === "CBOL");
-        await Promise.all(children.map((c) => DbApi.patch("shipments", c.id, { status: "Planned" })));
+        await Promise.all(children.map((c) => ShipmentsApi.update(c.id, { status: "Planned" })));
       }
       toast(`Tender withdrawn for ${row.id}`, "success");
       await refreshData();

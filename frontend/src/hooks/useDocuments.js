@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { generateBOLForShipment, computeDocStats, fetchDocuments, saveDocument, removeDocument } from "../services/documentService";
-import { DbApi, OrdersApi } from "../lib/api";
+import { ShipmentsApi, OrdersApi } from "../lib/api";
 
 export default function useDocuments(shipments, orders) {
   const [documents, setDocuments] = useState([]);
@@ -50,8 +50,11 @@ export default function useDocuments(shipments, orders) {
 
     // Persist to DB
     saveDocument(newDoc).catch(() => {});
-    // Update shipment bol_number field
-    DbApi.patch("shipments", ship.id, { bol_number: newDoc.id }).catch(() => {});
+    // Update shipment bol_number field. Routes through the audited
+    // PATCH /api/shipments/:id (Bug #38) so the change_history row
+    // lands in the timeline instead of going through the raw
+    // /db/shipments path.
+    ShipmentsApi.update(ship.id, { bolNumber: newDoc.id }).catch(() => {});
 
     const action = existing ? "regenerated" : "generated";
     return { success: true, message: `BOL ${action} for ${ship.id}`, doc: newDoc };
