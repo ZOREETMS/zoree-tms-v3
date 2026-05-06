@@ -50,18 +50,22 @@ export const STATUS_ROW_COLORS = {
 
 export const SPOT_ROW_STYLE = { background: "#fef2f2", borderLeft: "3px solid #dc2626" };
 
+// Display-only metadata for equipment dropdowns and badges.
+// `maxWeight` numbers were removed from this map on 2026-05-05 — the planner's
+// LTL/TL gates now read equipment_types.max_weight via equipmentLimitsService.
+// Anything that needs a real ceiling MUST go through useEquipmentLimits() or
+// fetchEquipmentLimits(); icons/labels here are for UI presentation only.
 export const EQUIPMENT_TYPES = {
-  "Dry Van 53'":    { maxWeight: 44000, icon: "🚛" },
-  "Flatbed":        { maxWeight: 48000, icon: "🏗️" },
-  "Reefer 53'":     { maxWeight: 43500, icon: "❄️" },
-  "Step Deck":      { maxWeight: 48000, icon: "📦" },
-  "Lowboy":         { maxWeight: 80000, icon: "⚙️" },
-  "Tanker":         { maxWeight: 46000, icon: "🛢️" },
-  "LTL Truck":      { maxWeight: 15000, icon: "📬" },
-  "Intermodal 53'": { maxWeight: 44000, icon: "🚂" },
+  "Dry Van 53'":    { icon: "🚛" },
+  "Flatbed":        { icon: "🏗️" },
+  "Reefer 53'":     { icon: "❄️" },
+  "Step Deck":      { icon: "📦" },
+  "Lowboy":         { icon: "⚙️" },
+  "Tanker":         { icon: "🛢️" },
+  "LTL Truck":      { icon: "📬" },
+  "Intermodal 53'": { icon: "🚂" },
 };
 
 export const DEFAULT_EQUIP = "Dry Van 53'";
-export const LTL_MAX_WEIGHT = 15000;
-export const TL_MAX_WEIGHT = 44000;
+// LTL_MAX_WEIGHT / TL_MAX_WEIGHT removed — see equipmentLimitsService.js.
 export const DEMO_USERS = ["Sridhar (Dispatcher)", "Tulasi (Admin)", "System (Auto)"];

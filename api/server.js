@@ -22,6 +22,7 @@ const fusionPublisher = require('./services/fusionPublisher');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { matchRate, matchAllRates } = require('./services/rateMatcher');
+const { getLtlMaxWeight } = require('./services/equipmentLimits');
 const {
   apiOrderToDbPatch,
   cleanupOrphanShipmentAfterUnassign,
@@ -2921,6 +2922,21 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       }
     } catch(e) { console.warn('[BulkPlan] carrier flags load error:', e.message); }
 
+    // Resolve the LTL ceiling once per request from equipment_types.LTL.max_weight.
+    // No hardcoded fallback — a missing/inactive LTL row is a misconfiguration
+    // we want to surface, not silently mask with the legacy 15000 constant.
+    let LTL_MAX;
+    try {
+      LTL_MAX = await getLtlMaxWeight();
+    } catch (e) {
+      console.error('[BulkPlan/rate] equipment_types LTL ceiling unavailable:', e.message);
+      return res.status(503).json({
+        error: 'Equipment limits unavailable — equipment_types.LTL.max_weight is missing or unreachable.',
+        detail: e.message,
+      });
+    }
+    console.log(`[BulkPlan/rate] LTL ceiling sourced from equipment_types: ${LTL_MAX} lb`);
+
     let cacheHits = 0;
     let cacheMisses = 0;
     const extractCity = (str) => (str || '')
@@ -2937,7 +2953,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       const { laneKey, originZip, destZip, totalWeight, freightClass, orderIds } = lane;
       const fc = String(freightClass || 70);
       const wt = Math.round(totalWeight || 1000);
-      const LTL_MAX = 15000;
+      // LTL_MAX resolved once per request above from equipment_types.LTL.max_weight.
       const loadType = wt >= 35000 ? 'Full TL' : wt >= LTL_MAX ? 'Partial TL' : 'LTL';
       const laneModes = Array.isArray(lane.includeModes)
         ? lane.includeModes.map((m) => String(m || '').toUpperCase()).filter(Boolean)

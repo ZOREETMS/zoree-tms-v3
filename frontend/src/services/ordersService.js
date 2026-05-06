@@ -845,7 +845,11 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
   // for shipment-group-level drops) instead of silently returning null.
   const failures = createFailureCollector();
 
-  const { LTL_MAX_WEIGHT: LTL_MAX, TL_MAX_WEIGHT: TL_MAX } = await import("../constants/orders.js");
+  // Source LTL/TL ceilings from equipment_types instead of hardcoded constants.
+  // Failure here is fatal for bulk-plan — surfacing the error is preferable to
+  // silently planning under a stale 15000 lb ceiling. See equipmentLimitsService.js.
+  const { fetchEquipmentLimits } = await import("./equipmentLimitsService.js");
+  const { ltlMax: LTL_MAX, tlMax: TL_MAX } = await fetchEquipmentLimits();
   const { calcDates } = await import("./bulkPlanService.js");
 
   // Group by lane + REQ-09 mode + REQ-10 service level constraints.

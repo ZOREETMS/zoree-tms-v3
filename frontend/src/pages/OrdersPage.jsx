@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
-import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, LTL_MAX_WEIGHT, DEMO_USERS } from "../constants/orders";
+import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, DEMO_USERS } from "../constants/orders";
+import { fetchEquipmentLimits } from "../services/equipmentLimitsService";
 import { fmt$, addBusinessDays, calcDates, cityZipLookup, constraintBadges, SdField } from "../utils/orderUtils.jsx";
 import { createShipmentsFromRoute, unplanOrderFromShipment, executeSinglePlan, fetchCarrierQuotes, prefetchCarrierQuotes, bulkPlanOrders, findMatchingRoute, buildShipmentGroups, datesCompatibleWithTransit, buildLocationString, copyOrder, cancelOrder as cancelOrderService, deleteOrderById, saveOrder as saveOrderService, createNewOrder, clearOrderLines, isPlannable, cleanupStaleShipmentRefs, validateAndFailPastDueOrders, clearPlanningFailureNotes, subscribeOrderChanges, normalizeMode, commonModeConstraint, normalizeServiceLevel, commonServiceLevelConstraint } from "../services/ordersService";
 import { emptyLocation, locationFromOrderOrigin, locationFromOrderDest, locationsToShipmentPatch } from "../types/location";
@@ -855,6 +856,17 @@ export default function OrdersPage() {
       await refreshData();
       return;
     }
+    // LTL/TL ceilings come from equipment_types (Equipment Master), not hardcoded
+    // constants. fetchEquipmentLimits is cached for 60s by React Query so this
+    // is effectively free on subsequent clicks. Throws if equipment_types is
+    // misconfigured — preferred over silently planning under a stale ceiling.
+    let ltlMax, tlMax;
+    try {
+      ({ ltlMax, tlMax } = await fetchEquipmentLimits());
+    } catch (e) {
+      toast(`Equipment limits unavailable: ${e.message}`, "error");
+      return;
+    }
     // consolidate=true: group all same-lane orders (normalized). false: just this order.
     const sibs = consolidate
       ? orders.filter((x) => isPlannable(x) && normalizeLane(x.origin) === normalizeLane(o.origin) && normalizeLane(x.dest) === normalizeLane(o.dest))
@@ -884,19 +896,17 @@ export default function OrdersPage() {
     // Split into shipment groups by equipment max weight.
     // REQ-09: when the mode constraint is LTL, stay on LTL capacity; when
     // it's TL, go straight to TL. Otherwise fall back to the historical
-    // weight-based heuristic (LTL unless total exceeds LTL_MAX_WEIGHT).
+    // weight-based heuristic (LTL unless total exceeds the LTL ceiling).
     const equipMaxWeight = laneModeConstraint === "LTL"
-      ? LTL_MAX_WEIGHT
+      ? ltlMax
       : laneModeConstraint === "TL"
-        ? EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight
-        : (totalWeight <= LTL_MAX_WEIGHT
-          ? LTL_MAX_WEIGHT
-          : EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight);
+        ? tlMax
+        : (totalWeight <= ltlMax ? ltlMax : tlMax);
     const groups = buildShipmentGroups(sibs, baseLane, equipMaxWeight);
     const shipmentGroups = groups.map((g) => {
       const gWeight = g.lane.totalWeight;
-      const autoEquip = gWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
-      const maxWt = EQUIPMENT_TYPES[autoEquip].maxWeight;
+      const autoEquip = gWeight <= ltlMax ? "LTL Truck" : DEFAULT_EQUIP;
+      const maxWt = autoEquip === "LTL Truck" ? ltlMax : tlMax;
       return {
         lane: g.lane,
         orders: g.orders,
@@ -910,7 +920,7 @@ export default function OrdersPage() {
     });
 
     const firstEquip = shipmentGroups[0]?.equipType || DEFAULT_EQUIP;
-    const firstMaxWt = shipmentGroups[0]?.maxWt || EQUIPMENT_TYPES[DEFAULT_EQUIP].maxWeight;
+    const firstMaxWt = shipmentGroups[0]?.maxWt || tlMax;
     const firstUtil = shipmentGroups[0]?.util || 0;
 
     const dockSchedulingOn = isFeatureEnabled(planningParameters, "dock_scheduling");
@@ -991,8 +1001,8 @@ export default function OrdersPage() {
             const subsetWeight = bestSubset.reduce((s, o) => s + Number(o.weight || 0), 0);
             const subsetPieces = bestSubset.reduce((s, o) => s + Number(o.pieces || 0), 0);
             const subsetLane = { ...sg.lane, totalWeight: subsetWeight, totalPieces: subsetPieces, orderIds: bestSubset.map(o => o.id) };
-            const subsetEquip = subsetWeight <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
-            const subsetMaxWt = EQUIPMENT_TYPES[subsetEquip].maxWeight;
+            const subsetEquip = subsetWeight <= ltlMax ? "LTL Truck" : DEFAULT_EQUIP;
+            const subsetMaxWt = subsetEquip === "LTL Truck" ? ltlMax : tlMax;
 
             const readyD = bestSubset.map(o => o.ready).filter(Boolean).sort().reverse()[0] || "";
             const dueD = bestSubset.map(o => o.due).filter(Boolean).sort()[0] || "";
@@ -1008,8 +1018,8 @@ export default function OrdersPage() {
             // Rate remainder individually
             for (const order of remainder) {
               const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
-              const singleEquip = Number(order.weight || 0) <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
-              const singleMaxWt = EQUIPMENT_TYPES[singleEquip].maxWeight;
+              const singleEquip = Number(order.weight || 0) <= ltlMax ? "LTL Truck" : DEFAULT_EQUIP;
+              const singleMaxWt = singleEquip === "LTL Truck" ? ltlMax : tlMax;
               const includeModes = singleEquip === "LTL Truck" ? ["LTL", "TL"] : ["TL"];
               const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "", { includeModes });
               finalGroups.push({
@@ -1023,8 +1033,8 @@ export default function OrdersPage() {
             // No compatible subset found — plan all individually
             for (const order of sg.orders) {
               const singleLane = { ...sg.lane, totalWeight: Number(order.weight || 0), totalPieces: Number(order.pieces || 0), orderIds: [order.id] };
-              const singleEquip = Number(order.weight || 0) <= LTL_MAX_WEIGHT ? "LTL Truck" : DEFAULT_EQUIP;
-              const singleMaxWt = EQUIPMENT_TYPES[singleEquip].maxWeight;
+              const singleEquip = Number(order.weight || 0) <= ltlMax ? "LTL Truck" : DEFAULT_EQUIP;
+              const singleMaxWt = singleEquip === "LTL Truck" ? ltlMax : tlMax;
               const includeModes = singleEquip === "LTL Truck" ? ["LTL", "TL"] : ["TL"];
               const { quotes, bestQuote } = await fetchCarrierQuotes(singleLane, calcDates, order.due || "", order.ready || "", { includeModes });
               finalGroups.push({

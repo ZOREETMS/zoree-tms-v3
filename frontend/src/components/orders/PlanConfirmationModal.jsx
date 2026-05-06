@@ -7,6 +7,11 @@ import ManualPlanForm, { validateManualForm } from "./ManualPlanForm";
 // mode differs from the lane's initial estimate, so the modal display
 // matches what the resulting shipment will actually be booked for.
 import { getInitialLoadDuration } from "../../services/dockService";
+// LTL/TL ceilings come from equipment_types via this hook — never from
+// hardcoded numbers in this file. The dropdown options below are
+// presentation-only (icon + name); the actual capacity enforced when
+// the user switches equipment is sourced from the DB.
+import { useEquipmentLimits } from "../../services/equipmentLimitsService";
 
 export default function PlanConfirmationModal({
   planModal, onModalChange, onConfirm, onClose,
@@ -17,6 +22,8 @@ export default function PlanConfirmationModal({
   onCrossDock,
   carriers = [],
 }) {
+  // Hook must run before any early return.
+  const { data: limits } = useEquipmentLimits();
   if (!planModal) return null;
 
   const { lane, siblings, busy, error, maxWt, util, loadDuration, equipType, shipmentGroups, reserveDock, dockSchedulingEnabled } = planModal;
@@ -82,7 +89,12 @@ export default function PlanConfirmationModal({
               value={groups[0]?.equipType || DEFAULT_EQUIP}
               onChange={(e) => {
                 const newEquip = e.target.value;
-                const newMax = EQUIPMENT_TYPES[newEquip].maxWeight;
+                // LTL Truck → equipment_types.LTL.max_weight, anything else →
+                // equipment_types.DV53.max_weight (the configured TL default).
+                // No hardcoded fallback — if `limits` hasn't loaded yet, leave
+                // maxWt unchanged rather than inventing a number.
+                if (!limits) return;
+                const newMax = newEquip === "LTL Truck" ? limits.ltlMax : limits.tlMax;
                 onModalChange((p) => {
                   if (!p) return null;
                   const updated = (p.shipmentGroups || groups).map((g) => ({
@@ -96,9 +108,18 @@ export default function PlanConfirmationModal({
               }}
               style={{ padding: "4px 9px", border: "1.5px solid var(--border)", borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }}
             >
-              {Object.entries(EQUIPMENT_TYPES).map(([name, eq]) => (
-                <option key={name} value={name}>{eq.icon} {name} (Max {eq.maxWeight.toLocaleString()} lbs)</option>
-              ))}
+              {Object.entries(EQUIPMENT_TYPES).map(([name, eq]) => {
+                // Icons + names are presentation only; max weight comes from
+                // equipment_types via useEquipmentLimits. While limits are
+                // loading we hide the parenthetical max rather than fabricate.
+                const max = limits
+                  ? (name === "LTL Truck" ? limits.ltlMax : limits.tlMax)
+                  : null;
+                const label = max != null
+                  ? `${eq.icon} ${name} (Max ${max.toLocaleString()} lbs)`
+                  : `${eq.icon} ${name}`;
+                return <option key={name} value={name}>{label}</option>;
+              })}
             </select>
             <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>Max: <strong style={{ color: "var(--accent)" }}>{(groups[0]?.maxWt || maxWt).toLocaleString()} lbs</strong> per trailer</span>
           </div>
