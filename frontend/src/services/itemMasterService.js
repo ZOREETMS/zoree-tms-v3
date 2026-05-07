@@ -1,89 +1,34 @@
 // ════════════════════════════════════════════════════════════════════
-// itemMasterService — payload mappers + persistence helpers for the
-// Item Master page (items + packaging_units).
+// itemMasterService — persistence helpers for the Item Master page
+// (items + packaging_units).
 //
-// Why this exists:
-//   - Rule 6/9 (CLAUDE_RULES.md): UI must not embed payload-shaping
-//     business logic. Pages only orchestrate.
-//   - QA #135: ItemMasterPage.saveItem was sending `desc` to the
-//     `items` table. The column is `description` (matches the form
-//     field, the equipment service, and `it.description` fallbacks
-//     elsewhere). Centralising the write here keeps the column name
-//     in one place so we don't drift again.
+// Pure payload builders + read helpers live in itemMasterPayload.js
+// (no DbApi import) so they can be unit-tested from plain Node. This
+// module re-exports them so existing callers don't have to switch
+// import paths, and adds the side-effecting save / duplicate / status
+// helpers on top.
 //
-// All Supabase access goes through DbApi (lib/api.js → /api/db/*).
-// No direct Supabase REST calls from the UI.
+// QA #135: payload now writes `description`, not `desc`. See the
+// itemMasterPayload module for the why.
 // ════════════════════════════════════════════════════════════════════
 import { DbApi } from "../lib/api";
+import {
+  buildItemRow,
+  buildPackagingRow,
+  readItemDescription,
+  readPkgDescription,
+} from "./itemMasterPayload";
 
 const ITEMS_TABLE = "items";
 const PKG_TABLE   = "packaging_units";
 
-/** Read helper that tolerates legacy rows where the column was once `desc`. */
-export function readItemDescription(it) {
-  if (!it) return "";
-  return it.description || it.desc || "";
-}
-
-export function readPkgDescription(p) {
-  if (!p) return "";
-  return p.description || p.desc || "";
-}
-
-/**
- * Build the items table row payload from the edit-form state.
- * Note the column is `description`, not `desc` (#135).
- */
-export function buildItemRow(form) {
-  return {
-    id:               (form.id || "").toUpperCase(),
-    description:      (form.description || "").toUpperCase(),
-    customer:         (form.customer || "").toUpperCase(),
-    item_class:       form.class || "General",
-    nmfc:             (form.nmfc || "").toUpperCase(),
-    fclass:           form.freight_class || "70",
-    weight_unit:      parseFloat(form.weight_unit) || 0,
-    value_unit:       parseFloat(form.value_unit)  || 0,
-    len:              parseFloat(form.len) || 0,
-    wid:              parseFloat(form.wid) || 0,
-    hgt:              parseFloat(form.hgt) || 0,
-    units_per_pallet: parseInt(form.units_per_pallet, 10) || 1,
-    pkg:              form.pkg || "Carton",
-    stack:            parseInt(form.stack, 10) || 1,
-    hazmat:           !!form.hazmat,
-    fragile:          !!form.fragile,
-    temp_ctrl:        !!form.temp_ctrl,
-    top_load:         !!form.top_load,
-    un:               form.un || "",
-    haz_class:        form.haz_class || "",
-    status:           form.status || "Active",
-  };
-}
-
-/**
- * Build the packaging_units row payload. Same column-name rule
- * as items: `description`, not `desc` (#135).
- */
-export function buildPackagingRow(form) {
-  return {
-    id:          (form.id || "").toUpperCase(),
-    description: (form.description || form.desc || "").toUpperCase(),
-    type:        form.type || "Carton",
-    material:    form.material || "Corrugated",
-    len:         parseFloat(form.len) || 0,
-    wid:         parseFloat(form.wid) || 0,
-    hgt:         parseFloat(form.hgt) || 0,
-    tare:        parseFloat(form.tare) || 0,
-    max_load:    parseFloat(form.max_load) || 0,
-    stack:       parseInt(form.stack, 10) || 1,
-    returnable:  !!form.returnable,
-    nested:      !!form.nested,
-    hazmat:      !!form.hazmat,
-    cost:        parseFloat(form.cost) || 0,
-    supplier:    form.supplier || "",
-    status:      form.status || "Active",
-  };
-}
+// Re-export the pure helpers so existing call sites keep working.
+export {
+  buildItemRow,
+  buildPackagingRow,
+  readItemDescription,
+  readPkgDescription,
+};
 
 /** Save (create or update) an item row. */
 export async function saveItem({ form, originalId }) {

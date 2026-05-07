@@ -165,8 +165,13 @@ export default function OrderEditModal({
 
   // Dropdown sources are the same as OrderFormScreen's, so pickers
   // behave the same way regardless of which entry point the user took
-  // to edit an order.
-  const customers = useMemo(() => customerOptions(data.orders), [data.orders]);
+  // to edit an order. QA bug #113: the customer dropdown now merges
+  // the OMS customer master with order-derived names so the bulk-plan
+  // edit modal sees the same full list as the standalone OrderForm.
+  const customers = useMemo(
+    () => customerOptions(data.orders, data.customers),
+    [data.orders, data.customers],
+  );
   const locations = useMemo(() => locationOptions(data.locations), [data.locations]);
 
   async function handleSave() {

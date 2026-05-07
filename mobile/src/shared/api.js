@@ -390,7 +390,7 @@ export const OmsApi = {
 // endpoint that already accepts the camelCase contract and runs the
 // REQ-06 tolerance decision), and translate edit-shape PATCHes to
 // snake_case before they hit /api/db/invoices/:id.
-function mapInvoiceFormToCreatePayload(form) {
+export function mapInvoiceFormToCreatePayload(form) {
   return {
     invoiceNumber:   form.num || form.invoiceNumber,
     carrier:         form.carrier,
@@ -416,7 +416,7 @@ function mapInvoiceFormToCreatePayload(form) {
   };
 }
 
-function mapInvoiceFormToEditPatch(form) {
+export function mapInvoiceFormToEditPatch(form) {
   // Edit path goes through /api/db/invoices/:id which is a passthrough
   // to PostgREST — keys MUST match the column names.
   const patch = {};

@@ -98,7 +98,13 @@ export function extractTenderDefaults(shipment: any): TenderDefaults {
   return {
     pickupDate:    String(shipment.pickup_date    ?? shipment.pickupDate    ?? ''),
     deliveryDate:  String(shipment.delivery_date  ?? shipment.deliveryDate  ?? ''),
-    dockDoor:      String(shipment.dock_door      ?? shipment.dockDoor      ?? shipment.dock_assigned ?? ''),
+    // dock-door fallback chain: prefer the canonical `dock_door`
+    // column, then either casing of the alias `dock_assigned` /
+    // `dockAssigned` that some upstream paths produce. The camelCase
+    // alias was missing previously so a shipment hydrated through
+    // dbToShipmentApi (camelCase emitter) lost its dock door on the
+    // tender modal — caught by the carrierPortalService unit test.
+    dockDoor:      String(shipment.dock_door      ?? shipment.dockDoor      ?? shipment.dock_assigned ?? shipment.dockAssigned ?? ''),
     dockLoadStart: String(shipment.loading_start  ?? shipment.dockLoadStart ?? ''),
     dockLoadEnd:   String(shipment.loading_end    ?? shipment.dockLoadEnd   ?? ''),
   };

@@ -131,7 +131,14 @@ describe('parseLocation', () => {
 describe('getField', () => {
   it('returns the first non-empty key', () => {
     expect(getField({ b: 'B', a: '' }, 'a', 'b')).toBe('B');
-    expect(getField({ a: 0 }, 'a')).toBe(''); // 0 is OK, but '' returns falsy fallback per spec
+    // Numeric 0 is a meaningful rate value (e.g. a $0 minimum-charge
+    // override). The function's contract is "first non-empty" where
+    // empty = undefined / null / empty string only — numeric 0 passes
+    // through. The previous expectation here ("0 → ''") contradicted
+    // both the JSDoc and the implementation's `!== ''` check, and
+    // would have silently zeroed-out legitimate rate fields if the
+    // implementation were "fixed" to match.
+    expect(getField({ a: 0 }, 'a')).toBe(0);
     expect(getField({}, 'a')).toBe('');
   });
 

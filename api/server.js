@@ -23,6 +23,7 @@ const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { matchRate, matchAllRates } = require('./services/rateMatcher');
 const { getLtlMaxWeight } = require('./services/equipmentLimits');
+const { shouldFetchLtl } = require('./services/ltlFetchGate');
 const {
   apiOrderToDbPatch,
   cleanupOrphanShipmentAfterUnassign,
@@ -3130,18 +3131,11 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       cacheMisses += 1;
       const quotes = [];
 
-      // QA #136: when the user explicitly selects LTL as the planning mode
-      // (wantsLtl && !wantsTl, i.e. allowedModes is exactly ['LTL']), the
-      // planner must still surface LTL quotes even when shipment weight
-      // exceeds LTL_MAX — otherwise the Plan modal renders only TL rates
-      // for an LTL-tagged order and the user has nothing to compare. The
-      // infeasible flag set at line ~3198 below marks the over-ceiling
-      // quotes so the UI can warn the user; we no longer drop them at
-      // the fetch gate. When LTL+TL are both allowed (default), keep the
-      // weight gate so we don't pay for fetches we'd discard anyway —
-      // TL quotes will cover heavier loads.
-      const explicitLtlOnly = wantsLtl && !wantsTl;
-      if (wantsLtl && (explicitLtlOnly || wt <= LTL_MAX)) {
+      // QA #136: gate logic extracted to api/services/ltlFetchGate.js
+      // so it's unit-testable. See that module for the full rule and
+      // why the previous `wt <= LTL_MAX` cutoff dropped LTL quotes
+      // when the user explicitly planned LTL on heavy lanes.
+      if (shouldFetchLtl({ wantsLtl, wantsTl, weight: wt, ltlMax: LTL_MAX })) {
         try {
           const ltlRes = await fetch(`http://localhost:${PORT || 3001}/api/ltl/quote`, {
             method: 'POST',

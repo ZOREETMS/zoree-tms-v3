@@ -333,9 +333,29 @@ describe('buildRouteExecutionPlan', () => {
     expect(plan.childShipments).toHaveLength(2);
     const child12 = plan.childShipments.find((c) => c.id.endsWith('.1.2'))!;
     const child13 = plan.childShipments.find((c) => c.id.endsWith('.1.3'))!;
-    // pro-rate: 600/(600+400)=60% of $1000 → $600 ; 400/1000 → $400
-    expect(child12.total_cost).toBe(600);
-    expect(child13.total_cost).toBe(400);
+    // Pro-rate uses the cumulative pair-miles produced by
+    // `buildCbolPairs` (its own unit test at line ~242 documents
+    // this: pickup → delivery legMiles is the SUM of leg_miles for
+    // every stop between them, inclusive of the delivery stop).
+    //
+    // For this fixture:
+    //   pair 1.2 (Chi → Dal):       cumulative miles = 600
+    //   pair 1.3 (Chi → Dal → Atl): cumulative miles = 600 + 400 = 1000
+    //   totalLegMiles = 600 + 1000 = 1600
+    //
+    // Pro-rate against the $1000 cost_override:
+    //   1.2: 600 / 1600 * 1000 = 375
+    //   1.3: 1000 / 1600 * 1000 = 625
+    //
+    // The previous expectation here (600 / 400) implicitly used a
+    // single-leg semantic that contradicts how buildCbolPairs is
+    // implemented and tested. Fixing the test rather than the
+    // implementation keeps the freight-traveled-miles invariant
+    // (a CBOL's miles = miles its freight rode the truck).
+    expect(child12.total_cost).toBe(375);
+    expect(child13.total_cost).toBe(625);
+    // Sanity: shares preserve the $1000 cost_override exactly.
+    expect(child12.total_cost + child13.total_cost).toBe(1000);
     expect(child12.bol_type).toBe('CBOL');
     expect(child12.master_shipment_id).toBe(plan.masterShipment.id);
 
