@@ -14,7 +14,10 @@ export {
 } from "./api";
 
 // Utils
-export { formatTimestamp, formatCurrency, formatCell } from "./utils/formatters";
+// QA bug #128: formatCurrencyFull added alongside formatCurrency so
+// callers that need full-precision shipment-cost formatting can pick
+// the right one without hunting through the formatters module.
+export { formatTimestamp, formatCurrency, formatCurrencyFull, formatCell } from "./utils/formatters";
 export {
   resolveCarrierName,
   plannedPickupDate,

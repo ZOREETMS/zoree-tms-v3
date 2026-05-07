@@ -1303,6 +1303,15 @@ app.get('/api/orders/:id/lines', async (req, res) => {
 app.post('/api/orders/:id/lines', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
+  // QA #138 follow-up: lines edit is a sub-resource of an order — gate
+  // by Edit access on the orders module so a 'view' user can't replace
+  // line items even though /api/orders/:id PATCH is now blocked.
+  if (!(await canWriteTable(user, 'orders', 'POST', getTenantId(user)))) {
+    const role = getUserRole(user);
+    return res.status(403).json({
+      error: `Role '${role}' has no Edit access on Orders. Ask an admin to grant Edit on the User Roles page.`,
+    });
+  }
   try {
     const orderId = req.params.id;
     const lines = Array.isArray(req.body) ? req.body : (req.body ? [req.body] : []);
@@ -1385,6 +1394,14 @@ app.post('/api/orders/:id/lines', async (req, res) => {
 app.delete('/api/orders/:id/lines', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
+  // QA #138 follow-up: same gate as POST /api/orders/:id/lines — clearing
+  // lines is an Edit-on-Orders write, not a no-op.
+  if (!(await canWriteTable(user, 'orders', 'DELETE', getTenantId(user)))) {
+    const role = getUserRole(user);
+    return res.status(403).json({
+      error: `Role '${role}' has no Edit access on Orders. Ask an admin to grant Edit on the User Roles page.`,
+    });
+  }
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${encodeURIComponent(req.params.id)}`, {
       method: 'DELETE', headers: sbHeaders(user._token)
@@ -1703,10 +1720,19 @@ app.post('/api/orders', async (req, res) => {
 app.delete('/api/orders/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  // REQ-04: only admin can delete orders.
+  // QA #138 follow-up: keep destructive delete admin-only by default
+  // (canWriteTable only checks 'edit'; delete is more sensitive). The
+  // matrix gate is layered ON TOP — even an admin must have Edit on
+  // Orders, otherwise the access matrix is configured inconsistently
+  // and we'd rather refuse than guess.
   const roleD = getUserRole(u);
   if (roleD !== 'admin') {
     return res.status(403).json({ error: `Role '${roleD}' cannot delete orders. Required: admin.` });
+  }
+  if (!(await canWriteTable(u, 'orders', 'DELETE', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Admin role has no Edit access on Orders in the current matrix. Restore Edit on the User Roles page before deleting.`,
+    });
   }
   try {
     // Read the row first so we can keep a tombstone for history.
@@ -1765,9 +1791,12 @@ app.get('/api/shipments/:id/history', async (req, res) => {
 app.post('/api/orders/:id/history/clear', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // QA #138 follow-up: matrix-driven gate.
   const role = getUserRole(u);
-  if (!['admin', 'planner'].includes(role)) {
-    return res.status(403).json({ error: `Role '${role}' cannot clear order history. Required: admin, planner.` });
+  if (!(await canWriteTable(u, 'orders', 'POST', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${role}' has no Edit access on Orders. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const marker = await historyClears.recordClear({
@@ -1785,9 +1814,12 @@ app.post('/api/orders/:id/history/clear', async (req, res) => {
 app.post('/api/shipments/:id/history/clear', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // QA #138 follow-up: matrix-driven gate.
   const role = getUserRole(u);
-  if (!['admin', 'planner'].includes(role)) {
-    return res.status(403).json({ error: `Role '${role}' cannot clear shipment history. Required: admin, planner.` });
+  if (!(await canWriteTable(u, 'shipments', 'POST', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${role}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const marker = await historyClears.recordClear({
@@ -1809,9 +1841,14 @@ app.post('/api/shipments/:id/history/clear', async (req, res) => {
 app.post('/api/shipments/:id/events', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // QA #138 follow-up: events are shipment writes; route through the
+  // access matrix so a planner downgraded to View on Shipments can't
+  // log a fake "Tendered" event past the matrix.
   const roleS = getUserRole(u);
-  if (!['admin', 'planner'].includes(roleS)) {
-    return res.status(403).json({ error: `Role '${roleS}' cannot add shipment events. Required: admin, planner.` });
+  if (!(await canWriteTable(u, 'shipments', 'POST', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${roleS}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const shipmentEvents = require('./services/shipmentEvents');
@@ -1836,10 +1873,20 @@ app.post('/api/shipments/:id/events', async (req, res) => {
 app.post('/api/shipments/:id/add-order', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  // REQ-04: only admin + planner can manually attach orders to a shipment.
+  // QA #138 follow-up: this mutation writes to BOTH shipments AND orders
+  // (the order's status flips to Planned and shipment_id is set). Require
+  // Edit on shipments AND on orders so a user with Edit on only one of
+  // them can't sneak through the side door.
   const roleS = getUserRole(u);
-  if (!['admin', 'planner'].includes(roleS)) {
-    return res.status(403).json({ error: `Role '${roleS}' cannot add orders to a shipment. Required: admin, planner.` });
+  const tenant = getTenantId(u);
+  const [shipOk, orderOk] = await Promise.all([
+    canWriteTable(u, 'shipments', 'POST', tenant),
+    canWriteTable(u, 'orders',    'PATCH', tenant),
+  ]);
+  if (!shipOk || !orderOk) {
+    return res.status(403).json({
+      error: `Role '${roleS}' needs Edit access on both Shipments and Orders to attach an order. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const orderId = String(req.body?.orderId || '').trim();
@@ -1868,10 +1915,13 @@ app.post('/api/shipments/:id/add-order', async (req, res) => {
 app.post('/api/shipments/:id/change-carrier', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  // REQ-04: same role gate as the other shipment-edit endpoints.
+  // QA #138 follow-up: matrix-driven gate. Carrier reassignment is a
+  // shipment edit, so Edit on Shipments is required.
   const roleC = getUserRole(u);
-  if (!['admin', 'planner', 'dispatcher'].includes(roleC)) {
-    return res.status(403).json({ error: `Role '${roleC}' cannot change shipment carrier. Required: admin, planner, dispatcher.` });
+  if (!(await canWriteTable(u, 'shipments', 'POST', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${roleC}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const result = await shipmentMutations.changeShipmentCarrier({
@@ -1896,10 +1946,12 @@ app.post('/api/shipments/:id/change-carrier', async (req, res) => {
 app.patch('/api/shipments/:id/status', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // QA #138 follow-up: matrix-driven gate. Status transitions are
+  // shipment edits.
   const role = getUserRole(u);
-  if (!['admin', 'planner', 'dispatcher'].includes(role)) {
+  if (!(await canWriteTable(u, 'shipments', 'PATCH', getTenantId(u)))) {
     return res.status(403).json({
-      error: `Role '${role}' cannot update shipment status. Required: admin, planner, dispatcher.`,
+      error: `Role '${role}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
     });
   }
   const { status } = req.body || {};
@@ -2001,9 +2053,12 @@ app.get('/api/shipments', async (req, res) => {
 app.post('/api/shipments', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
+  // QA #138 follow-up: matrix-driven gate.
   const role = getUserRole(user);
-  if (!['admin', 'planner'].includes(role)) {
-    return res.status(403).json({ error: `Role '${role}' cannot create shipments. Required: admin, planner.` });
+  if (!(await canWriteTable(user, 'shipments', 'POST', getTenantId(user)))) {
+    return res.status(403).json({
+      error: `Role '${role}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   // Pull non-column metadata fields out before insert so they don't
   // poison the DB write but still flow into the audit row.
@@ -2031,10 +2086,19 @@ app.post('/api/shipments', async (req, res) => {
 app.delete('/api/shipments/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  // REQ-04: only admin + planner can delete shipments.
+  // QA #138 follow-up: matrix-driven gate, layered on top of an
+  // admin/planner allow-list. Like /api/orders/:id DELETE, we keep the
+  // role allow-list as defence in depth — destruction is more
+  // dangerous than edit, so a custom role with Edit on Shipments still
+  // can't delete unless it's specifically admin or planner.
   const roleD = getUserRole(u);
   if (!['admin', 'planner'].includes(roleD)) {
     return res.status(403).json({ error: `Role '${roleD}' cannot delete shipments. Required: admin, planner.` });
+  }
+  if (!(await canWriteTable(u, 'shipments', 'DELETE', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${roleD}' has no Edit access on Shipments in the current matrix. Restore Edit on the User Roles page before deleting.`,
+    });
   }
   try {
     const shipId = req.params.id;

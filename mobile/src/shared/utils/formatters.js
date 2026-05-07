@@ -35,22 +35,22 @@ export function formatCurrency(n) {
 
 /**
  * Full-precision currency formatter for line-item display (per-shipment
- * cost, per-invoice amount). Mirrors how the web TMS renders the same
- * numbers (`Number(x).toLocaleString(...)` with two decimals) so a
- * shipment opened on both surfaces shows an identical figure. QA bug
- * #128: web $6,961.00 vs mobile $7K diverged because the shipment list
- * was using the abbreviated `formatCurrency` above.
+ * cost, per-invoice amount). Mirrors the web TMS's `formatUSD` in
+ * frontend/src/utils/shipmentCost.js *byte-for-byte* — both call
+ * Number#toLocaleString() with no options, which produces
+ * "$6,961" / "$6,961.5" / "$2,400,000" on en-US locales. QA bug #128:
+ * web $6,961 vs mobile $7K diverged because the shipment list was
+ * using the abbreviated `formatCurrency` above. Anchoring the mobile
+ * formatter to the exact same call as the web is the only durable
+ * way to keep the two surfaces showing identical values.
  *
- * Negative numbers and non-finite values render as "$0.00" rather than
- * leaking "$NaN" into the UI on a partially-loaded shipment row.
+ * Non-finite inputs render as "$0" rather than leaking "$NaN" into
+ * the UI on a partially-loaded shipment row.
  */
 export function formatCurrencyFull(n) {
   const num = Number(n);
-  if (!Number.isFinite(num)) return "$0.00";
-  return `$${num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  if (!Number.isFinite(num)) return "$0";
+  return `$${num.toLocaleString()}`;
 }
 
 /**

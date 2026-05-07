@@ -145,7 +145,9 @@ export default function OrderFormScreen() {
   // existing location can auto-populate the sibling City / State / ZIP
   // inputs - see `handleOriginChange` / `handleDestinationChange`.
   const customers = useMemo(
-    () => customerOptions(data.orders, (data as any).customers),
+    // `data.customers` is typed in TmsData (DataContext) — no `any`
+    // cast needed. Reads from the OMS master loaded by DbApi.customers().
+    () => customerOptions(data.orders, data.customers),
     [data.orders, data.customers],
   );
   const locations = useMemo(

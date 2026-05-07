@@ -19,6 +19,7 @@ import {
   buildOrderSavePayload,
   copyOrder,
   copyOrderLines,
+  deleteOrder,
   nextOrderId,
   saveOrder,
   validateOrderPayload,
@@ -31,6 +32,9 @@ jest.mock('../../shared/api', () => ({
     saveLines: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    // QA bug #121: deleteOrder routes through OrdersApi.remove. The
+    // module is mocked so unit tests don't touch the real backend.
+    remove: jest.fn(),
   },
 }));
 
@@ -39,6 +43,7 @@ beforeEach(() => {
   (OrdersApi.saveLines as jest.Mock).mockReset();
   (OrdersApi.create as jest.Mock).mockReset();
   (OrdersApi.update as jest.Mock).mockReset();
+  (OrdersApi.remove as jest.Mock).mockReset();
 });
 
 describe('nextOrderId', () => {
@@ -312,6 +317,47 @@ describe('copyOrder', () => {
     await expect(copyOrder({ id: 'ORD-1' })).rejects.toThrow('db down');
     // lines must NOT be copied if the parent insert failed
     expect(OrdersApi.lines).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteOrder (QA bug #121)', () => {
+  it('throws when the order has no id (defensive)', async () => {
+    await expect(deleteOrder(undefined as any)).rejects.toThrow(/missing id/);
+    await expect(deleteOrder({} as any)).rejects.toThrow(/missing id/);
+    expect(OrdersApi.remove).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete a Tender-Accepted order locally before round-tripping', async () => {
+    // Mirrors the server-side gate so the user gets a friendly
+    // explanation immediately rather than a 4xx after a network hop.
+    await expect(
+      deleteOrder({ id: 'ORD-1', status: 'Tender Accepted' }),
+    ).rejects.toThrow(/cannot be deleted/);
+    expect(OrdersApi.remove).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete an In-Transit / Delivered order', async () => {
+    await expect(deleteOrder({ id: 'ORD-2', status: 'In Transit' })).rejects.toThrow();
+    await expect(deleteOrder({ id: 'ORD-3', status: 'Delivered' })).rejects.toThrow();
+    expect(OrdersApi.remove).not.toHaveBeenCalled();
+  });
+
+  it('routes Unplanned / Planned / Cancelled deletions through OrdersApi.remove', async () => {
+    (OrdersApi.remove as jest.Mock).mockResolvedValue({ deleted: true });
+    for (const status of ['Unplanned', 'Planned', 'Cancelled', 'Tendered']) {
+      (OrdersApi.remove as jest.Mock).mockClear();
+      await deleteOrder({ id: `ORD-${status}`, status });
+      expect(OrdersApi.remove).toHaveBeenCalledWith(`ORD-${status}`);
+    }
+  });
+
+  it('propagates network / 4xx failures from the API client', async () => {
+    (OrdersApi.remove as jest.Mock).mockRejectedValue(
+      new Error("Role 'planner' cannot delete orders"),
+    );
+    await expect(
+      deleteOrder({ id: 'ORD-1', status: 'Unplanned' }),
+    ).rejects.toThrow(/cannot delete/);
   });
 });
 

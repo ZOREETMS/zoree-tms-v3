@@ -39,10 +39,17 @@ import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
 import { normalizeLane, buildLaneKey } from "../utils/laneUtils";
 import ExportButton from "../components/ui/ExportButton";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 export default function OrdersPage() {
   const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
   const itemMaster = items;
+  // QA #138 follow-up: matrix-driven gate. Controls visibility of every
+  // mutation affordance on this page (+ New Order, + Plan Group, the
+  // per-row OrderRowActions, the detail modal's Save button). Backend
+  // canWriteTable still enforces — this is just the UX courtesy.
+  const { canEdit: canEditOrders } = useFeatureAccess("orders");
+  const noEditOrdersTitle = canEditOrders ? "" : "View-only access — ask an admin for Edit on Orders";
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [customerFilter, setCustomerFilter] = useState("All");
@@ -1300,11 +1307,19 @@ export default function OrdersPage() {
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => setShowImportOrders(true)}
-            title="Bulk-import orders from a CSV or Excel file"
+            disabled={!canEditOrders}
+            title={canEditOrders ? "Bulk-import orders from a CSV or Excel file" : noEditOrdersTitle}
           >
             📥 Import Orders
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ New Order</button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowNewOrder(true)}
+            disabled={!canEditOrders}
+            title={noEditOrdersTitle}
+          >
+            + New Order
+          </button>
         </div>
       </div>
       <div className="page-content">
@@ -1515,7 +1530,25 @@ export default function OrdersPage() {
                       </span>
                       <span style={{ fontSize: 11, color: "var(--text3)" }}>{row.count} orders · {row.weight.toLocaleString()} lbs</span>
                       <span className={row.capacityClass} style={{ fontSize: 10 }}>{row.capacity}</span>
-                      <button style={{ marginLeft: "auto", padding: "5px 14px", borderRadius: 8, border: "none", background: "#d97706", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => openPlanModal(row.firstOrderId, true)}>⚡ Plan Group</button>
+                      <button
+                        style={{
+                          marginLeft: "auto",
+                          padding: "5px 14px",
+                          borderRadius: 8,
+                          border: "none",
+                          background: canEditOrders ? "#d97706" : "#bbb",
+                          color: "#fff",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: canEditOrders ? "pointer" : "not-allowed",
+                          fontFamily: "inherit",
+                        }}
+                        onClick={() => canEditOrders && openPlanModal(row.firstOrderId, true)}
+                        disabled={!canEditOrders}
+                        title={noEditOrdersTitle}
+                      >
+                        ⚡ Plan Group
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1556,6 +1589,7 @@ export default function OrdersPage() {
                     order={o}
                     shipments={shipments}
                     busy={busyId === o.id}
+                    canEdit={canEditOrders}
                     onPlan={(id) => openPlanModal(id)}
                     onCrossDock={(id) => openPlanModal(id)}
                     onAddToShipment={(ord) => setAddToShipOrder(ord)}
@@ -1613,6 +1647,7 @@ export default function OrdersPage() {
         onPlan={(id) => openPlanModal(id)} onUnplan={unplanOrder} onCopy={handleCopyOrder}
         onClearLines={async (id) => { await clearOrderLines(id); setDetailLines([]); toast("Lines cleared", "success"); }}
         busy={detailBusy}
+        canEdit={canEditOrders}
         changeLog={orderChangeLog[detailOrder?.id] || []}
         onClearHistory={async () => {
           // TMS bug #1: persistent Clear History. We call the backend to

@@ -1,10 +1,15 @@
 import RowActionsMenu from "../ui/RowActionsMenu";
 import { isPlannable } from "../../services/ordersService";
 
+// QA #138 follow-up: when canEdit is false (matrix says 'view' or 'none'),
+// the row actions collapse to read-only — primary becomes View, the
+// destructive items are dropped. Backend canWriteTable still rejects, so
+// this is just to keep the UX honest.
 export default function OrderRowActions({
   order,
   shipments = [],
   busy = false,
+  canEdit = true,
   onPlan,
   onCrossDock,
   onAddToShipment,
@@ -18,6 +23,18 @@ export default function OrderRowActions({
 }) {
   const o = order;
   const status = o.status;
+
+  // Read-only fallback when the matrix forbids edits. Returned for any
+  // status — overrides the per-status menus below.
+  if (!canEdit) {
+    return (
+      <RowActionsMenu
+        busy={busy}
+        primary={{ label: "View", icon: "👁", variant: "btn-secondary", onClick: () => onView?.(o.id) }}
+        items={[]}
+      />
+    );
+  }
 
   if (isPlannable(o)) {
     return (

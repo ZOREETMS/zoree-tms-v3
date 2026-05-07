@@ -31,6 +31,10 @@ export default function OrderDetailModal({
   carriers,
   toast,
   onClearHistory,
+  // QA #138 follow-up: when false, modal renders read-only — Save
+  // disabled, line-item save/clear disabled. Default true for backward
+  // compat with any other caller that doesn't pass the prop.
+  canEdit = true,
 }) {
   if (!order) return null;
 
@@ -329,7 +333,15 @@ export default function OrderDetailModal({
           <div style={{ padding: "14px 22px", background: "#f8faff", borderTop: "1.5px solid var(--border)", borderRadius: "0 0 16px 16px", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
             <span style={{ fontSize: 12, color: editStatus ? "var(--text3)" : "transparent", flex: 1 }}>{editStatus || "."}</span>
             <button className="btn btn-secondary" onClick={() => onTabChange("view")}>Cancel</button>
-            <button className="btn btn-primary" onClick={onSave} disabled={busy} style={{ background: "linear-gradient(135deg,#1a237e,#6366f1)", border: "none" }}>{"\ud83d\udcbe"} Save Changes</button>
+            <button
+              className="btn btn-primary"
+              onClick={onSave}
+              disabled={busy || !canEdit}
+              title={canEdit ? "" : "View-only access \u2014 ask an admin for Edit on Orders"}
+              style={{ background: canEdit ? "linear-gradient(135deg,#1a237e,#6366f1)" : "#9ca3af", border: "none" }}
+            >
+              {"\ud83d\udcbe"} Save Changes
+            </button>
           </div>
         )}
         {tab === "history" && (

@@ -22,7 +22,15 @@ export function useUpdateRolePermissions() {
   return useMutation({
     mutationFn: ({ roleName, permissions }) => updateRolePermissions(roleName, permissions),
     onSuccess: (data) => {
+      // QA #137: setQueryData primes the cache instantly so the UserRoles
+      // matrix re-renders without a round-trip; invalidateQueries then
+      // forces every other consumer (Layout's nav filter via
+      // useFeatureAccessMap, page-level useFeatureAccess) to refetch on
+      // their next render. Without the invalidate, a sibling tab's
+      // navigation could still display stale 'edit' affordances after a
+      // role was downgraded to 'view'.
       queryClient.setQueryData(ROLE_QUERY_KEY, data);
+      queryClient.invalidateQueries({ queryKey: ROLE_QUERY_KEY, refetchType: "active" });
     },
   });
 }

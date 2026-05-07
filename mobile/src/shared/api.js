@@ -379,20 +379,79 @@ export const OmsApi = {
   },
 };
 
+// QA #131: the previous mobile invoice save POSTed the camelCase form
+// shape ({ num, shipId, paymentTerms, amount, agreed, date, due, … })
+// straight to /api/db/invoices, but the DB columns are
+// invoice_number / shipment_id / payment_terms / invoiced_amount /
+// agreed_cost / invoice_date / due_date. PostgREST returned 400
+// "DB upset" because none of the camelCase keys exist as columns.
+//
+// Fix: route NEW invoices through /api/invoices (the audit-aware
+// endpoint that already accepts the camelCase contract and runs the
+// REQ-06 tolerance decision), and translate edit-shape PATCHes to
+// snake_case before they hit /api/db/invoices/:id.
+function mapInvoiceFormToCreatePayload(form) {
+  return {
+    invoiceNumber:   form.num || form.invoiceNumber,
+    carrier:         form.carrier,
+    carrierId:       form.carrierId || null,
+    shipmentId:      form.shipId || form.shipmentId || null,
+    // Mobile collects extraShipIds as a comma-separated string ("SHP-1, SHP-2").
+    // /api/invoices wants a string[] (shipmentIds). Split + trim defensively.
+    shipmentIds: (() => {
+      if (Array.isArray(form.shipmentIds)) return form.shipmentIds;
+      const all = [form.shipId, form.extraShipIds]
+        .filter(Boolean)
+        .join(",")
+        .split(",")
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+      return all.length > 1 ? all : undefined;
+    })(),
+    invoicedAmount:  parseFloat(form.amount) || 0,
+    invoiceDate:     form.date || null,
+    paymentTerms:    form.paymentTerms || "NET30",
+    notes:           form.notes || null,
+    metadata:        form.metadata || {},
+  };
+}
+
+function mapInvoiceFormToEditPatch(form) {
+  // Edit path goes through /api/db/invoices/:id which is a passthrough
+  // to PostgREST — keys MUST match the column names.
+  const patch = {};
+  if (form.num != null)          patch.invoice_number  = form.num;
+  if (form.carrier != null)      patch.carrier         = form.carrier;
+  if (form.shipId != null)       patch.shipment_id     = form.shipId || null;
+  if (form.status != null)       patch.status          = form.status;
+  if (form.date != null)         patch.invoice_date    = form.date || null;
+  if (form.due != null)          patch.due_date        = form.due || null;
+  if (form.paymentTerms != null) patch.payment_terms   = form.paymentTerms;
+  if (form.amount != null)       patch.invoiced_amount = parseFloat(form.amount) || 0;
+  if (form.agreed != null)       patch.agreed_cost     = form.agreed === "" ? null : parseFloat(form.agreed);
+  if (form.notes != null)        patch.notes           = form.notes || null;
+  return patch;
+}
+
 export const InvoicesApi = {
   list() {
     return api("/db/invoices?q=select=*%26order=created_at.desc%26limit=500");
   },
-  save(invoice) {
-    if (invoice.id)
+  async save(invoice) {
+    if (invoice.id) {
+      const patch = mapInvoiceFormToEditPatch(invoice);
       return api(`/db/invoices/${encodeURIComponent(invoice.id)}`, {
         method: "PATCH",
-        body: JSON.stringify(invoice),
+        body: JSON.stringify(patch),
       });
-    return api("/db/invoices", {
+    }
+    // /api/invoices returns { invoice, decision }. Unwrap to the row so
+    // the saveInvoice() contract stays "returns the saved invoice".
+    const res = await api("/invoices", {
       method: "POST",
-      body: JSON.stringify(invoice),
+      body: JSON.stringify(mapInvoiceFormToCreatePayload(invoice)),
     });
+    return res?.invoice || res;
   },
   remove(id) {
     return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "DELETE" });

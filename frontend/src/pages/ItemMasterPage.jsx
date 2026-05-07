@@ -9,6 +9,7 @@ import {
   readItemDescription,
   readPkgDescription,
 } from "../services/itemMasterService";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 const EMPTY_ITEM = {
   id: "", description: "", customer: "", class: "General", nmfc: "", freight_class: "70",
@@ -66,6 +67,12 @@ const SEED_PACKAGING = [
 
 export default function ItemMasterPage() {
   const { items, packagingUnits: dbPackagingUnits = [], setData, refreshData } = useOutletContext();
+  // QA #138 follow-up: matrix-driven write gate. When canEdit is false the
+  // page renders read-only — Save / +New / Edit / Delete / status toggles
+  // all disable. Admin always has canEdit=true via the hook's role
+  // override; "view" roles see the data but no mutation affordances.
+  const { canEdit: canEditItems } = useFeatureAccess("items");
+  const noEditTitle = canEditItems ? "" : "View-only access — ask an admin for Edit on Items";
   // Use seed data as fallback when DB table is empty
   const packagingUnits = dbPackagingUnits.length > 0 ? dbPackagingUnits : SEED_PACKAGING;
   const [tab, setTab] = useState("items");
@@ -451,7 +458,14 @@ export default function ItemMasterPage() {
                 <option value="General">General</option>
               </select>
               <button className="btn btn-secondary btn-sm" onClick={exportItems}>Export</button>
-              <button className="btn btn-primary btn-sm" onClick={openNew}>+ New Item</button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={openNew}
+                disabled={!canEditItems}
+                title={noEditTitle}
+              >
+                + New Item
+              </button>
             </>
           ) : (
             <>
@@ -476,7 +490,14 @@ export default function ItemMasterPage() {
                 <option value="Tote">Tote</option>
                 <option value="IBC">IBC</option>
               </select>
-              <button className="btn btn-primary btn-sm" onClick={openNewPkg}>+ New Packaging</button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={openNewPkg}
+                disabled={!canEditItems}
+                title={noEditTitle}
+              >
+                + New Packaging
+              </button>
             </>
           )}
         </div>
@@ -552,9 +573,28 @@ export default function ItemMasterPage() {
                         <td><StatusBadge status={status} /></td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <div style={{ display: "flex", gap: 5 }}>
-                            <button className="btn btn-secondary btn-sm" onClick={() => openEdit(it)}>Edit</button>
-                            <button className="btn btn-secondary btn-sm" onClick={() => duplicateItem(it)} disabled={busyId === it.id} title="Duplicate">&#10697;</button>
-                            <button className="btn btn-secondary btn-sm" onClick={() => toggleStatus(it)} disabled={busyId === it.id} title={status === "Active" ? "Deactivate" : "Activate"}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => openEdit(it)}
+                              disabled={!canEditItems}
+                              title={noEditTitle || "Edit item"}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => duplicateItem(it)}
+                              disabled={busyId === it.id || !canEditItems}
+                              title={canEditItems ? "Duplicate" : noEditTitle}
+                            >
+                              &#10697;
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => toggleStatus(it)}
+                              disabled={busyId === it.id || !canEditItems}
+                              title={canEditItems ? (status === "Active" ? "Deactivate" : "Activate") : noEditTitle}
+                            >
                               {status === "Active" ? "\uD83D\uDEAB" : "\u2705"}
                             </button>
                           </div>
@@ -632,8 +672,20 @@ export default function ItemMasterPage() {
                       <td><StatusBadge status={status} /></td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", gap: 5 }}>
-                          <button className="btn btn-secondary btn-sm" onClick={() => openEditPkg(p)}>Edit</button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => togglePkgStatus(p)} disabled={busyId === p.id} title={status === "Active" ? "Deactivate" : "Activate"}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => openEditPkg(p)}
+                            disabled={!canEditItems}
+                            title={noEditTitle || "Edit packaging"}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => togglePkgStatus(p)}
+                            disabled={busyId === p.id || !canEditItems}
+                            title={canEditItems ? (status === "Active" ? "Deactivate" : "Activate") : noEditTitle}
+                          >
                             {status === "Active" ? "\uD83D\uDEAB" : "\u2705"}
                           </button>
                         </div>
@@ -746,7 +798,14 @@ export default function ItemMasterPage() {
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setEditItem(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveItem} disabled={busyId === "saving"}>{busyId === "saving" ? "Saving..." : "Save Item"}</button>
+              <button
+                className="btn btn-primary"
+                onClick={saveItem}
+                disabled={busyId === "saving" || !canEditItems}
+                title={noEditTitle}
+              >
+                {busyId === "saving" ? "Saving..." : "Save Item"}
+              </button>
             </div>
           </div>
         </div>
@@ -867,7 +926,14 @@ export default function ItemMasterPage() {
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setEditPkg(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={savePkg} disabled={busyId === "saving-pkg"}>{busyId === "saving-pkg" ? "Saving..." : "Save Packaging"}</button>
+              <button
+                className="btn btn-primary"
+                onClick={savePkg}
+                disabled={busyId === "saving-pkg" || !canEditItems}
+                title={noEditTitle}
+              >
+                {busyId === "saving-pkg" ? "Saving..." : "Save Packaging"}
+              </button>
             </div>
           </div>
         </div>

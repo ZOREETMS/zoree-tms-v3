@@ -277,6 +277,29 @@ export default function UserRolesPage() {
             disabled={loading}
             style={{ padding: "6px 10px", border: "1px solid #d4d8e0", borderRadius: 6, fontSize: 13, width: 220 }}
           />
+          {/* QA #140: explicit Save / Discard. Hidden until something is
+              actually staged so non-admin / clean states stay tidy. */}
+          {dirty && (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleDiscardPending}
+                disabled={saving}
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSavePending}
+                disabled={saving || !isAdmin}
+                title={!isAdmin ? "Admin role required" : ""}
+              >
+                {saving ? "Saving…" : `Save Changes (${pendingCount})`}
+              </button>
+            </>
+          )}
           <button
             className="btn btn-primary"
             onClick={() => { setCreateError(""); setShowAdd(true); }}
@@ -382,8 +405,10 @@ export default function UserRolesPage() {
                         collapsed={isCollapsed}
                         onToggleSection={() => toggleSection(section.name)}
                         sortedRoleKeys={sortedRoleKeys}
-                        roles={roles}
-                        savingCell={savingCell}
+                        // QA #140: pass the resolver instead of the raw map
+                        // so cells render the staged value when present.
+                        levelFor={effectiveLevel}
+                        pending={pending}
                         deletingRole={deletingRole}
                         isAdmin={isAdmin}
                         onLevelChange={handleLevelChange}
@@ -424,9 +449,13 @@ export default function UserRolesPage() {
 // ──────────────────────────────────────────────────────────────────────
 function ModuleSectionRows({
   section, collapsed, onToggleSection,
-  sortedRoleKeys, roles, savingCell, deletingRole,
+  sortedRoleKeys, levelFor, pending, deletingRole,
   isAdmin, onLevelChange, onSetRow, stickyFirstCol,
 }) {
+  function isPendingCell(roleKey, featureKey) {
+    return !!(pending?.[roleKey] && Object.prototype.hasOwnProperty.call(pending[roleKey], featureKey));
+  }
+
   return (
     <>
       <tr style={{ background: "#f4f6fa" }}>
@@ -450,12 +479,21 @@ function ModuleSectionRows({
           {sortedRoleKeys.map((roleKey) => {
             const isAdminCol  = roleKey === ADMIN_ROLE_KEY;
             const cellId      = `${roleKey}:${feature.feature_key}`;
-            const isSaving    = savingCell === cellId;
             const isDeleting  = deletingRole === roleKey;
-            const disabled    = !isAdmin || isAdminCol || isSaving || isDeleting;
-            const level       = roles?.[roleKey]?.[feature.feature_key] || "none";
+            const disabled    = !isAdmin || isAdminCol || isDeleting;
+            const level       = levelFor ? levelFor(roleKey, feature.feature_key) : "none";
+            const dirtyCell   = isPendingCell(roleKey, feature.feature_key);
             return (
-              <td key={cellId} style={{ padding: "6px 8px" }}>
+              <td
+                key={cellId}
+                style={{
+                  padding: "6px 8px",
+                  // QA #140: subtle accent so admins see what's staged.
+                  background: dirtyCell ? "rgba(245,158,11,0.08)" : undefined,
+                  outline: dirtyCell ? "1px dashed rgba(245,158,11,0.5)" : undefined,
+                  outlineOffset: dirtyCell ? "-2px" : undefined,
+                }}
+              >
                 <RoleAccessSelect
                   level={level}
                   disabled={disabled}

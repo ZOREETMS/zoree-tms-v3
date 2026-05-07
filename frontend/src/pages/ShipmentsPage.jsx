@@ -31,6 +31,7 @@ import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
 import { buildLaneKey } from "../utils/laneUtils";
 import { TOAST_DURATIONS } from "../constants/toast";
 import ExportButton from "../components/ui/ExportButton";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { useRowSelection } from "../hooks/useRowSelection";
 import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
 import SelectionBar from "../components/ui/SelectionBar";
@@ -122,7 +123,7 @@ function InfoBox({ icon, label, value }) {
 }
 
 /* ── Shipment Detail Modal ── */
-function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier, onShipmentPatched }) {
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier, onShipmentPatched, canEdit = true }) {
   const linked = ds._linkedOrders || [];
   // Derive commodity from linked orders so it stays correct even when ds
   // was opened before the parent's `orders` list picked up the new
@@ -407,7 +408,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 0.8 }}>SHIP FROM</div>
-                  {!locEdit && (
+                  {!locEdit && canEdit && (
                     <button onClick={() => setLocEdit(true)} title="Edit ship-from and ship-to" style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 6, fontSize: 10, color: "var(--text3)", cursor: "pointer", padding: "2px 8px", fontFamily: "inherit" }}>✏️ Edit</button>
                   )}
                 </div>
@@ -827,6 +828,10 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
 
 export default function ShipmentsPage() {
   const { shipments, orders, carriers, equipmentTypes, setData, refreshData, refreshShipmentsAndOrders } = useOutletContext();
+  // QA #138 follow-up: matrix-driven gate for the Shipments module. Backend
+  // canWriteTable still enforces; this disables the buttons that would 403.
+  const { canEdit: canEditShipments } = useFeatureAccess("shipments");
+  const noEditShipmentsTitle = canEditShipments ? "" : "View-only access — ask an admin for Edit on Shipments";
   // Lightweight refresh for tender-path mutations (shipments + orders only).
   // Falls back to full refresh if the lighter helper isn't provided.
   const refreshTender = refreshShipmentsAndOrders || refreshData;
@@ -1457,7 +1462,14 @@ export default function ShipmentsPage() {
             selectedRows={sel.selectedRows(rows)}
             label="Export Shipments"
           />
-          <button className="btn btn-primary btn-sm" onClick={() => setShowNewShipment(true)}>+ New Shipment</button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowNewShipment(true)}
+            disabled={!canEditShipments}
+            title={noEditShipmentsTitle}
+          >
+            + New Shipment
+          </button>
         </div>
       </div>
       <div className="page-content">
@@ -1630,17 +1642,17 @@ export default function ShipmentsPage() {
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Tender Accepted</span>
                 )}
                 <button
-                  title="Copy Shipment"
-                  style={{ background: "rgba(59,130,246,.08)", color: "#2563eb", border: "1px solid rgba(59,130,246,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: "pointer", lineHeight: 1 }}
-                  disabled={busyId === s.id}
+                  title={canEditShipments ? "Copy Shipment" : noEditShipmentsTitle}
+                  style={{ background: "rgba(59,130,246,.08)", color: "#2563eb", border: "1px solid rgba(59,130,246,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: canEditShipments ? "pointer" : "not-allowed", lineHeight: 1, opacity: canEditShipments ? 1 : 0.5 }}
+                  disabled={busyId === s.id || !canEditShipments}
                   onClick={() => handleCopyShipment(s)}
                 >
                   📋
                 </button>
                 <button
-                  title="Delete Shipment"
-                  style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: "pointer", lineHeight: 1 }}
-                  disabled={busyId === s.id}
+                  title={canEditShipments ? "Delete Shipment" : noEditShipmentsTitle}
+                  style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: canEditShipments ? "pointer" : "not-allowed", lineHeight: 1, opacity: canEditShipments ? 1 : 0.5 }}
+                  disabled={busyId === s.id || !canEditShipments}
                   onClick={() => deleteShipment(s)}
                 >
                   🗑️
@@ -1671,7 +1683,14 @@ export default function ShipmentsPage() {
                     {["Planned", "Tender Rejected"].includes(c._displayStatus) && (
                       <button style={{ background: "#2563eb", color: "#fff", border: "none", padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, cursor: "pointer" }} disabled={busyId === c.id} onClick={() => onTender(c)}>📤 Tender</button>
                     )}
-                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.25)", padding: "2px 5px", borderRadius: 5, fontSize: 10, cursor: "pointer", lineHeight: 1, marginLeft: "auto" }} disabled={busyId === c.id} onClick={() => deleteShipment(c)}>🗑️</button>
+                    <button
+                      style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.25)", padding: "2px 5px", borderRadius: 5, fontSize: 10, cursor: canEditShipments ? "pointer" : "not-allowed", lineHeight: 1, marginLeft: "auto", opacity: canEditShipments ? 1 : 0.5 }}
+                      disabled={busyId === c.id || !canEditShipments}
+                      title={canEditShipments ? "Delete Shipment" : noEditShipmentsTitle}
+                      onClick={() => deleteShipment(c)}
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -1762,7 +1781,7 @@ export default function ShipmentsPage() {
       )}
 
       {/* Shipment Detail Modal */}
-      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} onShipmentPatched={(patch) => { setDetailShipment((prev) => prev ? { ...prev, ...patch } : prev); refreshData(); }} />}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} onShipmentPatched={(patch) => { setDetailShipment((prev) => prev ? { ...prev, ...patch } : prev); refreshData(); }} canEdit={canEditShipments} />}
 
       {/* Tender Result Modal */}
       <TenderResultModal
