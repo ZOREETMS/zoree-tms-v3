@@ -13,7 +13,11 @@ import {
   fontWeight,
   spacing,
 } from '../../theme';
-import { formatCurrency } from '../../shared/utils/formatters';
+// QA bug #128 — switched from `formatCurrency` (which abbreviates 6961
+// to "$7K") to `formatCurrencyFull` so mobile and web display the
+// identical full-precision value for a shipment cost. KPI tiles
+// elsewhere in the app keep using `formatCurrency` for compactness.
+import { formatCurrencyFull } from '../../shared/utils/formatters';
 import type { PlanningTabParamList } from '../../navigation/types';
 
 interface ShipmentCardProps {
@@ -113,7 +117,7 @@ const ShipmentCard: React.FC<ShipmentCardProps> = ({ shipment }) => {
             </View>
           </View>
           {totalCost != null && (
-            <Text style={styles.cost}>{formatCurrency(Number(totalCost))}</Text>
+            <Text style={styles.cost}>{formatCurrencyFull(Number(totalCost))}</Text>
           )}
         </View>
       </Card>

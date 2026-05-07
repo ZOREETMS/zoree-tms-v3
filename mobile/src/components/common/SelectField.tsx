@@ -10,6 +10,20 @@
  * If `allowCustom` is true, users can type a value not in `options`;
  * useful for Customer (existing customers populate the list, but a
  * brand-new customer name still saves correctly).
+ *
+ * QA bug #115: `onChange` now receives the matched SelectOption (or
+ * `null` for a custom-typed value not in the option list) as a second
+ * argument. Callers that need to read the option's structured `meta`
+ * (e.g. Origin/Destination auto-populating City / State / ZIP) opt in
+ * by reading the second parameter; legacy callers ignoring it keep
+ * working unchanged because the first parameter is still the value.
+ *
+ * QA bug #114: when `onCreateNew` is provided, the SelectModal renders
+ * a "+ Create new" header row that closes the modal and invokes the
+ * callback. SelectField stays presentationally-pure - the actual
+ * creation flow (a sub-modal that captures Name/City/State/Zip and
+ * persists via locationsService.createLocation) lives at the screen
+ * level so this component remains generic.
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -21,7 +35,8 @@ import type { SelectOption } from '../../services/optionsService';
 export interface SelectFieldProps {
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  /** Receives (value, matched option | null). Option is null for custom typed values. */
+  onChange: (value: string, option: SelectOption | null) => void;
   options: SelectOption[];
   placeholder?: string;
   /** Free-text fallback when query doesn't match an option. Default true. */
@@ -30,6 +45,16 @@ export interface SelectFieldProps {
   modalTitle?: string;
   /** Disabled visual + tap. */
   disabled?: boolean;
+  /**
+   * QA bug #114: optional callback that, when set, makes the picker
+   * render a "+ Create new" affordance at the top of the list. The
+   * caller is responsible for opening any creation UI - this component
+   * just closes the picker and invokes the callback so the screen can
+   * orchestrate.
+   */
+  onCreateNew?: () => void;
+  /** Label for the create row. Defaults to "Create new ${label}". */
+  createNewLabel?: string;
 }
 
 export default function SelectField({
@@ -41,6 +66,8 @@ export default function SelectField({
   allowCustom = true,
   modalTitle,
   disabled,
+  onCreateNew,
+  createNewLabel,
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
 
@@ -54,6 +81,15 @@ export default function SelectField({
     selected && selected.sublabel && selected.label !== selected.sublabel
       ? selected.sublabel
       : null;
+
+  // QA bug #115: when the user picks an existing option, we want to
+  // hand the full row (with `meta`) to the caller. For a custom typed
+  // value, no option exists - pass `null` so callers can branch on
+  // "this is a new user-typed entry, no prefill data available".
+  const handleSelect = (next: string) => {
+    const matched = options.find((o) => o.value === next) || null;
+    onChange(next, matched);
+  };
 
   return (
     <View style={styles.fieldWrap}>
@@ -90,9 +126,18 @@ export default function SelectField({
         title={modalTitle || `Select ${label}`}
         options={options}
         value={value}
-        onSelect={onChange}
+        onSelect={handleSelect}
         onClose={() => setOpen(false)}
         allowCustom={allowCustom}
+        onCreateNew={
+          onCreateNew
+            ? () => {
+                setOpen(false);
+                onCreateNew();
+              }
+            : undefined
+        }
+        createNewLabel={createNewLabel || `Create new ${label.toLowerCase()}`}
       />
     </View>
   );

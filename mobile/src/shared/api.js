@@ -190,6 +190,26 @@ export const DbApi = {
   carriers() {
     return api("/db/carriers?q=select=*%26order=name.asc%26limit=500");
   },
+  /**
+   * QA bug #113 — Customer dropdown on the mobile New Order form was
+   * sourced solely from distinct customer names on existing orders, so
+   * it surfaced only ~3 entries while the web pulled the full
+   * `oms_customers` master. We now expose the OMS customer master here
+   * and merge it into the dropdown options upstream
+   * (services/optionsService.customerOptions). `active=true` matches the
+   * filter the OMS app itself applies in zoree-oms.html so deactivated
+   * customers don't return.
+   *
+   * Returns [] on error rather than throwing — the caller (DataContext)
+   * already wraps with .catch(()=>[]) for graceful fallback to
+   * order-derived customers, but failing soft here means the rest of the
+   * Promise.all batch isn't poisoned by a single endpoint that 4xx's.
+   */
+  customers() {
+    return api(
+      "/db/oms_customers?q=select=id,name,active%26active=eq.true%26order=name.asc%26limit=500",
+    );
+  },
   lanePreferences() {
     return api("/db/lane_preferences?q=select=*%26order=id%26limit=200");
   },
@@ -283,6 +303,21 @@ export const OrdersApi = {
       method: "PATCH",
       body: JSON.stringify(patch || {}),
     });
+  },
+  /**
+   * QA bug #121 — mobile Order Detail had no Delete action, so users had
+   * to bounce to the web to remove a wrongly-created order. The backend
+   * exposes DELETE /api/orders/:id (added alongside this fix); it
+   * cascades through the audit trail (REQ-02) and unassigns any linked
+   * shipment via the same `cleanupOrphanShipmentAfterUnassign` helper
+   * already used by status-change paths.
+   *
+   * Service-layer callers should prefer `services/ordersService.deleteOrder`
+   * which adds confirmation framing — this raw method exists so
+   * future bulk-action UIs (web parity) can drive the endpoint directly.
+   */
+  remove(id) {
+    return api(`/orders/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 };
 

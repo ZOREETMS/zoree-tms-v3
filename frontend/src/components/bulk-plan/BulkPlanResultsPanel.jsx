@@ -35,7 +35,7 @@ function Pill({ color, children }) {
 const GREEN = { bg: "#dcfce7", fg: "#166534", border: "#86efac" };
 const RED   = { bg: "#fee2e2", fg: "#991b1b", border: "#fca5a5" };
 
-export default function BulkPlanResultsPanel({ results, elapsedMs }) {
+export default function BulkPlanResultsPanel({ results, elapsedMs, onClose }) {
   if (!results) return null;
   const { passedCount, failedCount, failedRows } = results;
   const anyResult = passedCount + failedCount > 0;
@@ -47,6 +47,7 @@ export default function BulkPlanResultsPanel({ results, elapsedMs }) {
       style={{
         marginBottom: 16,
         border: failedCount > 0 ? "1px solid #fca5a5" : "1px solid #86efac",
+        position: "relative",
       }}
     >
       <div className="card-body">
@@ -84,6 +85,33 @@ export default function BulkPlanResultsPanel({ results, elapsedMs }) {
           >
             Download Results (.xlsx)
           </button>
+
+          {/* QA #133: dismiss the per-run pass/fail rollup so the user can
+              hide it after reviewing/downloading. Only rendered when an
+              onClose handler is wired in. */}
+          {typeof onClose === "function" && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Dismiss bulk plan results"
+              title="Dismiss"
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 10,
+                background: "transparent",
+                border: "none",
+                fontSize: 18,
+                lineHeight: 1,
+                color: "var(--text3, #64748b)",
+                cursor: "pointer",
+                padding: "2px 6px",
+                borderRadius: 6,
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
 
         {failedCount > 0 && (

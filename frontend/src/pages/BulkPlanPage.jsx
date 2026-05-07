@@ -260,7 +260,11 @@ export default function BulkPlanPage() {
             whether or not shipments were created, so "0 shipments created"
             is replaced by a real reason breakdown. */}
         {planResults && (
-          <BulkPlanResultsPanel results={planResults} elapsedMs={planResults._elapsedMs} />
+          <BulkPlanResultsPanel
+            results={planResults}
+            elapsedMs={planResults._elapsedMs}
+            onClose={() => setPlanResults(null)}
+          />
         )}
 
         {/* Results banner */}

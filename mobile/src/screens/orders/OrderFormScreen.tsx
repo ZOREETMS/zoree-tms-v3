@@ -32,6 +32,7 @@ import {
   customerOptions,
   locationOptions,
 } from '../../services/optionsService';
+import type { SelectOption } from '../../services/optionsService';
 import {
   EMPTY_ORDER,
   ORDER_STATUSES,
@@ -42,6 +43,12 @@ import {
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 import SelectField from '../../components/common/SelectField';
 import DateField from '../../components/common/DateField';
+// QA bug #114 - inline location creation so the user can add a missing
+// pickup/dropoff without leaving the New Order flow.
+import CreateLocationModal from '../../components/locations/CreateLocationModal';
+// QA bug #114 - reuse the canonical "City, ST ZIP" composer so a row
+// created inline matches the format the dropdown otherwise stores.
+import { locationDisplayValue as composeLocationDisplay } from '../../services/locationsService';
 // QA bug #107 — line-items editor replaces the standalone Weight /
 // Pieces inputs in the Freight section. See orders/LineItemsEditor for
 // the rollup contract (weight/pieces are derived from the lines list).
@@ -125,14 +132,139 @@ export default function OrderFormScreen() {
 
   // Dropdown options derived from already-loaded DataContext rows.
   // Memoised so the picker FlatLists don't re-key on every form
-  // keystroke. customerOptions is sourced from existing orders (no
-  // dedicated `customers` table is loaded on mobile today); origin /
-  // destination come from the locations master.
-  const customers = useMemo(() => customerOptions(data.orders), [data.orders]);
-  const locations = useMemo(() => locationOptions(data.locations), [data.locations]);
+  // keystroke.
+  //
+  // QA bug #113: customerOptions now takes BOTH the orders list (for
+  // legacy / in-flight customers not yet in the OMS master) and the
+  // OMS customer master (oms_customers, exposed through DataContext as
+  // `customers`). The merge dedupes by case-folded name so a customer
+  // present in both sources appears once.
+  //
+  // QA bug #115: each `location` option now carries a `meta` payload
+  // with the source row's structured city / state / zip, so picking an
+  // existing location can auto-populate the sibling City / State / ZIP
+  // inputs - see `handleOriginChange` / `handleDestinationChange`.
+  const customers = useMemo(
+    () => customerOptions(data.orders, (data as any).customers),
+    [data.orders, data.customers],
+  );
+  const locations = useMemo(
+    () => locationOptions(data.locations),
+    [data.locations],
+  );
+
+  // QA bug #117: Ship Mode and Service Level were rendered as
+  // horizontal chip rows (with the empty-string mapped to "None"), so
+  // they didn't visually align with the rest of the form's dropdowns
+  // and the "None" chip was easy to mis-read as a real value. Convert
+  // them to canonical SelectOption shapes here so SelectField can
+  // render them the same way it renders Customer / Origin / Incoterms.
+  // Empty string -> friendly "(None)" label; persisted value still ''.
+  const shipModeOptions = useMemo<SelectOption[]>(
+    () =>
+      SHIP_MODES.map((m) => ({
+        value: m,
+        label: m === '' ? '(None)' : m,
+      })),
+    [],
+  );
+  const serviceLevelOptions = useMemo<SelectOption[]>(
+    () =>
+      SERVICE_LEVELS.map((s) => ({
+        value: s,
+        label: s === '' ? '(None)' : s,
+      })),
+    [],
+  );
+
+  // QA bug #114 - state for the inline Create Location modal.
+  // `pendingLocationSide` tracks whether the user is creating an
+  // origin or destination so we can route the saved row back into
+  // the correct sibling fields without re-prompting.
+  const [createLocationOpen, setCreateLocationOpen] = useState(false);
+  const [pendingLocationSide, setPendingLocationSide] =
+    useState<'origin' | 'destination' | null>(null);
 
   const updateField = (key: string, value: any) =>
     setForm((p: any) => ({ ...p, [key]: value }));
+
+  /**
+   * Apply a chosen location option (from the dropdown) to the form -
+   * auto-populates City / State / ZIP from the option's meta when
+   * available so the user doesn't have to re-type values that already
+   * live in the locations master (QA bug #115). Custom-typed values
+   * (no matched option) leave the sibling fields untouched.
+   */
+  const applyLocationSelection = (
+    side: 'origin' | 'destination',
+    nextValue: string,
+    option: SelectOption | null,
+  ) => {
+    setForm((p: any) => {
+      const out: any = { ...p };
+      const prefix = side === 'origin' ? 'origin' : 'dest';
+      out[side === 'origin' ? 'origin' : 'destination'] = nextValue;
+      if (option && option.meta) {
+        const m = option.meta as { city?: string; state?: string; zip?: string; name?: string };
+        if (m.city) out[`${prefix}City`] = m.city;
+        if (m.state) out[`${prefix}State`] = String(m.state).toUpperCase();
+        if (m.zip) out[`${prefix}Zip`] = m.zip;
+        // QA bug #123 - capture the source row's location name so
+        // ship_from_name / ship_to_name persist on the created order
+        // (otherwise the web TMS shows blank Ship From / Ship To name).
+        if (m.name) {
+          out[side === 'origin' ? 'shipFromName' : 'shipToName'] = m.name;
+        }
+      }
+      return out;
+    });
+  };
+
+  const handleOriginChange = (v: string, opt: SelectOption | null) =>
+    applyLocationSelection('origin', v, opt);
+  const handleDestinationChange = (v: string, opt: SelectOption | null) =>
+    applyLocationSelection('destination', v, opt);
+
+  /**
+   * QA bug #114 - "+ Create new location" was tapped on the picker.
+   * Capture which side the user is on, open the create modal, and
+   * leave the picker closed.
+   */
+  const openCreateLocation = (side: 'origin' | 'destination') => {
+    setPendingLocationSide(side);
+    setCreateLocationOpen(true);
+  };
+
+  /**
+   * Called by CreateLocationModal once a new location row has been
+   * persisted. Refresh DataContext so the new option appears in the
+   * picker, then auto-select it for the side the user was creating
+   * from. The structured fields (city/state/zip) are mirrored into the
+   * form so the user doesn't have to re-pick after saving.
+   */
+  const handleLocationCreated = async (loc: any) => {
+    await refreshData().catch(() => {});
+    if (!pendingLocationSide || !loc) {
+      setCreateLocationOpen(false);
+      setPendingLocationSide(null);
+      return;
+    }
+    const composed = composeLocationDisplay(loc);
+    setForm((p: any) => {
+      const prefix = pendingLocationSide === 'origin' ? 'origin' : 'dest';
+      return {
+        ...p,
+        [pendingLocationSide === 'origin' ? 'origin' : 'destination']: composed,
+        [`${prefix}City`]: loc.city || '',
+        [`${prefix}State`]: String(loc.state || '').toUpperCase(),
+        [`${prefix}Zip`]: loc.zip || '',
+        [pendingLocationSide === 'origin' ? 'shipFromName' : 'shipToName']:
+          loc.name || '',
+      };
+    });
+    setCreateLocationOpen(false);
+    setPendingLocationSide(null);
+  };
 
   const handleSave = async () => {
     if (saving) return;
@@ -256,8 +388,13 @@ export default function OrderFormScreen() {
           <Text style={styles.sectionTitle}>Customer & Lane</Text>
           {/* QA bug #86: Customer must be a dropdown of existing
               customers; allow free-text fallback so first-time
-              customers still save. Options come from optionsService
-              (distinct customer names on prior orders). */}
+              customers still save.
+              QA bug #113: the option list now merges the OMS customer
+              master with order-derived names (see customerOptions in
+              services/optionsService) so the dropdown shows every
+              active customer rather than just the ~3 already on
+              orders. Free-text entry remains available for legacy or
+              one-off customers. */}
           <SelectField
             label="Customer"
             value={form.customer || ''}
@@ -268,22 +405,33 @@ export default function OrderFormScreen() {
           />
           {/* QA bug #87: Origin / Destination dropdowns sourced from
               the locations master. allowCustom keeps ad-hoc lanes
-              workable (e.g. one-off pickups not yet in the master). */}
+              workable (e.g. one-off pickups not yet in the master).
+              QA bug #114: each picker now exposes a "+ Create new
+              location" affordance that opens CreateLocationModal so a
+              user who can't find their pickup/dropoff can add it
+              inline. The new row is auto-selected on save.
+              QA bug #115: handleOriginChange / handleDestinationChange
+              auto-populate City / State / ZIP from the picked option's
+              meta so the user doesn't re-type. */}
           <SelectField
             label="Origin"
             value={form.origin || ''}
-            onChange={(v) => updateField('origin', v)}
+            onChange={handleOriginChange}
             options={locations}
             placeholder="City, ST ZIP"
             modalTitle="Select Origin"
+            onCreateNew={() => openCreateLocation('origin')}
+            createNewLabel="Create new origin location"
           />
           <SelectField
             label="Destination"
             value={form.destination || ''}
-            onChange={(v) => updateField('destination', v)}
+            onChange={handleDestinationChange}
             options={locations}
             placeholder="City, ST ZIP"
             modalTitle="Select Destination"
+            onCreateNew={() => openCreateLocation('destination')}
+            createNewLabel="Create new destination location"
           />
           {/* QA bug #106: Ship-from Name / Ship-to Name removed; the
               mobile new-order flow now collects City + State per side
@@ -353,41 +501,63 @@ export default function OrderFormScreen() {
             </View>
           </View>
 
-          {/* Freight — QA bug #107: standalone Weight / Pieces inputs
-              removed from this section. Users now build the freight
-              from a Line Items list (item dropdown + qty + unit
-              weight); buildOrderSavePayload rolls those up into the
-              order's weight/pieces header so the planner sees the
-              same totals it always has. */}
-          <Text style={styles.sectionTitle}>Freight</Text>
+          {/* QA bug #107: standalone Weight / Pieces inputs removed.
+              Users now build the freight from a Line Items list (item
+              dropdown + qty + unit weight); buildOrderSavePayload
+              rolls those up into the order's weight/pieces header so
+              the planner sees the same totals it always has.
+
+              QA bug #118a: the prior "Freight" sectionTitle has been
+              removed - it was a stray label left over from the QA-107
+              refactor that no longer demarcated anything (Commodity +
+              Line Items already imply this is the freight section)
+              and confused users into thinking Freight was a separate
+              tab. Commodity now sits directly under the location
+              section without a leading divider.
+
+              QA bug #116: Commodity no longer pre-fills with "General"
+              - the EMPTY_ORDER default is now "" so the placeholder
+              guides the user to pick a real value. The save-time
+              fallback to "General" was also removed in
+              buildOrderSavePayload, so an empty input persists as
+              NULL rather than silently coercing to "General". */}
           <FormInput
             label="Commodity"
             value={form.commodity}
             onChangeText={(v: string) => updateField('commodity', v)}
+            placeholder="e.g. Network Equipment"
           />
           <LineItemsEditor
             lines={form.lines || []}
             items={data.items || []}
             onChange={(next: any[]) => updateField('lines', next)}
           />
-          {/* QA bug #88: Ship Mode chip row must include "None" so
-              users can clear the mode. SHIP_MODES now starts with ''
-              (mapped to label "None") — matching the SERVICE_LEVELS
-              pattern below so both rows behave the same way. The
-              empty-string value persists as NULL in ship_mode. */}
-          <Text style={styles.label}>Ship Mode</Text>
-          <ChipRow
-            options={SHIP_MODES.map((s) => s || 'None')}
-            value={form.shipMode || 'None'}
-            onChange={(v) => updateField('shipMode', v === 'None' ? '' : v)}
+          {/* QA bug #117: Ship Mode and Service Level were horizontal
+              chip rows that did not visually align with the rest of
+              the form's dropdowns and the inline "None" chip read as
+              a real value to QA. They are now SelectFields built from
+              the same SHIP_MODES / SERVICE_LEVELS lists, so picker
+              behaviour (search, scroll, "None" mapped to "(None)") is
+              consistent across the screen. The persisted value is
+              still '' for "no mode chosen" - SHIP_MODES[0] === '' is
+              what backs the (None) option. */}
+          <SelectField
+            label="Ship Mode"
+            value={form.shipMode || ''}
+            onChange={(v) => updateField('shipMode', v)}
+            options={shipModeOptions}
+            placeholder="(None)"
+            modalTitle="Select Ship Mode"
+            allowCustom={false}
           />
-          <Text style={styles.label}>Service Level</Text>
-          <ChipRow
-            options={SERVICE_LEVELS.map((s) => s || 'None')}
-            value={form.serviceLevel || 'None'}
-            onChange={(v) =>
-              updateField('serviceLevel', v === 'None' ? '' : v)
-            }
+          <SelectField
+            label="Service Level"
+            value={form.serviceLevel || ''}
+            onChange={(v) => updateField('serviceLevel', v)}
+            options={serviceLevelOptions}
+            placeholder="(None)"
+            modalTitle="Select Service Level"
+            allowCustom={false}
           />
 
           {/* Schedule — QA bug #89: Ready / Due Date now use a
@@ -415,12 +585,17 @@ export default function OrderFormScreen() {
             </View>
           </View>
 
-          {/* References — QA bug #109: Ref # was not required by the
-              planner / OMS workflow, so it has been removed from the
-              mobile form. The orders.ref_num column stays in the DB
-              (web edit path still surfaces it) — we just don't
-              collect it here. PO # is now full-width in the row. */}
-          <Text style={styles.sectionTitle}>References</Text>
+          {/* QA bug #109: Ref # was not required by the planner / OMS
+              workflow, so it has been removed from the mobile form.
+              The orders.ref_num column stays in the DB (web edit path
+              still surfaces it) - we just don't collect it here.
+
+              QA bug #118a: the prior "References" sectionTitle was
+              removed along with the Ref # field; with only PO # and
+              Incoterms remaining, a separate section header looked
+              orphaned and re-introduced the impression of a multi-
+              field group that no longer exists. Both fields render
+              flat under the schedule. */}
           <FormInput
             label="PO #"
             value={form.poNum}
@@ -467,12 +642,18 @@ export default function OrderFormScreen() {
               same column the OMS push service writes its
               special_instructions field into (see
               services/omsSync/pushOrderService.js), so a value entered
-              here lines up with what the OMS already sends. Renaming
-              the DB column would be a REQ-02 audited migration; the
-              UI relabel is the right scope for this QA item. */}
+              here lines up with what the OMS already sends.
+
+              QA bug #118a: the section sat under a `sectionTitle` AND
+              the `FormInput` re-rendered "Special Instructions" as
+              its own field label, so the screen showed the heading
+              twice in a row. The FormInput's label is now blank - the
+              `sectionTitle` is the single source of truth. The hint
+              copy moves under the textarea so users still see the
+              examples at a glance. */}
           <Text style={styles.sectionTitle}>Special Instructions</Text>
           <FormInput
-            label="Special Instructions"
+            label=""
             value={form.notes}
             onChangeText={(v: string) => updateField('notes', v)}
             placeholder="e.g. lift-gate required, call before delivery"
@@ -483,6 +664,25 @@ export default function OrderFormScreen() {
 
           <View style={{ height: spacing['5xl'] }} />
         </ScrollView>
+
+        {/* QA bug #114 - inline create-location modal. Visible state
+            is controlled by createLocationOpen; the picker that
+            triggered it is already closed. The pendingLocationSide
+            tells handleLocationCreated which side to auto-select on
+            save (origin vs destination). */}
+        <CreateLocationModal
+          visible={createLocationOpen}
+          onClose={() => {
+            setCreateLocationOpen(false);
+            setPendingLocationSide(null);
+          }}
+          onCreated={handleLocationCreated}
+          title={
+            pendingLocationSide === 'destination'
+              ? 'Add Destination Location'
+              : 'Add Origin Location'
+          }
+        />
       </View>
     </KeyboardAvoidingView>
   );
@@ -491,9 +691,13 @@ export default function OrderFormScreen() {
 /* ───────── Reusable sub-components ───────── */
 
 function FormInput({ label, value, onChangeText, style, ...props }: any) {
+  // QA bug #118a: a blank label means the caller relies on a higher-
+  // level sectionTitle to label the field (e.g. Special Instructions).
+  // Skip rendering the empty Text node so we don't leave a phantom row
+  // of empty-baseline whitespace above the input.
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         style={[styles.input, style]}
         value={value ?? ''}

@@ -22,7 +22,10 @@ import {
   deleteShipmentById,
   updateShipmentStatus,
 } from '../../services/shipmentService';
-import { formatCurrency } from '../../shared/utils/formatters';
+// QA bug #128 — shipment Detail must show the full-precision cost (e.g.
+// "$6,961.00") so it matches the web TMS view of the same shipment.
+// Previously used the K/M-abbreviating `formatCurrency`.
+import { formatCurrencyFull } from '../../shared/utils/formatters';
 import {
   borderRadius,
   colors,
@@ -353,7 +356,7 @@ export default function ShipmentDetailScreen() {
             <View style={styles.metric}>
               <Text style={styles.cardLabel}>Total Cost</Text>
               <Text style={[styles.cardValue, styles.costValue]}>
-                {totalCost != null ? formatCurrency(Number(totalCost)) : '--'}
+                {totalCost != null ? formatCurrencyFull(Number(totalCost)) : '--'}
               </Text>
             </View>
           </View>

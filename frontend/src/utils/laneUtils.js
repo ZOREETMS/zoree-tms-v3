@@ -9,6 +9,44 @@ export function normalizeZip(value) {
   return m ? m[1] : "";
 }
 
+// QA #141: when an order's `origin` / `dest` string is just a city (no
+// state, no ZIP) but the dedicated typed columns carry the rest of the
+// address, compose the canonical "CITY, ST ZIP" string from those columns
+// so the planned shipment carries full address-to-address details and the
+// Shipment Details modal stops rendering as "city-to-city". Falls back to
+// the original string verbatim when nothing better is available.
+function composeFullAddressString(rawAddress, city, state, zip) {
+  const raw = String(rawAddress || "").trim();
+  const hasStateOrZip = /,\s*[A-Z]{2}(\s|$)|\b\d{5}\b/.test(raw);
+  if (raw && hasStateOrZip) return raw;
+  const parts = [];
+  const head = [String(city || "").toUpperCase(), String(state || "").toUpperCase()]
+    .filter(Boolean)
+    .join(", ");
+  if (head) parts.push(head);
+  if (zip) parts.push(String(zip));
+  const composed = parts.join(" ").trim();
+  return composed || raw;
+}
+
+export function fullOrderOrigin(order = {}) {
+  return composeFullAddressString(
+    order.origin,
+    order.ship_from_city || order.origin_city,
+    order.ship_from_state || order.origin_state,
+    order.origin_zip,
+  );
+}
+
+export function fullOrderDest(order = {}) {
+  return composeFullAddressString(
+    order.dest,
+    order.ship_to_city || order.dest_city,
+    order.ship_to_state || order.dest_state,
+    order.dest_zip,
+  );
+}
+
 /**
  * Normalize an address fragment for stable lane-key matching.
  * Lowercases, collapses internal whitespace, trims ends. ZIP is preserved
@@ -41,8 +79,12 @@ export function buildLaneGroups(selectedOrders) {
     if (!groups.has(key)) {
       groups.set(key, {
         laneKey: key,
-        origin: o.origin || "",
-        destination: o.dest || "",
+        // QA #141: prefer the canonical "CITY, ST ZIP" composed from the
+        // typed ship-from / ship-to columns when the legacy free-text
+        // origin/dest is missing state or ZIP. Falls back to the raw
+        // string when the typed columns are also empty (legacy rows).
+        origin: fullOrderOrigin(o),
+        destination: fullOrderDest(o),
         originZip: normalizeZip(o.origin_zip || o.origin),
         destZip: normalizeZip(o.dest_zip || o.dest),
         // REQ-24: carry the ship-from / ship-to Location Name through lane
@@ -71,8 +113,11 @@ export function buildLaneGroups(selectedOrders) {
 export function buildSingleOrderLane(order) {
   return {
     laneKey: buildLaneKey(order),
-    origin: order.origin || "",
-    destination: order.dest || "",
+    // QA #141: same full-address composition as buildLaneGroups so the
+    // AI / single-shot plan path doesn't end up with city-only origin
+    // strings on the resulting shipment row.
+    origin: fullOrderOrigin(order),
+    destination: fullOrderDest(order),
     originZip: normalizeZip(order.origin_zip || order.origin),
     destZip: normalizeZip(order.dest_zip || order.dest),
     // REQ-24: keep the Location Name on single-order lanes too.

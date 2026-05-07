@@ -33,6 +33,11 @@
  */
 
 import { OrdersApi } from '../shared/api';
+// QA bug #121: deleteOrder uses the gating helper to fail fast for
+// non-deletable statuses (Tender Accepted / In Transit / Delivered)
+// before round-tripping. Service file pulled out per CLAUDE_RULES so
+// the screen never duplicates the rule inline.
+import { canDeleteOrder } from './orderActionRules';
 
 /**
  * Generate the next order id used for copies and ad-hoc creates.
@@ -153,7 +158,14 @@ export function buildOrderSavePayload(form: any) {
     shipToName: trimOrNull(f.shipToName),
     weight: toIntOrZero(f.weight),
     pieces: toIntOrZero(f.pieces),
-    commodity: trimOrNull(f.commodity) || 'General',
+    // QA bug #116: commodity used to be force-filled with "General" on
+    // both the form default and the save fallback. The user wants the
+    // field to genuinely stay blank when they don't pick a value, so
+    // the column nulls cleanly here. The DB allows NULL and any
+    // analytics path that previously bucketed "General" should switch
+    // to bucketing NULL the same way (see analyticsService — which
+    // already coalesces missing commodity to "Unknown").
+    commodity: trimOrNull(f.commodity),
     shipMode: trimOrNull(f.shipMode),
     serviceLevel: trimOrNull(f.serviceLevel),
     incoterms: trimOrNull(f.incoterms),
@@ -272,6 +284,33 @@ function omitUnsetFields(payload: any): any {
     out[k] = v;
   }
   return out;
+}
+
+/**
+ * QA bug #121: Delete an order from the mobile detail screen. Routes
+ * through OrdersApi.remove (DELETE /api/orders/:id) so the server can
+ * unassign any linked shipment, record an audit row (REQ-02) and
+ * apply the same access-control / status-gate rules the web has
+ * always enforced. Validation here is a defensive duplicate of the
+ * server's status guard - it lets the screen surface a friendlier
+ * "Cannot delete a delivered order" message before round-tripping.
+ *
+ * @param order  The order being deleted (full row; status field used
+ *               for the local guard).
+ * @throws       A validation Error when the order is in a non-deletable
+ *               state (server enforces the same rule), or whatever
+ *               OrdersApi.remove rejects with on a network / 4xx.
+ */
+export async function deleteOrder(order: any): Promise<void> {
+  if (!order || !order.id) {
+    throw new Error('deleteOrder: order missing id');
+  }
+  if (!canDeleteOrder(order)) {
+    throw new Error(
+      `Order in status "${order.status}" cannot be deleted. Cancel it instead.`,
+    );
+  }
+  await OrdersApi.remove(order.id);
 }
 
 /**

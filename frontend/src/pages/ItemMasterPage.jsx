@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { DbApi } from "../lib/api";
+import {
+  saveItem as saveItemRecord,
+  duplicateItem as duplicateItemRecord,
+  setItemStatus,
+  savePackaging,
+  setPackagingStatus,
+  readItemDescription,
+  readPkgDescription,
+} from "../services/itemMasterService";
 
 const EMPTY_ITEM = {
   id: "", description: "", customer: "", class: "General", nmfc: "", freight_class: "70",
@@ -11,7 +19,7 @@ const EMPTY_ITEM = {
 };
 
 const EMPTY_PKG = {
-  id: "", desc: "", type: "Carton", material: "Corrugated",
+  id: "", description: "", type: "Carton", material: "Corrugated",
   len: "", wid: "", hgt: "", tare: "", max_load: "", stack: 1,
   returnable: false, nested: false, hazmat: false,
   cost: "", supplier: "", status: "Active",
@@ -86,7 +94,7 @@ export default function ItemMasterPage() {
     if (q.trim()) {
       const t = q.toLowerCase();
       list = list.filter((it) =>
-        [it.id, it.desc, it.description, it.customer, it.item_class, it.nmfc, it.fclass]
+        [it.id, readItemDescription(it), it.customer, it.item_class, it.nmfc, it.fclass]
           .some((v) => String(v || "").toLowerCase().includes(t))
       );
     }
@@ -94,6 +102,14 @@ export default function ItemMasterPage() {
       list = list.filter((it) => (it.item_class || it.class || "General") === classFilter);
     }
     return list.sort((a, b) => {
+      // For the description column, sort using the read helper so legacy
+      // rows (where the value was once stored under `desc`) still order
+      // correctly alongside rows that now use `description`.
+      if (sortCol === "description") {
+        const av = readItemDescription(a).toLowerCase();
+        const bv = readItemDescription(b).toLowerCase();
+        return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
       const av = String(a[sortCol] || "").toLowerCase();
       const bv = String(b[sortCol] || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
@@ -119,7 +135,7 @@ export default function ItemMasterPage() {
   function openEdit(item) {
     setEditItem({
       ...item,
-      description: item.desc || item.description || "",
+      description: readItemDescription(item),
       class: item.item_class || item.class || "General",
       freight_class: item.fclass || item.freight_class || "70",
       _originalId: item.id,
@@ -135,36 +151,8 @@ export default function ItemMasterPage() {
     }
     setBusyId("saving");
     try {
-      const row = {
-        id: (editItem.id || "").toUpperCase(),
-        desc: (editItem.description || "").toUpperCase(),
-        customer: (editItem.customer || "").toUpperCase(),
-        item_class: editItem.class || "General",
-        nmfc: (editItem.nmfc || "").toUpperCase(),
-        fclass: editItem.freight_class || "70",
-        weight_unit: parseFloat(editItem.weight_unit) || 0,
-        value_unit: parseFloat(editItem.value_unit) || 0,
-        len: parseFloat(editItem.len) || 0,
-        wid: parseFloat(editItem.wid) || 0,
-        hgt: parseFloat(editItem.hgt) || 0,
-        units_per_pallet: parseInt(editItem.units_per_pallet) || 1,
-        pkg: editItem.pkg || "Carton",
-        stack: parseInt(editItem.stack) || 1,
-        hazmat: !!editItem.hazmat,
-        fragile: !!editItem.fragile,
-        temp_ctrl: !!editItem.temp_ctrl,
-        top_load: !!editItem.top_load,
-        un: editItem.un || "",
-        haz_class: editItem.haz_class || "",
-        status: editItem.status || "Active",
-      };
-      const existing = items.find((x) => x.id === editItem._originalId || x.id === editItem.id);
-      if (existing && editItem._originalId) {
-        await DbApi.patch("items", editItem._originalId, row);
-      } else {
-        await DbApi.upsert("items", row);
-      }
-      toast(`Item ${row.id} saved`, "success");
+      await saveItemRecord({ form: editItem, originalId: editItem._originalId });
+      toast(`Item ${(editItem.id || "").toUpperCase()} saved`, "success");
       setEditItem(null);
       await refreshData();
     } catch (err) {
@@ -176,12 +164,9 @@ export default function ItemMasterPage() {
 
   async function duplicateItem(item) {
     const newId = item.id + "-COPY";
-    const row = { ...item, id: newId };
-    delete row.created_at;
-    delete row.updated_at;
     setBusyId(item.id);
     try {
-      await DbApi.upsert("items", row);
+      await duplicateItemRecord(item);
       toast(`Duplicated as ${newId}`, "success");
       await refreshData();
     } catch (err) {
@@ -195,7 +180,7 @@ export default function ItemMasterPage() {
     const newStatus = (item.status || "Active") === "Active" ? "Inactive" : "Active";
     setBusyId(item.id);
     try {
-      await DbApi.patch("items", item.id, { status: newStatus });
+      await setItemStatus(item.id, newStatus);
       toast(`${item.id} set to ${newStatus}`, "success");
       await refreshData();
     } catch (err) {
@@ -210,7 +195,7 @@ export default function ItemMasterPage() {
     const csvRows = [headers.join(",")];
     rows.forEach((it) => {
       csvRows.push([
-        it.id, `"${it.desc || it.description || ""}"`, it.item_class || it.class || "",
+        it.id, `"${readItemDescription(it)}"`, it.item_class || it.class || "",
         it.nmfc, it.fclass || it.freight_class || "", it.weight_unit, it.value_unit,
         `${it.len || 0}x${it.wid || 0}x${it.hgt || 0}`, it.units_per_pallet,
         it.hazmat ? "Yes" : "No", it.status || "Active",
@@ -226,7 +211,7 @@ export default function ItemMasterPage() {
   }
 
   function getClass(it) { return it.item_class || it.class || "General"; }
-  function getDesc(it) { return it.desc || it.description || "--"; }
+  function getDesc(it) { return readItemDescription(it) || "--"; }
   function getDims(it) { return `${it.len || 0}\u00D7${it.wid || 0}\u00D7${it.hgt || 0}`; }
 
   // ── Packaging Units logic ────────────────────────────────────
@@ -235,7 +220,7 @@ export default function ItemMasterPage() {
     if (pkgSearch.trim()) {
       const t = pkgSearch.toLowerCase();
       list = list.filter((p) =>
-        [p.id, p.desc, p.type, p.material, p.supplier]
+        [p.id, readPkgDescription(p), p.type, p.material, p.supplier]
           .some((v) => String(v || "").toLowerCase().includes(t))
       );
     }
@@ -243,6 +228,11 @@ export default function ItemMasterPage() {
       list = list.filter((p) => p.type === pkgTypeFilter);
     }
     return list.sort((a, b) => {
+      if (pkgSortCol === "description") {
+        const av = readPkgDescription(a).toLowerCase();
+        const bv = readPkgDescription(b).toLowerCase();
+        return pkgSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
       const av = String(a[pkgSortCol] || "").toLowerCase();
       const bv = String(b[pkgSortCol] || "").toLowerCase();
       return pkgSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
@@ -264,7 +254,15 @@ export default function ItemMasterPage() {
   }
 
   function openNewPkg() { setEditPkg({ ...EMPTY_PKG }); }
-  function openEditPkg(pkg) { setEditPkg({ ...pkg, _originalId: pkg.id }); }
+  function openEditPkg(pkg) {
+    setEditPkg({
+      ...pkg,
+      // Normalise legacy `desc` field onto the canonical `description`
+      // so the Save flow always writes to the right column.
+      description: readPkgDescription(pkg),
+      _originalId: pkg.id,
+    });
+  }
   function editPkgField(key, value) { setEditPkg((p) => ({ ...p, [key]: value })); }
 
   function calcVolume(p) {
@@ -277,37 +275,15 @@ export default function ItemMasterPage() {
 
   async function savePkg() {
     if (!editPkg) return;
-    if (!editPkg.id || !editPkg.desc) {
+    const desc = editPkg.description || editPkg.desc || "";
+    if (!editPkg.id || !desc) {
       toast("Pkg Code and Description are required", "warning");
       return;
     }
     setBusyId("saving-pkg");
     try {
-      const row = {
-        id: (editPkg.id || "").toUpperCase(),
-        desc: (editPkg.desc || "").toUpperCase(),
-        type: editPkg.type || "Carton",
-        material: editPkg.material || "Corrugated",
-        len: parseFloat(editPkg.len) || 0,
-        wid: parseFloat(editPkg.wid) || 0,
-        hgt: parseFloat(editPkg.hgt) || 0,
-        tare: parseFloat(editPkg.tare) || 0,
-        max_load: parseFloat(editPkg.max_load) || 0,
-        stack: parseInt(editPkg.stack) || 1,
-        returnable: !!editPkg.returnable,
-        nested: !!editPkg.nested,
-        hazmat: !!editPkg.hazmat,
-        cost: parseFloat(editPkg.cost) || 0,
-        supplier: editPkg.supplier || "",
-        status: editPkg.status || "Active",
-      };
-      const existing = packagingUnits.find((x) => x.id === editPkg._originalId || x.id === editPkg.id);
-      if (existing && editPkg._originalId) {
-        await DbApi.patch("packaging_units", editPkg._originalId, row);
-      } else {
-        await DbApi.upsert("packaging_units", row);
-      }
-      toast(`Packaging ${row.id} saved`, "success");
+      await savePackaging({ form: editPkg, originalId: editPkg._originalId });
+      toast(`Packaging ${(editPkg.id || "").toUpperCase()} saved`, "success");
       setEditPkg(null);
       await refreshData();
     } catch (err) {
@@ -321,7 +297,7 @@ export default function ItemMasterPage() {
     const newStatus = (pkg.status || "Active") === "Active" ? "Inactive" : "Active";
     setBusyId(pkg.id);
     try {
-      await DbApi.patch("packaging_units", pkg.id, { status: newStatus });
+      await setPackagingStatus(pkg.id, newStatus);
       toast(`${pkg.id} set to ${newStatus}`, "success");
       await refreshData();
     } catch (err) {
@@ -542,7 +518,7 @@ export default function ItemMasterPage() {
                 <thead>
                   <tr>
                     <th style={{ cursor: "pointer" }} onClick={() => toggleSort("id")}>Item # <SortIcon col="id" active="items" /></th>
-                    <th style={{ cursor: "pointer" }} onClick={() => toggleSort("desc")}>Description <SortIcon col="desc" active="items" /></th>
+                    <th style={{ cursor: "pointer" }} onClick={() => toggleSort("description")}>Description <SortIcon col="description" active="items" /></th>
                     <th style={{ cursor: "pointer" }} onClick={() => toggleSort("item_class")}>Class <SortIcon col="item_class" active="items" /></th>
                     <th style={{ cursor: "pointer" }} onClick={() => toggleSort("nmfc")}>NMFC # <SortIcon col="nmfc" active="items" /></th>
                     <th style={{ cursor: "pointer" }} onClick={() => toggleSort("fclass")}>Freight Class <SortIcon col="fclass" active="items" /></th>
@@ -619,7 +595,7 @@ export default function ItemMasterPage() {
               <thead>
                 <tr>
                   <th style={{ cursor: "pointer" }} onClick={() => togglePkgSort("id")}>Pkg Code <SortIcon col="id" active="pkg" /></th>
-                  <th style={{ cursor: "pointer" }} onClick={() => togglePkgSort("desc")}>Description <SortIcon col="desc" active="pkg" /></th>
+                  <th style={{ cursor: "pointer" }} onClick={() => togglePkgSort("description")}>Description <SortIcon col="description" active="pkg" /></th>
                   <th>Type</th>
                   <th>Dims (L&times;W&times;H in)</th>
                   <th style={{ cursor: "pointer" }} onClick={() => togglePkgSort("tare")}>Tare Weight (lbs) <SortIcon col="tare" active="pkg" /></th>
@@ -642,7 +618,7 @@ export default function ItemMasterPage() {
                     <tr key={p.id} style={status === "Inactive" ? { opacity: 0.55 } : {}}>
                       <td><span className="mono" style={{ color: "var(--accent)", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }} onClick={() => openEditPkg(p)}>{p.id}</span></td>
                       <td>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{p.desc || "--"}</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{readPkgDescription(p) || "--"}</div>
                         <PkgPropertyBadges pkg={p} />
                       </td>
                       <td><TypeBadge type={p.type} /></td>
@@ -798,7 +774,11 @@ export default function ItemMasterPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Description *</label>
-                  <input value={editPkg.desc || ""} onChange={(e) => editPkgField("desc", e.target.value)} placeholder="e.g. Standard Export Carton" />
+                  <input
+                    value={editPkg.description || ""}
+                    onChange={(e) => editPkgField("description", e.target.value)}
+                    placeholder="e.g. Standard Export Carton"
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Type *</label>

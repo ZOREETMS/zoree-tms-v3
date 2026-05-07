@@ -1433,10 +1433,48 @@ function dbToOrderApi(r) {
     customer:        r.customer,
     origin:          r.origin,
     destination:     r.dest,
+    // QA bug #123 — ship_from_name / ship_to_name (the user-friendly
+    // location label, e.g. "Dallas DC") were saved through
+    // apiOrderToDbPatch but never round-tripped here, so a mobile-
+    // created order opened in TMS web rendered Ship From / Ship To
+    // blank. Expose both casings so OrderDetailModal (reads
+    // o.ship_from_name) and the bulk-plan service (reads o.shipFromName)
+    // both see the persisted value. Companion fix: mobile
+    // OrderFormScreen now captures the source location's name in the
+    // form state when the user picks an existing option from the
+    // dropdown.
+    ship_from_name:  r.ship_from_name || null,
+    shipFromName:    r.ship_from_name || null,
+    ship_to_name:    r.ship_to_name   || null,
+    shipToName:      r.ship_to_name   || null,
+    // QA bug #115 / #123 — origin_zip / dest_zip round-trip so the
+    // web's locationFromOrderOrigin/Dest helpers and the mobile form
+    // hydrate the ZIP input on edit. Without these the form fell back
+    // to parsing the free-text origin/dest column, which lost the +4
+    // suffix and any ZIP that the freight string didn't include.
+    origin_zip:      r.origin_zip || null,
+    originZip:       r.origin_zip || null,
+    dest_zip:        r.dest_zip   || null,
+    destZip:         r.dest_zip   || null,
     weight:          r.weight,
     pieces:          r.pieces,
     commodity:       r.commodity,
     incoterms:       r.incoterms   || null,
+    // QA bug #118b — ship_mode wasn't returned by the mapper, so the
+    // mobile edit form spread EMPTY_ORDER (which used to default to
+    // 'TL') OVER the loaded order, masking whatever mode the user had
+    // saved. Fixing the mapper here is the durable fix; EMPTY_ORDER's
+    // default also moved to '' so a transient mapper miss can't
+    // resurrect 'TL' silently. Expose both casings — the web edit
+    // form accepts either (see frontend OrdersPage:515).
+    ship_mode:       r.ship_mode || null,
+    shipMode:        r.ship_mode || null,
+    // QA bug #119 + #125 — service_level had the same round-trip gap
+    // (saved fine, never returned) so a Service Level set on web or
+    // mobile reverted to "(None)" the next time the order opened
+    // anywhere. Same dual-casing exposure as ship_mode.
+    service_level:   r.service_level || null,
+    serviceLevel:    r.service_level || null,
     // TMS bug: Reference # / PO Number edits were saved to DB but never
     // round-tripped to the UI because this mapper omitted them. Expose
     // both snake_case and camelCase aliases so consumers reading either
@@ -1454,6 +1492,19 @@ function dbToOrderApi(r) {
     hazmat:          r.hazmat      || false,
     preferredCarrier:r.preferred_carrier || null,
     excludedCarrier: r.excluded_carrier  || null,
+    // QA bug #119 follow-up — planning-constraint flags also weren't
+    // round-tripped, so the web's "Do not consolidate" / "Dedicated
+    // equipment" / "No contract rate" toggles reverted to false on
+    // every reopen even though they had been saved. Map all three
+    // here in both casings to fix the symmetric web bug while we're
+    // touching the mapper. Coerce to boolean so a NULL column reads
+    // as `false` rather than leaking through to the UI.
+    no_consolidate:  !!r.no_consolidate,
+    noConsolidate:   !!r.no_consolidate,
+    no_contract_rate:!!r.no_contract_rate,
+    noContractRate:  !!r.no_contract_rate,
+    dedicated_equip: !!r.dedicated_equip,
+    dedicatedEquip:  !!r.dedicated_equip,
     notes:           r.notes       || null,
     createdAt:       r.created_at,
     updatedAt:       r.updated_at,
@@ -1464,10 +1515,17 @@ app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,
 app.patch('/api/orders/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  // REQ-04: only admin + planner can edit orders.
+  // QA #138 / REQ-04: route the gate through the access matrix so an
+  // admin-set 'view' or 'none' on the orders module ACTUALLY blocks the
+  // write — the legacy role-name check (admin / planner only) ignored
+  // role_feature_permissions and let a planner with View-only on orders
+  // edit anyway. canWriteTable returns true only when the user's role
+  // has 'edit' for any feature that owns the orders table.
   const rolePP = getUserRole(u);
-  if (!['admin', 'planner'].includes(rolePP)) {
-    return res.status(403).json({ error: `Role '${rolePP}' cannot edit orders. Required: admin, planner.` });
+  if (!(await canWriteTable(u, 'orders', 'PATCH', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${rolePP}' has no Edit access on Orders. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const beforeRows = await dbSelect('orders', `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`, null);
@@ -1590,10 +1648,12 @@ app.patch('/api/orders/:id', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  // REQ-04: only admin + planner can create orders.
+  // QA #138: gate via the access matrix. Create needs Edit on Orders.
   const roleC = getUserRole(u);
-  if (!['admin', 'planner'].includes(roleC)) {
-    return res.status(403).json({ error: `Role '${roleC}' cannot create orders. Required: admin, planner.` });
+  if (!(await canWriteTable(u, 'orders', 'POST', getTenantId(u)))) {
+    return res.status(403).json({
+      error: `Role '${roleC}' has no Edit access on Orders. Ask an admin to grant Edit on the User Roles page.`,
+    });
   }
   try {
     const id = req.body?.id || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1892,10 +1952,12 @@ app.patch('/api/shipments/:id/status', async (req, res) => {
 app.patch('/api/shipments/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
+  // QA #138: same access-matrix gate as /api/orders/:id — the previous
+  // hardcoded role-name list let a 'view' permission still write.
   const role = getUserRole(u);
-  if (!['admin', 'planner', 'dispatcher'].includes(role)) {
+  if (!(await canWriteTable(u, 'shipments', 'PATCH', getTenantId(u)))) {
     return res.status(403).json({
-      error: `Role '${role}' cannot update shipments. Required: admin, planner, dispatcher.`,
+      error: `Role '${role}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
     });
   }
   try {
@@ -3004,8 +3066,18 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       cacheMisses += 1;
       const quotes = [];
 
-      // Always fetch LTL rates (CzarLite + CCXL) unless weight exceeds LTL max
-      if (wantsLtl && wt <= LTL_MAX) {
+      // QA #136: when the user explicitly selects LTL as the planning mode
+      // (wantsLtl && !wantsTl, i.e. allowedModes is exactly ['LTL']), the
+      // planner must still surface LTL quotes even when shipment weight
+      // exceeds LTL_MAX — otherwise the Plan modal renders only TL rates
+      // for an LTL-tagged order and the user has nothing to compare. The
+      // infeasible flag set at line ~3198 below marks the over-ceiling
+      // quotes so the UI can warn the user; we no longer drop them at
+      // the fetch gate. When LTL+TL are both allowed (default), keep the
+      // weight gate so we don't pay for fetches we'd discard anyway —
+      // TL quotes will cover heavier loads.
+      const explicitLtlOnly = wantsLtl && !wantsTl;
+      if (wantsLtl && (explicitLtlOnly || wt <= LTL_MAX)) {
         try {
           const ltlRes = await fetch(`http://localhost:${PORT || 3001}/api/ltl/quote`, {
             method: 'POST',

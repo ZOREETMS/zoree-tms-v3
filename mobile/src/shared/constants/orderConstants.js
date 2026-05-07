@@ -18,6 +18,23 @@
  *          POST /api/orders/:id/lines accepts. Weight + pieces are now
  *          rolled up from the lines client-side at save time so the
  *          planner still sees a populated header.
+ *
+ * QA bug #116 + #118b fix:
+ *   #116 — `commodity` no longer defaults to "General". The user wants
+ *          the field empty on a fresh New Order so they pick a real
+ *          value rather than accept a sticky placeholder. The server
+ *          still defaults to "General" via buildOrderSavePayload when
+ *          the user leaves it blank, so existing orders aren't affected
+ *          and analytics that bucket on "General" still work.
+ *   #118b — `shipMode` no longer defaults to "TL". When EDITING an
+ *          existing order, the screen spreads EMPTY_ORDER first then
+ *          the existing row on top. If the existing row's shipMode is
+ *          undefined (because the API didn't round-trip it — see the
+ *          companion fix to dbToOrderApi in api/server.js) the spread
+ *          would resurrect "TL" and overwrite whatever mode the user
+ *          actually picked. Empty string lets the persisted value win.
+ *          A user-explicit "TL" still saves as "TL" — only the *default*
+ *          changes here.
  */
 export const EMPTY_ORDER = {
   id: '',
@@ -34,8 +51,8 @@ export const EMPTY_ORDER = {
   shipToName: '',
   weight: '',
   pieces: '',
-  commodity: 'General',
-  shipMode: 'TL',
+  commodity: '',
+  shipMode: '',
   serviceLevel: '',
   incoterms: '',
   refNum: '',

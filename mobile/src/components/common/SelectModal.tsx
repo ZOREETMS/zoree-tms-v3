@@ -42,6 +42,17 @@ export interface SelectModalProps {
   allowCustom?: boolean;
   /** Helper text under the title. */
   hint?: string;
+  /**
+   * QA bug #114: when set, an additional "+ Create new" row renders at
+   * the very top of the list (above any allowCustom "Use X" row).
+   * Pressing it closes this modal and invokes the callback so the
+   * caller can present a creation form (e.g. CreateLocationModal).
+   * Keeping the modal close + callback dispatch in here means callers
+   * don't have to manage the "is the picker still open" race.
+   */
+  onCreateNew?: () => void;
+  /** Label for the create row. Defaults to "Create new". */
+  createNewLabel?: string;
 }
 
 export default function SelectModal({
@@ -53,6 +64,8 @@ export default function SelectModal({
   onClose,
   allowCustom = false,
   hint,
+  onCreateNew,
+  createNewLabel,
 }: SelectModalProps) {
   const [query, setQuery] = useState('');
 
@@ -159,16 +172,46 @@ export default function SelectModal({
               ) : null
             }
             ListHeaderComponent={
-              showCustomRow ? (
-                <TouchableOpacity
-                  style={styles.customRow}
-                  onPress={() => handleSelect(trimmed)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
-                  <Text style={styles.customRowText}>Use "{trimmed}"</Text>
-                </TouchableOpacity>
-              ) : null
+              <>
+                {/* QA bug #114: Create New row. Always available when
+                    onCreateNew is provided so users can add a missing
+                    location even before they start typing a query. The
+                    "Use 'X'" row below remains for free-text fallback
+                    when allowCustom=true and the query doesn't match. */}
+                {onCreateNew ? (
+                  <TouchableOpacity
+                    style={styles.createRow}
+                    onPress={() => {
+                      setQuery('');
+                      onCreateNew();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="add-circle"
+                      size={20}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.createRowText}>
+                      {createNewLabel || 'Create new'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {showCustomRow ? (
+                  <TouchableOpacity
+                    style={styles.customRow}
+                    onPress={() => handleSelect(trimmed)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={18}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.customRowText}>Use "{trimmed}"</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
             }
             renderItem={({ item }) => {
               const active = value && item.value === value;
@@ -283,6 +326,25 @@ const styles = StyleSheet.create({
   customRowText: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.medium,
+    color: colors.accent,
+  },
+  // QA bug #114: visually distinct from `customRow` so the user can
+  // tell the persisting "Create new" action apart from the throwaway
+  // "Use 'X'" free-text row. Slightly stronger background and a bolder
+  // weight on the label.
+  createRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(37,99,235,0.10)',
+  },
+  createRowText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
     color: colors.accent,
   },
   emptyWrap: {

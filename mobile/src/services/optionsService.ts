@@ -14,6 +14,14 @@ export interface SelectOption {
   label: string;
   /** Optional secondary text for locations. */
   sublabel?: string;
+  /**
+   * Free-form metadata carried alongside the option. Origin/Destination
+   * options use this to surface the source location row's `city`,
+   * `state`, `zip`, and `name` so the form screen can auto-populate the
+   * sibling City / State / ZIP inputs the moment the user picks an
+   * address (QA bug #115). Customer options leave it undefined.
+   */
+  meta?: Record<string, any>;
 }
 
 /**
@@ -35,18 +43,55 @@ function customerDedupKey(name: string): string {
 }
 
 /**
- * Distinct customer names seen on existing orders, sorted A-Z.
+ * Distinct customer names sourced from BOTH the OMS customer master
+ * (oms_customers, when DataContext has loaded it) AND from customer
+ * names seen on existing orders. Sorted A-Z.
+ *
+ * QA bug #113 fix: previously this returned only customers that had
+ * already been used on at least one order, so a fresh tenant whose OMS
+ * had ~50 customers but only 3 distinct ones across pre-seeded orders
+ * showed only 3 entries in the New Order dropdown - while the web
+ * always saw the full master via the OMS app. Merging both sources
+ * keeps the long-tail (legacy customers no longer in the OMS still
+ * appear, so historical-style orders can still be re-keyed) while also
+ * surfacing every active OMS customer up-front.
+ *
+ * Backwards-compatible signature: callers passing only `orders`
+ * continue to work; the second `customers` arg is optional. The
+ * dedup keys both sources by case-folded / whitespace-collapsed name
+ * so "ACME Corp" from the master and "acme  corp" from a legacy order
+ * row do not surface as duplicate rows.
  */
-export function customerOptions(orders: any[] | null | undefined): SelectOption[] {
-  if (!Array.isArray(orders)) return [];
+export function customerOptions(
+  orders: any[] | null | undefined,
+  customers?: any[] | null | undefined,
+): SelectOption[] {
   const byKey = new Map<string, string>();
-  for (const o of orders) {
-    const raw = String(o?.customer || '').trim();
-    if (!raw) continue;
-    const key = customerDedupKey(raw);
-    if (!key) continue;
-    if (!byKey.has(key)) byKey.set(key, raw);
+
+  // OMS master takes precedence for casing - it's the canonical name.
+  if (Array.isArray(customers)) {
+    for (const c of customers) {
+      const raw = String(c?.name || '').trim();
+      if (!raw) continue;
+      const key = customerDedupKey(raw);
+      if (!key) continue;
+      if (!byKey.has(key)) byKey.set(key, raw);
+    }
   }
+
+  // Then fold in anything seen on actual orders so legacy customers
+  // (deactivated / pre-OMS) still appear. First-seen casing wins so a
+  // master row already in `byKey` is not overwritten by a stray order.
+  if (Array.isArray(orders)) {
+    for (const o of orders) {
+      const raw = String(o?.customer || '').trim();
+      if (!raw) continue;
+      const key = customerDedupKey(raw);
+      if (!key) continue;
+      if (!byKey.has(key)) byKey.set(key, raw);
+    }
+  }
+
   return Array.from(byKey.values())
     .sort((a, b) => a.localeCompare(b))
     .map((name) => ({ value: name, label: name }));
@@ -98,7 +143,18 @@ export function locationOptions(locations: any[] | null | undefined): SelectOpti
       sublabel = address;
     }
 
-    items.push({ value, label, sublabel });
+    // QA bug #115: carry the original row's structured fields in
+    // `meta` so the form screen can auto-populate the sibling City /
+    // State / ZIP inputs the moment the user picks this option. Without
+    // this, the form had only the composed "City, ST ZIP" string to
+    // re-parse, which threw away casing and any location name. We store
+    // the trimmed values so the form doesn't have to re-clean them.
+    items.push({
+      value,
+      label,
+      sublabel,
+      meta: { name, city, state, zip },
+    });
   }
   const dedup = new Map<string, SelectOption>();
   for (const it of items) {

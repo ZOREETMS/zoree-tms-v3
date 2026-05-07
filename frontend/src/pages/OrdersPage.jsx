@@ -685,7 +685,7 @@ export default function OrdersPage() {
           const itMeta = itemMaster.find((x) => x.id === (ln.item_id || ln.itemId)) || {};
           return {
             line_num: idx + 1, item_id: ln.item_id || null,
-            description: itMeta.desc || ln.description || null,
+            description: itMeta.description || itMeta.desc || ln.description || null,
             qty_ordered: ln.qty_ordered || 0, unit_weight: ln.unit_weight || 0,
             total_weight: ln.total_weight || 0,
           };
@@ -1466,7 +1466,11 @@ export default function OrdersPage() {
       {/* REQ-28: inline pass/fail rollup for the most recent Plan Selected run.
           Includes a "Download Results (.xlsx)" button. */}
       {planResults && (
-        <BulkPlanResultsPanel results={planResults} elapsedMs={planResults._elapsedMs} />
+        <BulkPlanResultsPanel
+          results={planResults}
+          elapsedMs={planResults._elapsedMs}
+          onClose={() => setPlanResults(null)}
+        />
       )}
 
       {/* ═══ ORDERS TABLE ═══ */}

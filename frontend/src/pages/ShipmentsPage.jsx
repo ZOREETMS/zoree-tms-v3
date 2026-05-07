@@ -34,6 +34,13 @@ import ExportButton from "../components/ui/ExportButton";
 import { useRowSelection } from "../hooks/useRowSelection";
 import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../components/ui/SelectionCheckbox";
 import SelectionBar from "../components/ui/SelectionBar";
+// QA bugs #129 / #130 — mobile-side updates to shipment status
+// (Tender Accept, In-Transit, Delivered) need to flow into the web
+// ShipmentsPage view without manual refresh. The orders cascade is
+// already covered by useRealtimeOrders on OrdersPage; users sitting
+// on ShipmentsPage missed those updates because no shipments
+// realtime subscription was mounted there. This hook fills that gap.
+import { useRealtimeShipments } from "../hooks/useRealtimeShipments";
 
 const STATUS_BADGES = {
   Planned: "badge badge-teal",
@@ -823,6 +830,17 @@ export default function ShipmentsPage() {
   // Lightweight refresh for tender-path mutations (shipments + orders only).
   // Falls back to full refresh if the lighter helper isn't provided.
   const refreshTender = refreshShipmentsAndOrders || refreshData;
+
+  // QA bugs #129 / #130: subscribe to realtime shipment updates so a
+  // status change made on mobile (or by another web user) refreshes
+  // this view automatically. Debounced inside the hook to coalesce
+  // bursts (e.g. a planning batch that updates 50 shipments at once).
+  // Prefer the lighter refreshTender (shipments + orders) since
+  // realtime events on shipments don't require reloading the rate
+  // master / locations / drivers / etc.
+  useRealtimeShipments(() => {
+    try { refreshTender?.(); } catch (_) { /* noop */ }
+  });
   const navigate = useNavigate();
   const [shipView, setShipView] = useState("list");
   const [q, setQ] = useState("");

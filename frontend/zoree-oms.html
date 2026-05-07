@@ -1686,7 +1686,12 @@ async function saveOrder(o){
     // Bug #33: DB column renamed priority → service_level. In-app field
     // name `priority` is retained as the form-state key; only the row
     // assembled for the upsert uses the new column name.
-    incoterms:o.inco||'FOB Origin', service_level:o.priority||'Standard',
+    // QA #132: do NOT default service_level to 'Standard' when the user
+    // leaves the field blank. The OMS row should preserve NULL so the
+    // TMS Service Level cell stays empty (= "TMS selects"). Forcing
+    // 'Standard' here was the source of the spurious value showing up
+    // on every freshly-synced TMS order. Coerce empty/whitespace to null.
+    incoterms:o.inco||'FOB Origin', service_level:(o.priority && String(o.priority).trim()) || null,
     commodity:o.comm||null, special_instructions:o.notes||null,
     stage:o.stage, on_hold:o.hold||false, hold_reason:o.holdReason||null,
     tms_order_id:o.tmsId||null, tms_shipment_id:o.tmsShipId||null,

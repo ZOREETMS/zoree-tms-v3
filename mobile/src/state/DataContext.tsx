@@ -13,6 +13,15 @@ export interface TmsData {
   orders: any[];
   shipments: any[];
   carriers: any[];
+  /**
+   * QA bug #113 - oms_customers (active rows only). Used by
+   * services/optionsService.customerOptions to widen the New Order
+   * Customer dropdown beyond just-the-customers-already-on-orders, so
+   * mobile parity matches what the web sees via the OMS app. Empty
+   * array when the OMS app isn't seeded for this tenant - the dropdown
+   * gracefully falls back to order-derived names.
+   */
+  customers: any[];
   lanePreferences: any[];
   items: any[];
   locations: any[];
@@ -43,6 +52,7 @@ const emptyData: TmsData = {
   orders: [],
   shipments: [],
   carriers: [],
+  customers: [],
   lanePreferences: [],
   items: [],
   locations: [],
@@ -71,6 +81,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         orders,
         shipments,
         carriers,
+        // QA bug #113 - oms_customers fetched via DbApi.customers().
+        // Wrapped in .catch so a tenant without the OMS app seeded
+        // (or transient 4xx) still produces a usable Promise.all batch.
+        customers,
         lanePreferences,
         items,
         locations,
@@ -85,6 +99,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         DbApi.orders(),
         DbApi.shipments(),
         DbApi.carriers(),
+        DbApi.customers().catch(() => []),
         DbApi.lanePreferences().catch(() => []),
         DbApi.items().catch(() => []),
         DbApi.locations().catch(() => []),
@@ -101,6 +116,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         orders: Array.isArray(orders) ? orders : [],
         shipments: Array.isArray(shipments) ? shipments : [],
         carriers: Array.isArray(carriers) ? carriers : [],
+        customers: Array.isArray(customers) ? customers : [],
         lanePreferences: Array.isArray(lanePreferences) ? lanePreferences : [],
         items: Array.isArray(items) ? items : [],
         locations: Array.isArray(locations) ? locations : [],

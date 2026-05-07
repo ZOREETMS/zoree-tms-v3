@@ -164,7 +164,25 @@ describe('buildOrderSavePayload', () => {
     expect(out.pieces).toBe(4);
     expect(out.hazmat).toBe(true);
     expect(out.notes).toBeNull(); // empty string → null so DB stores cleanly
-    expect(out.commodity).toBe('General'); // default
+    // QA bug #116: commodity no longer auto-fills with "General" — an
+    // omitted commodity input must persist as null so the form's
+    // empty-on-load behaviour matches the saved value.
+    expect(out.commodity).toBeNull();
+  });
+
+  it('preserves an explicit commodity value through save', () => {
+    // Counter-example to the QA-#116 default change above: when the
+    // user actually picks a commodity, that value is round-tripped
+    // unchanged. Keeps the implicit guarantee that nothing in the
+    // save path overrides a user-typed value.
+    const out = buildOrderSavePayload({
+      customer: 'ACME',
+      origin: 'A',
+      destination: 'B',
+      weight: '1',
+      commodity: 'Electronics',
+    });
+    expect(out.commodity).toBe('Electronics');
   });
 
   it('falls back from destination to dest', () => {

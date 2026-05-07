@@ -58,24 +58,30 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
               searchSource="oms"
             />
           </div>
-          {/* Freight Details — parity with Edit tab */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <div>
+          {/* Freight Details — parity with Edit tab.
+              QA #134: switch from 4 cramped columns to 2×2 so the
+              Mode and Service Level <select>s have room for their
+              labels (e.g. "— TMS selects —", "White Glove") without
+              clipping inside the 620px modal. `minWidth: 0` lets
+              the inputs shrink with the grid track instead of
+              forcing an overflow. */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div style={{ minWidth: 0 }}>
               <label style={labelSt}>Weight (lbs)</label>
               <input type="number" value={form.weight || ""} onChange={(e) => upd("weight", e.target.value)} placeholder="Auto" style={inputSt} />
             </div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelSt}>Pieces</label>
               <input type="number" value={form.pieces || ""} onChange={(e) => upd("pieces", e.target.value)} placeholder="Auto" style={inputSt} />
             </div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelSt}>Mode</label>
               <select value={form.shipMode || ""} onChange={(e) => upd("shipMode", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
                 <option value="">— TMS selects —</option>
                 {["TL","LTL","Intermodal","Flatbed","Reefer","Parcel","Expedite","Air Freight"].map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelSt}>Service Level</label>
               <select value={form.serviceLevel || ""} onChange={(e) => upd("serviceLevel", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
                 <option value="">— TMS selects —</option>

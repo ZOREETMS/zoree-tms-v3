@@ -95,9 +95,19 @@ async function planOrder(p, { orders }) {
   if (!result.ok) throw new Error(result.errorMessage || "Failed to plan orders");
 
   const ship = result.shipment;
-  const originCity = (ship.origin || "").split(",")[0];
-  const destCity = (ship.dest || "").split(",")[0];
-  return `Shipment **${ship.id}** created · ${rawIds.length} order(s) · Carrier: ${ship.carrier} · ${ship.mode} · $${(ship.total_cost || 0).toLocaleString()} · ${originCity} → ${destCity}`;
+  // QA #141: render the full origin/dest address-to-address strings in the
+  // AI confirmation, not just the first comma-delimited fragment. The
+  // earlier `.split(",")[0]` cropped "ATLANTA, GA 30301" → "ATLANTA",
+  // making it look like the planner had only city-level context. The
+  // shipment row itself now also carries the full string (lane + plan
+  // forward fullOrderOrigin/Dest from laneUtils).
+  const originLabel = ship.ship_from_name
+    ? `${ship.ship_from_name} (${ship.origin || "—"})`
+    : (ship.origin || "—");
+  const destLabel = ship.ship_to_name
+    ? `${ship.ship_to_name} (${ship.dest || "—"})`
+    : (ship.dest || "—");
+  return `Shipment **${ship.id}** created · ${rawIds.length} order(s) · Carrier: ${ship.carrier} · ${ship.mode} · $${(ship.total_cost || 0).toLocaleString()} · ${originLabel} → ${destLabel}`;
 }
 
 /* ── Action: UPDATE_ORDER_STATUS ───────────────────────────────── */

@@ -12,7 +12,16 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import { OrdersApi } from '../../lib/api';
-import { copyOrder } from '../../services/ordersService';
+import { copyOrder, deleteOrder } from '../../services/ordersService';
+// QA bugs #120 / #121 / #122 — central gating helpers so this screen
+// never duplicates status rules inline. Updates here automatically
+// flow into any future bulk-action UIs that want the same guards.
+import {
+  canPlanOrder,
+  canTenderOrder,
+  canCancelOrder,
+  canDeleteOrder,
+} from '../../services/orderActionRules';
 import {
   ratePlanForOrder,
   executeOrderPlan,
@@ -170,6 +179,44 @@ export default function OrderDetailScreen() {
     }
   }, [order, refreshData]);
 
+  /**
+   * QA bug #121: Delete the current order. Confirmation is mandatory
+   * (even on a non-cancelled order this is destructive — it removes
+   * the row, audit cascade aside). The service layer enforces the
+   * status-gate before the round-trip, so a Cancelled order deletes
+   * cleanly while a Tender-Accepted order surfaces the friendly
+   * server-aligned reason.
+   *
+   * On success: pop back to the orders list and refresh DataContext
+   * so the detail view doesn't try to render a now-gone row.
+   */
+  const handleDelete = useCallback(async () => {
+    if (!order) return;
+    Alert.alert(
+      'Delete Order',
+      `Permanently delete "${order.order_id || order.id}"? This cannot be undone.`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setUpdating(true);
+            try {
+              await deleteOrder(order);
+              await refreshData();
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert('Delete failed', e?.message || 'Could not delete order');
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [order, navigation, refreshData]);
+
   if (!order) {
     return (
       <View style={styles.centered}>
@@ -287,6 +334,13 @@ export default function OrderDetailScreen() {
           )}
         </Card>
 
+        {/* QA bugs #120 / #121 / #122: action gating now flows from
+            services/orderActionRules so the screen never re-implements
+            the status rules. Disabled buttons stay visible (familiar
+            web parity) but cannot fire - no more accidental tendering
+            of an unplanned order or planning of a cancelled one. The
+            new Delete button rounds out the destructive-action set
+            that the web has long had. */}
         <View style={styles.actions}>
           <ActionButton
             label="Edit"
@@ -307,21 +361,28 @@ export default function OrderDetailScreen() {
             icon="git-merge-outline"
             color={colors.purple}
             onPress={planThisOrder}
-            disabled={updating || status === 'Planned'}
+            disabled={updating || !canPlanOrder(order)}
           />
           <ActionButton
             label="Tender"
             icon="send-outline"
             color={colors.cyan}
             onPress={() => changeStatus('Tendered')}
-            disabled={updating || status === 'Tendered'}
+            disabled={updating || !canTenderOrder(order)}
           />
           <ActionButton
             label="Cancel"
             icon="close-circle-outline"
             color={colors.red}
             onPress={() => changeStatus('Cancelled')}
-            disabled={updating || status === 'Cancelled'}
+            disabled={updating || !canCancelOrder(order)}
+          />
+          <ActionButton
+            label="Delete"
+            icon="trash-outline"
+            color={colors.red}
+            onPress={handleDelete}
+            disabled={updating || !canDeleteOrder(order)}
           />
         </View>
       </ScrollView>

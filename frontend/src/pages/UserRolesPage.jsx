@@ -12,7 +12,11 @@
 //     scrolling through ~30 modules.
 //   - Per-row "Set all →" lets an admin push one level to every role
 //     for that module in one shot.
-//   - Auto-saves per cell change via useUpdateRolePermissions.
+//   - QA #140: changes are STAGED locally and persisted only when the
+//     admin clicks Save Changes. Discard reverts all pending edits.
+//     The previous auto-save-per-cell flow (a) gave admins no way to
+//     undo and (b) issued one mutation per cell which made bulk edits
+//     feel slow (QA #137 — same fix lands both tickets).
 //   - Admin can add/delete custom roles; system roles are protected.
 // ════════════════════════════════════════════════════════════════════
 
@@ -49,13 +53,35 @@ export default function UserRolesPage() {
   const roleMeta    = roleQuery.data?.roleMetadata || [];
 
   // ── Local UI state ──────────────────────────────────────────────────
-  const [savingCell,   setSavingCell]   = useState(""); // `${role}:${feature}`
   const [saveError,    setSaveError]    = useState("");
   const [showAdd,      setShowAdd]      = useState(false);
   const [createError,  setCreateError]  = useState("");
   const [deletingRole, setDeletingRole] = useState("");
   const [search,       setSearch]       = useState("");
   const [collapsed,    setCollapsed]    = useState(() => new Set());
+
+  // QA #140 / #137: stage all matrix edits in `pending` until the admin
+  // clicks Save. Shape: { [roleKey]: { [featureKey]: 'edit'|'view'|'none' } }
+  // Only roles/features that actually changed appear in this map, so we
+  // can issue a minimum number of mutateAsync calls (one per touched
+  // role) on save instead of one per cell.
+  const [pending, setPending] = useState({});
+  const [saving,  setSaving]  = useState(false);
+  const pendingCount = useMemo(() => {
+    let n = 0;
+    for (const roleKey of Object.keys(pending)) {
+      n += Object.keys(pending[roleKey] || {}).length;
+    }
+    return n;
+  }, [pending]);
+  const dirty = pendingCount > 0;
+
+  /** Resolve the displayed level for a cell: pending wins over saved. */
+  function effectiveLevel(roleKey, featureKey) {
+    const p = pending[roleKey];
+    if (p && Object.prototype.hasOwnProperty.call(p, featureKey)) return p[featureKey];
+    return roles?.[roleKey]?.[featureKey] || "none";
+  }
 
   // ── Derived: ordered role columns ───────────────────────────────────
   const sortedRoleKeys = useMemo(() => {
@@ -106,42 +132,78 @@ export default function UserRolesPage() {
   }, [features, search]);
 
   // ── Handlers ────────────────────────────────────────────────────────
-  async function handleLevelChange(roleKey, featureKey, nextLevel) {
+  // QA #140: stage one cell's change in local state. Only persists on Save.
+  function handleLevelChange(roleKey, featureKey, nextLevel) {
     if (!isAdmin) return;
     if (roleKey === ADMIN_ROLE_KEY) return;
-    const current = roles[roleKey] || {};
-    const updated = { ...current, [featureKey]: nextLevel };
-    const cellId = `${roleKey}:${featureKey}`;
-    setSavingCell(cellId);
     setSaveError("");
+    setPending((prev) => {
+      const next = { ...prev };
+      const savedLevel = roles?.[roleKey]?.[featureKey] || "none";
+      const roleMap = { ...(next[roleKey] || {}) };
+      if (nextLevel === savedLevel) {
+        // Reverting to saved value — drop the pending entry so dirty
+        // counts stay accurate.
+        delete roleMap[featureKey];
+      } else {
+        roleMap[featureKey] = nextLevel;
+      }
+      if (Object.keys(roleMap).length === 0) {
+        delete next[roleKey];
+      } else {
+        next[roleKey] = roleMap;
+      }
+      return next;
+    });
+  }
+
+  // QA #140: "Set all" stages the same level for every non-admin role.
+  function handleSetRow(featureKey, level) {
+    if (!isAdmin) return;
+    setSaveError("");
+    setPending((prev) => {
+      const next = { ...prev };
+      const targets = sortedRoleKeys.filter((r) => r !== ADMIN_ROLE_KEY);
+      for (const roleKey of targets) {
+        const savedLevel = roles?.[roleKey]?.[featureKey] || "none";
+        const roleMap = { ...(next[roleKey] || {}) };
+        if (level === savedLevel) {
+          delete roleMap[featureKey];
+        } else {
+          roleMap[featureKey] = level;
+        }
+        if (Object.keys(roleMap).length === 0) delete next[roleKey];
+        else next[roleKey] = roleMap;
+      }
+      return next;
+    });
+  }
+
+  // QA #140 + #137: persist all staged edits in one click. We issue one
+  // mutateAsync per ROLE (not per cell) — saveRolePermissions on the
+  // backend already accepts the full per-role access map, so an admin
+  // touching N cells across a role still only makes one round-trip.
+  async function handleSavePending() {
+    if (!isAdmin || !dirty || saving) return;
+    setSaveError("");
+    setSaving(true);
     try {
-      await updateMutation.mutateAsync({ roleName: roleKey, permissions: updated });
+      const touchedRoles = Object.keys(pending);
+      for (const roleKey of touchedRoles) {
+        const merged = { ...(roles[roleKey] || {}), ...(pending[roleKey] || {}) };
+        await updateMutation.mutateAsync({ roleName: roleKey, permissions: merged });
+      }
+      setPending({});
     } catch (e) {
-      setSaveError(e.message || "Failed saving role permission");
+      setSaveError(e.message || "Failed saving role permissions");
     } finally {
-      setSavingCell((prev) => (prev === cellId ? "" : prev));
+      setSaving(false);
     }
   }
 
-  async function handleSetRow(featureKey, level) {
-    if (!isAdmin) return;
+  function handleDiscardPending() {
+    setPending({});
     setSaveError("");
-    // Apply to every non-admin role.
-    const targets = sortedRoleKeys.filter((r) => r !== ADMIN_ROLE_KEY);
-    for (const roleKey of targets) {
-      const current = roles[roleKey] || {};
-      const updated = { ...current, [featureKey]: level };
-      const cellId = `${roleKey}:${featureKey}`;
-      setSavingCell(cellId);
-      try {
-        await updateMutation.mutateAsync({ roleName: roleKey, permissions: updated });
-      } catch (e) {
-        setSaveError(e.message || `Failed updating ${roleKey}`);
-        break;
-      } finally {
-        setSavingCell((prev) => (prev === cellId ? "" : prev));
-      }
-    }
   }
 
   async function handleCreate({ roleKey, displayName: dn, description, defaultLevel }) {
