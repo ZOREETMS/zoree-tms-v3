@@ -13,6 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import { OrdersApi } from '../../lib/api';
 import { copyOrder } from '../../services/ordersService';
+import {
+  ratePlanForOrder,
+  executeOrderPlan,
+  isFailure,
+} from '../../services/planSingleOrderService';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
@@ -74,6 +79,11 @@ export default function OrderDetailScreen() {
   /**
    * Status change. QA bug #58 + #61 fix: route through OrdersApi.update
    * (PATCH /api/orders/:id) so the server-side cascade fires.
+   *
+   * NOTE: Do NOT call this with newStatus='Planned'. Planning requires a
+   * shipment row to be created via BulkPlanApi.execute — the bare PATCH
+   * leaves the order in an orphan Planned/no-shipment state (the bug
+   * that produced ORD-2026-991550). Use `planThisOrder` instead.
    */
   const changeStatus = useCallback(
     async (newStatus: string) => {
@@ -103,6 +113,62 @@ export default function OrderDetailScreen() {
     },
     [order, refreshData],
   );
+
+  /**
+   * Plan this single order — rate via BulkPlanApi, show the matched
+   * carrier/cost in a confirm dialog, then execute (which inserts the
+   * shipment row + sets shipment_id + cascades through audit history).
+   *
+   * Replaces the prior `changeStatus('Planned')` shortcut that flipped
+   * status without creating a shipment (root cause of ORD-2026-991550).
+   * All planning logic stays in `planSingleOrderService` — this
+   * callback is only orchestration (loading flag, dialog, refresh).
+   */
+  const planThisOrder = useCallback(async () => {
+    if (!order) return;
+    setUpdating(true);
+    try {
+      const rated = await ratePlanForOrder(order, 'cost');
+      if (isFailure(rated)) {
+        Alert.alert('Cannot plan order', rated.message);
+        return;
+      }
+      const { plan, summary } = rated;
+      const cost = `$${summary.totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      const dates = summary.pickupDate && summary.deliveryDate
+        ? `Pickup ${summary.pickupDate} → Delivery ${summary.deliveryDate}`
+        : 'Dates TBD';
+      Alert.alert(
+        'Confirm Plan',
+        `${summary.carrier} (${summary.mode})\n${cost}\n${dates}\n\nCreate shipment?`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setUpdating(false) },
+          {
+            text: 'Create',
+            onPress: async () => {
+              try {
+                const exec = await executeOrderPlan(plan);
+                if (!exec.shipment) {
+                  const msg = exec.errors[0]?.error || 'Shipment was not created';
+                  Alert.alert('Plan failed', msg);
+                  return;
+                }
+                await refreshData();
+                Alert.alert('Shipment created', `${exec.shipment.id} on ${exec.shipment.carrier}`);
+              } catch (e: any) {
+                Alert.alert('Plan failed', e.message || 'Could not create shipment');
+              } finally {
+                setUpdating(false);
+              }
+            },
+          },
+        ],
+      );
+    } catch (e: any) {
+      Alert.alert('Plan failed', e.message || 'Rating failed');
+      setUpdating(false);
+    }
+  }, [order, refreshData]);
 
   if (!order) {
     return (
@@ -240,7 +306,7 @@ export default function OrderDetailScreen() {
             label="Plan"
             icon="git-merge-outline"
             color={colors.purple}
-            onPress={() => changeStatus('Planned')}
+            onPress={planThisOrder}
             disabled={updating || status === 'Planned'}
           />
           <ActionButton

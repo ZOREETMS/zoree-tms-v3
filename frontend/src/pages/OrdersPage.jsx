@@ -31,6 +31,8 @@ import Toast from "../components/ui/Toast";
 import useToast from "../hooks/useToast";
 import { TOAST_DURATIONS } from "../constants/toast";
 import BulkPlanResultsPanel from "../components/bulk-plan/BulkPlanResultsPanel";
+import SchedulerMetrics from "../components/bulk-plan/SchedulerMetrics";
+import OrderRowActions from "../components/orders/OrderRowActions";
 import { buildBulkPlanResults } from "../services/bulkPlanResultsService";
 import { describeFailure } from "../services/planningFailureCatalog";
 import LocationFilter from "../components/ui/LocationFilter";
@@ -1333,24 +1335,17 @@ export default function OrdersPage() {
           </div>
         </div>
         <div style={{ padding: "12px 18px" }}>
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-            <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase" }}>Next Run In</div>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 18, marginTop: 4 }}>{schedCountdown}</div>
-            </div>
-            <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase" }}>Total Runs</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{schedRuns}</div>
-            </div>
-            <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase" }}>Orders Planned</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4, color: "var(--green)" }}>{schedPlanned}</div>
-            </div>
-            <div style={{ background: "var(--bg3)", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase" }}>Total Saved</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4, color: "var(--green)" }}>{schedSaved >= 1000 ? `$${Math.round(schedSaved / 1000)}K` : fmt$(schedSaved)}</div>
-            </div>
+          {/* Stats — extracted into SchedulerMetrics component (services/schedulerMetricsService.js) */}
+          <div style={{ marginBottom: 12 }}>
+            <SchedulerMetrics
+              orders={orders}
+              shipments={shipments}
+              schedCountdown={schedCountdown}
+              schedRuns={schedRuns}
+              schedPlanned={schedPlanned}
+              schedSaved={schedSaved}
+              schedRunning={schedRunning}
+            />
           </div>
           {/* Interval */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -1553,37 +1548,20 @@ export default function OrdersPage() {
                 <td>{badges.map((b, i) => <span key={i} style={{ display: "inline-block", fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 600, marginLeft: i > 0 ? 4 : 0, background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>{b.label}</span>)}</td>
                 <td><span className={STATUS_BADGES[o.status] || "badge badge-blue"}>{o.status || "—"}</span></td>
                 <td style={{ whiteSpace: "nowrap" }}>
-                  {isPlannable(o) && (<>
-                    <button className="btn btn-primary btn-sm" disabled={busyId === o.id} onClick={() => openPlanModal(o.id)}>⚡ Plan</button>{" "}
-                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(124,58,237,.08)", color: "#7c3aed", borderColor: "rgba(124,58,237,.3)" }} onClick={() => openPlanModal(o.id)} title="Cross-dock">🔄</button>{" "}
-                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(59,130,246,.08)", color: "#1d4ed8", borderColor: "rgba(59,130,246,.35)", fontSize: 11 }} disabled={busyId === o.id} onClick={() => setAddToShipOrder(o)} title="Add to an existing shipment (REQ-03)">📦 Add to Ship</button>{" "}
-                    <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="Edit">✏️</button>{" "}
-                    <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)} title="View">👁</button>{" "}
-                    <button style={{ background: "rgba(245,158,11,.10)", color: "#b45309", border: "1px solid rgba(245,158,11,.35)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer", marginLeft: 4 }} disabled={busyId === o.id} onClick={() => cancelOrder(o.id)} title="Cancel order">🚫</button>{" "}
-                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.2)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer", marginLeft: 4 }} disabled={busyId === o.id} onClick={() => deleteOrder(o.id)} title="Delete">🗑️</button>
-                  </>)}
-                  {o.status === "Planned" && (<>
-                    {/* REQ-12: don't offer a Tender action on the order row when the
-                       corresponding shipment has already been tendered (or tender-accepted).
-                       The button only appears while the shipment is still in a pre-tender
-                       state ("Planned" / null), so planners don't re-tender by accident. */}
-                    {(() => {
-                      const ship = o.shipment_id ? shipments.find((s) => s.id === o.shipment_id) : null;
-                      const st = String(ship?.status || "").toLowerCase();
-                      const alreadyTendered = st === "tendered" || st === "tender accepted" || st === "confirmed" || st === "in transit" || st === "delivered";
-                      return alreadyTendered
-                        ? null
-                        : <><button className="btn btn-secondary btn-sm" style={{ background: "rgba(16,185,129,.08)", color: "#059669", borderColor: "rgba(16,185,129,.35)", fontSize: 11 }}>📤 Tender</button>{" "}</>;
-                    })()}
-                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(245,158,11,.08)", color: "#b45309", borderColor: "rgba(245,158,11,.35)", fontSize: 11 }} onClick={() => unplanOrder(o.id)}>🔓 Unplan</button>
-                  </>)}
-                  {o.status === "Consolidated" && (
-                    <button className="btn btn-secondary btn-sm" style={{ background: "rgba(245,158,11,.08)", color: "#b45309", borderColor: "rgba(245,158,11,.35)", fontSize: 11 }} onClick={() => unplanOrder(o.id)}>🔓 Unplan</button>
-                  )}
-                  {o.status === "Cancelled" && (
-                    <button style={{ background: "rgba(220,38,38,.08)", color: "#dc2626", border: "1px solid rgba(220,38,38,.2)", padding: "4px 8px", borderRadius: 6, fontSize: 12, cursor: "pointer" }} disabled={busyId === o.id} onClick={() => deleteOrder(o.id)} title="Delete permanently">🗑️</button>
-                  )}
-                  <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, fontSize: 11 }} disabled={busyId === o.id} onClick={() => handleCopyOrder(o.id)} title="Copy order">📋</button>
+                  <OrderRowActions
+                    order={o}
+                    shipments={shipments}
+                    busy={busyId === o.id}
+                    onPlan={(id) => openPlanModal(id)}
+                    onCrossDock={(id) => openPlanModal(id)}
+                    onAddToShipment={(ord) => setAddToShipOrder(ord)}
+                    onEdit={(id) => openDetail(id)}
+                    onView={(id) => openDetail(id)}
+                    onCancel={(id) => cancelOrder(id)}
+                    onDelete={(id) => deleteOrder(id)}
+                    onUnplan={(id) => unplanOrder(id)}
+                    onCopy={(id) => handleCopyOrder(id)}
+                  />
                 </td>
               </tr>
             );

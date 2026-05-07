@@ -44,6 +44,11 @@ const shipmentMutations = require('./services/shipmentMutations');
 // inline so the existing /api/shipments/* inline routes stay
 // authoritative for the paths they already serve.
 const shipService = require('./services/shipments');
+// Defense-in-depth guard reused by the inline app.patch('/api/orders/:id')
+// handler below. Lives in the orders service so there's one source of
+// truth for the "Planned requires shipment_id" rule (root cause of the
+// ORD-2026-991550 orphan bug).
+const { assertPlannedHasShipment } = require('./services/orders');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
@@ -1470,6 +1475,25 @@ app.patch('/api/orders/:id', async (req, res) => {
     const patch = apiOrderToDbPatch(req.body);
     if (!Object.keys(patch).length) {
       return res.status(400).json({ error: 'No valid fields to update' });
+    }
+    // Defense-in-depth: reject status='Planned' transitions that don't
+    // also assign a shipment_id. The bulk-plan execute path (which is
+    // the only legitimate way an order should reach 'Planned') always
+    // sets both fields together — so this guard never trips for it.
+    // It DOES catch a bare PATCH from a client that's just flipping
+    // the status field, which is what produced the ORD-2026-991550
+    // orphan. See `assertPlannedHasShipment` in api/services/orders.js
+    // for the rule's single source of truth.
+    try {
+      assertPlannedHasShipment(
+        { status: before?.status, shipmentId: before?.shipment_id },
+        { status: patch.status, shipment_id: patch.shipment_id },
+      );
+    } catch (guardErr) {
+      return res.status(guardErr.status || 400).json({
+        error: guardErr.message,
+        code:  guardErr.code || 'PLANNED_REQUIRES_SHIPMENT',
+      });
     }
     // Use server-side service key to bypass Supabase client-role RLS on writes.
     const row = await dbUpdate('orders', req.params.id, patch, null);

@@ -384,3 +384,69 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 /* ── SIDEBAR LOGOUT BTN ───────────────────────────────────────── */
 .sidebar-logout-btn{width:100%;display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;background:transparent;border:none;font-family:inherit;margin-top:4px;transition:all .15s;}
 .sidebar-logout-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}
+
+/* ═══════════════════════════════════════════════════════════════
+   v3.12 ENTERPRISE UI POLISH
+   • Premium sidebar
+   • Tighter color hierarchy & table density
+   • Row-action kebab menu
+   • Scheduler metrics strip
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar premium polish ───────────────────────────────────── */
+.sidebar{background:linear-gradient(180deg,#0B1322 0%,#0F172A 100%);border-right:1px solid rgba(255,255,255,0.04);}
+.sidebar-logo{padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,0.05);}
+.nav-section{padding:14px 12px 4px;}
+.nav-section + .nav-section{margin-top:2px;}
+.nav-label{font-size:10.5px;color:rgba(148,163,184,0.7);letter-spacing:0.12em;padding:0 10px 8px;font-weight:600;}
+.nav-item{height:38px;padding:8px 12px;border-radius:9px;font-size:13.5px;color:#CBD5E1;font-weight:500;margin-bottom:1px;transition:background .12s,color .12s;}
+.nav-item:hover{background:rgba(37,99,235,0.10);color:#fff;}
+.nav-item.active{background:linear-gradient(90deg,rgba(37,99,235,0.22),rgba(37,99,235,0.05));color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(96,165,250,0.18);}
+.nav-item.active::before{left:0;top:8px;bottom:8px;width:3px;background:linear-gradient(180deg,#60A5FA,#3B82F6);box-shadow:0 0 8px rgba(96,165,250,0.6);}
+.nav-icon{font-size:14px;opacity:0.85;}
+.nav-item.active .nav-icon{opacity:1;}
+.nav-badge{font-size:9.5px;padding:1.5px 6px;letter-spacing:0.04em;}
+.sidebar-footer{padding:12px;border-top:1px solid rgba(255,255,255,0.05);background:rgba(0,0,0,0.18);}
+.user-chip{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.04);}
+
+/* ── Table density (enterprise readability) ───────────────────── */
+.grid td,table td{height:52px;border-bottom-color:#F4F6FA;}
+.grid td.cell-strong,td.cell-strong{font-size:13.5px;font-weight:600;color:var(--text);letter-spacing:-0.01em;}
+.grid tbody tr:hover td,tbody tr:hover{background:#EFF6FF;}
+.grid thead tr,thead tr{background:#FCFCFD;}
+.grid th,th{font-size:11.5px;letter-spacing:0.08em;}
+
+/* ── Row actions: primary button + kebab dropdown ─────────────── */
+.row-actions{display:inline-flex;align-items:center;gap:6px;position:relative;white-space:nowrap;}
+.row-actions .btn-sm{padding:0 12px;height:30px;font-size:12.5px;}
+.row-actions-icon{font-size:13px;line-height:1;}
+.kebab-btn{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);background:#fff;color:var(--text2);border-radius:8px;cursor:pointer;font-size:18px;line-height:1;font-weight:700;padding:0;transition:background .12s,color .12s,border-color .12s;}
+.kebab-btn:hover{background:#F1F5F9;color:var(--text);border-color:#CBD5E1;}
+.kebab-btn.open{background:var(--accent-glow);color:var(--accent);border-color:#BFDBFE;}
+.row-actions-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:200px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,0.12),0 2px 6px rgba(15,23,42,0.06);padding:6px;z-index:50;animation:rowMenuIn .12s ease-out;}
+@keyframes rowMenuIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.row-actions-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;color:var(--text);font-size:12.5px;font-weight:500;font-family:inherit;border-radius:7px;cursor:pointer;transition:background .1s,color .1s;text-transform:none;}
+.row-actions-item:hover{background:#F1F5F9;}
+.row-actions-item:disabled{opacity:.45;cursor:not-allowed;}
+.row-actions-item .row-actions-icon{width:18px;text-align:center;}
+.row-actions-item .row-actions-label{flex:1;}
+.row-actions-item.tone-warn{color:#B45309;}
+.row-actions-item.tone-warn:hover{background:#FFFBEB;}
+.row-actions-item.tone-danger{color:#B91C1C;}
+.row-actions-item.tone-danger:hover{background:#FEF2F2;}
+.row-actions-divider{height:1px;background:var(--border);margin:4px 2px;}
+
+/* ── Scheduler metrics strip ──────────────────────────────────── */
+.scheduler-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;}
+@media(max-width:1280px){.scheduler-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}}
+.scheduler-metric{position:relative;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-height:70px;overflow:hidden;}
+.scheduler-metric::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#CBD5E1;border-radius:10px 0 0 10px;}
+.scheduler-metric.tone-good::before{background:var(--green);}
+.scheduler-metric.tone-warn::before{background:var(--yellow);}
+.scheduler-metric.tone-info::before{background:var(--accent);}
+.scheduler-metric-label{font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;}
+.scheduler-metric-value{font-size:17px;font-weight:700;color:var(--text);margin-top:2px;line-height:1.15;letter-spacing:-0.01em;}
+.scheduler-metric.tone-good .scheduler-metric-value{color:var(--green);}
+.scheduler-metric.tone-warn .scheduler-metric-value{color:var(--yellow);}
+.scheduler-metric-sub{font-size:10.5px;color:var(--text3);text-transform:none;font-weight:500;margin-top:auto;}
+.ai-badge{display:inline-block;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:4px;letter-spacing:0.05em;margin-right:4px;vertical-align:middle;}

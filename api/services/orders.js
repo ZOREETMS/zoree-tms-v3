@@ -155,9 +155,46 @@ async function createOrder(payload, tenantConfig = null) {
   return dbToOrder(row);
 }
 
+/**
+ * Defense-in-depth guard against orphan-Planned orders.
+ *
+ * Background: ORD-2026-991550 was set to status='Planned' via a bare
+ * PATCH from the mobile OrderDetailScreen "Plan" button, with no
+ * shipment row created and `shipment_id` left null. The proper
+ * planning path (bulk-plan execute) sets BOTH `status='Planned'` AND
+ * `shipment_id` in one round-trip, so this guard never trips for it.
+ * Anything else trying to flip an order to 'Planned' without a
+ * shipment is — by definition — recreating that bug, and we'd rather
+ * surface a 4xx than persist the orphan.
+ *
+ * Kept as a small named helper (not inline in updateOrder) so the
+ * intent is clear and the rule has one place to live.
+ */
+function assertPlannedHasShipment(existing, updates) {
+  const nextStatus = updates.status !== undefined ? updates.status : existing.status;
+  if (nextStatus !== 'Planned') return;
+  // Caller might explicitly set shipmentId, or leave it untouched (in
+  // which case the existing value applies).
+  const nextShipmentId =
+    updates.shipmentId !== undefined ? updates.shipmentId
+    : updates.shipment_id !== undefined ? updates.shipment_id
+    : existing.shipmentId;
+  if (!nextShipmentId) {
+    const err = new Error(
+      'Cannot set order status to "Planned" without a shipment. '
+      + 'Use the bulk-plan execute endpoint (/api/bulk-plan/execute) '
+      + 'so a shipment row is created and shipment_id is assigned.'
+    );
+    err.status = 400;
+    err.code = 'PLANNED_REQUIRES_SHIPMENT';
+    throw err;
+  }
+}
+
 async function updateOrder(id, updates, tenantConfig = null) {
   // Merge with existing to avoid overwriting fields
   const existing = await getOrder(id, tenantConfig);
+  assertPlannedHasShipment(existing, updates);
   const merged   = { ...existing, ...updates, id };
   const row = await db.dbUpdate('orders', id, orderToDb(merged), tenantConfig);
   return dbToOrder(row || merged);
@@ -167,4 +204,16 @@ async function deleteOrder(id, tenantConfig = null) {
   return db.dbDelete('orders', id, tenantConfig);
 }
 
-module.exports = { listOrders, getOrder, createOrder, updateOrder, deleteOrder, groupByLane };
+module.exports = {
+  listOrders,
+  getOrder,
+  createOrder,
+  updateOrder,
+  deleteOrder,
+  groupByLane,
+  // Exported so the legacy inline `app.patch('/api/orders/:id', ...)`
+  // handler in server.js can apply the same guard without duplicating
+  // the rule. Once that handler is migrated to call updateOrder(),
+  // this export can go back to being internal.
+  assertPlannedHasShipment,
+};
