@@ -81,22 +81,57 @@ export default function OrderFormScreen() {
     [data.orders, orderId, isEdit],
   );
 
-  const [form, setForm] = useState<any>(() =>
-    existing
-      ? {
-          ...EMPTY_ORDER,
-          ...existing,
-          // Form inputs are strings; coerce numerics so TextInput
-          // doesn't choke on a number value.
-          weight: existing.weight != null ? String(existing.weight) : '',
-          pieces: existing.pieces != null ? String(existing.pieces) : '',
-          // QA bug #107 — `lines` is hydrated lazily for edits via
-          // OrdersApi.lines (effect below). Start with whatever was
-          // already on the cached order, otherwise empty.
-          lines: Array.isArray(existing.lines) ? existing.lines : [],
-        }
-      : { ...EMPTY_ORDER },
-  );
+  // QA #155 / QA #156 — local helper that mirrors parseAddressString in
+  // frontend/src/types/location.js. Inlined so the mobile bundle stays
+  // independent of the web src/ tree.
+  function parseAddrString(str: string): { city: string; state: string; zip: string } {
+    if (!str) return { city: '', state: '', zip: '' };
+    let s = String(str);
+    let zip = '';
+    const m = s.match(/\b(\d{5})\b/);
+    if (m) {
+      zip = m[1];
+      s = s.replace(m[1], '').replace(/,?\s*$/, '').trim();
+    }
+    const parts = s.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) return { city: '', state: '', zip };
+    if (parts.length === 1) return { city: parts[0], state: '', zip };
+    return {
+      city: parts[parts.length - 2],
+      state: parts[parts.length - 1],
+      zip,
+    };
+  }
+
+  const [form, setForm] = useState<any>(() => {
+    if (!existing) return { ...EMPTY_ORDER };
+    // QA #155 / QA #156: when the cached row only carries the composed
+    // origin/destination strings (typical for a freshly copied order or
+    // a row written by the legacy web flow that didn't fill the
+    // structured city/state columns), parse those strings as a fallback
+    // so the City + State inputs hydrate populated. Existing structured
+    // fields always win.
+    const parsedOrigin = parseAddrString(existing.origin || existing.originLocation || '');
+    const parsedDest   = parseAddrString(existing.destination || existing.dest || '');
+    return {
+      ...EMPTY_ORDER,
+      ...existing,
+      originCity:  existing.originCity  || existing.origin_city  || parsedOrigin.city  || '',
+      originState: existing.originState || existing.origin_state || parsedOrigin.state || '',
+      originZip:   existing.originZip   || existing.origin_zip   || parsedOrigin.zip   || '',
+      destCity:    existing.destCity    || existing.dest_city    || parsedDest.city    || '',
+      destState:   existing.destState   || existing.dest_state   || parsedDest.state   || '',
+      destZip:     existing.destZip     || existing.dest_zip     || parsedDest.zip     || '',
+      // Form inputs are strings; coerce numerics so TextInput
+      // doesn't choke on a number value.
+      weight: existing.weight != null ? String(existing.weight) : '',
+      pieces: existing.pieces != null ? String(existing.pieces) : '',
+      // QA bug #107 — `lines` is hydrated lazily for edits via
+      // OrdersApi.lines (effect below). Start with whatever was
+      // already on the cached order, otherwise empty.
+      lines: Array.isArray(existing.lines) ? existing.lines : [],
+    };
+  });
   const [saving, setSaving] = useState(false);
 
   // QA bug #107: when editing an existing order, fetch its current

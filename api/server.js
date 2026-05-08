@@ -50,6 +50,13 @@ const shipService = require('./services/shipments');
 // truth for the "Planned requires shipment_id" rule (root cause of the
 // ORD-2026-991550 orphan bug).
 const { assertPlannedHasShipment } = require('./services/orders');
+// Pure normalization + rollup math for order_lines, used by the bulk
+// import handler so a "Line Items" sheet entry persists with the same
+// shape (and same id format) as the existing UI editor's POST handler
+// produces. Plumbing (Supabase fetch + parent rollup PATCH) stays
+// inline below to match the rest of the file's patterns. See
+// services/orderLines.js for the full rationale.
+const { buildLines: buildOrderLines } = require('./services/orderLines');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
@@ -3598,6 +3605,67 @@ app.post('/api/bulk-plan/import', async (req, res) => {
           errors.push({ row: i + 1, message: 'Insert returned no row (RLS or constraint denial)' });
           continue;
         }
+
+        // ── Line items (TMS bug #144) ─────────────────────────────────
+        // If the import payload includes lineItems[], insert them into
+        // order_lines and roll the totals (line_count / weight / pieces)
+        // up onto the just-created order row — same semantics as the
+        // existing POST /api/orders/:id/lines handler so an imported
+        // order looks identical to one whose lines were entered through
+        // the UI editor.
+        //
+        // Failure handling: a line-insert failure is reported as a
+        // per-order error but does NOT roll back the order itself.
+        // Rationale — the order header is already valid (it persisted)
+        // and the user's recovery path is to open the order and add
+        // lines via the UI; rolling back would force them to re-enter
+        // the order header from scratch.
+        const rawLines = Array.isArray(o.lineItems) ? o.lineItems : [];
+        if (rawLines.length > 0) {
+          try {
+            const built = buildOrderLines(row.id, rawLines);
+            if (built.lines.length > 0) {
+              const insRes = await fetch(`${SUPABASE_URL}/rest/v1/order_lines`, {
+                method: 'POST',
+                headers: { ...sbHeaders(null), 'Prefer': 'return=representation' },
+                body: JSON.stringify(built.lines),
+              });
+              if (!insRes.ok) {
+                const txt = await insRes.text();
+                errors.push({ row: i + 1, message: `Line items insert failed: ${insRes.status} ${txt.slice(0, 200)}` });
+              } else {
+                // Roll the totals up onto the parent order. Lines win
+                // over any weight/pieces that came from the Orders
+                // sheet — matching POST /api/orders/:id/lines (line
+                // 1359-1366) where the parent always reflects the
+                // sum-of-lines after a replace.
+                const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(row.id)}`, {
+                  method: 'PATCH',
+                  headers: sbHeaders(null),
+                  body: JSON.stringify({
+                    line_count: built.line_count,
+                    weight:     built.weight,
+                    pieces:     built.pieces,
+                  }),
+                });
+                if (!patchRes.ok) {
+                  const txt = await patchRes.text();
+                  errors.push({ row: i + 1, message: `Order rollup PATCH failed: ${patchRes.status} ${txt.slice(0, 200)}` });
+                } else {
+                  // Reflect the rolled-up totals on the row we return
+                  // so the toast and the UI's optimistic state both
+                  // see the post-rollup numbers.
+                  row.line_count = built.line_count;
+                  row.weight     = built.weight;
+                  row.pieces     = built.pieces;
+                }
+              }
+            }
+          } catch (linesErr) {
+            errors.push({ row: i + 1, message: `Line items error: ${linesErr.message}` });
+          }
+        }
+
         created.push(row);
       } catch (insertErr) {
         errors.push({ row: i + 1, message: insertErr.message });

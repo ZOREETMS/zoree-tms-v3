@@ -414,7 +414,11 @@ textarea{resize:vertical;min-height:60px;}
     .oms-fsel-wide{min-width:150px;}
   </style>
   <div class="tbar" style="flex-wrap:wrap;gap:10px 12px;padding:12px 20px;align-items:flex-end">
-    <div class="oms-fgrp" style="flex:1;min-width:240px">
+    <!-- QA #151: Search used to take flex:1 which on wide screens stretched
+         it across the row, leaving an awkward gap between Search and
+         Customer. Pin Search to a fixed width band that matches the rest
+         of the filter chips so the row aligns evenly. -->
+    <div class="oms-fgrp" style="flex:0 0 280px;min-width:240px;max-width:360px">
       <span class="oms-flbl">Search</span>
       <div class="search-wrap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -664,33 +668,81 @@ textarea{resize:vertical;min-height:60px;}
     </div>
 
     <!-- Field mapping reference table -->
+    <!-- QA #152: previous markup repeated padding/border styles inline
+         on every <td>, making the table dense. The cell rules now live
+         in a small CSS scope (.mw-map) so columns align, the direction
+         tag has its own pill, and field names render as monospace
+         tokens. The table also gets a fixed table-layout + colgroup so
+         columns don't jiggle as data changes. -->
+    <style>
+      .mw-map{font-size:12px;width:100%;border-collapse:collapse;table-layout:fixed;}
+      .mw-map col.dir{width:90px;}
+      .mw-map col.fld{width:24%;}
+      .mw-map col.tx {width:24%;}
+      .mw-map col.tg {width:14%;}
+      .mw-map thead th{
+        padding:9px 10px;text-align:left;font-weight:600;font-size:11px;
+        text-transform:uppercase;letter-spacing:.04em;color:var(--text2);
+        background:var(--bg2);border-bottom:1px solid var(--border);
+        white-space:nowrap;
+      }
+      .mw-map thead th.col-oms{color:var(--accent);}
+      .mw-map thead th.col-tms{color:var(--teal);}
+      .mw-map tbody td{
+        padding:9px 10px;border-bottom:1px solid var(--border);
+        vertical-align:top;line-height:1.4;
+      }
+      .mw-map tbody tr:nth-child(even){background:var(--bg2);}
+      .mw-map tbody tr:hover{background:rgba(99,102,241,.06);}
+      .mw-map .field{
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+        font-size:11.5px;word-break:break-word;
+      }
+      .mw-map .field.oms{color:var(--accent);}
+      .mw-map .field.tms{color:var(--teal);}
+      .mw-map .transform{color:var(--text2);font-size:11.5px;}
+      .mw-map .trigger{font-size:11.5px;color:var(--text2);white-space:nowrap;}
+      .mw-map .dir-pill{
+        display:inline-block;padding:2px 8px;border-radius:999px;
+        font-size:10.5px;font-weight:700;letter-spacing:.04em;
+        text-transform:uppercase;line-height:1.4;
+      }
+      .mw-map .dir-pill.push{background:rgba(99,102,241,.12);color:var(--accent);}
+      .mw-map .dir-pill.pull{background:rgba(20,184,166,.12);color:var(--teal);}
+    </style>
     <div class="card" style="padding:20px">
       <div style="font-weight:700;margin-bottom:14px;font-size:13px">📋 Field Mapping Contract</div>
-      <table style="font-size:12px;width:100%;border-collapse:collapse">
+      <div style="overflow-x:auto">
+      <table class="mw-map">
+        <colgroup>
+          <col class="dir"/><col class="fld"/><col class="fld"/>
+          <col class="tx"/><col class="tg"/>
+        </colgroup>
         <thead>
-          <tr style="background:var(--bg2)">
-            <th style="padding:8px;text-align:left;color:var(--text2);font-weight:600;border-bottom:1px solid var(--border)">Direction</th>
-            <th style="padding:8px;text-align:left;color:var(--accent);font-weight:600;border-bottom:1px solid var(--border)">OMS Field (oms_orders)</th>
-            <th style="padding:8px;text-align:left;color:var(--teal);font-weight:600;border-bottom:1px solid var(--border)">TMS Field</th>
-            <th style="padding:8px;text-align:left;color:var(--text2);font-weight:600;border-bottom:1px solid var(--border)">Transform</th>
-            <th style="padding:8px;text-align:left;color:var(--text2);font-weight:600;border-bottom:1px solid var(--border)">Trigger</th>
+          <tr>
+            <th>Direction</th>
+            <th class="col-oms">OMS Field (oms_orders)</th>
+            <th class="col-tms">TMS Field</th>
+            <th>Transform</th>
+            <th>Trigger</th>
           </tr>
         </thead>
         <tbody id="mw-map-table">
-          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct (shared natural key)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
-          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">customer_id (UUID)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.customer</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">UUID → custName() lookup</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
-          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">origin_location</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.origin</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
-          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">lines[].qty × lines[].wt</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.weight</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Sum of line weights</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
-          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">lines[].qty (sum)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.pieces</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Sum of line quantities</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 3 → 4</td></tr>
-          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">tms_shipment_id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">orders.shipment_id</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct — triggers Stage 4→5</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
-          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">carrier</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.carrier</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
-          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">pickup_date</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.pickup_date</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
-          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">estimated_delivery</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.delivery_date</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Direct</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Sync</td></tr>
-          <tr style="background:var(--bg2)"><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">'In Transit' (derived)</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.status</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Hardcoded status string</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 9 → 10</td></tr>
-          <tr><td style="padding:7px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:600">→ Push</span></td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--accent)">'Delivered' + delivered_at</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);font-family:monospace;color:var(--teal)">shipments.status + delivered_at</td><td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text2)">Hardcoded status string</td><td style="padding:7px 8px;border-bottom:1px solid var(--border)">Stage 10 → 11</td></tr>
-          <tr style="background:var(--bg2)"><td style="padding:7px 8px"><span style="color:var(--teal);font-weight:600">← Pull</span></td><td style="padding:7px 8px;font-family:monospace;color:var(--accent)">inv weight/value (enrich only)</td><td style="padding:7px 8px;font-family:monospace;color:var(--teal)">items.weight_unit / value_unit</td><td style="padding:7px 8px;color:var(--text2)">Enriches matching OMS items only</td><td style="padding:7px 8px">Sync</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">id</span></td><td><span class="field tms">orders.id</span></td><td class="transform">Direct (shared natural key)</td><td class="trigger">Stage 3 → 4</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">customer_id (UUID)</span></td><td><span class="field tms">orders.customer</span></td><td class="transform">UUID → custName() lookup</td><td class="trigger">Stage 3 → 4</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">origin_location</span></td><td><span class="field tms">orders.origin</span></td><td class="transform">Direct</td><td class="trigger">Stage 3 → 4</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">lines[].qty × lines[].wt</span></td><td><span class="field tms">orders.weight</span></td><td class="transform">Sum of line weights</td><td class="trigger">Stage 3 → 4</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">lines[].qty (sum)</span></td><td><span class="field tms">orders.pieces</span></td><td class="transform">Sum of line quantities</td><td class="trigger">Stage 3 → 4</td></tr>
+          <tr><td><span class="dir-pill pull">← Pull</span></td><td><span class="field oms">tms_shipment_id</span></td><td><span class="field tms">orders.shipment_id</span></td><td class="transform">Direct — triggers Stage 4→5</td><td class="trigger">Sync</td></tr>
+          <tr><td><span class="dir-pill pull">← Pull</span></td><td><span class="field oms">carrier</span></td><td><span class="field tms">shipments.carrier</span></td><td class="transform">Direct</td><td class="trigger">Sync</td></tr>
+          <tr><td><span class="dir-pill pull">← Pull</span></td><td><span class="field oms">pickup_date</span></td><td><span class="field tms">shipments.pickup_date</span></td><td class="transform">Direct</td><td class="trigger">Sync</td></tr>
+          <tr><td><span class="dir-pill pull">← Pull</span></td><td><span class="field oms">estimated_delivery</span></td><td><span class="field tms">shipments.delivery_date</span></td><td class="transform">Direct</td><td class="trigger">Sync</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">'In Transit' (derived)</span></td><td><span class="field tms">shipments.status</span></td><td class="transform">Hardcoded status string</td><td class="trigger">Stage 9 → 10</td></tr>
+          <tr><td><span class="dir-pill push">→ Push</span></td><td><span class="field oms">'Delivered' + delivered_at</span></td><td><span class="field tms">shipments.status + delivered_at</span></td><td class="transform">Hardcoded status string</td><td class="trigger">Stage 10 → 11</td></tr>
+          <tr><td><span class="dir-pill pull">← Pull</span></td><td><span class="field oms">inv weight/value (enrich only)</span></td><td><span class="field tms">items.weight_unit / value_unit</span></td><td class="transform">Enriches matching OMS items only</td><td class="trigger">Sync</td></tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <!-- Middleware log -->
@@ -1672,7 +1724,12 @@ async function saveOrder(o){
     // REQ-24: origin_location and destination hold the composed
     // "CITY, ST ZIP" strings for back-compat; ship_from_* and
     // ship_to_* are the typed user inputs (migration 019).
-    origin_location:o.orig||null, destination:o.dest,
+    // QA #150: coerce empty composed strings to null so the DB column
+    // either has a real "CITY, ST ZIP" value or NULL — never "". The
+    // OMS→TMS planner downstream treats "" and NULL inconsistently and
+    // that mismatch was the trigger for several Book Order 400s.
+    origin_location:(o.orig && String(o.orig).trim()) || null,
+    destination:   (o.dest && String(o.dest).trim()) || null,
     origin_zip: o.origZip || ((o.orig||'').match(/\b(\d{5})\b/)?.[1]) || null,
     dest_zip:   o.destZip || ((o.dest||'').match(/\b(\d{5})\b/)?.[1]) || null,
     ship_from_name:  o.shipFromName  || null,
@@ -2438,7 +2495,17 @@ async function svO(action){
   var dest = composeAddr(stCity, stState, stZip);
 
   var lines=gLines();
-  if(!cust || !stCity || !stState){ toast('Customer and Ship To city/state required','twn'); return; }
+  // QA #150: previously this only validated Customer + Ship-To city/state,
+  // letting Ship-From go to the DB blank — which then failed with a 400
+  // when origin_location was missing the values downstream consumers
+  // (planner / TMS push / BOL) require. Also surface a concrete reason
+  // when lines are empty so the user knows what to fix.
+  if(!cust){ toast('Customer is required to book an order','twn'); return; }
+  if(!sfCity || !sfState){ toast('Ship From city/state are required','twn'); return; }
+  if(!stCity || !stState){ toast('Ship To city/state are required','twn'); return; }
+  if(action==='book' && !lines.length){
+    toast('At least one line item is required to book an order','twn'); return;
+  }
   var existing=_eo?orders.find(x=>x.id===_eo):null;
   var ord={
     id, cust, orig, dest,
@@ -2494,7 +2561,16 @@ async function svO(action){
     } else {
       toast('✅ Order '+id+' has been created (Draft)','tin',{ durationMs: 30000, dismissible: true });
     }
-  }catch(e){toast('❌ '+e.message,'ter');console.error(e);}
+  }catch(e){
+    // QA #150: surface the underlying Postgres error code + hint so the
+    // user (and the dev pulling the screenshot) sees WHAT failed instead
+    // of just "Object". Supabase errors carry `.code`, `.details`,
+    // `.hint`. Fall back to message for plain Errors.
+    var msg = (e && (e.message || e.details || e.hint)) || 'Unknown error';
+    var code = e && e.code ? ' ['+e.code+']' : '';
+    toast('❌ Book failed'+code+': '+msg,'ter');
+    console.error('[svO] booking error:', e);
+  }
 }
 
 // ─── AVAILABILITY CHECK (Stage 2→3) ─────────────

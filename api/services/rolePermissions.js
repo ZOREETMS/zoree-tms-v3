@@ -218,6 +218,12 @@ function createRolePermissionService({ dbSelect, dbUpsert, dbDelete }) {
   }
 
   // ── Public: persist a role's full access map ────────────────────────
+  // QA #146: a Save click used to issue ONE PostgREST round-trip per
+  // feature (~30 round-trips per role). On a typical Supabase round-trip
+  // of ~120ms that meant ~4s of pure latency before the success toast.
+  // PostgREST accepts a JSON array body for upserts, so we now POST one
+  // batched array of every role_feature_permissions row in a single
+  // request. The access_roles upsert is unchanged (single row anyway).
   async function saveRolePermissions(roleKey, accessByFeature, tenantId = DEFAULT_TENANT_ID) {
     const normalizedRole = normalizeRoleKey(roleKey);
     if (!normalizedRole) throw new Error('Role is required');
@@ -231,6 +237,8 @@ function createRolePermissionService({ dbSelect, dbUpsert, dbDelete }) {
       throw new Error('No access_features configured for tenant');
     }
 
+    const nowIso = new Date().toISOString();
+
     // Ensure the role row exists (idempotent upsert; preserve display name on update).
     await dbUpsert('access_roles', {
       id:           `role:${tenantId}:${normalizedRole}`,
@@ -239,20 +247,24 @@ function createRolePermissionService({ dbSelect, dbUpsert, dbDelete }) {
       display_name: deriveDisplayName(normalizedRole),
       is_system:    SYSTEM_ROLE_KEYS.has(normalizedRole),
       is_active:    true,
-      updated_at:   new Date().toISOString(),
+      updated_at:   nowIso,
     }, null);
 
-    for (const feature of catalogFeatures) {
+    // QA #146: build the full batch first, then send in one upsert call.
+    const permissionRows = catalogFeatures.map((feature) => {
       const level = normalizeAccessLevel(accessByFeature[feature.feature_key]);
-      await dbUpsert('role_feature_permissions', {
+      return {
         id:           `perm:${tenantId}:${normalizedRole}:${feature.feature_key}`,
         tenant_id:    tenantId,
         role_key:     normalizedRole,
         feature_key:  feature.feature_key,
         access_level: level,
         enabled:      level === 'edit',          // legacy mirror
-        updated_at:   new Date().toISOString(),
-      }, null);
+        updated_at:   nowIso,
+      };
+    });
+    if (permissionRows.length > 0) {
+      await dbUpsert('role_feature_permissions', permissionRows, null);
     }
 
     return loadRolePermissions(tenantId);
@@ -277,6 +289,8 @@ function createRolePermissionService({ dbSelect, dbUpsert, dbDelete }) {
     const safeLevel = normalizeAccessLevel(defaultLevel);
     const features = await loadFeatures(tenantId);
 
+    const nowIso = new Date().toISOString();
+
     await dbUpsert('access_roles', {
       id:           `role:${tenantId}:${normalizedRole}`,
       tenant_id:    tenantId,
@@ -285,20 +299,25 @@ function createRolePermissionService({ dbSelect, dbUpsert, dbDelete }) {
       description:  description ? String(description).trim() : null,
       is_system:    false,
       is_active:    true,
-      updated_at:   new Date().toISOString(),
+      updated_at:   nowIso,
     }, null);
 
-    for (const feature of features) {
+    // QA #146: batch the seed-permission inserts into one PostgREST
+    // upsert call instead of one-per-feature.
+    const seedRows = features.map((feature) => {
       const seedLevel = (DEFAULT_NEW_ROLE_ACCESS[feature.feature_key] || safeLevel);
-      await dbUpsert('role_feature_permissions', {
+      return {
         id:           `perm:${tenantId}:${normalizedRole}:${feature.feature_key}`,
         tenant_id:    tenantId,
         role_key:     normalizedRole,
         feature_key:  feature.feature_key,
         access_level: seedLevel,
         enabled:      seedLevel === 'edit',
-        updated_at:   new Date().toISOString(),
-      }, null);
+        updated_at:   nowIso,
+      };
+    });
+    if (seedRows.length > 0) {
+      await dbUpsert('role_feature_permissions', seedRows, null);
     }
 
     return loadRolePermissions(tenantId);

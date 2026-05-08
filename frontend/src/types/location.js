@@ -95,53 +95,70 @@ export function parseAddressString(str) {
  * Hydrate a Location from an order row's ship-from fields.
  * Falls back to parsing the `origin` string so legacy rows still show
  * a populated form.
+ *
+ * QA #155: when an order is created with explicit ship_from_city /
+ * ship_from_state columns (or the camelCase aliases) but the legacy
+ * `origin` string is empty (or only carries the location name), the
+ * old code returned blank city/state for the form. Prefer the explicit
+ * columns over the parsed fallback so the Edit modal shows what the
+ * user originally typed instead of a blank.
  */
 export function locationFromOrderOrigin(order = {}) {
   const parsed = parseAddressString(order.origin);
   return {
     name:  order.ship_from_name || order.shipFromName || "",
-    city:  parsed.city,
-    state: parsed.state,
-    zip:   order.origin_zip || parsed.zip || "",
+    city:  order.ship_from_city  || order.shipFromCity  || order.origin_city  || order.originCity  || parsed.city  || "",
+    state: order.ship_from_state || order.shipFromState || order.origin_state || order.originState || parsed.state || "",
+    zip:   order.origin_zip      || order.originZip     || parsed.zip         || "",
   };
 }
 
 /**
  * Hydrate a Location from an order row's ship-to fields.
+ *
+ * QA #155: see locationFromOrderOrigin — same explicit-column fallback
+ * keeps the Edit modal's City/State inputs populated.
  */
 export function locationFromOrderDest(order = {}) {
   const parsed = parseAddressString(order.dest);
   return {
     name:  order.ship_to_name || order.shipToName || "",
-    city:  parsed.city,
-    state: parsed.state,
-    zip:   order.dest_zip || parsed.zip || "",
+    city:  order.ship_to_city  || order.shipToCity  || order.dest_city  || order.destCity  || parsed.city  || "",
+    state: order.ship_to_state || order.shipToState || order.dest_state || order.destState || parsed.state || "",
+    zip:   order.dest_zip      || order.destZip     || parsed.zip       || "",
   };
 }
 
 /**
  * Hydrate a Location from a shipment row's ship-from fields.
+ *
+ * QA #155: explicit-column fallback applies here too — the shipment
+ * Edit panels share the same LocationFieldsEditor, so a shipment that
+ * stored ship_from_city/state (without composing into `origin`) was
+ * also showing blank fields in the inline editor.
  */
 export function locationFromShipmentOrigin(shipment = {}) {
   const parsed = parseAddressString(shipment.origin);
   return {
     name:  shipment.ship_from_name || "",
-    city:  parsed.city,
-    state: parsed.state,
-    zip:   shipment.origin_zip || parsed.zip || "",
+    city:  shipment.ship_from_city  || shipment.origin_city  || parsed.city  || "",
+    state: shipment.ship_from_state || shipment.origin_state || parsed.state || "",
+    zip:   shipment.origin_zip      || parsed.zip            || "",
   };
 }
 
 /**
  * Hydrate a Location from a shipment row's ship-to fields.
+ *
+ * QA #155: see locationFromShipmentOrigin.
  */
 export function locationFromShipmentDest(shipment = {}) {
   const parsed = parseAddressString(shipment.dest);
   return {
     name:  shipment.ship_to_name || "",
-    city:  parsed.city,
-    state: parsed.state,
-    zip:   shipment.dest_zip || parsed.zip || "",
+    city:  shipment.ship_to_city  || shipment.dest_city  || parsed.city  || "",
+    state: shipment.ship_to_state || shipment.dest_state || parsed.state || "",
+    zip:   shipment.dest_zip      || parsed.zip          || "",
   };
 }
 

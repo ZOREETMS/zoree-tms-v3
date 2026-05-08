@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useCarrierBids } from "../hooks/useCarrierBids";
 import { SEED_BIDS } from "../services/carrierBidsService";
+import { useEditGate } from "../hooks/useEditGate";
 import BidsStatGrid from "../components/carrier-bids/BidsStatGrid";
 import RfqTable from "../components/carrier-bids/RfqTable";
 import BidDetailModal from "../components/carrier-bids/BidDetailModal";
@@ -8,6 +9,11 @@ import CreateRfqModal from "../components/carrier-bids/CreateRfqModal";
 
 export default function CarrierBidsPage() {
   const { bids, stats, awardBid, addRfq } = useCarrierBids(SEED_BIDS);
+
+  // QA #148 / QA #149: Carrier Bid Management writes (Create RFQ + Award)
+  // must obey the Finance matrix. Both Finance role and Viewer were able
+  // to bypass the View-only setting before this gate was added.
+  const gate = useEditGate("carrier_bids");
 
   const [detailRfqId, setDetailRfqId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -24,20 +30,22 @@ export default function CarrierBidsPage() {
 
   const handleAward = useCallback(
     (rfqId, carrier) => {
+      if (!gate.canEdit) return;          // QA #148/149 guard
       awardBid(rfqId, carrier);
       setDetailRfqId(null);
       showToast(`${rfqId} awarded to ${carrier}`, "success");
     },
-    [awardBid]
+    [awardBid, gate.canEdit]
   );
 
   const handleCreateRfq = useCallback(
     (rfq) => {
+      if (!gate.canEdit) return;          // QA #148/149 guard
       const created = addRfq(rfq);
       setShowCreate(false);
       showToast(`${created.id} created — ${rfq.lane}`, "success");
     },
-    [addRfq]
+    [addRfq, gate.canEdit]
   );
 
   const detailRfq = detailRfqId ? bids.find((b) => b.id === detailRfqId) : null;
@@ -55,7 +63,8 @@ export default function CarrierBidsPage() {
         <div className="header-actions">
           <button
             className="btn btn-primary btn-sm"
-            onClick={() => setShowCreate(true)}
+            onClick={() => { if (gate.canEdit) setShowCreate(true); }}
+            {...gate.editProps()}          /* QA #148/149 */
           >
             + Create RFQ
           </button>
@@ -72,7 +81,11 @@ export default function CarrierBidsPage() {
       {detailRfq && (
         <BidDetailModal
           rfq={detailRfq}
-          onAward={handleAward}
+          /* QA #148/149: BidDetailModal hides the Award button when
+             onAward is undefined, so 'view' access shows tender details
+             read-only. */
+          onAward={gate.canEdit ? handleAward : undefined}
+          canEdit={gate.canEdit}
           onClose={() => setDetailRfqId(null)}
         />
       )}

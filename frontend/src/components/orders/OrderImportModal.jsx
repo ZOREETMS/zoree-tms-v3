@@ -100,13 +100,19 @@ export default function OrderImportModal({ open, onClose, onComplete }) {
     setAnalysis(null);
     setResult(null);
     try {
-      const { headers, rows } = await parseOrderFile(picked);
+      // parseOrderFile returns the Orders sheet AND the optional Line
+      // Items sheet (TMS bug #144). Forward both halves to analyze so
+      // line-item rows get linked to their parent orders by Order Row #.
+      // Defaults via destructuring keep this safe for legacy 8-column
+      // single-sheet files where the Line Items sheet is absent.
+      const parsed = await parseOrderFile(picked);
+      const { headers, rows, lineItemHeaders = [], lineItemRows = [] } = parsed;
       if (rows.length === 0) {
         setError("The uploaded file has no data rows.");
         setStage("idle");
         return;
       }
-      const a = analyzeOrderUpload({ headers, rows });
+      const a = analyzeOrderUpload({ headers, rows, lineItemHeaders, lineItemRows });
       setAnalysis(a);
       setStage("preview");
     } catch (err) {
@@ -207,13 +213,37 @@ export default function OrderImportModal({ open, onClose, onComplete }) {
   /* ───────── Preview (post-parse) ───────── */
   const renderPreview = () => {
     const sampleRows = analysis.analyzed.slice(0, PREVIEW_ROWS);
+    // Bug #144: surface the line-items summary (only if a Line Items
+    // sheet was present + matched) so the user knows lines will land
+    // on import. Suppressed entirely on legacy single-sheet imports
+    // so the modal looks unchanged for users who don't use the new
+    // sheet.
+    const liTotal       = counts.lineItemsTotal      || 0;
+    const liOrders      = counts.ordersWithLines     || 0;
+    const liUnattached  = counts.unattachedLineItems || 0;
+    const showLineItemsBanner = liTotal > 0 || liUnattached > 0;
     return (
       <div>
         <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
           <StatBlock label="TOTAL"   value={counts.total} />
           <StatBlock label="VALID"   value={counts.valid}   color="#16a34a" />
           <StatBlock label="INVALID" value={counts.invalid} color="#b91c1c" />
+          {liTotal > 0 && (
+            <StatBlock label="LINE ITEMS" value={`${liTotal} / ${liOrders} ord`} color="#4f46e5" />
+          )}
         </div>
+
+        {showLineItemsBanner && liUnattached > 0 && (
+          <div style={{
+            background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)",
+            borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#92400e",
+          }}>
+            <strong>{liUnattached} line item{liUnattached === 1 ? "" : "s"}</strong>
+            {" "}on the Line Items sheet had no matching Order Row #
+            {" "}— those rows will be ignored on import. Check that the Order Row #
+            column points to the 1-based position in the Orders sheet (1 = first data row).
+          </div>
+        )}
 
         {analysis.unmappedHeaders.length > 0 && (
           <div style={{
@@ -240,9 +270,24 @@ export default function OrderImportModal({ open, onClose, onComplete }) {
             <tbody>
               {sampleRows.map((a) => {
                 const bad = a.errors.length > 0;
+                const lineCount = Array.isArray(a.payload?.lineItems) ? a.payload.lineItems.length : 0;
                 return (
                   <tr key={a.rowNumber} style={bad ? { background: "rgba(239,68,68,.05)" } : undefined}>
-                    <td className="mono text-sm">{a.rowNumber}</td>
+                    <td className="mono text-sm" style={{ whiteSpace: "nowrap" }}>
+                      {a.rowNumber}
+                      {lineCount > 0 && (
+                        <span
+                          title={`${lineCount} line item${lineCount === 1 ? "" : "s"} attached to this order`}
+                          style={{
+                            marginLeft: 6, padding: "1px 6px", borderRadius: 999,
+                            background: "rgba(79,70,229,.12)", color: "#4338ca",
+                            fontSize: 10, fontWeight: 700,
+                          }}
+                        >
+                          +{lineCount}
+                        </span>
+                      )}
+                    </td>
                     {PREVIEW_FIELDS.map((f) => (
                       <td key={f.key} className="text-sm" style={{ whiteSpace: "nowrap", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
                         {String(a.payload[f.key] ?? "")}

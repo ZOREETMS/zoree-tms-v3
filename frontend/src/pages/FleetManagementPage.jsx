@@ -3,6 +3,7 @@ import { useFleet } from "../hooks/useFleet";
 import { useDrivers } from "../hooks/useDrivers";
 import { SEED_VEHICLES, SEED_DRIVERS } from "../services/fleetService";
 import { DRIVER_STATUSES } from "../types/fleet";
+import { useEditGate } from "../hooks/useEditGate";
 import StatCard from "../components/fleet/StatCard";
 import FleetTabSwitcher from "../components/fleet/FleetTabSwitcher";
 import VehicleTable from "../components/fleet/VehicleTable";
@@ -16,6 +17,9 @@ import SelectionBar from "../components/ui/SelectionBar";
 export default function FleetManagementPage() {
   const [activeTab, setActiveTab] = useState("vehicles");
   const [toast, setToast] = useState({ text: "", type: "" });
+  // QA #147: Execution module 'view' must collapse Add Vehicle / Add
+  // Driver / Assign Driver / row Edit / DriverModal save+delete.
+  const gate = useEditGate("fleet_management");
 
   // Hooks for fleet and driver state
   const fleet = useFleet(SEED_VEHICLES);
@@ -35,24 +39,30 @@ export default function FleetManagementPage() {
   }
 
   // Vehicle handlers
+  // QA #147: every mutation entry-point goes through gate.requireEdit so
+  // a misbehaving child component can't bypass disabled props.
   const openVehicleModal = useCallback((unit) => {
+    if (!gate.canEdit) return;
     const v = unit ? fleet.vehicles.find((x) => x.unit === unit) : null;
     setVehicleModal({ open: true, vehicle: v });
-  }, [fleet.vehicles]);
+  }, [fleet.vehicles, gate.canEdit]);
 
   const handleSaveVehicle = useCallback((data) => {
+    if (!gate.canEdit) return;            // QA #147 guard
     fleet.saveVehicle(data, vehicleModal.vehicle?.unit);
     setVehicleModal({ open: false, vehicle: null });
     showToast(`Vehicle saved: ${data.unit}`, "success");
-  }, [fleet, vehicleModal.vehicle]);
+  }, [fleet, vehicleModal.vehicle, gate.canEdit]);
 
   // Driver handlers
   const openDriverModal = useCallback((id) => {
+    if (!gate.canEdit) return;
     const d = id ? driverState.drivers.find((x) => x.id === id) : null;
     setDriverModal({ open: true, driver: d });
-  }, [driverState.drivers]);
+  }, [driverState.drivers, gate.canEdit]);
 
   const handleSaveDriver = useCallback((data) => {
+    if (!gate.canEdit) return;            // QA #147 guard
     const existingId = driverModal.driver?.id;
     driverState.saveDriver(data, existingId);
 
@@ -63,23 +73,26 @@ export default function FleetManagementPage() {
 
     setDriverModal({ open: false, driver: null });
     showToast(`${existingId ? "Updated" : "Added"} driver: ${data.name}`, "success");
-  }, [driverState, driverModal.driver, fleet]);
+  }, [driverState, driverModal.driver, fleet, gate.canEdit]);
 
   const handleDeleteDriver = useCallback(() => {
+    if (!gate.canEdit) return;            // QA #147 guard
     const d = driverModal.driver;
     if (!d) return;
     if (d.vehicle) fleet.updateVehicleDriver(d.vehicle, "Unassigned");
     driverState.removeDriver(d.id);
     setDriverModal({ open: false, driver: null });
     showToast("Driver removed", "info");
-  }, [driverModal.driver, driverState, fleet]);
+  }, [driverModal.driver, driverState, fleet, gate.canEdit]);
 
   // Assignment handler
   const openAssignModal = useCallback((driverId) => {
+    if (!gate.canEdit) return;            // QA #147 guard
     setAssignModal({ open: true, driverId });
-  }, []);
+  }, [gate.canEdit]);
 
   const handleConfirmAssign = useCallback(({ driverId, vehicleId }) => {
+    if (!gate.canEdit) return;            // QA #147 guard
     const driver = driverState.drivers.find((d) => d.id === driverId);
     if (!driver) return;
 
@@ -99,7 +112,7 @@ export default function FleetManagementPage() {
       `${driver.name} assigned${vehicleId ? ` to ${vehicleId}` : ""}`,
       "success"
     );
-  }, [driverState, fleet]);
+  }, [driverState, fleet, gate.canEdit]);
 
   return (
     <>
@@ -114,10 +127,18 @@ export default function FleetManagementPage() {
           {/* Vehicle tab actions */}
           {activeTab === "vehicles" && (
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => openAssignModal(null)}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => openAssignModal(null)}
+                {...gate.editProps()}      /* QA #147 */
+              >
                 👤 Assign Driver
               </button>
-              <button className="btn btn-primary btn-sm" onClick={() => openVehicleModal(null)}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => openVehicleModal(null)}
+                {...gate.editProps()}      /* QA #147 */
+              >
                 + Add Vehicle
               </button>
             </div>
@@ -147,7 +168,11 @@ export default function FleetManagementPage() {
                 <option value="">All Statuses</option>
                 {DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <button className="btn btn-primary btn-sm" onClick={() => openDriverModal(null)}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => openDriverModal(null)}
+                {...gate.editProps()}      /* QA #147 */
+              >
                 + Add Driver
               </button>
             </div>
@@ -171,9 +196,13 @@ export default function FleetManagementPage() {
             <SelectionBar count={vehicleSel.size} entityLabel="Vehicle" onClear={vehicleSel.clear} />
             <VehicleTable
               vehicles={fleet.vehicles}
-              onEdit={openVehicleModal}
-              onAssignDriver={openAssignModal}
+              /* QA #147: collapse row-level edit handlers so VehicleTable
+                 hides/disables Edit + Assign affordances when canEdit is
+                 false. onTrack stays available — it's read-only. */
+              onEdit={gate.canEdit ? openVehicleModal : undefined}
+              onAssignDriver={gate.canEdit ? openAssignModal : undefined}
               onTrack={(unit) => showToast(`Tracking ${unit}`, "info")}
+              canEdit={gate.canEdit}
               sel={vehicleSel}
             />
           </>
@@ -192,9 +221,11 @@ export default function FleetManagementPage() {
             <SelectionBar count={driverSel.size} entityLabel="Driver" onClear={driverSel.clear} />
             <DriverTable
               drivers={driverState.filtered}
-              onEdit={openDriverModal}
-              onAssign={openAssignModal}
+              /* QA #147: see VehicleTable comment above. */
+              onEdit={gate.canEdit ? openDriverModal : undefined}
+              onAssign={gate.canEdit ? openAssignModal : undefined}
               onSwitchToVehicles={() => setActiveTab("vehicles")}
+              canEdit={gate.canEdit}
               sel={driverSel}
             />
           </>

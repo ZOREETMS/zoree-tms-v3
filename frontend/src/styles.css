@@ -423,9 +423,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .kebab-btn{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);background:#fff;color:var(--text2);border-radius:8px;cursor:pointer;font-size:18px;line-height:1;font-weight:700;padding:0;transition:background .12s,color .12s,border-color .12s;}
 .kebab-btn:hover{background:#F1F5F9;color:var(--text);border-color:#CBD5E1;}
 .kebab-btn.open{background:var(--accent-glow);color:var(--accent);border-color:#BFDBFE;}
-.row-actions-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:200px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,0.12),0 2px 6px rgba(15,23,42,0.06);padding:6px;z-index:50;animation:rowMenuIn .12s ease-out;}
+/* QA #153: longer labels (e.g. "Cross-Dock Plan", "Delete Permanently",
+   "Add to Shipment") were getting clipped or wrapping awkwardly because
+   min-width was 200px and the menu had no max-height. The portal layer
+   in RowActionsMenu.jsx already handles viewport positioning; this rule
+   widens the band, lets the box size to its content (width:max-content
+   between min/max), nowraps individual labels, and caps height with a
+   scroll fallback so 8+ items render fully on short viewports. */
+.row-actions-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:220px;max-width:320px;width:max-content;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,0.12),0 2px 6px rgba(15,23,42,0.06);padding:6px;z-index:50;max-height:min(70vh,520px);overflow-y:auto;animation:rowMenuIn .12s ease-out;}
 @keyframes rowMenuIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-.row-actions-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;color:var(--text);font-size:12.5px;font-weight:500;font-family:inherit;border-radius:7px;cursor:pointer;transition:background .1s,color .1s;text-transform:none;}
+.row-actions-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;color:var(--text);font-size:12.5px;font-weight:500;font-family:inherit;border-radius:7px;cursor:pointer;transition:background .1s,color .1s;text-transform:none;white-space:nowrap;}
 .row-actions-item:hover{background:#F1F5F9;}
 .row-actions-item:disabled{opacity:.45;cursor:not-allowed;}
 .row-actions-item .row-actions-icon{width:18px;text-align:center;}

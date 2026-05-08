@@ -67,6 +67,15 @@ export function nextOrderId(): string {
  */
 export function buildOrderCopyPayload(source: any, newId: string) {
   const s = source || {};
+  // QA #156: carry the structured city/state/zip alongside the composed
+  // origin/destination strings. Without this, a copied order arrived at
+  // OrderFormScreen with only the flat `origin` text — when the form
+  // tried to hydrate City/State from the camelCase columns those came
+  // back undefined and the user saw blank fields. Falling back through
+  // a parsed-address helper keeps web-edited orders (which may only
+  // store the composed string) round-trippable too.
+  const parsedOrigin = parseAddressString(s.origin || s.originLocation);
+  const parsedDest   = parseAddressString(s.destination || s.dest);
   return {
     id: newId,
     customer: s.customer ?? null,
@@ -75,6 +84,10 @@ export function buildOrderCopyPayload(source: any, newId: string) {
     // (and old web code) use `dest`. Accept both — falling back to
     // null only if neither is present.
     destination: s.destination ?? s.dest ?? null,
+    originCity:  s.originCity  ?? s.origin_city  ?? s.shipFromCity  ?? s.ship_from_city  ?? parsedOrigin.city  ?? null,
+    originState: s.originState ?? s.origin_state ?? s.shipFromState ?? s.ship_from_state ?? parsedOrigin.state ?? null,
+    destCity:    s.destCity    ?? s.dest_city    ?? s.shipToCity    ?? s.ship_to_city    ?? parsedDest.city    ?? null,
+    destState:   s.destState   ?? s.dest_state   ?? s.shipToState   ?? s.ship_to_state   ?? parsedDest.state   ?? null,
     originZip: s.originZip ?? s.origin_zip ?? null,
     destZip: s.destZip ?? s.dest_zip ?? null,
     shipFromName: s.shipFromName ?? s.ship_from_name ?? null,
@@ -98,6 +111,31 @@ export function buildOrderCopyPayload(source: any, newId: string) {
     notes: s.notes ?? null,
     poNum: s.poNum ?? s.po_number ?? s.po_num ?? null,
     refNum: s.refNum ?? s.ref_num ?? null,
+  };
+}
+
+/**
+ * QA #156 helper — parse a "CITY, ST ZIP" or "Name, CITY, ST ZIP"
+ * string into city/state/zip parts. Mirror of parseAddressString in
+ * frontend/src/types/location.js so the mobile bundle doesn't need to
+ * reach into the web src tree at build time.
+ */
+function parseAddressString(str: any): { city: string; state: string; zip: string } {
+  if (!str) return { city: '', state: '', zip: '' };
+  let s = String(str);
+  let zip = '';
+  const m = s.match(/\b(\d{5})\b/);
+  if (m) {
+    zip = m[1];
+    s = s.replace(m[1], '').replace(/,?\s*$/, '').trim();
+  }
+  const parts = s.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return { city: '', state: '', zip };
+  if (parts.length === 1) return { city: parts[0], state: '', zip };
+  return {
+    city: parts[parts.length - 2],
+    state: parts[parts.length - 1],
+    zip,
   };
 }
 

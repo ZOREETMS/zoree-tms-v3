@@ -23,23 +23,42 @@ export default function RowActionsMenu({ primary, items = [], busy = false }) {
   // Position the portal-rendered menu relative to the kebab button.
   // Right-aligns the menu's right edge with the kebab's right edge,
   // matching the previous `right: 0` absolute behavior.
+  //
+  // QA #153: also flip the menu ABOVE the kebab when there's not enough
+  // vertical space below, and re-measure the menu's own height so the
+  // anchor accounts for the actual content. Without this, rows near the
+  // bottom of a small viewport showed the menu clipped by the viewport
+  // edge — exactly the "options are partially visible" symptom users hit.
   useLayoutEffect(() => {
     if (!open) return;
     const updatePos = () => {
       const btn = kebabRef.current;
       if (!btn) return;
       const r = btn.getBoundingClientRect();
+      const menuEl = menuRef.current;
+      const menuH = menuEl ? menuEl.getBoundingClientRect().height : 0;
+      const gap = 6;
+      const spaceBelow = window.innerHeight - r.bottom;
+      const spaceAbove = r.top;
+      // Flip up only when below is too tight AND above has more room —
+      // otherwise stay below and let the menu's own max-height/scroll
+      // handle the overflow.
+      const flipUp = menuH > spaceBelow - gap && spaceAbove > spaceBelow;
       setPos({
-        top: r.bottom + 6,
+        top: flipUp ? Math.max(8, r.top - menuH - gap) : r.bottom + gap,
         right: Math.max(8, window.innerWidth - r.right),
       });
     };
     updatePos();
+    // Run a second time on the next frame so we know the menu's measured
+    // height once it has rendered (first pass uses 0 → flipUp false).
+    const raf = requestAnimationFrame(updatePos);
     // capture-phase scroll so we react to scrolls in any ancestor (e.g. the
     // page body or the table-wrap horizontal scroller).
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", updatePos, true);
       window.removeEventListener("resize", updatePos);
     };

@@ -4,6 +4,7 @@ import { DOCK_DOORS, DEFAULT_DOCK_CONFIG } from "../constants/docks";
 // API calls go through dockScheduleService (services layer)
 import { parseLoadingWindow } from "../services/dockService";
 import { getDockConfigForWarehouse, saveDockConfig, persistShipmentDockAssignment } from "../services/dockScheduleService";
+import { useEditGate } from "../hooks/useEditGate";
 import DockLegend from "../components/dock-scheduling/DockLegend";
 import DockGrid from "../components/dock-scheduling/DockGrid";
 import AppointmentCard from "../components/dock-scheduling/AppointmentCard";
@@ -12,6 +13,11 @@ import { formatDateDisplay, todayStr } from "../utils/dateUtils";
 
 export default function DockSchedulingPage() {
   const { orders, shipments, warehouseDockConfigs = [], refreshData } = useOutletContext();
+  // QA #147: Execution module access at 'view' must collapse edit
+  // affordances (Configure, slot click → new appt, Save Config, edit appt
+  // save/delete). Matrix-driven gate; backend canWriteTable is still the
+  // authoritative reject.
+  const gate = useEditGate("dock_scheduling");
   const [dockDate, setDockDate] = useState(todayStr());
   const [appointments, setAppointments] = useState([]);
   const [editAppt, setEditAppt] = useState(null);
@@ -44,6 +50,7 @@ export default function DockSchedulingPage() {
   const [editConfig, setEditConfig] = useState(null);
 
   function openConfig() {
+    if (!gate.canEdit) return;            // QA #147 defensive guard
     setEditConfig({
       num_doors: currentDbRow?.num_doors ?? 6,
       max_per_door: currentDbRow?.max_per_door ?? 4,
@@ -55,6 +62,7 @@ export default function DockSchedulingPage() {
   }
 
   async function handleSaveConfig() {
+    if (!gate.canEdit) return;            // QA #147 defensive guard
     if (!warehouseFilter || !editConfig) return;
     setConfigSaving(true);
     try {
@@ -132,6 +140,7 @@ export default function DockSchedulingPage() {
   }
 
   function openNewAppt(door, hour) {
+    if (!gate.canEdit) return;            // QA #147 defensive guard
     setEditAppt({
       id: "", door, date: dockDate, start: hour, duration: 60,
       type: "Outbound", carrier: "", shipmentId: "", status: "Scheduled", notes: "",
@@ -139,6 +148,7 @@ export default function DockSchedulingPage() {
   }
 
   async function saveAppt() {
+    if (!gate.canEdit) return;            // QA #147 defensive guard
     if (!editAppt) return;
     const appt = { ...editAppt, date: dockDate, id: editAppt.id || "DA-" + Date.now() };
 
@@ -172,6 +182,7 @@ export default function DockSchedulingPage() {
   }
 
   function deleteAppt() {
+    if (!gate.canEdit) return;            // QA #147 defensive guard
     if (!editAppt) return;
     setAppointments((prev) => prev.filter((a) => a.id !== editAppt.id));
     setEditAppt(null);
@@ -228,8 +239,12 @@ export default function DockSchedulingPage() {
             {warehouseOptions.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
           </select>
           {warehouseFilter && (
-            <button className="btn btn-secondary btn-sm" onClick={showConfig ? () => setShowConfig(false) : openConfig}
-              style={{ fontSize: 11 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={showConfig ? () => setShowConfig(false) : openConfig}
+              style={{ fontSize: 11 }}
+              {...gate.editProps()}        /* QA #147: matches matrix */
+            >
               {showConfig ? "Hide Config" : "Configure"}
             </button>
           )}
@@ -286,8 +301,12 @@ export default function DockSchedulingPage() {
                   {Array.from({ length: 24 }, (_, i) => <option key={i + 1} value={i + 1}>{String(i + 1).padStart(2, "0")}:00</option>)}
                 </select>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={handleSaveConfig} disabled={configSaving}
-                style={{ background: "linear-gradient(135deg,#1a237e,#6366f1)", border: "none", height: 32 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleSaveConfig}
+                style={{ background: "linear-gradient(135deg,#1a237e,#6366f1)", border: "none", height: 32 }}
+                {...gate.editProps({ disabled: configSaving })}   /* QA #147 */
+              >
                 {configSaving ? "Saving..." : "Save Config"}
               </button>
             </div>
@@ -295,7 +314,17 @@ export default function DockSchedulingPage() {
         )}
 
         <DockLegend />
-        <DockGrid doors={dockConfig.doors} startHour={dockConfig.startHour} endHour={dockConfig.endHour} appointments={dayAppts} onSlotClick={openNewAppt} onAppointmentClick={setEditAppt} />
+        <DockGrid
+          doors={dockConfig.doors}
+          startHour={dockConfig.startHour}
+          endHour={dockConfig.endHour}
+          appointments={dayAppts}
+          /* QA #147: when matrix says 'view', empty-slot click and
+              appointment-detail-edit are both disabled at the source so
+              the user never lands inside a modal they can't save. */
+          onSlotClick={gate.canEdit ? openNewAppt : undefined}
+          onAppointmentClick={gate.canEdit ? setEditAppt : undefined}
+        />
 
         {/* Dock Issues */}
         {(() => {

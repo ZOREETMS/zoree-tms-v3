@@ -81,6 +81,14 @@ export const SERVICE_LEVELS = [
   '', 'Standard', 'Guaranteed', 'Expedited', 'White Glove',
 ];
 
+// QA #154 — Canonical 4-option list, MUST match the OMS HTML
+// (frontend/zoree-oms.html) and the web React modal source-of-truth at
+// frontend/src/constants/incoterms.js. The mobile codebase is built
+// independently so we keep an explicit copy here; if you change one
+// list, change the other in the same PR.
 export const INCOTERMS = [
-  'EXW','FCA','CPT','CIP','DAP','DPU','DDP','FAS','FOB','CFR','CIF',
+  'FOB Origin',
+  'FOB Destination',
+  'CIF',
+  'DDP',
 ];

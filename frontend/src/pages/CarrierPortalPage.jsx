@@ -9,6 +9,7 @@ import {
   saveTenderResponse,
 } from "../services/carrierPortalService";
 import { propagateTenderAcceptance } from "../services/tenderAcceptanceNotifier";
+import { useEditGate } from "../hooks/useEditGate";
 import TenderCard from "../components/carrier-portal/TenderCard";
 import TenderRespondModal from "../components/carrier-portal/TenderRespondModal";
 import TenderDetailModal from "../components/carrier-portal/TenderDetailModal";
@@ -25,6 +26,9 @@ const TABS = [
 
 export default function CarrierPortalPage() {
   const { shipments, orders, carriers, refreshData } = useOutletContext();
+  // QA #147: Execution module 'view' must collapse Accept / Reject /
+  // Change actions on the carrier portal — those mutate shipment state.
+  const gate = useEditGate("carrier_portal");
   const [selectedCarrier, setSelectedCarrier] = useState("");
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -189,6 +193,7 @@ export default function CarrierPortalPage() {
 
   // Handlers
   function openRespond(shipId, preselect) {
+    if (!gate.canEdit) return;            // QA #147 guard
     setRespondModal({ open: true, shipId, preselect: preselect || null });
   }
 
@@ -205,6 +210,7 @@ export default function CarrierPortalPage() {
   }
 
   async function handleSubmitResponse(responseData) {
+    if (!gate.canEdit) return;            // QA #147 guard
     const shipId = respondModal.shipId;
     const ship = shipments.find((s) => s.id === shipId);
     if (!ship) return;
@@ -321,10 +327,13 @@ export default function CarrierPortalPage() {
             rows={filteredShipments}
             sel={sel}
             tenderResponses={tenderResponses}
-            onAccept={(id) => openRespond(id, "accept")}
-            onReject={(id) => openRespond(id, "reject")}
+            /* QA #147: collapse Accept/Reject/Change to undefined when
+               canEdit is false so TenderTable hides the action cluster. */
+            onAccept={gate.canEdit ? (id) => openRespond(id, "accept") : undefined}
+            onReject={gate.canEdit ? (id) => openRespond(id, "reject") : undefined}
             onViewDetail={openDetail}
-            onChangeResponse={(id) => openRespond(id)}
+            onChangeResponse={gate.canEdit ? (id) => openRespond(id) : undefined}
+            canEdit={gate.canEdit}
           />
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: 16 }}>
@@ -334,10 +343,12 @@ export default function CarrierPortalPage() {
                 shipment={s}
                 response={tenderResponses[s.id]}
                 consolidatedOrders={s.consolidatedOrders?.length || 0}
-                onAccept={(id) => openRespond(id, "accept")}
-                onReject={(id) => openRespond(id, "reject")}
+                /* QA #147: same as TenderTable above. */
+                onAccept={gate.canEdit ? (id) => openRespond(id, "accept") : undefined}
+                onReject={gate.canEdit ? (id) => openRespond(id, "reject") : undefined}
                 onViewDetail={openDetail}
-                onChangeResponse={(id) => openRespond(id)}
+                onChangeResponse={gate.canEdit ? (id) => openRespond(id) : undefined}
+                canEdit={gate.canEdit}
               />
             ))}
           </div>
@@ -535,7 +546,7 @@ function portalStatusBadge(response) {
   return { label: "Rejected", bg: "rgba(239,68,68,.1)", color: "#dc2626", border: "rgba(239,68,68,.3)" };
 }
 
-function TenderTable({ rows, sel, tenderResponses, onAccept, onReject, onViewDetail, onChangeResponse }) {
+function TenderTable({ rows, sel, tenderResponses, onAccept, onReject, onViewDetail, onChangeResponse, canEdit = true }) {
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div className="table-wrap" style={{ overflowX: "auto" }}>
@@ -612,7 +623,11 @@ function TenderTable({ rows, sel, tenderResponses, onAccept, onReject, onViewDet
                       >
                         Details
                       </button>
-                      {pending ? (
+                      {/* QA #147: Accept/Reject/Change only render when
+                          the edit gate has handed us a handler. The
+                          parent page collapses them to undefined for
+                          'view' access so the row stays read-only. */}
+                      {pending && canEdit && onAccept && onReject ? (
                         <>
                           <button
                             type="button"
@@ -635,7 +650,7 @@ function TenderTable({ rows, sel, tenderResponses, onAccept, onReject, onViewDet
                             Reject
                           </button>
                         </>
-                      ) : (
+                      ) : !pending && canEdit && onChangeResponse ? (
                         <button
                           type="button"
                           style={{
@@ -646,7 +661,7 @@ function TenderTable({ rows, sel, tenderResponses, onAccept, onReject, onViewDet
                         >
                           Change
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>

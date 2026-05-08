@@ -1,6 +1,7 @@
 import React from "react";
 import OrderLinesEditor from "../OrderLinesEditor";
 import LocationFieldsEditor from "../LocationFieldsEditor";
+import { INCOTERMS } from "../../constants/incoterms";   // QA #154
 
 export default function NewOrderModal({ show, form, onFormChange, lines, onLinesChange, onSubmit, onClose, carriers, busy, itemMaster }) {
   if (!show) return null;
@@ -95,7 +96,9 @@ export default function NewOrderModal({ show, form, onFormChange, lines, onLines
             <div><label style={labelSt}>Incoterms <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400 }}>(optional)</span></label>
               <select value={form.incoterms} onChange={(e) => upd("incoterms", e.target.value)} style={{ ...inputSt, background: "#fff" }}>
                 <option value="">— Select —</option>
-                {["EXW","FCA","CPT","CIP","DAP","DPU","DDP","FAS","FOB","CFR","CIF"].map((t) => <option key={t}>{t}</option>)}
+                {/* QA #154: canonical 4-option list shared with the OMS
+                    HTML and mobile app — see constants/incoterms.js. */}
+                {INCOTERMS.map((t) => <option key={t}>{t}</option>)}
               </select>
             </div>
           </div>

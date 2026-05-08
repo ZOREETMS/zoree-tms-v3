@@ -89,20 +89,11 @@ export function mapHeaders(headers) {
 }
 
 /**
- * Parse a File or Blob (CSV / XLSX / XLSM / XLS) into a list of
- * header-keyed plain objects. The first sheet is read; empty rows are
- * dropped. Dates come back as strings in `YYYY-MM-DD` form so the
- * downstream payload doesn't have to deal with Excel's serial-day numbers.
- *
- * @returns {Promise<{ headers: string[], rows: Object[] }>}
+ * Read one sheet as { headers, rows } where rows are header-keyed objects
+ * and empty rows are skipped. Pure helper used by parseOrderFile for both
+ * the Orders sheet and the optional Line Items sheet.
  */
-export async function parseOrderFile(file) {
-  if (!file) throw new Error("parseOrderFile: file is required");
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw new Error("Workbook contains no sheets");
-  const sheet = wb.Sheets[sheetName];
+function sheetToHeaderedRows(sheet) {
   // header:1 → array-of-arrays so we can capture the original header row
   // verbatim (including casing/spacing) for `mapHeaders`.
   const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
@@ -117,6 +108,122 @@ export async function parseOrderFile(file) {
     rows.push(obj);
   }
   return { headers, rows };
+}
+
+/**
+ * Find a sheet by name, case + whitespace insensitive. Returns null if
+ * not present so callers can treat the Line Items sheet as optional.
+ */
+function findSheetByName(wb, target) {
+  const want = String(target || "").toLowerCase().replace(/\s+/g, " ").trim();
+  for (const name of wb.SheetNames || []) {
+    const got = String(name).toLowerCase().replace(/\s+/g, " ").trim();
+    if (got === want) return wb.Sheets[name];
+  }
+  return null;
+}
+
+/**
+ * Parse a File or Blob (CSV / XLSX / XLSM / XLS).
+ *
+ * The first sheet is treated as the Orders sheet. If a second sheet
+ * named "Line Items" exists (case + whitespace insensitive), it is also
+ * parsed; analyzeOrderUpload then groups its rows by "Order Row #" and
+ * attaches them to each order's payload as `lineItems[]` (TMS bug #144).
+ *
+ * Empty rows are dropped on both sheets. Dates come back as strings in
+ * `YYYY-MM-DD` form so the downstream payload doesn't have to deal with
+ * Excel's serial-day numbers.
+ *
+ * @returns {Promise<{
+ *   headers:         string[],          // Orders sheet header row
+ *   rows:            Object[],          // Orders sheet data rows
+ *   lineItemHeaders: string[],          // Line Items sheet header row ([] if absent)
+ *   lineItemRows:    Object[],          // Line Items sheet data rows ([] if absent)
+ * }>}
+ */
+export async function parseOrderFile(file) {
+  if (!file) throw new Error("parseOrderFile: file is required");
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error("Workbook contains no sheets");
+  const ordersSheet = wb.Sheets[sheetName];
+  const { headers, rows } = sheetToHeaderedRows(ordersSheet);
+
+  // The Line Items sheet is optional. Keep parseOrderFile happy on
+  // single-sheet (8-column legacy) imports by defaulting to empty arrays.
+  const linesSheet = findSheetByName(wb, "Line Items");
+  const { headers: lineItemHeaders, rows: lineItemRows } = linesSheet
+    ? sheetToHeaderedRows(linesSheet)
+    : { headers: [], rows: [] };
+
+  return { headers, rows, lineItemHeaders, lineItemRows };
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Line Items sheet — header aliases + normalization (TMS bug #144)
+ * ───────────────────────────────────────────────────────────── */
+
+// Linkage column: "Order Row #" matches the 1-based data-row index in
+// the Orders sheet (1 = first non-header row). Auxiliary aliases
+// accommodate spreadsheets exported from various tools.
+const LINE_ITEM_HEADER_ALIASES = {
+  orderRow:    ["order row", "order row #", "order row number", "order #", "order number", "order index"],
+  lineNum:     ["line", "line #", "line num", "line number"],
+  itemId:      ["item id", "item", "sku", "item code", "itemid", "item_id"],
+  description: ["description", "item description", "product", "freight"],
+  qtyOrdered:  ["qty", "quantity", "qty ordered", "pieces", "units"],
+  unitWeight:  ["unit weight", "unit wt", "weight per unit", "wt per unit"],
+  totalWeight: ["total weight", "total wt", "line weight"],
+};
+
+export function mapLineItemHeaders(headers) {
+  const map = {};
+  for (const raw of headers || []) {
+    const key = normalizeHeaderKey(raw);
+    let matched = null;
+    for (const [canonical, aliases] of Object.entries(LINE_ITEM_HEADER_ALIASES)) {
+      if (aliases.includes(key)) { matched = canonical; break; }
+    }
+    map[raw] = matched;
+  }
+  return map;
+}
+
+/**
+ * Convert one Line Items raw row into the shape the import API expects.
+ * Pure. Returns null for blank rows so callers can drop them cleanly.
+ */
+export function normalizeLineItemRow(rawRow, headerMap) {
+  const f = {};
+  for (const [hdr, canonical] of Object.entries(headerMap)) {
+    if (!canonical) continue;
+    const val = rawRow[hdr];
+    if (val === undefined) continue;
+    f[canonical] = typeof val === "string" ? val.trim() : val;
+  }
+  const str = (v) => (v === undefined || v === null || v === "") ? "" : String(v).trim();
+  const orderRow = toNumberOrNull(f.orderRow);
+  const description = str(f.description);
+  const itemId      = str(f.itemId);
+  const qty         = toNumberOrNull(f.qtyOrdered);
+
+  // Drop entirely blank rows: no order linkage AND no description /
+  // item / qty signal. Saves the caller a defensive filter.
+  if (orderRow == null && !description && !itemId && (qty == null || qty === 0)) {
+    return null;
+  }
+
+  return {
+    orderRow:    orderRow,                     // null if missing — caller flags
+    lineNum:     toNumberOrNull(f.lineNum),    // null = sequential auto-assign server-side
+    itemId:      itemId || null,
+    description: description,
+    qtyOrdered:  qty != null ? qty : 0,
+    unitWeight:  toNumberOrNull(f.unitWeight),
+    totalWeight: toNumberOrNull(f.totalWeight),
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -245,13 +352,22 @@ export function validateOrderRow(rawRow, headerMap, payload) {
  *     analyzed: Array<{
  *       rowNumber,                 // 1-based excluding header
  *       raw:    Object,
- *       payload: Object,
+ *       payload: Object,           // includes lineItems[] when matched
  *       errors: string[],
  *     }>,
- *     counts: { total, valid, invalid },
+ *     counts: { total, valid, invalid,
+ *               lineItemsTotal,    // total normalized lines in the sheet
+ *               ordersWithLines,   // analyzed orders that received lines
+ *               unattachedLineItems // lines whose Order Row # didn't match
+ *             },
+ *     lineItemHeaderMap,
+ *     unmappedLineItemHeaders,
  *   }
+ *
+ * Accepts the extended parseOrderFile shape — `lineItemHeaders` and
+ * `lineItemRows` are optional so legacy single-sheet imports keep working.
  */
-export function analyzeOrderUpload({ headers, rows }) {
+export function analyzeOrderUpload({ headers, rows, lineItemHeaders, lineItemRows }) {
   const headerMap = mapHeaders(headers);
   const unmappedHeaders = Object.entries(headerMap)
     .filter(([, c]) => !c)
@@ -269,13 +385,67 @@ export function analyzeOrderUpload({ headers, rows }) {
     };
   });
 
+  // ── Line items linkage (bug #144) ──────────────────────────────────
+  // Group normalized line-item rows by "Order Row #" (1-based index
+  // into the Orders sheet's data rows; Order Row 1 = first non-header
+  // row = analyzed[0]). Drop blank rows during normalization. Lines
+  // whose Order Row # is missing or out of range count as "unattached"
+  // so the modal can warn instead of silently losing data.
+  const lineItemHeaderMap = mapLineItemHeaders(lineItemHeaders || []);
+  const unmappedLineItemHeaders = Object.entries(lineItemHeaderMap)
+    .filter(([, c]) => !c)
+    .map(([h]) => h)
+    .filter(Boolean);
+
+  let lineItemsTotal      = 0;
+  let unattachedLineItems = 0;
+  const linesByOrderRow   = new Map();
+
+  for (const raw of (lineItemRows || [])) {
+    const li = normalizeLineItemRow(raw, lineItemHeaderMap);
+    if (!li) continue;                                  // blank row
+    lineItemsTotal++;
+    const idx0 = (Number(li.orderRow) || 0) - 1;        // 1-based → 0-based
+    if (idx0 < 0 || idx0 >= analyzed.length) {
+      unattachedLineItems++;
+      continue;
+    }
+    if (!linesByOrderRow.has(idx0)) linesByOrderRow.set(idx0, []);
+    linesByOrderRow.get(idx0).push(li);
+  }
+
+  let ordersWithLines = 0;
+  analyzed.forEach((a, idx) => {
+    const ls = linesByOrderRow.get(idx);
+    if (ls && ls.length > 0) {
+      // Re-number sequentially within the order (1..N) so users who
+      // leave Line # blank still get a clean 1..N sequence on the
+      // saved order. Explicit Line # values are preserved.
+      a.payload.lineItems = ls.map((li, j) => ({
+        ...li,
+        lineNum: li.lineNum != null ? li.lineNum : j + 1,
+      }));
+      ordersWithLines++;
+    }
+  });
+
   const counts = {
     total:   analyzed.length,
     valid:   analyzed.filter((a) => a.errors.length === 0).length,
     invalid: analyzed.filter((a) => a.errors.length  >  0).length,
+    lineItemsTotal,
+    ordersWithLines,
+    unattachedLineItems,
   };
 
-  return { headerMap, unmappedHeaders, analyzed, counts };
+  return {
+    headerMap,
+    unmappedHeaders,
+    analyzed,
+    counts,
+    lineItemHeaderMap,
+    unmappedLineItemHeaders,
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -385,11 +555,44 @@ const TEMPLATE_SAMPLE_ROWS = [
   ],
 ];
 
-/** Trigger a browser download of a starter XLSX template. */
+// Line Items sheet (TMS bug #144). Optional companion to the Orders sheet.
+//
+// Linkage: "Order Row #" is the 1-based index into the Orders sheet's
+// data rows (1 = first non-header row). So the lines below belong to:
+//   Order Row 1 → "Cisco Systems …" (the first sample order)
+//   Order Row 2 → "Acme Corp …"     (the second sample order)
+// "Line #" is optional — if blank, lines are auto-numbered 1..N in the
+// order they appear within their Order Row group.
+const LINE_ITEM_TEMPLATE_HEADERS = [
+  "Order Row #", "Line #", "Item ID", "Description", "Qty", "Unit Wt", "Total Wt",
+];
+
+const LINE_ITEM_TEMPLATE_SAMPLE_ROWS = [
+  [1, 1, "ITM-1004", "Cisco Catalyst 9300 — 24-port",  10, 38, 380],
+  [1, 2, "ITM-1006", "Cisco Catalyst 9500 — 48-port",   5, 52, 260],
+  [1, 3, "ITM-2110", "SFP-10G-LR optical module",      40,  1,  40],
+  [2, 1, "ITM-3300", "Office supplies — assorted",     10, 25, 250],
+  [2, 2, "",         "Pallet wrap and labels",          5, 10,  50],
+];
+
+/**
+ * Trigger a browser download of a starter XLSX template. Two sheets:
+ *   • "Orders"     — required header row + 8 required + 8 optional cols
+ *   • "Line Items" — optional, links by Order Row #
+ *
+ * Single-sheet legacy templates still import cleanly because the parser
+ * treats the Line Items sheet as optional.
+ */
 export function downloadOrderTemplate() {
-  const aoa = [TEMPLATE_HEADERS, ...TEMPLATE_SAMPLE_ROWS];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Orders");
+
+  const ordersAoa = [TEMPLATE_HEADERS, ...TEMPLATE_SAMPLE_ROWS];
+  const ordersWs  = XLSX.utils.aoa_to_sheet(ordersAoa);
+  XLSX.utils.book_append_sheet(wb, ordersWs, "Orders");
+
+  const linesAoa = [LINE_ITEM_TEMPLATE_HEADERS, ...LINE_ITEM_TEMPLATE_SAMPLE_ROWS];
+  const linesWs  = XLSX.utils.aoa_to_sheet(linesAoa);
+  XLSX.utils.book_append_sheet(wb, linesWs, "Line Items");
+
   XLSX.writeFile(wb, "order_import_template.xlsx");
 }

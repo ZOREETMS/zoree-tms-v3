@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import { InvoicesApi } from "../lib/api";
 import useInvoices from "../hooks/useInvoices";
+import { useEditGate } from "../hooks/useEditGate";
 import InvoiceStatsGrid from "../components/invoices/InvoiceStatsGrid";
 import InvoiceFilterBar from "../components/invoices/InvoiceFilterBar";
 import InvoiceTable from "../components/invoices/InvoiceTable";
@@ -10,6 +11,10 @@ import { generateInvoiceNum, computeDueDate } from "../services/invoiceService";
 
 export default function FreightInvoicesPage() {
   const { shipments, carriers } = useOutletContext();
+  // QA #148 / QA #149: Freight Invoices writes (Import / New Invoice /
+  // Approve / Dispute / Send-to-AP) must obey the Finance matrix for
+  // both Finance and Viewer roles.
+  const gate = useEditGate("invoices");
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -58,12 +63,16 @@ export default function FreightInvoicesPage() {
   }
 
   function openNewInvoice() {
+    if (!gate.canEdit) return;            // QA #148/149 guard
     setEditInvoice(null);
     setModalOpen(true);
   }
 
   // Open the existing-invoice details modal when a row is clicked.
   // The InvoiceModal already supports edit mode when invoice.num is set.
+  // QA #148/149: still allow the modal to OPEN under view access — the
+  // modal becomes read-only via canEdit prop below — but block the New
+  // Invoice path which would otherwise create a row.
   function openExistingInvoice(inv) {
     if (!inv) return;
     setEditInvoice(inv);
@@ -71,6 +80,7 @@ export default function FreightInvoicesPage() {
   }
 
   async function handleSave(form) {
+    if (!gate.canEdit) return;            // QA #148/149 guard
     setBusy(true);
     try {
       // REQ-06: for new invoices, submit through the tolerance-decision
@@ -148,6 +158,7 @@ export default function FreightInvoicesPage() {
   }
 
   async function handleApprove(num) {
+    if (!gate.canEdit) return;            // QA #148/149 guard
     const inv = invoices.find((i) => i.num === num);
     if (!inv) return;
     try {
@@ -166,6 +177,7 @@ export default function FreightInvoicesPage() {
   }
 
   async function handleDispute(num) {
+    if (!gate.canEdit) return;            // QA #148/149 guard
     const inv = invoices.find((i) => i.num === num);
     if (!inv) return;
     try {
@@ -186,6 +198,7 @@ export default function FreightInvoicesPage() {
   // auto-decided Approved but sending was deferred, or after a manual
   // approve override).
   async function handleSendToAp(num) {
+    if (!gate.canEdit) return;            // QA #148/149 guard
     const inv = invoices.find((i) => i.num === num);
     if (!inv || !inv.id) return;
     try {
@@ -213,8 +226,17 @@ export default function FreightInvoicesPage() {
           <div className="page-sub">3-way match, audit, and AP processing</div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-secondary btn-sm">📥 Import</button>
-          <button className="btn btn-primary btn-sm" onClick={openNewInvoice}>
+          <button
+            className="btn btn-secondary btn-sm"
+            {...gate.editProps()}          /* QA #148/149 */
+          >
+            📥 Import
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={openNewInvoice}
+            {...gate.editProps()}          /* QA #148/149 */
+          >
             + New Invoice
           </button>
         </div>
@@ -238,10 +260,13 @@ export default function FreightInvoicesPage() {
           sortCol={sortCol}
           sortAsc={sortAsc}
           onSort={toggleSort}
-          onApprove={handleApprove}
-          onDispute={handleDispute}
-          onSendToAp={handleSendToAp}
+          /* QA #148/149: row-level write actions disappear under 'view'.
+             onOpenInvoice stays — opening the modal is a read action. */
+          onApprove={gate.canEdit ? handleApprove : undefined}
+          onDispute={gate.canEdit ? handleDispute : undefined}
+          onSendToAp={gate.canEdit ? handleSendToAp : undefined}
           onOpenInvoice={openExistingInvoice}
+          canEdit={gate.canEdit}
         />
       </div>
 
@@ -250,7 +275,11 @@ export default function FreightInvoicesPage() {
           invoice={editInvoice}
           shipments={shipments || []}
           carriers={carrierNames}
-          onSave={handleSave}
+          /* QA #148/149: when matrix says 'view', InvoiceModal still
+             renders so users can read details, but onSave is gated and
+             the canEdit prop tells the modal to hide its Save button. */
+          onSave={gate.canEdit ? handleSave : undefined}
+          canEdit={gate.canEdit}
           onClose={() => setModalOpen(false)}
           busy={busy}
         />
