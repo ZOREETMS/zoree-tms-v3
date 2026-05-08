@@ -25,6 +25,14 @@ function dbToOrder(r) {
     weight:          r.weight,
     pieces:          r.pieces,
     shipMode:        r.ship_mode || null,
+    // REQ-10: service_level shipped in migration 013 and apiOrderToDbPatch
+    // (services/orderMutations.js) maps it on writes, but this reader was
+    // missed at the time — getOrder/listOrders therefore returned orders
+    // without the Service Level set, even when the column was populated.
+    // Surfaces it now so any consumer of orderService (incl. the
+    // /routes/orders.js router) sees the field consistently with the
+    // bulk-import path that started populating it (TMS bug #145).
+    serviceLevel:    r.service_level || null,
     commodity:       r.commodity,
     incoterms:       r.incoterms   || null,
     refNum:          r.ref_num || null,
@@ -63,6 +71,12 @@ function orderToDb(o) {
     weight:            parseInt(String(o.weight || 0).replace(/,/g, '')) || 0,
     pieces:            parseInt(o.pieces) || 0,
     ship_mode:         o.shipMode || null,
+    // Sibling of ship_mode — REQ-10 added the column + the apiOrderToDbPatch
+    // mapping but missed this writer, so anything that wrote orders through
+    // services/orders.js (createOrder / updateOrder via routes/orders.js) was
+    // silently dropping the field. Closes that gap so the import refactor
+    // (Step B) and any future caller behave the same way.
+    service_level:     o.serviceLevel || null,
     commodity:         o.commodity    || 'General',
     incoterms:         o.incoterms    || null,
     ref_num:           o.refNum || null,

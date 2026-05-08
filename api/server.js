@@ -3543,6 +3543,20 @@ app.post('/api/orders/reconcile-status', async (req, res) => {
 });
 
 // ── POST /api/bulk-plan/import — Bulk create orders from CSV/Excel ───────────
+//
+// Bug-fix scope (TMS bugs #143/#145): the previous body of this handler
+// hand-rolled the orders row inline and only carried `customer / origin /
+// destination / weight / pieces / commodity / ready / due / status`. Every
+// other column the schema supports — ship_from_name, ship_to_name,
+// origin_zip, dest_zip, ship_mode, service_level, po_number, ref_num,
+// incoterms, notes, hazmat, preferred_carrier, etc. — was silently dropped
+// even when the import file provided it. The fix routes the row build
+// through `apiOrderToDbPatch` (the same mapper POST /api/orders already
+// uses) and persists via `dbUpsert`, so any field the frontend parser
+// learns to send going forward (Step C of the import bug-fix plan) flows
+// through with no further server change. CLAUDE_RULES §2 (services-first):
+// import now shares one mapper with the rest of the API instead of having
+// its own divergent schema.
 app.post('/api/bulk-plan/import', async (req, res) => {
   const user = await verifyToken(req, res); if (!user) return;
   try {
@@ -3554,37 +3568,37 @@ app.post('/api/bulk-plan/import', async (req, res) => {
 
     for (let i = 0; i < importOrders.length; i++) {
       const o = importOrders[i];
-      // Validate
-      if (!o.customer) { errors.push({ row: i + 1, message: 'Customer required' }); continue; }
-      if (!o.origin) { errors.push({ row: i + 1, message: 'Origin required' }); continue; }
+      // Lightweight per-row validation — kept here (rather than relying on
+      // services/orders.js#validateOrder) so the import contract stays
+      // looser than single-create. The frontend parser is the primary
+      // gate; this is just a safety net for clients that POST directly.
+      if (!o.customer)    { errors.push({ row: i + 1, message: 'Customer required' });    continue; }
+      if (!o.origin)      { errors.push({ row: i + 1, message: 'Origin required' });      continue; }
       if (!o.destination) { errors.push({ row: i + 1, message: 'Destination required' }); continue; }
 
       const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      const row = {
-        id: orderId,
-        customer: o.customer,
-        origin: o.origin,
-        dest: o.destination,
-        weight: parseFloat(o.weight) || 0,
-        pieces: parseInt(o.pieces) || 0,
-        commodity: o.commodity || 'General',
-        ready: o.readyDate || null,
-        due: o.dueDate || null,
-        status: 'Unplanned',
-      };
+
+      // Build the DB row through the canonical mapper. Two import-specific
+      // defaults are layered on AFTER the patch because apiOrderToDbPatch
+      // emits null for both when the body doesn't carry them, but import
+      // semantics have always defaulted these so existing UI assumptions
+      // (status filter on Unplanned; commodity displayed as "General")
+      // keep working unchanged.
+      const patch = apiOrderToDbPatch(o);
+      if (!patch.status)    patch.status    = 'Unplanned';
+      if (!patch.commodity) patch.commodity = 'General';
 
       try {
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/orders?on_conflict=id`, {
-          method: 'POST',
-          headers: {
-            'apikey': SERVICE_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates,return=representation',
-          },
-          body: JSON.stringify(row),
-        });
-        const data = await r.json();
-        created.push(Array.isArray(data) ? data[0] : data);
+        const row = await dbUpsert('orders', { id: orderId, ...patch }, null);
+        // Mirrors the POST /api/orders defensive check (QA bug #91): an
+        // upsert can return an empty payload if RLS or a constraint
+        // silently dropped the write. Surface that to the frontend as a
+        // per-row error rather than a phantom-success.
+        if (!row || !row.id) {
+          errors.push({ row: i + 1, message: 'Insert returned no row (RLS or constraint denial)' });
+          continue;
+        }
+        created.push(row);
       } catch (insertErr) {
         errors.push({ row: i + 1, message: insertErr.message });
       }

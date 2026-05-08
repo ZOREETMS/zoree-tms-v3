@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import useBulkPlan from '../../shared/hooks/useBulkPlan';
 import SearchBar from '../../components/ui/SearchBar';
@@ -12,10 +12,12 @@ import SelectableOrderCard from '../../components/bulkplan/SelectableOrderCard';
 import OrderEditModal from '../../components/bulkplan/OrderEditModal';
 import { classifyLoadType } from '../../shared/utils/laneUtils';
 import { useData } from '../../state/DataContext';
+import type { BulkPlanTabParamList } from '../../navigation/types';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 export default function BulkPlanScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<BulkPlanTabParamList, 'BulkPlan'>>();
   const { refreshData } = useData();
   const {
     unplannedOrders, selectedIds, selectionSummary, lanes,
@@ -25,6 +27,22 @@ export default function BulkPlanScreen() {
 
   const [search, setSearch] = useState('');
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
+
+  /**
+   * Pre-select orders handed off from OrdersScreen's "Plan Selected"
+   * action. We feed them through `selectAll` so the lane preview /
+   * KPI cards are populated immediately. The route param is cleared
+   * after consumption so re-renders don't re-trigger.
+   */
+  const initialSelectedIds = route.params?.initialSelectedIds;
+  React.useEffect(() => {
+    if (!initialSelectedIds || initialSelectedIds.length === 0) return;
+    if (!Array.isArray(unplannedOrders) || unplannedOrders.length === 0) return;
+    const matchedSet = new Set(initialSelectedIds);
+    const matched = unplannedOrders.filter((o: any) => matchedSet.has(String(o.id)));
+    if (matched.length > 0) selectAll(matched);
+    navigation.setParams({ initialSelectedIds: undefined } as any);
+  }, [initialSelectedIds, unplannedOrders, selectAll, navigation]);
 
   React.useEffect(() => {
     if (results) {

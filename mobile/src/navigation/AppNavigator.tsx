@@ -12,6 +12,8 @@ import { colors, fontSize, fontWeight, spacing } from '../theme';
 
 import OverviewStack from './tabs/OverviewTabs';
 import PlanningStack from './tabs/PlanningTabs';
+import BulkPlanStack from './tabs/BulkPlanTabs';
+import MultiStopStack from './tabs/MultiStopTabs';
 import ExecutionStack from './tabs/ExecutionTabs';
 import FinanceStack from './tabs/FinanceTabs';
 import InsightsStack from './tabs/InsightsTabs';
@@ -96,6 +98,16 @@ export default function AppNavigator() {
         name="PlanningTab"
         component={PlanningStack}
         options={{ title: 'Planning', drawerIcon: () => <Text>🧾</Text> }}
+      />
+      <Drawer.Screen
+        name="BulkPlanTab"
+        component={BulkPlanStack}
+        options={{ title: 'Bulk Plan', drawerIcon: () => <Text>⚡</Text> }}
+      />
+      <Drawer.Screen
+        name="MultiStopTab"
+        component={MultiStopStack}
+        options={{ title: 'Multi-Stop Routes', drawerIcon: () => <Text>🛣️</Text> }}
       />
       <Drawer.Screen
         name="ExecutionTab"

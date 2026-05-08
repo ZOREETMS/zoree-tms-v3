@@ -21,10 +21,9 @@ import ItemMasterScreen from '../../screens/items/ItemMasterScreen';
 import ItemDetailScreen from '../../screens/items/ItemDetailScreen';
 import ItemFormScreen from '../../screens/items/ItemFormScreen';
 
-// Bulk Plan screens
-import BulkPlanScreen from '../../screens/bulkplan/BulkPlanScreen';
-import BulkPlanResultsScreen from '../../screens/bulkplan/BulkPlanResultsScreen';
-import MultiStopRoutesScreen from '../../screens/routes/MultiStopRoutesScreen';
+// Bulk Plan and Multi-Stop Routes have been promoted to their own
+// drawer-level stacks (BulkPlanTabs / MultiStopTabs). They're no
+// longer registered here to keep route names unique across navigators.
 
 // Placeholders for future screens
 import PlaceholderScreen from '../../screens/PlaceholderScreen';
@@ -56,15 +55,10 @@ export default function PlanningStack() {
       <Stack.Screen name="LocationDetail" component={LocationDetailScreen} />
       <Stack.Screen name="LocationForm" component={LocationFormScreen} />
 
-      {/* Bulk Plan */}
-      <Stack.Screen name="BulkPlan" component={BulkPlanScreen} />
-      <Stack.Screen name="BulkPlanResults" component={BulkPlanResultsScreen} />
-
       {/* Placeholders */}
       <Stack.Screen name="RouteOptimizer">
         {() => <PlaceholderScreen title="Route Optimizer" icon="🗺️" />}
       </Stack.Screen>
-      <Stack.Screen name="MultiStopRoutes" component={MultiStopRoutesScreen} />
     </Stack.Navigator>
   );
 }

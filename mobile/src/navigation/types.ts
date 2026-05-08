@@ -11,12 +11,42 @@ export type RootStackParamList = {
 export type DrawerParamList = {
   OverviewTab: undefined;
   PlanningTab: undefined;
+  // Promoted from PlanningStack to top-level drawer entries so they're
+  // discoverable without having to dig through the Orders screen
+  // (mirrors the web sidebar where Planning, Bulk Plan and Multi-Stop
+  // Routes are all first-class items).
+  BulkPlanTab: undefined;
+  MultiStopTab: undefined;
   ExecutionTab: undefined;
   FinanceTab: undefined;
   DocumentsTab: undefined;
   IntegrationTab: undefined;
   InsightsTab: undefined;
   SystemTab: undefined;
+};
+
+export type BulkPlanTabParamList = {
+  /**
+   * Optional `initialSelectedIds` is forwarded from OrdersScreen's
+   * "Plan Selected" hand-off. The Bulk Plan screen pre-selects those
+   * orders so the user lands on a fully primed lane summary instead
+   * of an empty page. Web parity: the OrdersPage selection bar's
+   * "Plan Selected" creates shipments inline, but mobile prefers a
+   * confirm-step before the cascade fires.
+   */
+  BulkPlan: { initialSelectedIds?: string[] } | undefined;
+  BulkPlanResults: { results: any };
+};
+
+export type MultiStopTabParamList = {
+  /**
+   * Route templates list. Optional `selectedOrderIds` arrives via the
+   * Orders screen "Create Multi-Stop Route" action — when present the
+   * screen either jumps into ExecuteRouteModal (if a matching template
+   * exists) or RouteFormModal (to author a new template from those
+   * orders). Mirrors the web `?orderIds=` query-param flow.
+   */
+  MultiStopRoutes: { selectedOrderIds?: string[] } | undefined;
 };
 
 export type OverviewTabParamList = {
@@ -41,9 +71,10 @@ export type PlanningTabParamList = {
   LocationDetail: { locationId: string };
   LocationForm: { locationId?: string };
   RouteOptimizer: undefined;
-  BulkPlan: undefined;
-  BulkPlanResults: { results: any };
-  MultiStopRoutes: undefined;
+  // BulkPlan / BulkPlanResults / MultiStopRoutes have been promoted to
+  // their own drawer-level stacks (see BulkPlanTabParamList /
+  // MultiStopTabParamList above). They're no longer registered inside
+  // PlanningTabs to avoid duplicate route names.
 };
 
 export type ExecutionTabParamList = {

@@ -3,7 +3,7 @@ import {
   View,
   Text,
   FlatList,
-
+  Alert,
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
@@ -15,6 +15,7 @@ import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import StatusFilter from '../../components/common/StatusFilter';
 import OrderCard from '../../components/orders/OrderCard';
+import OrderSelectionBar from '../../components/orders/OrderSelectionBar';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 const ORDER_STATUSES = [
@@ -33,6 +34,40 @@ export default function OrdersScreen() {
 
   const [search, setSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState('All');
+  /**
+   * Selection state. `selectionMode` flips on when the user
+   * long-presses any card, and stays on until they tap Clear or
+   * complete an action. Selected IDs survive across re-renders so the
+   * realtime data refresh doesn't drop the user's picks.
+   */
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  /**
+   * Selection helpers. Long-press flips selectionMode on and selects
+   * the long-pressed order; subsequent taps add/remove. Tapping in
+   * normal mode still navigates to detail.
+   */
+  const enterSelectionWith = useCallback((id: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      // Auto-exit selection mode when the user empties their picks.
+      if (next.size === 0) setSelectionMode(false);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
 
   /** Count orders per status for filter badges */
   const statusCounts = useMemo(() => {
@@ -69,9 +104,92 @@ export default function OrdersScreen() {
     refreshData();
   }, [refreshData]);
 
+  /* ── Selection summary + actions ─────────────────────────────────── */
+  const selectedOrders = useMemo(
+    () => data.orders.filter((o: any) => selectedIds.has(String(o.id))),
+    [data.orders, selectedIds],
+  );
+
+  const selectionSummary = useMemo(() => {
+    const totalWeight = selectedOrders.reduce(
+      (s: number, o: any) => s + (Number(o.weight) || 0),
+      0,
+    );
+    const unplannedCount = selectedOrders.filter(
+      (o: any) => (o.status || '').toLowerCase() === 'unplanned',
+    ).length;
+    return {
+      count: selectedOrders.length,
+      totalWeight,
+      unplannedCount,
+    };
+  }, [selectedOrders]);
+
+  /**
+   * "Plan Selected" hands off to the BulkPlanScreen with the user's
+   * picks pre-loaded. We avoid duplicating the rate / consolidate /
+   * execute pipeline here — the BulkPlanScreen already owns it via
+   * useBulkPlan, and surfacing it gives the user a chance to review
+   * the lane grouping before committing. Cross-stack navigation works
+   * because BulkPlan is registered on the BulkPlanTab drawer entry.
+   */
+  const handlePlanSelected = useCallback(() => {
+    if (selectionSummary.unplannedCount === 0) {
+      Alert.alert(
+        'Nothing to plan',
+        'Select at least one Unplanned order to plan.',
+      );
+      return;
+    }
+    const ids = selectedOrders
+      .filter((o: any) => (o.status || '').toLowerCase() === 'unplanned')
+      .map((o: any) => String(o.id));
+    navigation.navigate('BulkPlanTab', {
+      screen: 'BulkPlan',
+      params: { initialSelectedIds: ids },
+    });
+    clearSelection();
+  }, [selectedOrders, selectionSummary.unplannedCount, navigation, clearSelection]);
+
+  /**
+   * "Create Multi-Stop Route" hands off to MultiStopRoutesScreen with
+   * the selected order IDs. That screen decides whether to open the
+   * Execute sheet (existing template matches) or the RouteFormModal
+   * with a draft pre-built from those orders. Mirrors the web
+   * `?orderIds=` deep-link.
+   */
+  const handleCreateMultiStop = useCallback(() => {
+    if (selectionSummary.unplannedCount < 2) {
+      Alert.alert(
+        'Need 2+ Unplanned orders',
+        'Multi-stop routes need at least two unplanned orders with different destinations.',
+      );
+      return;
+    }
+    const ids = selectedOrders
+      .filter((o: any) => (o.status || '').toLowerCase() === 'unplanned')
+      .map((o: any) => String(o.id));
+    navigation.navigate('MultiStopTab', {
+      screen: 'MultiStopRoutes',
+      params: { selectedOrderIds: ids },
+    });
+    clearSelection();
+  }, [selectedOrders, selectionSummary.unplannedCount, navigation, clearSelection]);
+
   const renderItem = useCallback(
-    ({ item }: { item: any }) => <OrderCard order={item} />,
-    [],
+    ({ item }: { item: any }) => {
+      const id = String(item.id ?? item.order_id ?? '');
+      return (
+        <OrderCard
+          order={item}
+          selectionMode={selectionMode}
+          selected={selectedIds.has(id)}
+          onToggleSelect={toggleSelected}
+          onLongPressSelect={enterSelectionWith}
+        />
+      );
+    },
+    [selectionMode, selectedIds, toggleSelected, enterSelectionWith],
   );
 
   const keyExtractor = useCallback(
@@ -91,23 +209,32 @@ export default function OrdersScreen() {
         </View>
       </View>
 
-      {/* Quick Nav */}
+      {/* Quick Nav. Bulk Plan / Multi-Stop are also reachable from the
+          drawer (top-level entries) and from the long-press selection
+          bar — the buttons here are kept as a redundant shortcut for
+          users who prefer in-screen navigation. */}
       <View style={styles.quickNav}>
         <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('Shipments')}>
           <Ionicons name="airplane-outline" size={16} color="#FFFFFF" />
           <Text style={styles.quickNavText}>Shipments</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('BulkPlan')}>
+        <TouchableOpacity
+          style={styles.quickNavBtn}
+          onPress={() => navigation.navigate('BulkPlanTab', { screen: 'BulkPlan' })}
+        >
           <Ionicons name="rocket-outline" size={16} color="#FFFFFF" />
           <Text style={styles.quickNavText}>Bulk Plan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickNavBtn}
+          onPress={() => navigation.navigate('MultiStopTab', { screen: 'MultiStopRoutes' })}
+        >
+          <Ionicons name="git-branch-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.quickNavText}>Multi-Stop</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('ItemMaster')}>
           <Ionicons name="cube-outline" size={16} color="#FFFFFF" />
           <Text style={styles.quickNavText}>Items</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickNavBtn} onPress={() => navigation.navigate('LocationMaster')}>
-          <Ionicons name="location-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.quickNavText}>Locations</Text>
         </TouchableOpacity>
       </View>
 
@@ -134,6 +261,7 @@ export default function OrdersScreen() {
         data={filteredOrders}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        extraData={`${selectionMode}-${selectedIds.size}`}
         contentContainerStyle={
           filteredOrders.length === 0 ? styles.emptyContainer : styles.listContent
         }
@@ -158,14 +286,28 @@ export default function OrdersScreen() {
         }
       />
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('OrderDetail', { orderId: 'new' })}
-      >
-        <Ionicons name="add" size={28} color={colors.white} />
-      </TouchableOpacity>
+      {/* FAB — hidden during selection mode so it doesn't fight with
+          the SelectionBar for the same screen corner. */}
+      {!selectionMode && (
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('OrderDetail', { orderId: 'new' })}
+        >
+          <Ionicons name="add" size={28} color={colors.white} />
+        </TouchableOpacity>
+      )}
+
+      {selectionMode && selectionSummary.count > 0 && (
+        <OrderSelectionBar
+          count={selectionSummary.count}
+          totalWeight={selectionSummary.totalWeight}
+          unplannedCount={selectionSummary.unplannedCount}
+          onClear={clearSelection}
+          onPlanSelected={handlePlanSelected}
+          onCreateMultiStop={handleCreateMultiStop}
+        />
+      )}
     </View>
   );
 }

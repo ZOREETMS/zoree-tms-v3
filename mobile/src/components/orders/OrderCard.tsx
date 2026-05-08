@@ -8,14 +8,45 @@ import { colors, fontSize, fontWeight, spacing } from '../../theme';
 
 interface OrderCardProps {
   order: any;
+  /**
+   * When true, the OrdersScreen is in multi-select mode. The card
+   * shows a checkbox, tap toggles selection, and we skip the
+   * navigate-to-detail path. When false (default), the card behaves
+   * exactly as before.
+   */
+  selectionMode?: boolean;
+  /** Whether this order is currently selected (only meaningful in selectionMode). */
+  selected?: boolean;
+  /** Tap handler in selection mode — toggles this order's selection. */
+  onToggleSelect?: (orderId: string) => void;
+  /**
+   * Long-press handler — used by OrdersScreen to *enter* selection
+   * mode from the regular list view. The OrderCard doesn't track that
+   * state itself; the parent owns it.
+   */
+  onLongPressSelect?: (orderId: string) => void;
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
+const OrderCard: React.FC<OrderCardProps> = ({
+  order,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onLongPressSelect,
+}) => {
   const navigation = useNavigation<any>();
+  const id = (order.id ?? order.order_id ?? '').toString();
 
   const handlePress = () => {
-    const id = (order.id ?? order.order_id ?? '').toString();
+    if (selectionMode) {
+      onToggleSelect?.(id);
+      return;
+    }
     navigation.navigate('OrderDetail', { orderId: id });
+  };
+
+  const handleLongPress = () => {
+    onLongPressSelect?.(id);
   };
 
   const readyDate = (order.readyDate || order.ready_date || order.ready)
@@ -31,9 +62,22 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
     : '--';
 
   return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
-      <Card style={styles.card}>
+    <TouchableOpacity
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={300}
+      activeOpacity={0.7}
+    >
+      <Card style={[styles.card, selectionMode && selected && styles.cardSelected]}>
         <View style={styles.topRow}>
+          {selectionMode ? (
+            <Ionicons
+              name={selected ? 'checkbox' : 'square-outline'}
+              size={20}
+              color={selected ? colors.accent : colors.text3}
+              style={styles.checkboxIcon}
+            />
+          ) : null}
           <Text style={styles.orderId} numberOfLines={1}>
             {order.order_id || order.id}
           </Text>
@@ -81,6 +125,14 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  },
+  cardSelected: {
+    borderWidth: 2,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(37,99,235,0.04)',
+  },
+  checkboxIcon: {
+    marginRight: spacing.sm,
   },
   topRow: {
     flexDirection: 'row',

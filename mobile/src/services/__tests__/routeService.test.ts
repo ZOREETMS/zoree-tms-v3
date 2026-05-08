@@ -8,6 +8,7 @@ import {
   autoAssignOrders,
   buildCbolPairs,
   buildRouteExecutionPlan,
+  buildRouteFromOrders,
   buildRoutePayload,
   calcRouteCost,
   calcTotalMiles,
@@ -15,6 +16,7 @@ import {
   deleteRoute,
   emptyRoute,
   executeRoute,
+  findMatchingRoute,
   genRouteId,
   getCbolCost,
   moveStop,
@@ -430,5 +432,173 @@ describe('computeRouteStats', () => {
     expect(out.total).toBe(4);
     expect(out.active).toBe(3); // missing-status defaults Active
     expect(out.inactive).toBe(1);
+  });
+});
+
+describe('findMatchingRoute', () => {
+  const chicagoDallasAtlanta = {
+    id: 'RT-1',
+    name: 'Chi → Dal+Atl',
+    carrier: 'XPO',
+    stops: [
+      { type: 'pickup',   city: 'Chicago', state: 'IL', location: 'Chicago, IL' },
+      { type: 'delivery', city: 'Dallas',  state: 'TX', location: 'Dallas, TX' },
+      { type: 'delivery', city: 'Atlanta', state: 'GA', location: 'Atlanta, GA' },
+    ],
+  };
+
+  it('returns null when there is no carrier-bearing template', () => {
+    const noCarrier = { ...chicagoDallasAtlanta, carrier: '' };
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA' },
+    ];
+    expect(findMatchingRoute([noCarrier], orders)).toBeNull();
+  });
+
+  it('returns null when matched orders share a single destination', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+    ];
+    // Single delivery — not a multi-stop scenario.
+    expect(findMatchingRoute([chicagoDallasAtlanta], orders)).toBeNull();
+  });
+
+  it('returns null when fewer than 2 orders match', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      // O2 origin is wrong — won't match the route's pickup city.
+      { id: 'O2', origin: 'Boston, MA', dest: 'Atlanta, GA' },
+    ];
+    expect(findMatchingRoute([chicagoDallasAtlanta], orders)).toBeNull();
+  });
+
+  it('matches when 2+ orders cover 2+ unique destinations of a route', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA' },
+    ];
+    const out = findMatchingRoute([chicagoDallasAtlanta], orders);
+    expect(out?.route.id).toBe('RT-1');
+    expect(out?.matchedOrders.map((o: any) => o.id).sort()).toEqual(['O1', 'O2']);
+  });
+
+  it('uses substring containment so "CHICAGO, IL" matches "Chicago"', () => {
+    const orders = [
+      { id: 'O1', origin: 'CHICAGO, IL 60601', dest: 'DALLAS, TX' },
+      { id: 'O2', origin: 'Chicago Heights, IL', dest: 'Atlanta-Hartsfield, GA' },
+    ];
+    const out = findMatchingRoute([chicagoDallasAtlanta], orders);
+    expect(out).not.toBeNull();
+    expect(out?.matchedOrders).toHaveLength(2);
+  });
+
+  it('falls back to o.destination when o.dest is absent', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', destination: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', destination: 'Atlanta, GA' },
+    ];
+    expect(findMatchingRoute([chicagoDallasAtlanta], orders)).not.toBeNull();
+  });
+
+  it('returns the first qualifying route when multiple templates match', () => {
+    const second = { ...chicagoDallasAtlanta, id: 'RT-2', name: 'Second' };
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA' },
+    ];
+    const out = findMatchingRoute([chicagoDallasAtlanta, second], orders);
+    expect(out?.route.id).toBe('RT-1');
+  });
+});
+
+describe('buildRouteFromOrders', () => {
+  it('returns null for fewer than 2 orders', () => {
+    expect(buildRouteFromOrders([])).toBeNull();
+    expect(buildRouteFromOrders([
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+    ])).toBeNull();
+  });
+
+  it('builds 1 pickup at the shared origin + 1 delivery per order, in order', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX', weight: 10000 },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA', weight: 8000 },
+      { id: 'O3', origin: 'Chicago, IL', dest: 'Memphis, TN', weight: 4000 },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+
+    expect(draft.stops).toHaveLength(4);
+    expect(draft.stops[0].type).toBe('pickup');
+    expect(draft.stops[0].city).toBe('Chicago');
+    expect(draft.stops[0].state).toBe('IL');
+    // Deliveries appear in the same order the orders were passed in.
+    expect(draft.stops[1].city).toBe('Dallas');
+    expect(draft.stops[2].city).toBe('Atlanta');
+    expect(draft.stops[3].city).toBe('Memphis');
+    expect(draft.stops.slice(1).every((s) => s.type === 'delivery')).toBe(true);
+  });
+
+  it('runs recalcLoadSeq so deliveries get reverse-LIFO load_seq', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA' },
+      { id: 'O3', origin: 'Chicago, IL', dest: 'Memphis, TN' },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+    // pickup gets '', deliveries 3 → 2 → 1 (loaded in reverse).
+    expect(draft.stops[0].load_seq).toBe('');
+    expect(draft.stops[1].load_seq).toBe(3);
+    expect(draft.stops[2].load_seq).toBe(2);
+    expect(draft.stops[3].load_seq).toBe(1);
+  });
+
+  it('lifts max_weight to the sum of order weights when the sum exceeds 44k', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX', weight: 30000 },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA', weight: 25000 },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+    expect(draft.max_weight).toBe(55000);
+  });
+
+  it('keeps max_weight at 44000 when total order weight is under 44k', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX', weight: 10000 },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA', weight: 5000 },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+    expect(draft.max_weight).toBe(44000);
+  });
+
+  it('builds a human-readable name from origin + delivery chain', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA' },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+    expect(draft.name).toBe('Multi-Stop: Chicago → Dallas → Atlanta');
+  });
+
+  it('falls back to o.destination when o.dest is missing', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', destination: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', destination: 'Atlanta, GA' },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+    expect(draft.stops[1].city).toBe('Dallas');
+    expect(draft.stops[2].city).toBe('Atlanta');
+  });
+
+  it('produces a route that passes validateRoute', () => {
+    const orders = [
+      { id: 'O1', origin: 'Chicago, IL', dest: 'Dallas, TX' },
+      { id: 'O2', origin: 'Chicago, IL', dest: 'Atlanta, GA' },
+    ];
+    const draft = buildRouteFromOrders(orders)!;
+    // Auto-create routes need a name to pass validation — buildRouteFromOrders
+    // synthesises one, so the draft should validate as-is.
+    expect(validateRoute(draft).ok).toBe(true);
   });
 });

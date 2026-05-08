@@ -24,15 +24,42 @@ import { BulkPlanApi } from "../lib/api";
  * Header → canonical-field mapping
  * ───────────────────────────────────────────────────────────── */
 
+// Header aliases — case + whitespace insensitive (see normalizeHeaderKey).
+//
+// REQ for TMS bugs #143 / #145: previously this map only covered the eight
+// "minimum viable" columns. Even when the import file carried PO Number,
+// Ship Mode, Service Level, Notes, Ship From / Ship To name labels, or
+// the broken-out zip codes, those values were silently ignored because
+// the canonical key wasn't recognized here. Every field below now flows
+// straight through to api/services/orderMutations.js#apiOrderToDbPatch
+// (which the import handler routes through after Step B), so adding a
+// canonical key here is the entire frontend half of "make this column
+// land in the database".
+//
+// Address fields (#143 — separate columns chosen by product over
+// single-cell parsing): name labels and zips are accepted as their own
+// columns. The full free-text address still goes in `Origin` /
+// `Destination` so we keep matching the existing manual-create UX where
+// `origin` is one string and `origin_zip` / `ship_from_name` are
+// auxiliary. No single-cell address parsing — a missing zip column
+// stays null rather than us guessing at parse time.
 const HEADER_ALIASES = {
-  customer:    ["customer", "customer name", "shipper", "client", "account"],
-  origin:      ["origin", "ship from", "shipfrom", "from", "pickup", "pickup location", "origin location"],
-  destination: ["destination", "dest", "ship to", "shipto", "to", "delivery", "delivery location", "dest location"],
-  weight:      ["weight", "weight (lbs)", "weight lbs", "wt", "lbs", "pounds"],
-  pieces:      ["pieces", "qty", "quantity", "units", "pcs", "count"],
-  commodity:   ["commodity", "product", "freight", "description"],
-  readyDate:   ["ready date", "ready", "pickup date", "pickup_date", "readydate"],
-  dueDate:     ["due date", "due", "delivery date", "delivery_date", "duedate"],
+  customer:     ["customer", "customer name", "shipper", "client", "account"],
+  origin:       ["origin", "ship from", "shipfrom", "from", "pickup", "pickup location", "origin location"],
+  destination:  ["destination", "dest", "ship to", "shipto", "to", "delivery", "delivery location", "dest location"],
+  shipFromName: ["ship from name", "shipfromname", "origin name", "from name", "ship from label"],
+  shipToName:   ["ship to name", "shiptoname", "destination name", "to name", "ship to label"],
+  originZip:    ["origin zip", "originzip", "from zip", "ship from zip", "ship from zip code", "origin postal", "origin postal code"],
+  destZip:      ["destination zip", "destzip", "dest zip", "to zip", "ship to zip", "ship to zip code", "destination postal", "destination postal code"],
+  weight:       ["weight", "weight (lbs)", "weight lbs", "wt", "lbs", "pounds"],
+  pieces:       ["pieces", "qty", "quantity", "units", "pcs", "count"],
+  commodity:    ["commodity", "product", "freight", "description"],
+  poNum:        ["po number", "po num", "po", "po#", "po #", "purchase order", "purchase order number", "ponumber"],
+  shipMode:     ["mode", "ship mode", "shipmode", "service mode", "transport mode", "transportation mode"],
+  serviceLevel: ["service level", "servicelevel", "priority", "service", "service type"],
+  notes:        ["notes", "comments", "special instructions", "instructions", "remarks"],
+  readyDate:    ["ready date", "ready", "pickup date", "pickup_date", "readydate"],
+  dueDate:      ["due date", "due", "delivery date", "delivery_date", "duedate"],
 };
 
 const REQUIRED_FIELDS = ["customer", "origin", "destination"];
@@ -138,15 +165,36 @@ export function normalizeUploadedRow(rawRow, headerMap) {
     f[canonical] = typeof val === "string" ? val.trim() : val;
   }
 
+  // Local helper: trim a string-ish cell or return "" so empty cells don't
+  // leak `undefined` / numbers into the API body. Numbers (zip codes
+  // entered without a leading zero, for example) get coerced to strings
+  // so the server-side mapper isn't fed mixed types.
+  const str = (v) => (v === undefined || v === null || v === "") ? "" : String(v).trim();
+
   return {
-    customer:    String(f.customer    || "").trim(),
-    origin:      String(f.origin      || "").trim(),
-    destination: String(f.destination || "").trim(),
-    weight:      toNumberOrNull(f.weight),
-    pieces:      toNumberOrNull(f.pieces),
-    commodity:   f.commodity ? String(f.commodity).trim() : "",
-    readyDate:   toIsoDateOrNull(f.readyDate),
-    dueDate:     toIsoDateOrNull(f.dueDate),
+    // ── Header fields ──
+    customer:     str(f.customer),
+    origin:       str(f.origin),
+    destination:  str(f.destination),
+    // ── Address auxiliaries (bug #143) ──
+    // Name labels are free text; zips are coerced to string to preserve
+    // a leading zero that XLSX would have read as a number.
+    shipFromName: str(f.shipFromName),
+    shipToName:   str(f.shipToName),
+    originZip:    str(f.originZip),
+    destZip:      str(f.destZip),
+    // ── Quantities ──
+    weight:       toNumberOrNull(f.weight),
+    pieces:       toNumberOrNull(f.pieces),
+    // ── Reference fields (bug #145) ──
+    commodity:    str(f.commodity),
+    poNum:        str(f.poNum),
+    shipMode:     str(f.shipMode),
+    serviceLevel: str(f.serviceLevel),
+    notes:        str(f.notes),
+    // ── Dates ──
+    readyDate:    toIsoDateOrNull(f.readyDate),
+    dueDate:      toIsoDateOrNull(f.dueDate),
   };
 }
 
@@ -242,13 +290,24 @@ export function analyzeOrderUpload({ headers, rows }) {
  * Reports progress via `onProgress({ completed, total })` after each
  * chunk so the modal can render a progress bar without polling.
  *
- * Returns `{ created, failed: [{ rowNumber, customer, error }] }`.
+ * Returns `{
+ *   created:         number,                       // total inserted rows
+ *   createdOrderIds: string[],                     // ORD-… ids in the
+ *                                                  // order the API
+ *                                                  // reported them
+ *   failed:          [{ rowNumber, customer, error }],
+ * }`.
+ *
+ * `createdOrderIds` exists so the caller can surface the new order
+ * numbers in the success toast (TMS bug #142 — the post-import message
+ * was a generic "Imported N orders" that hid the ids the user needs to
+ * navigate / copy).
  */
 export async function bulkImportOrders(analyzed, {
   chunkSize  = 50,
   onProgress = null,
 } = {}) {
-  const out = { created: 0, failed: [] };
+  const out = { created: 0, createdOrderIds: [], failed: [] };
   const queue = (analyzed || []).filter((a) => a.errors.length === 0);
   const total = queue.length;
   if (total === 0) return out;
@@ -258,6 +317,14 @@ export async function bulkImportOrders(analyzed, {
     try {
       const res = await BulkPlanApi.import(slice.map((a) => a.payload));
       out.created += Number(res?.created || 0);
+      // Capture the new order ids the server echoed back so the UI can
+      // show them in the success toast (bug #142). The endpoint returns
+      // the inserted row(s) under `orders`; each row is the persisted
+      // shape from Supabase, so `.id` is the ORD-… identifier.
+      const createdRows = Array.isArray(res?.orders) ? res.orders : [];
+      for (const row of createdRows) {
+        if (row && row.id) out.createdOrderIds.push(String(row.id));
+      }
       const errs = Array.isArray(res?.errors) ? res.errors : [];
       for (const e of errs) {
         // Server `row` index is 1-based within the request body;
@@ -290,14 +357,32 @@ export async function bulkImportOrders(analyzed, {
  * Template download (mirrors the rate-template UX)
  * ───────────────────────────────────────────────────────────── */
 
+// Required columns come first (anyone editing in Excel sees them
+// immediately); optional auxiliaries — added in the bug #143 / #145 fix
+// — come after. Users who already have legacy 8-column sheets still
+// import cleanly because every new column is optional.
 const TEMPLATE_HEADERS = [
   "Customer", "Origin", "Destination", "Weight (lbs)", "Pieces",
   "Commodity", "Ready Date", "Due Date",
+  // Address auxiliaries (#143)
+  "Ship From Name", "Origin Zip", "Ship To Name", "Destination Zip",
+  // Reference fields (#145)
+  "PO Number", "Mode", "Service Level", "Notes",
 ];
 
 const TEMPLATE_SAMPLE_ROWS = [
-  ["Cisco Systems", "Chicago, IL 60601", "Dallas, TX 75201", 12000, 24, "Network Equipment", "2026-05-10", "2026-05-13"],
-  ["Acme Corp",     "Atlanta, GA 30301", "Miami, FL 33101",  4500,  10, "General",            "2026-05-11", "2026-05-15"],
+  [
+    "Cisco Systems", "Chicago, IL 60601", "Dallas, TX 75201", 12000, 24, "Network Equipment",
+    "2026-05-10", "2026-05-13",
+    "Cisco Chicago DC", "60601", "Cisco Dallas DC", "75201",
+    "PO-487231", "TL", "Standard", "Dock 4 — call 30 min ahead",
+  ],
+  [
+    "Acme Corp", "Atlanta, GA 30301", "Miami, FL 33101", 4500, 10, "General",
+    "2026-05-11", "2026-05-15",
+    "Acme Atlanta WH", "30301", "Acme Miami DC", "33101",
+    "PO-487232", "LTL", "Expedited", "",
+  ],
 ];
 
 /** Trigger a browser download of a starter XLSX template. */

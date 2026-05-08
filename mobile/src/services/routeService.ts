@@ -502,6 +502,122 @@ export async function executeRoute(plan: ExecutionPlan): Promise<{ ok: true; mas
   };
 }
 
+/* ── Auto-create / matching from selected orders ─────────────────── */
+
+/**
+ * Look for an existing route template that already covers the lanes
+ * described by `orders`. Mirrors the web `findMatchingRoute`
+ * (frontend/src/services/ordersService.js) — only routes WITH a
+ * carrier qualify, and the match requires:
+ *   - 2+ orders
+ *   - 2+ unique destinations (otherwise it isn't really multi-stop)
+ *   - every order's origin overlaps a route pickup AND every order's
+ *     destination overlaps a route delivery (substring either way).
+ *
+ * Returns the first matching template + the orders it covers, or null
+ * if nothing matches. The caller decides whether to open the execute
+ * sheet or build a new route.
+ */
+export function findMatchingRoute(
+  templates: any[],
+  orders: any[],
+): { route: any; matchedOrders: any[] } | null {
+  const normalize = (s: unknown) =>
+    String(s || '').trim().toLowerCase().split(',')[0].trim();
+
+  for (const t of Array.isArray(templates) ? templates : []) {
+    if (!t?.carrier) continue;
+    const tStops = Array.isArray(t.stops) ? t.stops : [];
+    const tPickups = tStops
+      .filter((s: any) => s.type === 'pickup')
+      .map((s: any) => normalize(s.location || s.city));
+    const tDeliveries = tStops
+      .filter((s: any) => s.type === 'delivery')
+      .map((s: any) => normalize(s.location || s.city));
+
+    const matched = (orders || []).filter((o: any) => {
+      const oOrigin = normalize(o.origin);
+      const oDest = normalize(o.dest || o.destination);
+      return (
+        tPickups.some((p: string) => oOrigin.includes(p) || p.includes(oOrigin))
+        && tDeliveries.some((td: string) => oDest.includes(td) || td.includes(oDest))
+      );
+    });
+
+    const uniqueDests = new Set(matched.map((o: any) => normalize(o.dest || o.destination)));
+    if (matched.length >= 2 && uniqueDests.size >= 2) {
+      return { route: t, matchedOrders: matched };
+    }
+  }
+  return null;
+}
+
+/**
+ * Build a brand-new draft route template from a set of orders. Mirrors
+ * the web MultiStopRoutesPage `?orderIds=` auto-create flow: one
+ * pickup at the shared origin, then one delivery per order. The result
+ * is intended to feed straight into RouteFormModal so the user can
+ * tweak names / carrier / cost before saving.
+ *
+ * Returns null if fewer than 2 orders are provided (single-order =
+ * single-stop = not a multi-stop scenario).
+ */
+export function buildRouteFromOrders(orders: any[]): RouteTemplate | null {
+  const list = Array.isArray(orders) ? orders.filter(Boolean) : [];
+  if (list.length < 2) return null;
+
+  const originOrder = list[0];
+  const originLoc = String(originOrder.origin || '');
+  const originParts = originLoc.split(',').map((p) => p.trim());
+  const originCity = originParts[0] || '';
+  const originState = (originParts[1] || '').split(/\s/)[0] || '';
+
+  const stops: RouteStop[] = [
+    {
+      sequence: 1,
+      city: originCity,
+      state: originState,
+      location: originLoc,
+      type: 'pickup',
+      stop_seq: 1,
+      load_seq: '',
+      lat: null,
+      lng: null,
+    },
+  ];
+
+  list.forEach((o, i) => {
+    const loc = String(o.dest || o.destination || '');
+    const parts = loc.split(',').map((p) => p.trim());
+    const city = parts[0] || '';
+    const state = (parts[1] || '').split(/\s/)[0] || '';
+    stops.push({
+      sequence: i + 2,
+      city,
+      state,
+      location: loc,
+      type: 'delivery',
+      stop_seq: i + 2,
+      load_seq: list.length - i,
+      lat: null,
+      lng: null,
+    });
+  });
+
+  const totalWeight = list.reduce((s, o) => s + (Number(o.weight) || 0), 0);
+  const destChain = list
+    .map((o) => String(o.dest || o.destination || '').split(',')[0]?.trim())
+    .filter(Boolean)
+    .join(' → ');
+
+  return {
+    ...emptyRoute(),
+    name: `Multi-Stop: ${originCity || 'Origin'} → ${destChain || 'Stops'}`,
+    stops: recalcLoadSeq(stops),
+    max_weight: Math.max(44000, totalWeight),
+  };
+}
+
 /* ── Stats ───────────────────────────────────────────────────────── */
 
 export interface RouteStats {

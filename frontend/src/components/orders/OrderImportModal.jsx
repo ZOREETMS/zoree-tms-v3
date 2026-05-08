@@ -149,7 +149,14 @@ export default function OrderImportModal({ open, onClose, onComplete }) {
 
   function handleFinish() {
     const created = result?.created || 0;
-    if (onComplete) onComplete({ created, failed: result?.failed || [] });
+    if (onComplete) onComplete({
+      created,
+      // Forward the new ORD- ids so the parent toast can show them
+      // (bug #142). Default to an empty array so older callers that
+      // only destructure `created` keep working.
+      createdOrderIds: result?.createdOrderIds || [],
+      failed: result?.failed || [],
+    });
     reset();
     onClose && onClose();
   }

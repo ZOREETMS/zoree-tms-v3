@@ -1726,9 +1726,23 @@ export default function OrdersPage() {
       <OrderImportModal
         open={showImportOrders}
         onClose={() => setShowImportOrders(false)}
-        onComplete={({ created, failed }) => {
+        onComplete={({ created, createdOrderIds, failed }) => {
           if (created > 0) {
-            toast(`Imported ${created} order${created === 1 ? "" : "s"}`, "success");
+            // Bug #142 — show the new ORD- ids inline so the user can
+            // immediately see/copy them. Truncate over 3 to keep the
+            // toast readable; the full list is also visible in the
+            // refreshed orders table.
+            const ids = Array.isArray(createdOrderIds) ? createdOrderIds : [];
+            const noun = `order${created === 1 ? "" : "s"}`;
+            let msg;
+            if (ids.length === 0) {
+              msg = `Imported ${created} ${noun}`;
+            } else if (ids.length <= 3) {
+              msg = `Imported ${created} ${noun}: ${ids.join(", ")}`;
+            } else {
+              msg = `Imported ${created} ${noun}: ${ids.slice(0, 3).join(", ")} + ${ids.length - 3} more`;
+            }
+            toast(msg, "success");
             refreshData?.();
           }
           if (failed?.length) {
