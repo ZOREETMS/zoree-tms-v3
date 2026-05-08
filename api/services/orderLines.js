@@ -58,7 +58,13 @@ function normalizeLine(orderId, line, fallbackLineNum) {
     id:           buildOrderLineId(orderId, lineNum),
     order_id:     orderId,
     line_num:     lineNum,
-    item_id:      line.item_id ?? line.itemId ?? null,
+    // Truthy-chain (||) instead of nullish-coalesce (??) so an empty
+    // string itemId coerces to null — matches the existing UI editor
+    // at server.js:1338 (`line.item_id || line.itemId || null`). The
+    // schema is nullable text; null is the conventional "no item"
+    // value, an empty string would round-trip as "the item literally
+    // named ''".
+    item_id:      line.item_id || line.itemId || null,
     description:  line.description ?? '',
     qty_ordered:  qty,
     unit_weight:  unitWt,

@@ -27,8 +27,16 @@
 
 import { useCallback, useMemo } from "react";
 import { useFeatureAccess } from "./useFeatureAccess";
+import { buildEditProps, runIfCanEdit } from "./editGateHelpers";
 
-const VIEW_TITLE = "Read-only — your role does not have edit access for this module.";
+// QA #147/#148/#149: pure helpers live in editGateHelpers.js so they
+// can be unit-tested without spinning up React. This hook is a thin
+// wrapper that memoises them with the active canEdit value.
+
+// Re-export so existing import sites that pulled the helpers from the
+// hook module keep working. Prefer importing from editGateHelpers in
+// new code — it keeps the dependency graph React-free.
+export { buildEditProps, runIfCanEdit };
 
 /**
  * @param {string} featureKey  — module feature_key (e.g. 'dock_scheduling').
@@ -44,20 +52,15 @@ const VIEW_TITLE = "Read-only — your role does not have edit access for this m
 export function useEditGate(featureKey) {
   const { level, canEdit, canRead, isLoading } = useFeatureAccess(featureKey);
 
-  const editProps = useCallback((extra = {}) => {
-    if (canEdit) return { ...extra };
-    return {
-      ...extra,
-      disabled: true,
-      title: extra.title || VIEW_TITLE,
-      "aria-disabled": true,
-    };
-  }, [canEdit]);
+  const editProps = useCallback(
+    (extra) => buildEditProps(canEdit, extra),
+    [canEdit],
+  );
 
-  const requireEdit = useCallback((fn) => {
-    if (!canEdit) return undefined;
-    return typeof fn === "function" ? fn() : undefined;
-  }, [canEdit]);
+  const requireEdit = useCallback(
+    (fn) => runIfCanEdit(canEdit, fn),
+    [canEdit],
+  );
 
   return useMemo(
     () => ({ level, canEdit, canRead, isLoading, editProps, requireEdit }),

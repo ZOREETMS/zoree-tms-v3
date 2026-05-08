@@ -230,4 +230,11 @@ module.exports = {
   // the rule. Once that handler is migrated to call updateOrder(),
   // this export can go back to being internal.
   assertPlannedHasShipment,
+  // Pure field mappers. Not strictly internal — they encode a stable
+  // schema contract (DB row ↔ API shape) and are called by
+  // createOrder/updateOrder/listOrders/getOrder above. Exported so the
+  // tests in __tests__/bulkPlanImport.bugfix.test.js can pin the
+  // service_level mapping that landed for TMS bug #145 (latent half).
+  dbToOrder,
+  orderToDb,
 };

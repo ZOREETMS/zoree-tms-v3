@@ -103,11 +103,20 @@ test('normalizeLine: zero/missing total_weight + zero qty => 0 (not NaN)', () =>
   assert.equal(row.total_weight, 0);
 });
 
-test('normalizeLine: item_id is nullable — empty string normalises to null', () => {
+test('normalizeLine: item_id null input → row.item_id null', () => {
   // The schema is intentionally soft; description can carry the freight
   // identity on its own.
   const row = normalizeLine('ORD-100010', {
     item_id: null, description: 'Pallet wrap', qty: 1, unitWt: 5,
+  }, 1);
+  assert.equal(row.item_id, null);
+});
+
+test('normalizeLine: item_id empty string coerces to null (matches UI editor at server.js:1338)', () => {
+  // Two writers should behave identically — an empty itemId on the
+  // import path must not round-trip to the DB as the literal "" item.
+  const row = normalizeLine('ORD-100011', {
+    itemId: '', description: 'Pallet wrap', qty: 1, unitWt: 5,
   }, 1);
   assert.equal(row.item_id, null);
 });

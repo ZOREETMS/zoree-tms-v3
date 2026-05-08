@@ -84,10 +84,14 @@ export function buildOrderCopyPayload(source: any, newId: string) {
     // (and old web code) use `dest`. Accept both — falling back to
     // null only if neither is present.
     destination: s.destination ?? s.dest ?? null,
-    originCity:  s.originCity  ?? s.origin_city  ?? s.shipFromCity  ?? s.ship_from_city  ?? parsedOrigin.city  ?? null,
-    originState: s.originState ?? s.origin_state ?? s.shipFromState ?? s.ship_from_state ?? parsedOrigin.state ?? null,
-    destCity:    s.destCity    ?? s.dest_city    ?? s.shipToCity    ?? s.ship_to_city    ?? parsedDest.city    ?? null,
-    destState:   s.destState   ?? s.dest_state   ?? s.shipToState   ?? s.ship_to_state   ?? parsedDest.state   ?? null,
+    // QA #156 — || (not ??) so empty strings from parseAddressString
+    // collapse to null and stay consistent with the rest of this
+    // payload (customer/notes/etc. all use ?? null but their non-string
+    // sources never produce '').
+    originCity:  s.originCity  || s.origin_city  || s.shipFromCity  || s.ship_from_city  || parsedOrigin.city  || null,
+    originState: s.originState || s.origin_state || s.shipFromState || s.ship_from_state || parsedOrigin.state || null,
+    destCity:    s.destCity    || s.dest_city    || s.shipToCity    || s.ship_to_city    || parsedDest.city    || null,
+    destState:   s.destState   || s.dest_state   || s.shipToState   || s.ship_to_state   || parsedDest.state   || null,
     originZip: s.originZip ?? s.origin_zip ?? null,
     destZip: s.destZip ?? s.dest_zip ?? null,
     shipFromName: s.shipFromName ?? s.ship_from_name ?? null,

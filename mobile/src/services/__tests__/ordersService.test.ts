@@ -150,6 +150,76 @@ describe('buildOrderCopyPayload', () => {
     expect(out.id).toBe('Y');
     expect(out.status).toBe('Unplanned');
   });
+
+  // ── QA #156 — City/State must round-trip on Copy Order ────────────
+
+  it('QA #156 — preserves explicit camelCase City/State on copy', () => {
+    const src = {
+      id: 'ORD-2026-1',
+      origin: 'CHICAGO, IL 60601',
+      destination: 'DALLAS, TX 75201',
+      originCity: 'Chicago',
+      originState: 'IL',
+      destCity: 'Dallas',
+      destState: 'TX',
+    };
+    const out = buildOrderCopyPayload(src, 'NEW');
+    expect(out.originCity).toBe('Chicago');
+    expect(out.originState).toBe('IL');
+    expect(out.destCity).toBe('Dallas');
+    expect(out.destState).toBe('TX');
+  });
+
+  it('QA #156 — accepts snake_case City/State columns', () => {
+    const src = {
+      id: 'ORD-2026-2',
+      origin_city: 'Atlanta',
+      origin_state: 'GA',
+      dest_city: 'Phoenix',
+      dest_state: 'AZ',
+    };
+    const out = buildOrderCopyPayload(src, 'NEW');
+    expect(out.originCity).toBe('Atlanta');
+    expect(out.originState).toBe('GA');
+    expect(out.destCity).toBe('Phoenix');
+    expect(out.destState).toBe('AZ');
+  });
+
+  it('QA #156 — falls back to parsing the composed origin/destination string', () => {
+    // The repro: a copied-from-web order arrived with only the flat
+    // origin string. The form would render City/State blank without
+    // this fallback parse.
+    const src = {
+      id: 'ORD-2026-3',
+      origin: 'CHICAGO, IL 60601',
+      destination: 'DALLAS, TX 75201',
+    };
+    const out = buildOrderCopyPayload(src, 'NEW');
+    expect(out.originCity).toBe('CHICAGO');
+    expect(out.originState).toBe('IL');
+    expect(out.destCity).toBe('DALLAS');
+    expect(out.destState).toBe('TX');
+  });
+
+  it('QA #156 — explicit fields beat the parsed fallback', () => {
+    const src = {
+      id: 'ORD-2026-4',
+      origin: 'WRONGCITY, ZZ 99999',
+      originCity: 'Chicago',
+      originState: 'IL',
+    };
+    const out = buildOrderCopyPayload(src, 'NEW');
+    expect(out.originCity).toBe('Chicago');
+    expect(out.originState).toBe('IL');
+  });
+
+  it('QA #156 — copy with no address data leaves City/State as null', () => {
+    const out = buildOrderCopyPayload({ id: 'X' }, 'Y');
+    expect(out.originCity).toBeNull();
+    expect(out.originState).toBeNull();
+    expect(out.destCity).toBeNull();
+    expect(out.destState).toBeNull();
+  });
 });
 
 describe('buildOrderSavePayload', () => {
