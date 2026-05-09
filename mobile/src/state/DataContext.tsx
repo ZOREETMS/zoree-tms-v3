@@ -11,6 +11,14 @@ import { useRealtimeData } from './useRealtimeData';
 
 export interface TmsData {
   orders: any[];
+  /**
+   * True row count for the orders table — sourced from
+   * /api/orders/count. The `orders` array above is bounded by the
+   * 500-row page DbApi.orders returns, so the dashboard tile and the
+   * OrdersScreen "All" chip should read `ordersTotal` instead of
+   * `orders.length` once you have more than 500 orders.
+   */
+  ordersTotal: number;
   shipments: any[];
   carriers: any[];
   /**
@@ -50,6 +58,7 @@ interface DataContextValue {
 
 const emptyData: TmsData = {
   orders: [],
+  ordersTotal: 0,
   shipments: [],
   carriers: [],
   customers: [],
@@ -95,6 +104,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         routeTemplates,
         equipmentTypes,
         vehicles,
+        // True orders count — independent failure mode: a count outage
+        // should not blank out the rest of the dashboard. On miss we
+        // fall back to the prior total in the setData below (or 0 on
+        // first load).
+        ordersTotal,
       ] = await Promise.all([
         DbApi.orders(),
         DbApi.shipments(),
@@ -110,10 +124,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         DbApi.routeTemplates().catch(() => []),
         DbApi.equipmentTypes().catch(() => []),
         DbApi.vehicles().catch(() => []),
+        DbApi.ordersCount().catch(() => undefined),
       ]);
 
-      setData({
+      setData((prev) => ({
         orders: Array.isArray(orders) ? orders : [],
+        ordersTotal: typeof ordersTotal === 'number' ? ordersTotal : prev.ordersTotal ?? 0,
         shipments: Array.isArray(shipments) ? shipments : [],
         carriers: Array.isArray(carriers) ? carriers : [],
         customers: Array.isArray(customers) ? customers : [],
@@ -127,7 +143,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         routeTemplates: Array.isArray(routeTemplates) ? routeTemplates : [],
         equipmentTypes: Array.isArray(equipmentTypes) ? equipmentTypes : [],
         vehicles: Array.isArray(vehicles) ? vehicles : [],
-      });
+      }));
     } catch (e: any) {
       setError(e.message || 'Failed loading data');
     } finally {

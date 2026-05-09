@@ -11,10 +11,18 @@
 
 const db = require('../supabase');
 
+// Column names match the actual public.shipments schema. The loading
+// window pair is `loading_start` / `loading_end` (added in migration
+// 20260324120000_shipments_loading_times); there are no `dock_load_*`
+// columns. Selecting those names makes Postgres reject the read with
+// "column shipments.dock_load_start does not exist", which surfaces
+// in the OMS Edit-Order modal as a red "Could not load TMS plan"
+// banner. Use the canonical names everywhere else in the codebase
+// already uses (api/services/shipments.js, omsSync.js).
 const SHIPMENT_COLS = [
   'id', 'status', 'carrier', 'mode', 'service_level',
   'pickup_date', 'delivery_date',
-  'dock_door', 'dock_time', 'dock_load_start', 'dock_load_end',
+  'dock_door', 'dock_time', 'loading_start', 'loading_end',
   'bol_number', 'pro_number', 'seal_number',
 ].join(',');
 

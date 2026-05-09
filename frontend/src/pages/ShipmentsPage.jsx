@@ -341,7 +341,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     return doneFallback;
   };
   const timelineEvents = [
-    { icon: "📋", label: "Order Created & Rate Confirmed", done: true, time: phaseLine("created", ds.created_at, "Confirmed") },
+    { icon: "📋", label: "Shipment Created & Rate Confirmed", done: true, time: phaseLine("created", ds.created_at, "Confirmed") },
     { icon: "📤", label: "Tendered to Carrier", done: isTendered, time: isTendered ? phaseLine("tendered", ds.tendered_at, "Confirmed") : "Pending" },
     // REQ-19: surface the tender-accepted event in the shipment timeline.
     // Previously the timeline jumped straight from "Tendered" to "Picked Up",

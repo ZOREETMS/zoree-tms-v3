@@ -2,11 +2,11 @@
  * Mobile shipment service - orchestration layer for manual shipment
  * create / copy / delete on the mobile shipments screens.
  *
- * Pure service layer: calls DbApi/ShipmentsApi, returns plain data,
+ * Pure service layer: calls ShipmentsApi, returns plain data,
  * no React state, no UI side-effects.
  */
 
-import { DbApi, ShipmentsApi } from '../lib/api';
+import { ShipmentsApi } from '../lib/api';
 
 /**
  * Treat null/empty/whitespace as missing, otherwise return the
@@ -22,6 +22,20 @@ function nullIfBlank(v: any): string | null {
 
 /* ID + form helpers */
 
+/**
+ * Legacy client-side ID generator. **No longer used by createShipment /
+ * copyShipment** — both go through ShipmentsApi.create which lets the
+ * server issue a 6-digit-suffix id with a uniqueness pre-check (FU-2,
+ * post-#168). The previous 4-digit suffix had ~1/9_000 collision odds
+ * and the server's upsert was `merge-duplicates`, so a collision
+ * silently overwrote an unrelated row.
+ *
+ * Kept exported so older consumers and unit tests that asserted the
+ * SHP-YYYY-NNNN format keep compiling. Anything new should use the
+ * id the server returns from POST /api/shipments.
+ *
+ * @deprecated prefer the server-issued id from ShipmentsApi.create
+ */
 export function generateShipmentId(): string {
   return `SHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 }
@@ -118,25 +132,51 @@ export function validateShipmentForm(form: ShipmentFormState): ValidationResult 
 
 /* Mutations */
 
+/**
+ * QA bug #168 fix: previously `DbApi.upsert('shipments', payload)` which
+ * hits the raw passthrough at /api/db/shipments. That route writes the
+ * row but skips:
+ *   - the REQ-02 'create' audit row (no "Shipment Created" rung in the
+ *     web Shipment Timeline),
+ *   - the SHIPMENT_UPDATED bus.emit → wsBroadcast that connected web
+ *     tabs use to auto-refresh the Shipments list.
+ *
+ * Net effect was that mobile-created shipments only showed up on the
+ * web after a manual page reload, and never picked up a Created rung.
+ *
+ * Routing through ShipmentsApi.create posts to /api/shipments (the
+ * audited handler in api/server.js) which writes the change_history
+ * row, and the same handler now emits SHIPMENT_UPDATED so open web
+ * tabs refresh live. Mirrors the #57 / #63 pattern already applied to
+ * deleteShipmentById and updateShipmentStatus.
+ *
+ * FU-2 follow-up: id is now issued server-side (6-digit suffix +
+ * uniqueness pre-check) — the client sends an id-less payload and
+ * surfaces the id from the API response.
+ */
 export async function createShipment(form: ShipmentFormState): Promise<any> {
-  const id = generateShipmentId();
-  const payload = { id, ...buildShipmentPayload(form) };
-  await DbApi.upsert('shipments', payload);
-  return payload;
+  const payload = buildShipmentPayload(form);
+  const created = await ShipmentsApi.create(payload);
+  // Merge server response (carries the assigned id) over the local
+  // payload so the screen's success Alert / navigation has the new id.
+  return { ...payload, ...(created || {}) };
 }
 
 /**
  * QA bug #56 fix: previously delivery_date: '' was sent which Postgres
  * rejects for date columns. nullIfBlank scrubs all optional values.
+ *
+ * QA bug #168 follow-up: routes through ShipmentsApi.create (POST
+ * /api/shipments — audited + WS-broadcast) instead of DbApi.upsert
+ * (raw passthrough). Same reasoning as createShipment above. Server
+ * also issues the new id now, so we don't pre-generate one here.
  */
 export async function copyShipment(source: any): Promise<any> {
   if (!source || typeof source !== 'object') {
     throw new Error('copyShipment: source shipment is required');
   }
-  const id = generateShipmentId();
   const today = new Date().toISOString().slice(0, 10);
   const copy: Record<string, any> = {
-    id,
     origin: source.origin || '',
     dest: source.dest || '',
     origin_zip: nullIfBlank(source.origin_zip),
@@ -158,9 +198,15 @@ export async function copyShipment(source: any): Promise<any> {
     pickup_date: today,
     delivery_date: null,
     status: 'Planned',
+    // Audit metadata: the server strips this off the row write but
+    // surfaces it on the change_history 'create' row as `copiedFrom`,
+    // matching the web's copyShipment behaviour.
+    copiedFrom: source.id || source.shipment_id || null,
   };
-  await DbApi.upsert('shipments', copy);
-  return copy;
+  // Server returns the inserted row with its assigned id. Merge it back
+  // so callers (the screen's success Alert) see the new id.
+  const created = await ShipmentsApi.create(copy);
+  return { ...copy, ...(created || {}) };
 }
 
 /**

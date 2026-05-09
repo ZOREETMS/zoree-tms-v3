@@ -49,7 +49,7 @@ const shipService = require('./services/shipments');
 // handler below. Lives in the orders service so there's one source of
 // truth for the "Planned requires shipment_id" rule (root cause of the
 // ORD-2026-991550 orphan bug).
-const { assertPlannedHasShipment } = require('./services/orders');
+const { assertPlannedHasShipment, countOrders: countOrdersService } = require('./services/orders');
 // Pure normalization + rollup math for order_lines, used by the bulk
 // import handler so a "Line Items" sheet entry persists with the same
 // shape (and same id format) as the existing UI editor's POST handler
@@ -1557,6 +1557,32 @@ function dbToOrderApi(r) {
 }
 app.get('/api/orders',    async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('orders','select=*&order=created_at.desc&limit=500',u._token); const orders = rows.map(dbToOrderApi); res.json({ orders, total: orders.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 
+// GET /api/orders/count — true row count for the orders table (after
+// optional status/customer filters), without pulling rows. The legacy
+// `/api/orders` handler above caps at 500 rows and reports
+// `total: orders.length`, so any UI that read that `total` (header,
+// "All" status chip, dashboard KPIs) topped out at 500. This endpoint
+// reads the real count via the modular service layer (which uses
+// Supabase's `count: 'exact', head: true` under the hood).
+//
+// Registered AFTER /api/orders but BEFORE the `/api/orders/:id`
+// handlers below, so Express doesn't treat "count" as an order id.
+app.get('/api/orders/count', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  try {
+    const filters = {
+      status:   req.query.status   || null,
+      customer: req.query.customer || null,
+      statuses: req.query.statuses ? req.query.statuses.split(',') : null,
+    };
+    const total = await countOrdersService(filters, null);
+    res.json({ total });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.patch('/api/orders/:id', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
@@ -2090,9 +2116,42 @@ app.post('/api/shipments', async (req, res) => {
   }
   // Pull non-column metadata fields out before insert so they don't
   // poison the DB write but still flow into the audit row.
-  const { copiedFrom = null, ...shipmentRow } = req.body || {};
-  if (!shipmentRow.id) return res.status(400).json({ error: 'shipment.id required' });
+  const { copiedFrom = null, ...rawBody } = req.body || {};
   try {
+    // FU-3 (post-#168): canonicalize the body through the create-path
+    // mapper so column whitelisting + camel/snake handling lives in
+    // ONE place instead of being hand-rolled in every web/mobile
+    // caller. The mapper enumerates every shipments column the table
+    // accepts at insert (including the previously-diverging equipment,
+    // commodity, rate_id, rate, fuel_surcharge, accessorials, miles,
+    // line_items columns). Keeps `shipmentToDb` / `updateShipment`
+    // untouched.
+    const shipmentRow = shipService.buildShipmentInsertRow(rawBody);
+
+    // FU-2 (post-#168): server-issued ids. The previous client-side
+    // generators picked a 4-digit suffix and the dbUpsert below uses
+    // `merge-duplicates`, so a colliding id silently overwrote an
+    // unrelated row. We now generate a 6-digit suffix server-side
+    // with a uniqueness pre-check + small retry loop. Legacy clients
+    // that still send their own id are honored (compat) but should
+    // be migrated.
+    if (!shipmentRow.id) {
+      shipmentRow.id = await shipService.generateUniqueShipmentId();
+    }
+
+    // FU-2 follow-up: auto-stamp bol_number when the caller didn't
+    // provide one. Mirrors the bulk-plan path
+    // (frontend/src/services/bulkPlanExecution.js) which already does
+    // `bol_number: BOL-<shipId>`. Doing it here means manual creates
+    // (web NewShipmentModal, mobile create form, copyShipment) all
+    // get a usable BOL/Carrier Ref InfoBox out of the gate instead of
+    // rendering "—" until the user opens an edit. Caller-provided
+    // values pass through untouched (e.g. a real BOL from an EDI
+    // ingest path).
+    if (!shipmentRow.bol_number) {
+      shipmentRow.bol_number = `BOL-${shipmentRow.id}`;
+    }
+
     const row = await dbUpsert('shipments', shipmentRow, null);
     try {
       await history.recordChange({
@@ -2105,6 +2164,26 @@ app.post('/api/shipments', async (req, res) => {
       });
     } catch (auditErr) {
       console.error('[shipments/create] history write failed:', auditErr.message);
+    }
+    // QA bug #168: fan out a SHIPMENT_UPDATED event so connected web
+    // tabs (and the mobile useRealtimeData subscriber) refresh their
+    // shipments list immediately. Without this, a shipment created on
+    // mobile was only visible on the web after a manual page reload.
+    // Reusing SHIPMENT_UPDATED keeps the WS contract narrow — the
+    // existing bridge at the bottom of this file already wires it to
+    // wsBroadcast, and frontend/src/pages/ShipmentsPage.jsx is already
+    // listening on `shipment.updated`. Best-effort: a broadcast failure
+    // must not roll back the create.
+    try {
+      bus.emit(EVENTS.SHIPMENT_UPDATED, {
+        id:         shipmentRow.id,
+        action:     'create',
+        status:     shipmentRow.status || 'Planned',
+        carrier:    shipmentRow.carrier || null,
+        via:        copiedFrom ? 'copy' : 'manual',
+      });
+    } catch (broadcastErr) {
+      console.error('[shipments/create] WS broadcast failed:', broadcastErr.message);
     }
     res.status(201).json(row || shipmentRow);
   } catch (e) {

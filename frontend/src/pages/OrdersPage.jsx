@@ -42,7 +42,7 @@ import ExportButton from "../components/ui/ExportButton";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 export default function OrdersPage() {
-  const { orders, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
+  const { orders, ordersTotal = 0, shipments, carriers, rates = [], setData, refreshData, routeTemplates, planningParameters, warehouseDockConfigs = [], items = [] } = useOutletContext();
   const itemMaster = items;
   // QA #138 follow-up: matrix-driven gate. Controls visibility of every
   // mutation affordance on this page (+ New Order, + Plan Group, the
@@ -1248,10 +1248,19 @@ export default function OrdersPage() {
   }, []);
 
   const statusCounts = useMemo(() => {
-    const c = { All: orders.length };
+    // `All` is the true table total from /api/orders/count — not
+    // `orders.length`, which tops out at the 500-row page DbApi.orders
+    // returns. The per-status chips below ARE still derived from the
+    // loaded page (so they may undercount once you have >500 orders),
+    // because computing per-status totals server-side would need its
+    // own endpoint and isn't part of this fix. The footer now
+    // discloses the "loaded N of total" gap so the asymmetry is
+    // visible. Falls back to orders.length for the brief moment
+    // before the count round-trip resolves.
+    const c = { All: ordersTotal || orders.length };
     orders.forEach((o) => { c[o.status] = (c[o.status] || 0) + 1; });
     return c;
-  }, [orders]);
+  }, [orders, ordersTotal]);
 
   /* ── Selected orders stats ── */
   const selectedStats = useMemo(() => {
@@ -1297,7 +1306,7 @@ export default function OrdersPage() {
           <div className="page-sub">Auto-consolidates open orders by lane every run</div>
         </div>
         <div className="header-actions">
-          <span style={{ fontSize: 13, color: "var(--text2)", fontWeight: 600 }}>{orders.length} Orders</span>
+          <span style={{ fontSize: 13, color: "var(--text2)", fontWeight: 600 }}>{ordersTotal || orders.length} Orders</span>
           <ExportButton
             entity="orders"
             rows={rows}
@@ -1609,9 +1618,20 @@ export default function OrdersPage() {
       </div></div>
 
       <div className="text-sm text-muted mt-2">
-        {rows.length === 0
-          ? `0 of ${orders.length} orders`
-          : `${(currentPage - 1) * ROWS_PER_PAGE + 1}-${Math.min(currentPage * ROWS_PER_PAGE, rows.length)} of ${rows.length} filtered (${orders.length} total)`}
+        {(() => {
+          // True table total takes precedence over the loaded page
+          // size. When the table has more rows than the 500-row page
+          // we load (DbApi.orders), `loaded` is shown alongside so it
+          // is obvious the per-status chips above reflect what's in
+          // memory, not the universe.
+          const total = ordersTotal || orders.length;
+          const loaded = orders.length;
+          const loadedSuffix = total > loaded ? ` · loaded ${loaded.toLocaleString()}` : "";
+          if (rows.length === 0) return `0 of ${total.toLocaleString()} orders${loadedSuffix}`;
+          const from = (currentPage - 1) * ROWS_PER_PAGE + 1;
+          const to   = Math.min(currentPage * ROWS_PER_PAGE, rows.length);
+          return `${from}-${to} of ${rows.length.toLocaleString()} filtered (${total.toLocaleString()} total${loadedSuffix})`;
+        })()}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
         <div style={{ fontSize: 12, color: "var(--text3)" }}>

@@ -35,6 +35,31 @@ async function dbSelect(table, query = {}, tenantConfig = null) {
   return data || [];
 }
 
+// ── Count-only select ─────────────────────────────────────────────
+// Returns the exact row count for `table` (after applying filters)
+// without pulling any rows. Uses Supabase's `count: 'exact', head: true`
+// so the response is just a Content-Range header — cheap even on large
+// tables and the right primitive for "how many orders are there?"
+// header/KPI displays that today are bounded by the 500-row page size.
+async function dbCount(table, query = {}, tenantConfig = null) {
+  const db = getClient(tenantConfig);
+  let q = db.from(table).select('*', { count: 'exact', head: true });
+  if (query.filters) {
+    query.filters.forEach(([col, op, val]) => {
+      if (op === 'eq')  q = q.eq(col, val);
+      if (op === 'in')  q = q.in(col, val);
+      if (op === 'gt')  q = q.gt(col, val);
+      if (op === 'lt')  q = q.lt(col, val);
+      if (op === 'gte') q = q.gte(col, val);
+      if (op === 'lte') q = q.lte(col, val);
+      if (op === 'ilike') q = q.ilike(col, val);
+    });
+  }
+  const { count, error } = await q;
+  if (error) throw new Error(`[DB] ${table} count failed: ${error.message}`);
+  return count || 0;
+}
+
 async function dbUpsert(table, row, conflictCol = 'id', tenantConfig = null) {
   const db = getClient(tenantConfig);
   const { data, error } = await db.from(table).upsert(row, { onConflict: conflictCol }).select();
@@ -70,4 +95,4 @@ async function verifyToken(token, tenantConfig = null) {
   return user;
 }
 
-module.exports = { getClient, dbSelect, dbUpsert, dbUpdate, dbDelete, signIn, verifyToken };
+module.exports = { getClient, dbSelect, dbCount, dbUpsert, dbUpdate, dbDelete, signIn, verifyToken };

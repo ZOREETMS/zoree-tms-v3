@@ -2,7 +2,18 @@ import { OrdersApi, ShipmentsApi } from "../lib/api";
 import { emptyLocation, locationsToShipmentPatch } from "../types/location";
 
 /**
- * Generate a unique shipment ID.
+ * Legacy client-side ID generator. **No longer used by createShipment /
+ * copyShipment** — both let the server issue the id via
+ * ShipmentsApi.create (FU-2, post-#168). The previous 4-digit suffix
+ * had ~1/9_000 collision odds and the server's upsert is
+ * `merge-duplicates`, so a collision silently overwrote an unrelated
+ * row. Server now issues a 6-digit suffix with a uniqueness pre-check.
+ *
+ * Kept exported because a few legacy non-mutation callers (preview
+ * cards, copy modals that inspect the projected id) still want the
+ * format. Anything new should consume the id from the API response.
+ *
+ * @deprecated prefer the server-issued id returned by ShipmentsApi.create
  */
 export function generateShipmentId() {
   return `SHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -51,15 +62,23 @@ function normalizeDate(value) {
 /**
  * Create a new shipment in the database.
  * @param {Object} shipmentData - The shipment fields from the form.
- * @returns {Object} The created shipment with generated ID.
+ * @returns {Promise<Object>} The created shipment with the server-issued id.
+ *
+ * FU-3 (post-#168): the column whitelist + camel/snake mapping now
+ * lives in api/services/shipments.js#buildShipmentInsertRow, so this
+ * function only does the form-level coercions the form hasn't already
+ * done. We intentionally still spread `shipmentData` so any new fields
+ * the form picks up automatically flow to the canonicalizer — adding a
+ * new column means one edit (the canonicalizer) instead of three.
+ *
+ * FU-2: the server issues the id; we merge the API response over the
+ * local shape so callers get the assigned id back without a refetch.
  */
 export async function createShipment(shipmentData) {
-  const id = generateShipmentId();
   const equipment = typeof shipmentData.equipment === "string"
     ? shipmentData.equipment.trim()
     : shipmentData.equipment;
   const shipment = {
-    id,
     ...shipmentData,
     weight: parseFloat(shipmentData.weight) || 0,
     pieces: parseInt(shipmentData.pieces) || 0,
@@ -71,9 +90,9 @@ export async function createShipment(shipmentData) {
   };
   // Routed through the dedicated endpoint so the backend records a
   // 'create' change_history row — the Shipment Details timeline reads
-  // this to render the "Order Created & Rate Confirmed" timestamp.
-  await ShipmentsApi.create(shipment);
-  return shipment;
+  // this to render the "Shipment Created & Rate Confirmed" timestamp.
+  const created = await ShipmentsApi.create(shipment);
+  return { ...shipment, ...(created || {}) };
 }
 
 /**
@@ -147,7 +166,6 @@ function transitDaysFromShipment(s) {
  * @returns {Object} The newly created copy.
  */
 export async function copyShipment(sourceShipment) {
-  const id = generateShipmentId();
   const today = new Date().toISOString().slice(0, 10);
   const s = sourceShipment || {};
 
@@ -162,8 +180,12 @@ export async function copyShipment(sourceShipment) {
   // linked, which is exactly the post-copy state.
   const lineItemsSnapshot = await buildLineItemsSnapshot(s._linkedOrders);
 
+  // FU-2 (post-#168): server issues the id. We still need the id to
+  // construct the auto-stamped bol_number ("BOL-<id>") that the modal
+  // reads — so we let the server return the id, then send a follow-up
+  // PATCH with bol_number=BOL-<assigned_id>. Doing it post-create
+  // mirrors the bulk-plan path (see bulkPlanExecution.js).
   const copy = {
-    id,
     // ── Lane / location ─────────────────────────────────────────────
     origin:         s.origin || "",
     dest:           s.dest || "",
@@ -232,15 +254,16 @@ export async function copyShipment(sourceShipment) {
     // master_shipment_id, tender_*. These belong to the original
     // execution and would either violate uniqueness or be misleading.
     //
-    // bol_number — auto-stamped from the new shipment id, mirroring
-    // bulkPlanExecution.js (`bol_number: BOL-<shipId>`), so the
-    // BOL/Carrier Ref InfoBox renders immediately on the copy
-    // instead of "—".
+    // bol_number — FU-2 (post-#168): the server now auto-stamps
+    // BOL-<assigned_id> when the row arrives without one (see
+    // api/server.js POST /api/shipments). Previously we built it
+    // client-side off a client-issued id; that path is gone. The
+    // copy ends up with the same `BOL-<new-id>` value the modal
+    // expects, just sourced from the server.
     //
     // pickup_date resets to today; delivery_date is projected from
     // the source's transit window (or NULL if it had none — Postgres
     // `date` rejects "", SQLSTATE 22007).
-    bol_number:    `BOL-${id}`,
     pickup_date:   today,
     delivery_date: projectedDelivery,
     status:        "Planned",
@@ -251,13 +274,16 @@ export async function copyShipment(sourceShipment) {
     copiedFrom: s.id || null,
   };
 
-  await ShipmentsApi.create(copy);
+  // Server returns the newly-inserted row with the assigned id +
+  // auto-stamped bol_number. Merge it back so the caller sees the
+  // canonical post-create shape (id + bol_number especially).
+  const created = await ShipmentsApi.create(copy);
   // Per product decision: the copy does NOT create new orders or
   // re-link the source's orders. The new shipment lands without
   // ASSOCIATED ORDER / LINE ITEMS until the user attaches orders
   // to it via the existing flow. (See chat history 2026-05-03 — the
   // earlier order-duplication path was reverted.)
-  return copy;
+  return { ...copy, ...(created || {}) };
 }
 
 export async function deleteShipmentById(shipmentId) {

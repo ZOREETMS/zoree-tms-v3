@@ -75,7 +75,12 @@ export default function DashboardScreen() {
           <View style={styles.kpiHalf}>
             <KpiCard
               label="Total Orders"
-              value={data.orders.length}
+              // True total from /api/orders/count — `data.orders` is
+              // bounded by the 500-row page DbApi.orders returns, so
+              // reading `.length` here would top out at 500 and never
+              // grow. Falls back to the loaded length for the brief
+              // pre-fetch window.
+              value={data.ordersTotal || data.orders.length}
               icon="receipt-outline"
               color={colors.accent}
             />
@@ -195,7 +200,11 @@ export default function DashboardScreen() {
             onPress={() => navigation.navigate('PlanningTab', { screen: 'Orders' })}
           >
             <Text style={styles.viewAllText}>
-              View All {data.orders.length} Orders
+              {/* Same rationale as the Total Orders KPI above — the
+                  visible "preview" list is the loaded page (5 items),
+                  but the "View All N" CTA should advertise the real
+                  table size, not the 500-row cap. */}
+              View All {data.ordersTotal || data.orders.length} Orders
             </Text>
             <Ionicons name="arrow-forward" size={16} color={colors.accent} />
           </TouchableOpacity>

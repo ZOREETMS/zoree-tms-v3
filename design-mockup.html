@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zoree TMS — Design Refresh Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* Surfaces */
+    --bg:#F7F8FA;
+    --surface:#FFFFFF;
+    --surface-2:#FBFBFD;
+    --surface-3:#F2F4F7;
+
+    /* Lines */
+    --line:#EDEFF3;
+    --line-strong:#E2E5EB;
+
+    /* Text */
+    --ink:#0B1220;
+    --ink-2:#475569;
+    --ink-3:#8A93A4;
+    --ink-4:#B6BCC8;
+
+    /* Brand */
+    --brand:#3055F5;
+    --brand-2:#1E3FE0;
+    --brand-soft:#EEF1FE;
+
+    /* Status */
+    --green:#10A37F;   --green-soft:#E6F5F0;
+    --amber:#B45309;   --amber-soft:#FFF6E5;
+    --red:#D14343;     --red-soft:#FCEAEA;
+    --indigo:#4F46E5;  --indigo-soft:#EEF0FE;
+    --teal:#0E9486;    --teal-soft:#E1F4F2;
+
+    /* Shape & motion */
+    --r-sm:8px;
+    --r:10px;
+    --r-lg:14px;
+    --r-xl:18px;
+    --shadow-1:0 1px 0 rgba(15,23,42,.04), 0 1px 2px rgba(15,23,42,.04);
+    --shadow-2:0 4px 16px rgba(15,23,42,.06), 0 1px 0 rgba(15,23,42,.04);
+    --shadow-pop:0 24px 60px rgba(15,23,42,.18), 0 2px 0 rgba(15,23,42,.04);
+
+    --side-w:236px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  ::selection{background:var(--brand-soft);color:var(--brand-2)}
+
+  /* ── Doc layout ─────────────────────────────────────────── */
+  .doc{max-width:1280px;margin:0 auto;padding:36px 28px 80px}
+  .doc-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:8px}
+  .doc-head h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+  .doc-head .sub{color:var(--ink-2);margin-top:6px;max-width:62ch}
+  .doc-meta{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:12px;color:var(--ink-2)}
+  .pill .dot{width:6px;height:6px;border-radius:999px;background:var(--brand)}
+  .doc-toc{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 28px}
+  .doc-toc a{padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;color:var(--ink-2)}
+  .doc-toc a:hover{color:var(--ink);border-color:var(--line-strong)}
+
+  .frame{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--shadow-1);margin:18px 0 36px}
+  .frame-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface-2);color:var(--ink-3);font-size:12.5px}
+  .frame-bar .lights{display:flex;gap:6px}
+  .frame-bar .lights span{width:10px;height:10px;border-radius:999px;background:#E5E7EB}
+  .frame-bar .lights span:nth-child(1){background:#FF5F57}
+  .frame-bar .lights span:nth-child(2){background:#FEBC2E}
+  .frame-bar .lights span:nth-child(3){background:#28C840}
+  .frame-bar .url{flex:1;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 12px;color:var(--ink-2);font-family:'JetBrains Mono',monospace;font-size:12px}
+  .frame-body{position:relative}
+
+  /* ── App shell ──────────────────────────────────────────── */
+  .app{display:grid;grid-template-columns:var(--side-w) 1fr;min-height:780px}
+
+  /* Sidebar */
+  .side{background:#0B1220;color:#D7DCE5;padding:14px 10px;border-right:1px solid #0F172A;display:flex;flex-direction:column}
+  .side-brand{display:flex;align-items:center;gap:10px;padding:8px 8px 14px}
+  .brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3055F5 0%,#7C3AED 100%);display:grid;place-items:center;color:#fff;font-weight:700;letter-spacing:-.02em}
+  .brand-name{font-weight:700;letter-spacing:-.01em;font-size:15px;color:#fff}
+  .brand-env{font-size:10.5px;color:#7C8597;letter-spacing:.12em}
+  .side-search{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:7px 10px;margin:0 4px 8px;color:#A6ADBB;font-size:12.5px}
+  .side-search kbd{margin-left:auto;font-size:10.5px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:1px 6px;border-radius:5px;color:#9aa3b3;font-family:'JetBrains Mono',monospace}
+  .side-section{padding:14px 8px 6px;font-size:11px;letter-spacing:.10em;color:#6B7388;text-transform:uppercase;font-weight:600}
+  .side-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:#C8CEDB;font-size:13.5px;cursor:pointer;position:relative}
+  .side-item:hover{background:rgba(255,255,255,.04);color:#fff}
+  .side-item.active{background:rgba(48,85,245,.18);color:#fff}
+  .side-item.active::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
+  .side-item .ico{width:18px;height:18px;display:grid;place-items:center;color:#8B93A6}
+  .side-item.active .ico,.side-item:hover .ico{color:#fff}
+  .side-item .count{margin-left:auto;font-size:11px;background:rgba(255,255,255,.06);padding:1px 7px;border-radius:999px;color:#B7BFCE}
+  .side-item .count.hot{background:rgba(209,67,67,.18);color:#FF8A8A}
+  .side-foot{margin-top:auto;padding:8px;border-top:1px solid rgba(255,255,255,.06)}
+  .me{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px}
+  .me:hover{background:rgba(255,255,255,.04)}
+  .avatar{width:30px;height:30px;border-radius:999px;background:#3055F5;color:#fff;font-weight:600;display:grid;place-items:center;font-size:12px}
+  .me-meta{display:flex;flex-direction:column;line-height:1.2}
+  .me-meta .name{color:#fff;font-size:13px;font-weight:500}
+  .me-meta .role{color:#7C8597;font-size:11.5px}
+
+  /* Main */
+  .main{background:var(--bg);min-width:0}
+  .topbar{display:flex;align-items:center;gap:14px;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .crumbs{display:flex;align-items:center;gap:6px;color:var(--ink-3);font-size:13px}
+  .crumbs .sep{color:var(--ink-4)}
+  .crumbs strong{color:var(--ink);font-weight:600}
+  .top-spacer{flex:1}
+  .icon-btn{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--ink-2);border:1px solid var(--line);background:var(--surface)}
+  .icon-btn:hover{color:var(--ink);background:var(--surface-3)}
+
+  .page{padding:22px 28px 40px}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}
+  .page-title{font-size:22px;font-weight:700;letter-spacing:-.015em}
+  .page-sub{color:var(--ink-2);font-size:13px;margin-top:4px}
+  .page-actions{display:flex;gap:8px;align-items:center}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-radius:9px;font-size:13px;font-weight:500;border:1px solid transparent;color:var(--ink);background:var(--surface);transition:background .12s,border-color .12s,color .12s,box-shadow .12s}
+  .btn-ghost{background:transparent;color:var(--ink-2);border-color:transparent}
+  .btn-ghost:hover{color:var(--ink);background:var(--surface-3)}
+  .btn-secondary{background:var(--surface);border-color:var(--line-strong);color:var(--ink)}
+  .btn-secondary:hover{background:var(--surface-3)}
+  .btn-primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn-primary:hover{background:var(--brand-2)}
+  .btn-sm{height:30px;padding:0 10px;font-size:12.5px}
+  .btn-lg{height:40px;padding:0 16px;font-size:13.5px}
+  .btn .kbd{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.18);border-radius:4px;padding:1px 5px;margin-left:4px}
+  .btn-secondary .kbd{color:var(--ink-3);border-color:var(--line-strong)}
+
+  /* KPI */
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-1);position:relative;overflow:hidden}
+  .kpi .label{color:var(--ink-2);font-size:12.5px;font-weight:500}
+  .kpi .value{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:6px 0 4px}
+  .kpi .delta{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+  .kpi .delta.up{color:var(--green)}
+  .kpi .delta.down{color:var(--red)}
+  .kpi .spark{position:absolute;right:14px;top:14px;width:84px;height:30px;color:var(--brand);opacity:.55}
+
+  /* Section header */
+  .section-h{display:flex;align-items:baseline;justify-content:space-between;margin:8px 2px 12px}
+  .section-h h2{font-size:15px;font-weight:600;letter-spacing:-.005em}
+  .section-h .more{font-size:12.5px;color:var(--ink-2)}
+
+  /* Module grid */
+  .modules{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .module{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;display:flex;gap:12px;align-items:flex-start;cursor:pointer;transition:border-color .12s,box-shadow .12s,transform .12s}
+  .module:hover{border-color:var(--line-strong);box-shadow:var(--shadow-2)}
+  .module .ico{width:36px;height:36px;border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;flex-shrink:0}
+  .module .name{font-weight:600;font-size:13.5px;letter-spacing:-.005em}
+  .module .desc{color:var(--ink-2);font-size:12.5px;margin-top:2px}
+
+  /* Two column row */
+  .two-col{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:24px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1)}
+  .panel-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .panel-h h3{font-size:14px;font-weight:600}
+  .panel-body{padding:6px 0}
+  .row-list{display:flex;flex-direction:column}
+  .row-list .row{display:grid;grid-template-columns:32px 1fr auto;gap:10px;padding:10px 16px;align-items:center;border-bottom:1px solid var(--line)}
+  .row-list .row:last-child{border-bottom:0}
+  .row-ico{width:30px;height:30px;border-radius:999px;background:var(--surface-3);color:var(--ink-2);display:grid;place-items:center}
+  .row .who{font-size:13px;color:var(--ink)}
+  .row .what{font-size:12px;color:var(--ink-2);margin-top:1px}
+  .row .when{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+  /* Insights chips */
+  .insight{display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .insight:last-child{border-bottom:0}
+  .insight .lead{width:6px;border-radius:6px;background:var(--brand)}
+  .insight.warn .lead{background:var(--amber)}
+  .insight.bad .lead{background:var(--red)}
+  .insight .body{flex:1}
+  .insight .title{font-size:13px;font-weight:600}
+  .insight .copy{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+
+  /* Orders page */
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0 10px;height:34px;width:300px;color:var(--ink-3)}
+  .search input{border:0;outline:0;background:transparent;font:inherit;color:var(--ink);width:100%}
+  .chips{display:flex;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--ink-2);font-size:12.5px;font-weight:500;cursor:pointer}
+  .chip:hover{color:var(--ink);border-color:var(--line-strong)}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chip .n{background:rgba(255,255,255,.18);color:#fff;border-radius:999px;font-size:11px;padding:1px 6px}
+  .chip:not(.on) .n{background:var(--surface-3);color:var(--ink-2)}
+
+  .grid-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-1)}
+  table.gt{width:100%;border-collapse:collapse}
+  .gt thead th{position:sticky;top:0;background:var(--surface-2);font-size:11.5px;color:var(--ink-2);font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);height:auto}
+  .gt tbody td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink)}
+  .gt tbody tr:last-child td{border-bottom:0}
+  .gt tbody tr:hover td{background:var(--surface-2)}
+  .gt tbody tr.sel td{background:var(--brand-soft)}
+  .gt .mono{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ink)}
+  .gt .muted{color:var(--ink-2)}
+  .gt .right{text-align:right;font-variant-numeric:tabular-nums}
+  .gt .check{width:30px}
+  .checkbox{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-strong);display:inline-grid;place-items:center;background:var(--surface)}
+  .checkbox.on{background:var(--brand);border-color:var(--brand);color:#fff}
+
+  /* Badges */
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:500;line-height:18px;border:1px solid transparent}
+  .badge::before{content:"";width:6px;height:6px;border-radius:999px;background:currentColor;opacity:.85}
+  .b-unplanned{background:#F1F4F8;color:#5A6478;border-color:#E4E8EE}
+  .b-planned{background:var(--brand-soft);color:var(--brand-2);border-color:#DEE5FE}
+  .b-tendered{background:var(--amber-soft);color:var(--amber);border-color:#FBE5BB}
+  .b-intransit{background:var(--indigo-soft);color:var(--indigo);border-color:#DEE2FE}
+  .b-delivered{background:var(--green-soft);color:var(--green);border-color:#CDEDE0}
+  .b-exception{background:var(--red-soft);color:var(--red);border-color:#F4D3D3}
+
+  /* Stage rail in modal */
+  .stage-rail{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:6px 0 14px}
+  .stage{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+  .stage .bar{height:3px;width:100%;border-radius:999px;background:var(--line-strong)}
+  .stage.done .bar{background:var(--green)}
+  .stage.done{color:var(--green)}
+  .stage.now .bar{background:var(--brand)}
+  .stage.now{color:var(--brand-2)}
+
+  /* Modal stage */
+  .stage-bg{position:relative;background:linear-gradient(180deg,#F1F3F8 0%,#EAEDF4 100%);padding:48px 0;display:grid;place-items:center}
+  .stage-bg::before{content:"";position:absolute;inset:0;background:
+     radial-gradient(circle at 20% 20%, rgba(48,85,245,0.08), transparent 40%),
+     radial-gradient(circle at 80% 80%, rgba(124,58,237,0.06), transparent 40%);}
+  .modal{position:relative;width:min(720px,calc(100% - 48px));background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-pop);overflow:hidden}
+  .modal-head{display:flex;align-items:center;gap:12px;padding:18px 22px 12px;border-bottom:1px solid var(--line)}
+  .modal-mark{width:34px;height:34px;border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center}
+  .modal-title{font-size:16px;font-weight:600;letter-spacing:-.005em}
+  .modal-eyebrow{font-size:11.5px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+  .modal-x{margin-left:auto;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--ink-3)}
+  .modal-x:hover{background:var(--surface-3);color:var(--ink)}
+  .modal-stage-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--brand-soft);color:var(--brand-2);font-size:11.5px;font-weight:600;border:1px solid #DEE5FE}
+  .modal-body{padding:18px 22px}
+  .callout{display:flex;gap:12px;padding:12px 14px;background:var(--amber-soft);border:1px solid #FBE5BB;border-radius:12px;margin-bottom:18px}
+  .callout .kbd{flex-shrink:0;width:26px;height:26px;border-radius:8px;background:#fff;color:var(--amber);display:grid;place-items:center;font-weight:700}
+  .callout .copy{font-size:12.5px;color:#7A4F08}
+  .callout .copy strong{color:#5C3A06}
+
+  /* read-only meta grid */
+  .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+  .meta{padding:12px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .meta:nth-child(3n){border-right:0}
+  .meta:nth-last-child(-n+3){border-bottom:0}
+  .meta .k{font-size:10.5px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+  .meta .v{font-size:13px;font-weight:500;color:var(--ink);line-height:1.35}
+  .meta .v small{display:block;font-weight:400;color:var(--ink-2);font-size:12px;margin-top:1px}
+
+  /* form inputs */
+  .form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+  .field label{display:block;font-size:11.5px;color:var(--ink-2);font-weight:600;letter-spacing:.02em;margin-bottom:6px}
+  .input,.select{width:100%;height:38px;padding:0 12px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);font:inherit;color:var(--ink);outline:0;transition:border-color .12s,box-shadow .12s}
+  .input:focus,.select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(48,85,245,.12)}
+  .input.with-suffix{padding-right:46px}
+  .input-wrap{position:relative}
+  .input-wrap .suffix{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:12px}
+  .form-grid.two{grid-template-columns:1fr 1fr}
+
+  .modal-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 22px;border-top:1px solid var(--line);background:var(--surface-2)}
+  .modal-foot .left{font-size:12px;color:var(--ink-3)}
+
+  /* Annotations */
+  .annot{padding:14px 18px;background:#FCFCFE;border-top:1px dashed var(--line-strong);font-size:12.5px;color:var(--ink-2)}
+  .annot strong{color:var(--ink)}
+  .annot ul{margin:6px 0 0 18px}
+
+  /* SVG icon */
+  .i{width:1em;height:1em;display:inline-block;vertical-align:-2px}
+
+  /* Compare strip */
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:8px 0 28px}
+  .compare .panel{border:1px dashed var(--line-strong)}
+  .compare .label-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);background:var(--surface-3);margin:12px 0 4px 14px}
+  .compare .label-tag.now{color:var(--brand-2);background:var(--brand-soft)}
+
+  /* Spark line */
+  svg{display:block}
+
+  @media (max-width:1080px){
+    .modules{grid-template-columns:repeat(2,1fr)}
+    .kpi-row{grid-template-columns:repeat(2,1fr)}
+    .two-col{grid-template-columns:1fr}
+    .meta-grid,.form-grid{grid-template-columns:repeat(2,1fr)}
+    .meta:nth-child(3n){border-right:1px solid var(--line)}
+    .meta:nth-child(2n){border-right:0}
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <div class="doc-head">
+    <div>
+      <h1>Zoree TMS — Design Refresh</h1>
+      <p class="sub">Cleaner, more modern direction for the whole app: a calmer surface, lighter chrome, real typographic hierarchy, and modal/table patterns that feel less boxed-in. Same React component shape — different look.</p>
+    </div>
+    <div class="doc-meta">
+      <span class="pill"><span class="dot"></span> Mockup v1</span>
+      <span class="pill">Inter · 14/22</span>
+      <span class="pill">Brand #3055F5</span>
+    </div>
+  </div>
+
+  <div class="doc-toc">
+    <a href="#shell">App shell &amp; sidebar</a>
+    <a href="#home">Home / dashboard</a>
+    <a href="#orders">Orders list</a>
+    <a href="#modal">Pack Order modal</a>
+    <a href="#notes">What changed</a>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <h2 id="shell" style="font-size:18px;font-weight:600;margin:8px 2px">1 · App shell &amp; home</h2>
+  <p style="color:var(--ink-2);margin:2px 2px 0;max-width:72ch">Sidebar keeps the dark surface but loses the all-caps labels and adds a search field, badge counts that sit inline, and a clearer active-state. Topbar adds breadcrumbs so deep pages feel less floating.</p>
+
+  <div class="frame" id="home">
+    <div class="frame-bar">
+      <div class="lights"><span></span><span></span><span></span></div>
+      <div class="url">app.zoree.io / home</div>
+      <span style="width:60px"></span>
+    </div>
+    <div class="frame-body">
+      <div class="app">
+
+        <!-- Sidebar -->
+        <aside class="side">
+          <div class="side-brand">
+            <div class="brand-mark">Z</div>
+            <div>
+              <div class="brand-name">Zoree TMS</div>
+              <div class="brand-env">PRODUCTION · v3.11</div>
+            </div>
+          </div>
+          <div class="side-search">
+            <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            Search…
+            <kbd>⌘K</kbd>
+          </div>
+
+          <div class="side-section">Planning</div>
+          <div class="side-item active">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12 12 3l9 9"/><path d="M5 10v10h14V10"/></svg></span>
+            Home
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg></span>
+            Orders <span class="count">142</span>
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h13l5 5v5H3z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></span>
+            Shipments <span class="count">38</span>
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v6H4z"/><path d="M4 14h10v6H4z"/><path d="M18 14h2v6h-2z"/></svg></span>
+            Bulk planning
+          </div>
+
+          <div class="side-section">Execution</div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2c4 0 7 3 7 7 0 5-7 13-7 13S5 14 5 9c0-4 3-7 7-7Z"/></svg></span>
+            Live tracking <span class="count hot">3</span>
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18v10H3z"/><path d="M3 11h18"/></svg></span>
+            Carriers
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 5v14M16 5v14"/></svg></span>
+            Dock scheduling
+          </div>
+
+          <div class="side-section">Finance</div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h5"/></svg></span>
+            Invoices <span class="count">7</span>
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+            Freight audit
+          </div>
+          <div class="side-item">
+            <span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></svg></span>
+            Analytics
+          </div>
+
+          <div class="side-foot">
+            <div class="me">
+              <div class="avatar">SR</div>
+              <div class="me-meta">
+                <span class="name">Sridhar T.</span>
+                <span class="role">Ops Lead · Atlanta</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main -->
+        <section class="main">
+          <div class="topbar">
+            <div class="crumbs">
+              <span>Workspace</span>
+              <svg class="i sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+              <strong>Home</strong>
+            </div>
+            <div class="top-spacer"></div>
+            <button class="btn btn-ghost btn-sm">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              Search
+              <span class="kbd" style="color:var(--ink-3);border:1px solid var(--line-strong);border-radius:4px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:10.5px">⌘K</span>
+            </button>
+            <button class="icon-btn" title="Notifications">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+            </button>
+            <button class="btn btn-secondary btn-sm">Reports</button>
+            <button class="btn btn-primary btn-sm">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              New order
+            </button>
+          </div>
+
+          <div class="page">
+            <div class="page-head">
+              <div>
+                <div class="page-title">Good afternoon, Sridhar</div>
+                <div class="page-sub">Saturday, May 9 — 142 open orders, 38 active shipments, 3 exceptions need eyes.</div>
+              </div>
+              <div class="page-actions">
+                <button class="btn btn-secondary btn-sm">Last 7 days</button>
+                <button class="btn btn-ghost btn-sm">Customize</button>
+              </div>
+            </div>
+
+            <!-- KPI -->
+            <div class="kpi-row">
+              <div class="kpi">
+                <svg class="spark" viewBox="0 0 84 30" fill="none"><path d="M2 22 L14 18 L22 24 L34 12 L46 16 L58 6 L70 10 L82 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <div class="label">Active shipments</div>
+                <div class="value">38</div>
+                <div class="delta up">▲ 12% vs last week</div>
+              </div>
+              <div class="kpi">
+                <svg class="spark" viewBox="0 0 84 30" fill="none" style="color:var(--amber)"><path d="M2 14 L14 16 L22 12 L34 18 L46 14 L58 22 L70 16 L82 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <div class="label">Open orders</div>
+                <div class="value">142</div>
+                <div class="delta">— flat vs yesterday</div>
+              </div>
+              <div class="kpi">
+                <svg class="spark" viewBox="0 0 84 30" fill="none" style="color:var(--red)"><path d="M2 18 L14 14 L22 20 L34 10 L46 18 L58 8 L70 14 L82 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <div class="label">Exceptions</div>
+                <div class="value">3</div>
+                <div class="delta down">▲ 1 since 9am</div>
+              </div>
+              <div class="kpi">
+                <svg class="spark" viewBox="0 0 84 30" fill="none" style="color:var(--green)"><path d="M2 24 L14 22 L22 18 L34 16 L46 14 L58 10 L70 8 L82 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <div class="label">Savings (est. mo.)</div>
+                <div class="value">$48.2K</div>
+                <div class="delta up">▲ $2.1K vs last mo.</div>
+              </div>
+            </div>
+
+            <!-- Modules -->
+            <div class="section-h">
+              <h2>Modules</h2>
+              <a class="more" href="#">Browse all →</a>
+            </div>
+            <div class="modules">
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg></div>
+                <div><div class="name">Orders</div><div class="desc">Create, edit, and track transportation orders.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h13l5 5v5H3z"/></svg></div>
+                <div><div class="name">Shipments</div><div class="desc">Plan, consolidate, and tender freight.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v6H4z"/><path d="M4 14h10v6H4z"/></svg></div>
+                <div><div class="name">Bulk plan</div><div class="desc">Rate &amp; execute shipments in batches.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 5v14M16 5v14"/></svg></div>
+                <div><div class="name">Dock scheduling</div><div class="desc">Manage dock appointments and windows.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2c4 0 7 3 7 7 0 5-7 13-7 13S5 14 5 9c0-4 3-7 7-7Z"/></svg></div>
+                <div><div class="name">Live tracking</div><div class="desc">Real-time map of every truck in motion.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
+                <div><div class="name">Invoices</div><div class="desc">Process &amp; approve carrier invoices.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div>
+                <div><div class="name">Analytics</div><div class="desc">Spend, lane, and scorecard insights.</div></div>
+              </div>
+              <div class="module">
+                <div class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 4 9 8 10 4-1 8-5 8-10V6Z"/></svg></div>
+                <div><div class="name">Compliance</div><div class="desc">HOS, weight, and certifications.</div></div>
+              </div>
+            </div>
+
+            <!-- Two col: insights + activity -->
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-h"><h3>Insights</h3><a class="more" href="#">View all</a></div>
+                <div class="panel-body">
+                  <div class="insight">
+                    <div class="lead"></div>
+                    <div class="body">
+                      <div class="title">7 orders eligible to consolidate ATL → DFW</div>
+                      <div class="copy">Estimated savings $1,840 if combined into one truckload tomorrow.</div>
+                    </div>
+                  </div>
+                  <div class="insight warn">
+                    <div class="lead"></div>
+                    <div class="body">
+                      <div class="title">AVERITT contract expires in 12 days</div>
+                      <div class="copy">38 active lanes affected. Open RFQ to keep coverage.</div>
+                    </div>
+                  </div>
+                  <div class="insight bad">
+                    <div class="lead"></div>
+                    <div class="body">
+                      <div class="title">SHP-2026-9091 idle &gt; 4h near Memphis</div>
+                      <div class="copy">No GPS ping since 11:40. Customer ETA at risk.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-h"><h3>Recent activity</h3><a class="more" href="#">Audit log</a></div>
+                <div class="panel-body row-list">
+                  <div class="row">
+                    <div class="row-ico">
+                      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
+                    </div>
+                    <div>
+                      <div class="who">Maya created order ORD-394218</div>
+                      <div class="what">AT&amp;T · ATL → DFW · 800 lbs</div>
+                    </div>
+                    <div class="when">2m ago</div>
+                  </div>
+                  <div class="row">
+                    <div class="row-ico" style="color:var(--green)">
+                      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg>
+                    </div>
+                    <div>
+                      <div class="who">SHP-2026-9098 packed</div>
+                      <div class="what">Stage 7 → 8 · Door 1 · 1 carton, 800 lbs</div>
+                    </div>
+                    <div class="when">14m</div>
+                  </div>
+                  <div class="row">
+                    <div class="row-ico" style="color:var(--brand)">
+                      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+                    </div>
+                    <div>
+                      <div class="who">RFQ #221 sent to 5 carriers</div>
+                      <div class="what">Lane: Atlanta XDock → Houston DC</div>
+                    </div>
+                    <div class="when">1h</div>
+                  </div>
+                  <div class="row">
+                    <div class="row-ico" style="color:var(--amber)">
+                      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.7a2 2 0 0 1 3.4 0L20 16a2 2 0 0 1-1.7 3H5.7A2 2 0 0 1 4 16Z"/></svg>
+                    </div>
+                    <div>
+                      <div class="who">Weight check failed for ORD-394199</div>
+                      <div class="what">Reweigh logged 12,340 lb (declared 11,500)</div>
+                    </div>
+                    <div class="when">2h</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <h2 id="orders" style="font-size:18px;font-weight:600;margin:8px 2px">2 · Orders list</h2>
+  <p style="color:var(--ink-2);margin:2px 2px 0;max-width:72ch">Tighter row height, status pills with the same dot-system you have today, monospace IDs for scannability, and filter chips that double as counters.</p>
+
+  <div class="frame">
+    <div class="frame-bar">
+      <div class="lights"><span></span><span></span><span></span></div>
+      <div class="url">app.zoree.io / orders</div>
+      <span style="width:60px"></span>
+    </div>
+    <div class="frame-body">
+      <div class="app">
+
+        <!-- abbreviated sidebar (visual only) -->
+        <aside class="side">
+          <div class="side-brand">
+            <div class="brand-mark">Z</div>
+            <div>
+              <div class="brand-name">Zoree TMS</div>
+              <div class="brand-env">PRODUCTION · v3.11</div>
+            </div>
+          </div>
+          <div class="side-search">Search…<kbd>⌘K</kbd></div>
+          <div class="side-section">Planning</div>
+          <div class="side-item">Home</div>
+          <div class="side-item active">Orders <span class="count">142</span></div>
+          <div class="side-item">Shipments <span class="count">38</span></div>
+          <div class="side-item">Bulk planning</div>
+          <div class="side-section">Execution</div>
+          <div class="side-item">Live tracking <span class="count hot">3</span></div>
+          <div class="side-item">Carriers</div>
+          <div class="side-item">Dock scheduling</div>
+          <div class="side-foot">
+            <div class="me"><div class="avatar">SR</div><div class="me-meta"><span class="name">Sridhar T.</span><span class="role">Ops Lead</span></div></div>
+          </div>
+        </aside>
+
+        <section class="main">
+          <div class="topbar">
+            <div class="crumbs">
+              <span>Workspace</span>
+              <svg class="i sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+              <span>Planning</span>
+              <svg class="i sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+              <strong>Orders</strong>
+            </div>
+            <div class="top-spacer"></div>
+            <button class="btn btn-secondary btn-sm">Import CSV</button>
+            <button class="btn btn-primary btn-sm">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              New order
+            </button>
+          </div>
+
+          <div class="page">
+            <div class="page-head">
+              <div>
+                <div class="page-title">Orders</div>
+                <div class="page-sub">142 open · 38 in shipments · 11,402 lifetime.</div>
+              </div>
+              <div class="page-actions">
+                <button class="btn btn-ghost btn-sm">Export</button>
+                <button class="btn btn-secondary btn-sm">Columns</button>
+              </div>
+            </div>
+
+            <div class="toolbar">
+              <div class="search">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input placeholder="Search orders, customers, BOL…" />
+              </div>
+              <div class="chips">
+                <button class="chip on">All <span class="n">142</span></button>
+                <button class="chip">Unplanned <span class="n">37</span></button>
+                <button class="chip">Planned <span class="n">28</span></button>
+                <button class="chip">Tendered <span class="n">19</span></button>
+                <button class="chip">In transit <span class="n">36</span></button>
+                <button class="chip">Delivered <span class="n">19</span></button>
+                <button class="chip">Exception <span class="n">3</span></button>
+              </div>
+              <div style="margin-left:auto" class="chips">
+                <button class="chip">Customer ▾</button>
+                <button class="chip">Lane ▾</button>
+                <button class="chip">Pickup window ▾</button>
+              </div>
+            </div>
+
+            <div class="grid-card">
+              <table class="gt">
+                <thead>
+                  <tr>
+                    <th class="check"><span class="checkbox"></span></th>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Lane</th>
+                    <th>Pickup</th>
+                    <th>Carrier</th>
+                    <th>Status</th>
+                    <th class="right">Weight</th>
+                    <th class="right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="sel">
+                    <td><span class="checkbox on"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5L20 7"/></svg></span></td>
+                    <td><span class="mono">ORD-394206</span></td>
+                    <td>AT&amp;T</td>
+                    <td>Atlanta XDock <span class="muted">→</span> Dallas, TX</td>
+                    <td>2026-05-20 · <span class="muted">06:00</span></td>
+                    <td>AVERITT EXPRESS</td>
+                    <td><span class="badge b-tendered">Packing</span></td>
+                    <td class="right">800 lb</td>
+                    <td class="right">$1,240.00</td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td><span class="mono">ORD-394207</span></td>
+                    <td>Walmart</td>
+                    <td>Memphis DC <span class="muted">→</span> Houston, TX</td>
+                    <td>2026-05-12 · <span class="muted">10:30</span></td>
+                    <td>—</td>
+                    <td><span class="badge b-unplanned">Unplanned</span></td>
+                    <td class="right">14,200 lb</td>
+                    <td class="right muted">—</td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td><span class="mono">ORD-394208</span></td>
+                    <td>Home Depot</td>
+                    <td>Atlanta XDock <span class="muted">→</span> Charlotte, NC</td>
+                    <td>2026-05-11 · <span class="muted">14:00</span></td>
+                    <td>OLD DOMINION</td>
+                    <td><span class="badge b-planned">Planned</span></td>
+                    <td class="right">2,100 lb</td>
+                    <td class="right">$680.00</td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td><span class="mono">ORD-394209</span></td>
+                    <td>AT&amp;T</td>
+                    <td>Atlanta XDock <span class="muted">→</span> Dallas, TX</td>
+                    <td>2026-05-20 · <span class="muted">06:00</span></td>
+                    <td>AVERITT EXPRESS</td>
+                    <td><span class="badge b-intransit">In transit</span></td>
+                    <td class="right">920 lb</td>
+                    <td class="right">$1,310.00</td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td><span class="mono">ORD-394210</span></td>
+                    <td>FedEx Supply Chain</td>
+                    <td>Memphis DC <span class="muted">→</span> Nashville, TN</td>
+                    <td>2026-05-10 · <span class="muted">08:00</span></td>
+                    <td>SAIA</td>
+                    <td><span class="badge b-delivered">Delivered</span></td>
+                    <td class="right">3,400 lb</td>
+                    <td class="right">$890.00</td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td><span class="mono">ORD-394211</span></td>
+                    <td>Best Buy</td>
+                    <td>Dallas DC <span class="muted">→</span> Phoenix, AZ</td>
+                    <td>2026-05-13 · <span class="muted">11:30</span></td>
+                    <td>XPO</td>
+                    <td><span class="badge b-exception">Exception</span></td>
+                    <td class="right">5,600 lb</td>
+                    <td class="right">$2,180.00</td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td><span class="mono">ORD-394212</span></td>
+                    <td>Target</td>
+                    <td>Atlanta XDock <span class="muted">→</span> Miami, FL</td>
+                    <td>2026-05-14 · <span class="muted">07:00</span></td>
+                    <td>—</td>
+                    <td><span class="badge b-tendered">Tendered</span></td>
+                    <td class="right">7,840 lb</td>
+                    <td class="right">$1,975.00</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <h2 id="modal" style="font-size:18px;font-weight:600;margin:8px 2px">3 · Pack Order modal — refreshed</h2>
+  <p style="color:var(--ink-2);margin:2px 2px 0;max-width:72ch">The big change vs the screenshot: read-only details stop pretending to be inputs. They become a neat 3×3 facts grid. Inputs get real labels and breathing room. A stage rail at the top makes the “Stage 7 → 8” progress visible at a glance.</p>
+
+  <div class="frame">
+    <div class="frame-bar">
+      <div class="lights"><span></span><span></span><span></span></div>
+      <div class="url">app.zoree.io / shipments / SHP-2026-9103 — Pack</div>
+      <span style="width:60px"></span>
+    </div>
+    <div class="frame-body stage-bg">
+
+      <div class="modal">
+        <div class="modal-head">
+          <div class="modal-mark">
+            <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="m12 13 0 8"/></svg>
+          </div>
+          <div>
+            <div class="modal-eyebrow">Shipment SHP-2026-9103</div>
+            <div class="modal-title">Pack order</div>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+            <span class="modal-stage-pill">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+              Stage 7 → 8
+            </span>
+            <button class="modal-x">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <!-- Stage rail -->
+          <div class="stage-rail">
+            <div class="stage done"><div class="bar"></div>1 · Order</div>
+            <div class="stage done"><div class="bar"></div>2 · Plan</div>
+            <div class="stage done"><div class="bar"></div>3 · Rate</div>
+            <div class="stage done"><div class="bar"></div>4 · Tender</div>
+            <div class="stage done"><div class="bar"></div>5 · Accept</div>
+            <div class="stage done"><div class="bar"></div>6 · Dock</div>
+            <div class="stage done"><div class="bar"></div>7 · Stage</div>
+            <div class="stage now"><div class="bar"></div>8 · Pack</div>
+          </div>
+
+          <div class="callout">
+            <div class="kbd">8</div>
+            <div class="copy"><strong>Packing.</strong> Items packed into cartons. Enter carton count, final weight, and generate shipping labels.</div>
+          </div>
+
+          <!-- Read-only details -->
+          <div class="meta-grid">
+            <div class="meta">
+              <div class="k">Order</div>
+              <div class="v">ORD-394206</div>
+            </div>
+            <div class="meta">
+              <div class="k">Customer</div>
+              <div class="v">AT&amp;T</div>
+            </div>
+            <div class="meta">
+              <div class="k">Source</div>
+              <div class="v">Atlanta XDock<small>College Park, GA · 30337</small></div>
+            </div>
+
+            <div class="meta">
+              <div class="k">Destination</div>
+              <div class="v">Dallas, TX 75207</div>
+            </div>
+            <div class="meta">
+              <div class="k">Carrier</div>
+              <div class="v">AVERITT EXPRESS<small>Service level — standard</small></div>
+            </div>
+            <div class="meta">
+              <div class="k">Pickup window</div>
+              <div class="v">2026-05-20<small>06:00 → 07:30 · Door 1</small></div>
+            </div>
+
+            <div class="meta">
+              <div class="k">BOL</div>
+              <div class="v" style="color:var(--ink-3)">— not generated</div>
+            </div>
+            <div class="meta">
+              <div class="k">Total weight</div>
+              <div class="v">800 lb</div>
+            </div>
+            <div class="meta">
+              <div class="k">Status</div>
+              <div class="v"><span class="badge b-tendered">Packing</span></div>
+            </div>
+          </div>
+
+          <!-- Inputs -->
+          <div class="form-grid">
+            <div class="field">
+              <label>Carton count</label>
+              <div class="input-wrap">
+                <input class="input with-suffix" value="1" />
+                <span class="suffix">cartons</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Packed weight</label>
+              <div class="input-wrap">
+                <input class="input with-suffix" value="800" />
+                <span class="suffix">lbs</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Pallet count</label>
+              <div class="input-wrap">
+                <input class="input with-suffix" value="1" />
+                <span class="suffix">pallets</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-grid two">
+            <div class="field">
+              <label>Label type</label>
+              <select class="select">
+                <option>GS1-128 Barcode</option>
+                <option>Plain text label</option>
+                <option>Carrier-specific</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Packing slip #</label>
+              <input class="input" value="PS-929038" />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <div class="left">Last updated 14m ago by Maya R.</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-secondary">Save draft</button>
+            <button class="btn btn-primary">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg>
+              Confirm packed
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <h2 id="notes" style="font-size:18px;font-weight:600;margin:8px 2px">4 · What changed (and why)</h2>
+
+  <div class="panel" style="padding:0;margin-top:10px">
+    <div class="panel-h"><h3>Global</h3></div>
+    <div class="annot">
+      <ul>
+        <li><strong>Drop universal ALL CAPS.</strong> Today every label, button, and badge is uppercased. It reads loud and dates the UI. Reserve uppercase for tiny eyebrow labels (10.5px) only — body text stays sentence-case.</li>
+        <li><strong>Quieter chrome, louder content.</strong> Borders move from <code>#E2E8F0</code> to a softer <code>#EDEFF3</code>; surfaces shift to <code>#F7F8FA</code>. Headers and values get the contrast instead of the boxes.</li>
+        <li><strong>Tighter type scale.</strong> 28→22px page titles, 30→26px KPI numbers. Same hierarchy, less shouting on small screens.</li>
+        <li><strong>Single brand blue used sparingly.</strong> Today blue lives on every chip, header, and link. Mockup keeps blue for the primary CTA, focus rings, and active sidebar item only — everything else is monochrome.</li>
+        <li><strong>Real focus states.</strong> 3px brand-soft ring on inputs replaces the current border-only treatment.</li>
+      </ul>
+    </div>
+
+    <div class="panel-h"><h3>Sidebar &amp; topbar</h3></div>
+    <div class="annot">
+      <ul>
+        <li><strong>Sidebar search</strong> with ⌘K — discoverability beats scroll-and-scan in a 30-module nav.</li>
+        <li><strong>Inline counts</strong> (orders 142, exceptions 3) replace the existing pill badges floating off to the right; counts stay on the row, hot ones turn red.</li>
+        <li><strong>Active state</strong> uses a 3px left rail in brand color + soft tinted background, instead of a plain background highlight.</li>
+        <li><strong>Topbar breadcrumbs</strong>: today every page just shows its own title. With 35 pages, breadcrumbs orient you without taking real estate.</li>
+      </ul>
+    </div>
+
+    <div class="panel-h"><h3>Home / dashboard</h3></div>
+    <div class="annot">
+      <ul>
+        <li><strong>Greeting + summary line</strong> instead of a dry page title — sets context for the day in one sentence.</li>
+        <li><strong>KPI cards with sparklines</strong> — today’s KPIs are a single number with a delta. Sparklines give the trend at a glance without a separate chart.</li>
+        <li><strong>Module cards</strong> reduce per-card padding (24→16px) and use a clean icon tile instead of an emoji square — emojis render inconsistently across OS versions.</li>
+        <li><strong>Insights + activity columns</strong>: same content as today, but insights now use a colored lead bar (blue/amber/red) instead of full-width tinted backgrounds, which were competing with the rest of the page for attention.</li>
+      </ul>
+    </div>
+
+    <div class="panel-h"><h3>Orders list</h3></div>
+    <div class="annot">
+      <ul>
+        <li><strong>Status chips double as filters and counters.</strong> Today the stat-grid and chip-row are separate; combining them saves vertical space and makes the page feel more like Linear/Retool.</li>
+        <li><strong>Monospace IDs</strong> (ORD-394206) so the eye locks onto the column. Tabular numerics for weights/costs keep right-alignment clean.</li>
+        <li><strong>Row hover</strong> uses surface-2, not <code>#DBEAFE</code> — the current “electric blue” hover is jarring on long lists; the selected row keeps brand-soft so selection still pops.</li>
+        <li><strong>Header cells</strong> drop <code>height:44px</code> in favor of natural padding, and lose <code>letter-spacing:.06em</code> for a calmer look. Sort affordance moves to a hover-only chevron.</li>
+      </ul>
+    </div>
+
+    <div class="panel-h"><h3>Pack Order modal (the big one)</h3></div>
+    <div class="annot">
+      <ul>
+        <li><strong>Read-only fields stop being inputs.</strong> Today ORDER, CUSTOMER, SOURCE etc. are styled as bordered boxes that look editable. They become a calm 3×3 facts grid with eyebrow labels — same density, less visual noise.</li>
+        <li><strong>Stage rail</strong> turns the “Stage 7 → 8” pill into actual progress: 7 green segments + 1 active. Reusable across all stage modals (1–8).</li>
+        <li><strong>Header gets a brand mark + eyebrow</strong>: the dark navy header bar from today is heavy on a small modal; a light header with brand-tinted icon and small shipment ID eyebrow works better at this size.</li>
+        <li><strong>Inputs gain real labels</strong> — “Carton count” instead of CARTON COUNT in caps, units shown as suffixes inside the input (cartons, lbs, pallets) so users don’t need to read the label to know what unit they’re typing.</li>
+        <li><strong>Footer gets context</strong>: who last updated and when, plus a Save-draft option in case ops needs to step away mid-pack.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

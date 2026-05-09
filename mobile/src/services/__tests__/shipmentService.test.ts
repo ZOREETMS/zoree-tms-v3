@@ -14,16 +14,14 @@ import {
   updateShipmentStatus,
   validateShipmentForm,
 } from '../shipmentService';
-import { DbApi, ShipmentsApi } from '../../lib/api';
+import { ShipmentsApi } from '../../lib/api';
 
 jest.mock('../../lib/api', () => ({
-  DbApi: {
-    upsert: jest.fn(),
-    remove: jest.fn(),
-  },
-  // QA bug #57 + #63: deleteShipmentById and updateShipmentStatus now
-  // route through the service-layer ShipmentsApi (not the raw DbApi).
+  // QA bug #57 + #63 + #168: every shipment mutation
+  // (delete / status / create / copy) now routes through the
+  // service-layer ShipmentsApi. DbApi is no longer used by this file.
   ShipmentsApi: {
+    create: jest.fn(),
     remove: jest.fn(),
     updateStatus: jest.fn(),
   },
@@ -143,8 +141,11 @@ describe('validateShipmentForm', () => {
 describe('createShipment', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('upserts to shipments table with a generated id', async () => {
-    (DbApi.upsert as jest.Mock).mockResolvedValue(undefined);
+  // QA bug #168 fix: routes through ShipmentsApi.create (POST /api/shipments).
+  // Server now issues the id; the client sends an id-less payload and
+  // surfaces whatever id the API returns.
+  it('calls ShipmentsApi.create with no id and surfaces the server-issued id', async () => {
+    (ShipmentsApi.create as jest.Mock).mockResolvedValue({ id: 'SHP-2026-123456' });
     const result = await createShipment({
       ...buildBlankShipment(),
       originCity: 'Chicago',
@@ -153,17 +154,20 @@ describe('createShipment', () => {
       destState: 'TX',
       weight: '500',
     });
-    expect(result.id).toMatch(/^SHP-\d{4}-\d{4}$/);
-    expect(result.status).toBe('Planned');
-    expect(DbApi.upsert).toHaveBeenCalledWith(
-      'shipments',
+    expect(ShipmentsApi.create).toHaveBeenCalledTimes(1);
+    const sent = (ShipmentsApi.create as jest.Mock).mock.calls[0][0];
+    expect(sent).toEqual(
       expect.objectContaining({
-        id: result.id,
         origin: 'Chicago, IL',
         dest: 'Dallas, TX',
         weight: 500,
       }),
     );
+    // Belt and braces: client must not pre-generate an id any more.
+    expect(sent.id).toBeUndefined();
+    // Returned object surfaces the server-issued id back to the screen.
+    expect(result.id).toBe('SHP-2026-123456');
+    expect(result.status).toBe('Planned');
   });
 });
 
@@ -174,8 +178,11 @@ describe('copyShipment', () => {
     await expect(copyShipment(null as any)).rejects.toThrow(/source shipment is required/);
   });
 
-  it('upserts a fresh row with a new id and reset state', async () => {
-    (DbApi.upsert as jest.Mock).mockResolvedValue(undefined);
+  // QA bug #168 follow-up: copyShipment now routes through
+  // ShipmentsApi.create (POST /api/shipments — audited + WS-broadcast)
+  // and lets the server issue the new id.
+  it('posts a fresh row with reset state and surfaces the server-issued id', async () => {
+    (ShipmentsApi.create as jest.Mock).mockResolvedValue({ id: 'SHP-2026-987654' });
     const out = await copyShipment({
       id: 'SHP-2025-0001',
       origin: 'Chicago, IL 60601',
@@ -193,17 +200,21 @@ describe('copyShipment', () => {
       bol_type: 'MBOL',
       master_shipment_id: 'SHP-MASTER',
     });
-    expect(out.id).toMatch(/^SHP-\d{4}-\d{4}$/);
-    expect(out.id).not.toBe('SHP-2025-0001');
+    // Returned object surfaces the server-issued id back to the screen.
+    expect(out.id).toBe('SHP-2026-987654');
     expect(out.status).toBe('Planned');
-    // QA bug #56 fix: delivery_date now null (not '') so Postgres
-    // accepts the upsert. Empty string was rejected as a date value.
+    // QA bug #56 fix: delivery_date stays null (not '') so Postgres
+    // accepts the date column.
     expect(out.delivery_date).toBeNull();
     expect(out.equipment).toBe('Dry Van 53ft');
-    expect((out as any).order_ids).toBeUndefined();
-    expect((out as any).bol_type).toBeUndefined();
-    expect((out as any).master_shipment_id).toBeUndefined();
-    expect(DbApi.upsert).toHaveBeenCalledWith('shipments', expect.objectContaining({ id: out.id }));
+    // Reset/non-copied fields stay off the wire.
+    const sent = (ShipmentsApi.create as jest.Mock).mock.calls[0][0];
+    expect(sent.id).toBeUndefined();
+    expect(sent.order_ids).toBeUndefined();
+    expect(sent.bol_type).toBeUndefined();
+    expect(sent.master_shipment_id).toBeUndefined();
+    // copiedFrom propagates so the audit row records the lineage.
+    expect(sent.copiedFrom).toBe('SHP-2025-0001');
   });
 });
 
@@ -222,7 +233,6 @@ describe('deleteShipmentById', () => {
     (ShipmentsApi.remove as jest.Mock).mockResolvedValue({ ok: true });
     await deleteShipmentById('SHP-2026-0001');
     expect(ShipmentsApi.remove).toHaveBeenCalledWith('SHP-2026-0001');
-    expect(DbApi.remove).not.toHaveBeenCalled();
   });
 });
 

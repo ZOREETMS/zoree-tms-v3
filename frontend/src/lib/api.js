@@ -39,6 +39,35 @@ async function tryRefreshToken() {
   return _refreshing;
 }
 
+// Session-expired signal. Fired exactly once per "user is no longer
+// authenticated" event (token missing/expired AND refresh failed) so
+// AuthContext can drop the user and App re-renders LoginPage. Without
+// this, a stale token surfaces as "Missing Authorization header" inside
+// whichever feature modal happened to make the call (Plan, Tender, …).
+// The thrown SessionExpiredError is a marker — callers don't need to
+// special-case it; they just won't see it because the UI has already
+// switched to the login screen by the time the rejection propagates.
+let _sessionExpiredFired = false;
+export class SessionExpiredError extends Error {
+  constructor() { super("Session expired"); this.name = "SessionExpiredError"; this.code = "SESSION_EXPIRED"; }
+}
+function fireSessionExpired() {
+  if (_sessionExpiredFired) return;
+  _sessionExpiredFired = true;
+  try {
+    localStorage.removeItem("zoree_token");
+    localStorage.removeItem("zoree_refresh_token");
+    localStorage.removeItem("zoree_user");
+  } catch (_) { /* storage disabled — listener will still re-render */ }
+  try {
+    window.dispatchEvent(new CustomEvent("zoree:session-expired"));
+  } catch (_) { /* SSR / non-browser */ }
+}
+// Reset the latch when a fresh login succeeds so a later session
+// expiry can fire again. AuthContext.login calls this after storing
+// the new token.
+export function resetSessionExpiredLatch() { _sessionExpiredFired = false; }
+
 async function api(path, options = {}, _retried = false) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -48,10 +77,16 @@ async function api(path, options = {}, _retried = false) {
       ...(options.headers || {}),
     },
   });
-  // Auto-refresh on 401 and retry once
+  // Auto-refresh on 401 and retry once. /auth/* is exempt so a wrong
+  // password during login doesn't get treated as a session expiry.
   if (res.status === 401 && !_retried && !path.includes("/auth/")) {
     const refreshed = await tryRefreshToken();
     if (refreshed) return api(path, options, true);
+    // Refresh failed (no refresh token, or refresh token rejected) →
+    // session is genuinely gone. Bounce to login instead of surfacing
+    // "Missing Authorization header" inside a feature modal.
+    fireSessionExpired();
+    throw new SessionExpiredError();
   }
   const text = await res.text();
   let data = {};
@@ -131,6 +166,15 @@ export const AuthApi = {
 export const DbApi = {
   orders() {
     return api("/db/orders?q=select=*%26order=created_at.desc%26limit=500");
+  },
+  // True row count for the orders table — paired with `orders()` above
+  // because that call is hard-capped at 500 rows. Header chips, the
+  // OrdersPage "All" status count, and Dashboard KPIs that need the
+  // real total (not the page size) should call this instead of reading
+  // `orders.length`. Returns just a number; backend endpoint:
+  // GET /api/orders/count → { total }.
+  ordersCount() {
+    return api("/orders/count").then((r) => Number(r?.total) || 0);
   },
   shipments() {
     return api("/db/shipments?q=select=*%26order=created_at.desc%26limit=500");

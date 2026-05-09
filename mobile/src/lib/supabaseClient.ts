@@ -25,12 +25,13 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/env';
 
-// Defaults used when no per-tenant override is provided. Sourced from
-// the same project as api/server.js. Keep in sync if Supabase project
-// rotates — there's no .env file on mobile builds.
-const DEFAULT_SUPABASE_URL = 'https://ljbeihotrmyqthxptcgp.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = '';
+// Defaults are sourced from config/env.ts (single source of truth —
+// EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY at build
+// time). configureSupabase still accepts overrides so a future
+// Settings screen / per-tenant flow can plug in different credentials
+// without touching this module — see the comment in lib/api.ts.
 
 let _client: SupabaseClient | null = null;
 
@@ -45,8 +46,8 @@ export function configureSupabase({
   url?: string;
   anonKey?: string;
 }): void {
-  const finalUrl = url || DEFAULT_SUPABASE_URL;
-  const finalKey = anonKey || DEFAULT_SUPABASE_ANON_KEY;
+  const finalUrl = url || SUPABASE_URL;
+  const finalKey = anonKey || SUPABASE_ANON_KEY;
   if (!finalUrl || !finalKey) {
     // Without an anon key, Realtime would silently fail — log loudly
     // so dev catches a misconfigured build before QA does.

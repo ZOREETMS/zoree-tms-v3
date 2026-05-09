@@ -81,8 +81,8 @@ export function derivePhaseTimestamps(historyRows) {
     if (!tsRaw) continue;
 
     // 0. Creation event — when the shipment row was first written.
-    //    Pairs with the "Order Created & Rate Confirmed" rung so it has
-    //    a real timestamp instead of a static "Confirmed" label.
+    //    Pairs with the "Shipment Created & Rate Confirmed" rung so it
+    //    has a real timestamp instead of a static "Confirmed" label.
     if ((row.action || row.type) === "create") {
       remember("created", tsRaw);
     }

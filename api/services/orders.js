@@ -147,6 +147,25 @@ async function listOrders(filters = {}, tenantConfig = null) {
   };
 }
 
+// Returns the true row count for `orders` (after the same status/customer
+// filters that `listOrders` accepts) without pulling rows. Exists because
+// the UI's "ORDERS" header and dashboard KPIs were reading
+// `result.orders.length` from `listOrders`, which is bounded by the
+// page-size cap (default 500) and therefore stops growing past 500 even
+// when the table has more.
+//
+// Kept as a separate method (rather than rolling the count into
+// `listOrders`) so callers that only need the total — header chips,
+// dashboard tiles, mobile screens — don't pay for the row payload.
+async function countOrders(filters = {}, tenantConfig = null) {
+  const dbFilters = [];
+  if (filters.status)   dbFilters.push(['status',   'eq',    filters.status]);
+  if (filters.customer) dbFilters.push(['customer', 'ilike', `%${filters.customer}%`]);
+  if (filters.statuses) dbFilters.push(['status',   'in',    filters.statuses]);
+
+  return db.dbCount('orders', { filters: dbFilters }, tenantConfig);
+}
+
 async function getOrder(id, tenantConfig = null) {
   const rows = await db.dbSelect('orders', {
     filters: [['id', 'eq', id]],
@@ -220,6 +239,7 @@ async function deleteOrder(id, tenantConfig = null) {
 
 module.exports = {
   listOrders,
+  countOrders,
   getOrder,
   createOrder,
   updateOrder,

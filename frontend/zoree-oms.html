@@ -765,7 +765,7 @@ textarea{resize:vertical;min-height:60px;}
 <!-- ══════════════ MODALS ══════════════ -->
 <!-- ORDER ENTRY -->
 <div class="ov" id="m-o"><div class="modal" style="width:720px">
-  <div class="modal-header"><span class="modal-icon">🧾</span><span class="modal-title" id="om-ti">New Sales Order</span><span class="modal-stage">Stage 1 — Entry</span><button class="modal-close" onclick="cl('m-o')">✕</button></div>
+  <div class="modal-header"><span class="modal-icon">🧾</span><span class="modal-title" id="om-ti">New Sales Order</span><span class="modal-stage" id="om-stage-badge">Stage 1 — Entry</span><button class="modal-close" onclick="cl('m-o')">✕</button></div>
   <div class="modal-body">
     <div class="note note-blue"><strong>Stage 1 — Sales Order Entry:</strong> Enter ship-to, line items and delivery date. Click <em>Book Order</em> to confirm and check availability.</div>
     <div class="fr f3">
@@ -835,9 +835,9 @@ textarea{resize:vertical;min-height:60px;}
     </div>
   </div>
   <div class="modal-footer">
-    <button class="btn btn-secondary" onclick="cl('m-o')">Cancel</button>
-    <button class="btn btn-ghost" onclick="svO('draft')">Save Draft</button>
-    <button class="btn btn-primary" onclick="svO('book')">Book Order →</button>
+    <button class="btn btn-secondary" onclick="cl('m-o')">Close</button>
+    <button class="btn btn-ghost"   id="om-btn-draft" onclick="svO('draft')">Save Draft</button>
+    <button class="btn btn-primary" id="om-btn-book"  onclick="svO('book')">Book Order →</button>
   </div>
 </div></div>
 
@@ -1863,6 +1863,18 @@ async function syncTMS(){
         if (m.deliveryDate  && ord.deliveryDate!== m.deliveryDate)  { ord.deliveryDate= m.deliveryDate; changed = true; }
         if (m.proNumber     && !ord.pro)                            { ord.pro         = m.proNumber;    changed = true; }
         if (m.bolNumber     && !ord.bol)                            { ord.bol         = m.bolNumber;    changed = true; }
+        // Bug #BOL-PRO-MODE-OMS-PICK: serviceLevel + mode were never
+        // mirrored on this path, so the warehouse modals showed Service
+        // Level and Mode as "—" for orders that the planner-poll path
+        // promoted before the tender-accept push could fire (or whose
+        // tender-accept push happened to skip — see omsSync.js skip
+        // reasons). Mirror them with the empty-guard pattern used for
+        // BOL/PRO so a user's OMS-side override is never clobbered;
+        // saveOrder() translates serviceLevel → service_level and
+        // mode → ship_mode via the existing dbToOrder/orderToDb mapper
+        // (zoree-oms.html:1695 / 1742 / 1751).
+        if (m.serviceLevel  && !ord.serviceLevel)                   { ord.serviceLevel = m.serviceLevel; changed = true; }
+        if (m.mode          && !ord.mode)                           { ord.mode         = m.mode;         changed = true; }
         if (m.shipStatus === 'Delivered') { ord.tmsDelivered = true; changed = true; }
         // Stage promotion: 4→5 when TMS has planned the shipment
         if (ord.stage === 4 && m.tmsShipmentId && (m.tmsStatus === 'Planned' || m.tmsStatus === 'Consolidated' || m.shipStatus)) {
@@ -1870,19 +1882,23 @@ async function syncTMS(){
           await logStage(ord.id, 4, 5);
           changed = true; updated++;
           // Log TMS shipment ID flowing back to OMS
-          mwLog('← TMS shipment assigned: ' + m.tmsShipmentId + ' → OMS order ' + ord.id + ' | Carrier: ' + (m.carrier||'TBD') + ' | Stage: 4→5',
+          mwLog('← TMS shipment assigned: ' + m.tmsShipmentId + ' → OMS order ' + ord.id + ' | Carrier: ' + (m.carrier||'TBD') + ' | Mode: ' + (m.mode||'—') + ' | Stage: 4→5',
             true, {
               flow: 'TMS → OMS',
               src: 'TMS', dst: 'OMS',
               recordId: m.tmsShipmentId,
               rowCount: 1,
-              fields: ['tms_shipment_id', 'carrier', 'pickup_date', 'delivery_date', 'stage'],
+              fields: ['tms_shipment_id', 'carrier', 'mode', 'service_level', 'pickup_date', 'delivery_date', 'bol_number', 'pro_number', 'stage'],
               payload: {
                 omsOrderId:    ord.id,
                 tmsShipmentId: m.tmsShipmentId,
                 carrier:       m.carrier       || null,
+                mode:          m.mode          || null,
+                serviceLevel:  m.serviceLevel  || null,
                 pickupDate:    m.pickupDate    || null,
                 deliveryDate:  m.deliveryDate  || null,
+                bolNumber:     m.bolNumber     || null,
+                proNumber:     m.proNumber     || null,
                 stagePromotion:'4→5',
               }
             }
@@ -2381,6 +2397,26 @@ function openOM(id){
   // pickup/delivery dates, dock door, dock load start/end, BOL, PRO,
   // Seal). Otherwise hide the panel entirely.
   try { populateOmTmsPlan(o); } catch(e) { console.warn('[populateOmTmsPlan]', e.message); }
+
+  // Stage-aware modal chrome. New orders open at Stage 1 (Entry); existing
+  // orders show their current stage in the header badge. Once an order is
+  // booked we no longer want the "Save Draft" path, and once it has
+  // shipped (stage >= 10) "Book Order" no longer makes sense — clicking
+  // it on a Shipped/Delivered row would re-run validation against the
+  // old draft state and confuse downstream sync. Hide the action buttons
+  // in those terminal stages so the modal is effectively read-only.
+  var _omStageLabels = ['','Entry','Booked','Reserved','Released to TMS','TMS Planned','Tendered','Picking','Packed','Staged','Shipped','Delivered'];
+  var _omStage = (o && o.stage) ? o.stage : 1;
+  var _omBadge = document.getElementById('om-stage-badge');
+  if (_omBadge) _omBadge.textContent = 'Stage ' + _omStage + ' — ' + (_omStageLabels[_omStage] || 'Unknown');
+  var _omBtnDraft = document.getElementById('om-btn-draft');
+  var _omBtnBook  = document.getElementById('om-btn-book');
+  // Save Draft is only meaningful before the order is booked.
+  if (_omBtnDraft) _omBtnDraft.style.display = (_omStage >= 2)  ? 'none' : '';
+  // Book Order disappears once the order has shipped (REQ: shipped orders
+  // must not expose the Book button — they are immutable post-load).
+  if (_omBtnBook)  _omBtnBook.style.display  = (_omStage >= 10) ? 'none' : '';
+
   openM('m-o');
 }
 
@@ -2423,8 +2459,10 @@ async function populateOmTmsPlan(o){
     cell('Delivery Date', ship.delivery_date),
     cell('Dock Door', ship.dock_door || ship.dock_assigned),
     cell('Dock Number', ship.dock_assigned),
-    cell('Dock Load Start', ship.dock_load_start || ship.dock_time),
-    cell('Dock Load End', ship.dock_load_end),
+    // Canonical schema columns are loading_start / loading_end; older
+    // payloads may still expose dock_load_start/end or just dock_time.
+    cell('Dock Load Start', ship.loading_start || ship.dock_load_start || ship.dock_time),
+    cell('Dock Load End',   ship.loading_end   || ship.dock_load_end),
     cell('BOL Number', ship.bol_number),
     cell('PRO Number', ship.pro_number),
     cell('Seal Number', ship.seal_number),
@@ -2768,6 +2806,14 @@ function _omsBaseHdr(o){
     if (o.loadingStart && o.loadingEnd) return o.loadingStart + ' → ' + o.loadingEnd;
     return o.loadingStart || o.loadingEnd || '—';
   })();
+  // Bug #BOL-PRO-MODE-OMS-PICK: Mode and PRO # were missing from this
+  // shared header, so even when the underlying values existed on the
+  // OMS row the warehouse modals (Pick / Pack / Dock / Stage / Ship /
+  // POD) had no place to render them. They sit alongside their natural
+  // peers — Mode next to Carrier (the "how it ships" pair), PRO # next
+  // to BOL (the "tracking numbers" pair) — mirroring the Tender Info
+  // modal's grouping (zoree-oms.html:_renderTenderInfo) and the TMS
+  // Shipment Details panel.
   return ifc('Order',o.id)+
          ifc('Customer',custName(o.cust))+
          ifc('Source',sourceLbl)+
@@ -2775,7 +2821,9 @@ function _omsBaseHdr(o){
          ifc('Shipment',o.tmsShipId||'—')+
          ifc('Service Level',o.serviceLevel||'—')+
          ifc('Carrier',o.carrier||'—')+
+         ifc('Mode',o.mode||'—')+
          ifc('BOL',o.bol||'—')+
+         ifc('PRO #',o.pro||'—')+
          ifc('Pickup',o.pickupDate||'—')+
          ifc('Dock #',o.dockDoor||'—')+
          ifc('Dock Window',loadWin);
@@ -2924,7 +2972,11 @@ function openPODModal(id){
     {e:'Loaded & Shipped',t:o.shippedAt||'',done:o.stage>=10,cur:o.stage===10},
     {e:'Delivered / POD',t:o.deliveredAt||'',done:o.stage>=11,cur:false},
   ];
-  document.getElementById('pod-hdr').innerHTML=_omsBaseHdr(o)+ifc('Ship Date',o.shipDate||'—')+ifc('Est. Delivery',o.deliveryDate||'—')+ifc('PRO #',o.pro||'—');
+  // PRO # used to be appended here as a stage-specific tail cell because
+  // _omsBaseHdr didn't render it. Now that the base header includes
+  // PRO # for every warehouse modal (Step D of bug #BOL-PRO-MODE-OMS-PICK),
+  // appending it again would duplicate the field — drop the trailing cell.
+  document.getElementById('pod-hdr').innerHTML=_omsBaseHdr(o)+ifc('Ship Date',o.shipDate||'—')+ifc('Est. Delivery',o.deliveryDate||'—');
   document.getElementById('pod-timeline').innerHTML=
     `<div class="track-timeline">`+
     events.map(ev=>`<div class="track-event">

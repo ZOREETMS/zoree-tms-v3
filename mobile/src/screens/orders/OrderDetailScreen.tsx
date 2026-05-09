@@ -23,10 +23,13 @@ import {
   canDeleteOrder,
 } from '../../services/orderActionRules';
 import {
-  ratePlanForOrder,
+  rateAllCarriersForOrder,
+  buildPlanFromQuote,
   executeOrderPlan,
   isFailure,
+  type SingleOrderCarrierQuote,
 } from '../../services/planSingleOrderService';
+import CarrierPickerModal from '../../components/orders/CarrierPickerModal';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
@@ -44,6 +47,14 @@ export default function OrderDetailScreen() {
   const [lines, setLines] = useState<any[]>([]);
   const [linesLoading, setLinesLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
+
+  // Carrier-picker state. `pickerQuotes` is the rated list shown in
+  // the modal; `pickerBusy` blocks the Confirm button while we run
+  // buildPlanFromQuote + executeOrderPlan. We deliberately keep these
+  // as plain useState rather than a reducer — the modal is short-lived
+  // and the four transitions (open / pick / busy / close) are simple.
+  const [pickerQuotes, setPickerQuotes] = useState<SingleOrderCarrierQuote[] | null>(null);
+  const [pickerBusy, setPickerBusy] = useState(false);
 
   const order = useMemo(
     () => data.orders.find((o) => (o.id ?? o.order_id)?.toString() === orderId),
@@ -124,60 +135,79 @@ export default function OrderDetailScreen() {
   );
 
   /**
-   * Plan this single order — rate via BulkPlanApi, show the matched
-   * carrier/cost in a confirm dialog, then execute (which inserts the
-   * shipment row + sets shipment_id + cascades through audit history).
+   * Plan this single order — rate via BulkPlanApi, show ALL viable
+   * carriers in the picker modal, and execute the plan the user
+   * chooses (which inserts the shipment row + sets shipment_id +
+   * cascades through audit history).
    *
-   * Replaces the prior `changeStatus('Planned')` shortcut that flipped
-   * status without creating a shipment (root cause of ORD-2026-991550).
-   * All planning logic stays in `planSingleOrderService` — this
-   * callback is only orchestration (loading flag, dialog, refresh).
+   * Was previously: rate → single-carrier Alert → execute the cheapest.
+   * That flow only ever surfaced one carrier, so the user couldn't see
+   * — let alone choose — alternative options that returned a quote on
+   * the same lane. The picker fixes that gap. The "create shipment
+   * row, not just flip status" guarantee from the original fix
+   * (ORD-2026-991550) is preserved because the chosen plan still
+   * executes through `BulkPlanApi.execute`.
+   *
+   * Pure orchestration: open picker on rate-success, no business logic.
    */
   const planThisOrder = useCallback(async () => {
     if (!order) return;
     setUpdating(true);
     try {
-      const rated = await ratePlanForOrder(order, 'cost');
+      const rated = await rateAllCarriersForOrder(order, 'cost');
       if (isFailure(rated)) {
         Alert.alert('Cannot plan order', rated.message);
         return;
       }
-      const { plan, summary } = rated;
-      const cost = `$${summary.totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-      const dates = summary.pickupDate && summary.deliveryDate
-        ? `Pickup ${summary.pickupDate} → Delivery ${summary.deliveryDate}`
-        : 'Dates TBD';
-      Alert.alert(
-        'Confirm Plan',
-        `${summary.carrier} (${summary.mode})\n${cost}\n${dates}\n\nCreate shipment?`,
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => setUpdating(false) },
-          {
-            text: 'Create',
-            onPress: async () => {
-              try {
-                const exec = await executeOrderPlan(plan);
-                if (!exec.shipment) {
-                  const msg = exec.errors[0]?.error || 'Shipment was not created';
-                  Alert.alert('Plan failed', msg);
-                  return;
-                }
-                await refreshData();
-                Alert.alert('Shipment created', `${exec.shipment.id} on ${exec.shipment.carrier}`);
-              } catch (e: any) {
-                Alert.alert('Plan failed', e.message || 'Could not create shipment');
-              } finally {
-                setUpdating(false);
-              }
-            },
-          },
-        ],
-      );
+      setPickerQuotes(rated.quotes);
     } catch (e: any) {
       Alert.alert('Plan failed', e.message || 'Rating failed');
+    } finally {
       setUpdating(false);
     }
-  }, [order, refreshData]);
+  }, [order]);
+
+  /**
+   * Carrier-picker confirm: build the plan from the chosen quote
+   * (so the shipment row carries that exact carrier + cost) and run
+   * it through executeOrderPlan. We keep the picker open while busy
+   * so the user has visual continuity if execute throws.
+   */
+  const handlePickerConfirm = useCallback(
+    async (quote: SingleOrderCarrierQuote) => {
+      if (!order) return;
+      setPickerBusy(true);
+      try {
+        const plan = buildPlanFromQuote(order, quote);
+        if (!plan) {
+          Alert.alert(
+            'Cannot plan order',
+            `${quote.carrier} did not return enough information to build a plan (no transit time).`,
+          );
+          return;
+        }
+        const exec = await executeOrderPlan(plan);
+        if (!exec.shipment) {
+          const msg = exec.errors[0]?.error || 'Shipment was not created';
+          Alert.alert('Plan failed', msg);
+          return;
+        }
+        setPickerQuotes(null);
+        await refreshData();
+        Alert.alert('Shipment created', `${exec.shipment.id} on ${exec.shipment.carrier}`);
+      } catch (e: any) {
+        Alert.alert('Plan failed', e.message || 'Could not create shipment');
+      } finally {
+        setPickerBusy(false);
+      }
+    },
+    [order, refreshData],
+  );
+
+  const handlePickerCancel = useCallback(() => {
+    if (pickerBusy) return; // ignore taps while a plan is in flight
+    setPickerQuotes(null);
+  }, [pickerBusy]);
 
   /**
    * QA bug #121: Delete the current order. Confirmation is mandatory
@@ -392,6 +422,15 @@ export default function OrderDetailScreen() {
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
       )}
+
+      <CarrierPickerModal
+        visible={pickerQuotes !== null}
+        quotes={pickerQuotes ?? []}
+        orderLabel={order.order_id || order.id}
+        busy={pickerBusy}
+        onCancel={handlePickerCancel}
+        onConfirm={handlePickerConfirm}
+      />
     </View>
   );
 }

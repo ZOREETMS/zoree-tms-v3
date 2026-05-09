@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { AuthApi, AuthApiExt } from "../lib/api";
+import { AuthApi, AuthApiExt, resetSessionExpiredLatch } from "../lib/api";
 
 const AuthContext = createContext(null);
 
@@ -33,6 +33,18 @@ export function AuthProvider({ children }) {
       .finally(() => setBooting(false));
   }, []);
 
+  // When `api.js` detects an unrecoverable 401 (no refresh token, or
+  // refresh token rejected) it dispatches `zoree:session-expired`.
+  // Drop the in-memory user so App.jsx re-renders <LoginPage /> instead
+  // of leaving the feature modal open with a "Missing Authorization
+  // header" error visible. localStorage was already cleared by
+  // fireSessionExpired() in api.js — this just syncs React state.
+  useEffect(() => {
+    const onExpired = () => setUser(null);
+    window.addEventListener("zoree:session-expired", onExpired);
+    return () => window.removeEventListener("zoree:session-expired", onExpired);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -43,6 +55,9 @@ export function AuthProvider({ children }) {
         localStorage.setItem("zoree_token", data.token);
         localStorage.setItem("zoree_refresh_token", data.refresh_token || "");
         localStorage.setItem("zoree_user", JSON.stringify(data.user || null));
+        // New session — re-arm the one-shot session-expired latch so
+        // the next 401 can bounce the user back to login again.
+        resetSessionExpiredLatch();
         setUser(data.user || null);
         return data;
       },

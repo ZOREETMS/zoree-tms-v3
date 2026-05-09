@@ -2047,7 +2047,13 @@ async function processMWQueue() {
             if (!omsOrderIds.length) { result = { mapped: [], ships: [] }; break; }
             var [ tmsOrdersRes, tmsShipsRes ] = await Promise.all([
               tmsDb().from('orders').select('id,shipment_id,status').in('id', omsOrderIds),
-              tmsDb().from('shipments').select('id,carrier,pickup_date,delivery_date,pickup,delivery,status,mode,trailer,pro_number,bol_number')
+              // Bug #BOL-PRO-MODE-OMS-PICK: service_level was missing from
+              // the projection, so the planner-poll path could never carry
+              // it back to the OMS even though the omsSync (tender-accept)
+              // path does. Mode was already selected but never mapped (see
+              // the mapper below). Both are now in the projection so the
+              // mapper has access to them.
+              tmsDb().from('shipments').select('id,carrier,pickup_date,delivery_date,pickup,delivery,status,mode,service_level,trailer,pro_number,bol_number')
                 .order('created_at', { ascending: false }).limit(500),
             ]);
             if (tmsOrdersRes.error) throw tmsOrdersRes.error;
@@ -2059,6 +2065,14 @@ async function processMWQueue() {
                 omsOrderId:    t.id,
                 tmsShipmentId: t.shipment_id  || null,
                 carrier:       ship?.carrier   || null,
+                // Bug #BOL-PRO-MODE-OMS-PICK: serviceLevel and mode were
+                // dropped on this path — only the tender-accept push
+                // (api/services/omsSync.js) carried them, leaving the
+                // planner-poll fallback incomplete. Now mirrored so the
+                // OMS sees the same fields regardless of which path
+                // promoted the order.
+                serviceLevel:  ship?.service_level || null,
+                mode:          ship?.mode          || null,
                 pickupDate:    ship?.pickup_date   || ship?.pickup   || null,
                 deliveryDate:  ship?.delivery_date || ship?.delivery || null,
                 proNumber:     ship?.pro_number    || null,
@@ -2075,15 +2089,15 @@ async function processMWQueue() {
                 'TMS shipment '+m.tmsShipmentId+' assigned to OMS order '+m.omsOrderId+' | Carrier: '+(m.carrier||'TBD'),
                 {
                   srcSystem:'TMS', dstSystem:'OMS', recordId: m.tmsShipmentId, rowCount: 1,
-                  fields: ['tms_shipment_id','carrier','pickup_date','delivery_date'],
-                  payload: { omsOrderId:m.omsOrderId, tmsShipmentId:m.tmsShipmentId, carrier:m.carrier, pickupDate:m.pickupDate, deliveryDate:m.deliveryDate },
+                  fields: ['tms_shipment_id','carrier','mode','service_level','pickup_date','delivery_date','bol_number','pro_number'],
+                  payload: { omsOrderId:m.omsOrderId, tmsShipmentId:m.tmsShipmentId, carrier:m.carrier, mode:m.mode, serviceLevel:m.serviceLevel, pickupDate:m.pickupDate, deliveryDate:m.deliveryDate, bolNumber:m.bolNumber, proNumber:m.proNumber },
                 }
               );
             });
             if(mapped.length > 0) logEvent('ok', 'TMS → OMS', 'pullTMSPlanning: ' + mapped.length + ' order(s) synced from TMS', {
               srcSystem:'TMS', dstSystem:'OMS', rowCount: mapped.length,
-              fields: ['carrier','pickup_date','delivery_date','pro_number','status'],
-              payload: { summary: mapped.map(function(m){ return {orderId:m.omsOrderId, shipmentId:m.tmsShipmentId, carrier:m.carrier}; }) },
+              fields: ['carrier','mode','service_level','pickup_date','delivery_date','pro_number','bol_number','status'],
+              payload: { summary: mapped.map(function(m){ return {orderId:m.omsOrderId, shipmentId:m.tmsShipmentId, carrier:m.carrier, mode:m.mode, serviceLevel:m.serviceLevel}; }) },
             });
             break;
           }
@@ -2149,6 +2163,70 @@ async function processMWQueue() {
             logEvent('ok', 'OMS → TMS', 'pushPODStatus: ' + payload.tmsShipmentId + ' → Delivered', {
               srcSystem:'OMS', dstSystem:'TMS', recordId: payload.tmsShipmentId, rowCount: 1,
               fields: ['status','delivered_at'], payload: payload,
+            });
+            break;
+          }
+
+          case 'PUSH_ITEM_TO_TMS': {
+            // REQ-31 — OMS oms_inventory write → TMS items upsert.
+            // Trigger trg_oms_inventory_push_to_tms enqueues the OMS row
+            // as JSON; we map the logistics-relevant columns and upsert
+            // into TMS items keyed on id. Stock/bin/customer fields are
+            // OMS-internal and intentionally omitted.
+            var omsItem = payload || {};
+            if (!omsItem.id) throw new Error('PUSH_ITEM_TO_TMS: payload missing id');
+            var tmsItemRow = {
+              id:            omsItem.id,
+              description:   omsItem.description || null,
+              weight_unit:   parseFloat(omsItem.unit_weight) || 0,
+              value_unit:    parseFloat(omsItem.unit_value)  || 0,
+              freight_class: omsItem.freight_class || null,
+              nmfc:          omsItem.nmfc || null,
+              hazmat:        !!omsItem.hazmat,
+              fragile:       !!omsItem.fragile,
+            };
+            var { error: itemUpsertErr } = await tmsDb()
+              .from('items')
+              .upsert(tmsItemRow, { onConflict: 'id' });
+            if (itemUpsertErr) throw itemUpsertErr;
+            result = { synced: tmsItemRow.id, table: 'items' };
+            logEvent('ok', 'OMS → TMS', 'pushItemToTMS: ' + tmsItemRow.id, {
+              srcSystem:'OMS', dstSystem:'TMS', recordId: tmsItemRow.id, rowCount: 1,
+              fields: ['id','description','weight_unit','value_unit','freight_class','nmfc','hazmat','fragile'],
+              payload: tmsItemRow,
+            });
+            break;
+          }
+
+          case 'PUSH_LOCATION_TO_TMS': {
+            // REQ-30 — OMS oms_locations write → TMS locations upsert.
+            // Trigger trg_oms_locations_push_to_tms enqueues the OMS row
+            // as JSON. The active boolean on OMS becomes status text on
+            // TMS ('Active' | 'Inactive') — see api/routes/locations.js
+            // rowToView() for the symmetric read mapping.
+            var omsLoc = payload || {};
+            if (!omsLoc.id) throw new Error('PUSH_LOCATION_TO_TMS: payload missing id');
+            var tmsLocRow = {
+              id:         omsLoc.id,
+              name:       omsLoc.name || null,
+              type:       omsLoc.type || 'Warehouse',
+              address:    omsLoc.address || null,
+              city:       omsLoc.city  || '',
+              state:      omsLoc.state || '',
+              zip:        omsLoc.zip   || '',
+              country:    omsLoc.country || 'US',
+              dock_doors: Number.isFinite(Number(omsLoc.dock_doors)) ? Number(omsLoc.dock_doors) : 4,
+              status:     (omsLoc.active === false) ? 'Inactive' : 'Active',
+            };
+            var { error: locUpsertErr } = await tmsDb()
+              .from('locations')
+              .upsert(tmsLocRow, { onConflict: 'id' });
+            if (locUpsertErr) throw locUpsertErr;
+            result = { synced: tmsLocRow.id, table: 'locations' };
+            logEvent('ok', 'OMS → TMS', 'pushLocationToTMS: ' + tmsLocRow.id, {
+              srcSystem:'OMS', dstSystem:'TMS', recordId: tmsLocRow.id, rowCount: 1,
+              fields: ['id','name','type','address','city','state','zip','country','dock_doors','status'],
+              payload: tmsLocRow,
             });
             break;
           }

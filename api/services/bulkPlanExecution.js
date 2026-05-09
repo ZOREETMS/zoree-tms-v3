@@ -26,6 +26,16 @@ function omsSync() {
   return _omsSync;
 }
 
+// Reuse the canonical id generator from the shipments service so the
+// bulk-plan path benefits from the 6-digit suffix space + existence
+// pre-check + retry loop. Prior implementation used a 4-digit
+// Math.random() suffix with no uniqueness check, which collided with
+// existing shipment ids in production once a few hundred shipments
+// existed for the year (birthday paradox). On collision the downstream
+// dbUpsert merged onto the existing row instead of failing, silently
+// reassigning new orders onto an already-Delivered shipment.
+const { generateUniqueShipmentId } = require('./shipments');
+
 function serviceHeaders(serviceKey, prefer = 'return=representation') {
   return {
     apikey: serviceKey,
@@ -116,8 +126,19 @@ async function fetchLineItemsSnapshot(orderIds, dbSelect) {
 }
 
 async function executePlan(plan, { SUPABASE_URL, SERVICE_KEY, dbSelect, fetchImpl }) {
-  const year = new Date().getFullYear();
-  const shipId = `SHP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+  // Use the shipments-service helper. Pass an `exists` callback wired to
+  // the injected dbSelect so this stays mockable in tests (the default
+  // helper would reach for the singleton db module instead).
+  const shipId = await generateUniqueShipmentId({
+    exists: async (candidate) => {
+      const rows = await dbSelect(
+        'shipments',
+        { filters: [['id', 'eq', candidate]], limit: 1 },
+        null,
+      ).catch(() => []);
+      return Array.isArray(rows) && rows.length > 0;
+    },
+  });
   const bolId = `BOL-${shipId}`;
   const orderIds = Array.isArray(plan.orderIds) ? plan.orderIds.slice() : [];
 

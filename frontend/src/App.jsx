@@ -87,18 +87,32 @@ function PrivateRoutes({ data }) {
 
 export default function App() {
   const { isAuthenticated, booting } = useAuth();
-  const [data, setData] = useState({ orders: [], shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [], warehouseDockConfigs: [] });
+  // `ordersTotal` is the true row count from /api/orders/count — used by
+  // the OrdersPage header, the "All" status chip, and Dashboard KPIs
+  // that previously read `orders.length`. The `orders` array itself
+  // still tops out at the 500-row page (see DbApi.orders), so the
+  // table/list views stay paginated; only the displayed total is
+  // promoted to the real number.
+  const [data, setData] = useState({ orders: [], ordersTotal: 0, shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [], warehouseDockConfigs: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function refreshCoreData() {
     setError("");
-    return Promise.all([DbApi.orders(), DbApi.shipments()])
-      .then(([orders, shipments]) => {
+    // ordersCount is fetched in parallel and tolerated independently —
+    // a count failure should not blank out the orders array we did
+    // get back. On miss we keep the previous total (passed via prev).
+    return Promise.all([
+      DbApi.orders(),
+      DbApi.shipments(),
+      DbApi.ordersCount().catch(() => undefined),
+    ])
+      .then(([orders, shipments, ordersTotal]) => {
         setData((prev) => ({
           ...prev,
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
+          ordersTotal: ordersTotal ?? prev.ordersTotal ?? 0,
         }));
       })
       .catch((e) => setError(e.message || "Failed loading data"));
@@ -128,9 +142,14 @@ export default function App() {
       DbApi.equipmentTypes().catch(() => []),
       DbApi.planningParameters().catch(() => []),
       DbApi.warehouseDockConfigs().catch(() => []),
+      // True orders count — independent failure mode: a count outage
+      // should never blank out the rest of the dashboard, so it
+      // collapses to undefined and we fall back to the prior total
+      // below (or 0 on the very first load).
+      DbApi.ordersCount().catch(() => undefined),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters, warehouseDockConfigs]) => {
-        setData({
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters, warehouseDockConfigs, ordersTotal]) => {
+        setData((prev) => ({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
           carriers: Array.isArray(carriers) ? carriers : [],
@@ -145,7 +164,8 @@ export default function App() {
           equipmentTypes: Array.isArray(equipmentTypes) ? equipmentTypes : [],
           planningParameters: Array.isArray(planningParameters) ? planningParameters : [],
           warehouseDockConfigs: Array.isArray(warehouseDockConfigs) ? warehouseDockConfigs : [],
-        });
+          ordersTotal: ordersTotal ?? prev.ordersTotal ?? 0,
+        }));
       })
       .catch((e) => setError(e.message || "Failed loading data"))
       .finally(() => setLoading(false));

@@ -7,7 +7,7 @@ import React, {
 } from 'react';
 import { AuthApi, configureAuthHooks } from '../lib/api';
 import { storage } from '../lib/storage';
-import { API_BASE } from '../config/env';
+import { API_BASE, SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/env';
 
 interface User {
   id?: string;
@@ -38,9 +38,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * endpoint /auth/v1/token?grant_type=refresh_token that server.js
  * /api/auth/login uses, swap the access_token + refresh_token, retry
  * the original request.
+ *
+ * Mobile-bug 60 follow-up: SUPABASE_URL / SUPABASE_ANON_KEY now come
+ * from config/env.ts (EXPO_PUBLIC_* env vars at build time) so the
+ * Realtime client and this refresh path share one source of truth.
+ * The previous in-file '' constants meant a missing key silently
+ * disabled both flows.
  */
-const SUPABASE_URL = 'https://ljbeihotrmyqthxptcgp.supabase.co';
-const SUPABASE_ANON_KEY = '';
 
 /**
  * Refresh the Supabase access_token using the stored refresh_token.

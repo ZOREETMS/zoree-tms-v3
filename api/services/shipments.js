@@ -58,6 +58,32 @@ function dbToShipment(r) {
     // status flip from In Transit / Delivered surfaces with date AND time.
     shippedAt:          r.shipped_at     || null,
     deliveredAt:        r.delivered_at   || null,
+    // FU-4 (post-#168): the eight columns the create-path canonicalizer
+    // (`buildShipmentInsertRow`) carries also need to round-trip through
+    // the read mapper so PATCH /api/shipments/:id can persist them.
+    // Without this, updateShipment's `merged = {...existing, ...updates}`
+    // would lose any of these keys that weren't in the incoming patch
+    // (because `existing` came from this mapper). Keep this list in
+    // lock-step with `shipmentToDb` and `buildShipmentInsertRow`.
+    equipment:          r.equipment      || null,
+    commodity:          r.commodity      || null,
+    rateId:             r.rate_id        || null,
+    rate:               r.rate           || 0,
+    fuelSurcharge:      r.fuel_surcharge || 0,
+    accessorials:       r.accessorials   || 0,
+    miles:              r.miles          || 0,
+    // Preserve NULL on line_items so a PATCH that doesn't touch the
+    // column doesn't write an empty array back over a NULL — both are
+    // semantically "no items" for readers, but rewriting NULL to [] on
+    // every unrelated update would amplify writes and obscure history
+    // diffs.
+    lineItems:          Array.isArray(r.line_items) ? r.line_items : null,
+    // Migration 021: international parity columns. Default 'USA' at the
+    // DB level — read mapper surfaces whatever's stored.
+    originCountry:      r.origin_country || null,
+    destCountry:        r.dest_country   || null,
+    // Migration 004: planning-time exception tag.
+    dockIssue:          r.dock_issue     || null,
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
   };
@@ -92,6 +118,18 @@ const SHIPMENT_DB_TO_APP = Object.freeze({
   shipped_at:     'shippedAt',
   delivered_at:   'deliveredAt',
   dest:           'destination',
+  // FU-4 (post-#168): keep this map in lock-step with the round-trip
+  // dbToShipment / shipmentToDb / buildShipmentInsertRow column set so
+  // a snake_case patch from a legacy caller correctly overrides the
+  // existing camelCase value during the merge in updateShipment().
+  // Same-name fields (equipment, commodity, rate, accessorials, miles)
+  // don't need an entry — they pass through `out[k]` untouched.
+  rate_id:        'rateId',
+  fuel_surcharge: 'fuelSurcharge',
+  line_items:     'lineItems',
+  origin_country: 'originCountry',
+  dest_country:   'destCountry',
+  dock_issue:     'dockIssue',
 });
 function normalizeShipmentUpdates(updates) {
   if (!updates || typeof updates !== 'object') return {};
@@ -145,6 +183,35 @@ function shipmentToDb(s) {
     // auto-stamp on "In Transit" / "Delivered" actually persists.
     shipped_at:       pick('shippedAt',    'shipped_at')        || null,
     delivered_at:     pick('deliveredAt',  'delivered_at')      || null,
+    // FU-4 (post-#168): bring shipmentToDb to parity with the create-
+    // path canonicalizer (`buildShipmentInsertRow`). Before this,
+    // PATCH /api/shipments/:id with any of these keys silently dropped
+    // them (the rationale was "shipmentToDb does not yet know about
+    // all DB columns"). Now it does — the create and update paths
+    // share the same column knowledge. Numeric coercion stays
+    // permissive: form inputs arrive as strings.
+    equipment:        (() => {
+      const v = pick('equipment', 'equipment');
+      return typeof v === 'string' ? v.trim() || null : (v ?? null);
+    })(),
+    commodity:        pick('commodity',    'commodity')         || null,
+    rate_id:          pick('rateId',       'rate_id')           || null,
+    rate:             parseFloat(String(s.rate ?? 0).replace(/[$,]/g, '')) || 0,
+    fuel_surcharge:   parseFloat(String(s.fuelSurcharge ?? s.fuel_surcharge ?? 0).replace(/[$,]/g, '')) || 0,
+    accessorials:     parseFloat(String(s.accessorials ?? 0).replace(/[$,]/g, '')) || 0,
+    miles:            parseFloat(String(s.miles ?? 0).replace(/,/g, ''))  || 0,
+    line_items:       Array.isArray(s.lineItems)
+                        ? s.lineItems
+                        : (Array.isArray(s.line_items) ? s.line_items : null),
+    // Migration 021 international parity columns. NULL passthrough
+    // means the DB default ('USA') applies on insert; on update we
+    // only overwrite when the caller actually sent a value (otherwise
+    // updateShipment's `merged` already carries the existing value
+    // through).
+    origin_country:   pick('originCountry', 'origin_country') || null,
+    dest_country:     pick('destCountry',   'dest_country')   || null,
+    // Migration 004 planning-time exception tag.
+    dock_issue:       pick('dockIssue',     'dock_issue')     || null,
   };
 }
 
@@ -196,8 +263,12 @@ async function getShipment(id, tenantConfig = null) {
 
 async function createShipment(payload, tenantConfig = null) {
   if (!payload.id) {
-    const year = new Date().getFullYear();
-    payload.id = `SHP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Route through the collision-safe helper instead of a raw 4-digit
+    // Math.random suffix. Prior code could mint an id that already
+    // belonged to another shipment; dbUpsert(... 'id' ...) would then
+    // merge onto the existing row instead of failing, silently reusing
+    // a stale (sometimes Delivered) shipment.
+    payload.id = await generateUniqueShipmentId();
   }
   const row = await db.dbUpsert('shipments', shipmentToDb(payload), 'id', tenantConfig);
   return dbToShipment(row);
@@ -337,16 +408,25 @@ async function updateShipment(id, updates, tenantConfig = null, context = {}) {
 // the Shipment Timeline had no source for the "Tendered to Carrier"
 // timestamp (it rendered "Confirmed").
 //
-// Routing every legacy caller through updateShipment is risky because
-// shipmentToDb does not yet know about all DB columns (service_level,
-// seal_number, …) — delegating would silently drop those fields.
+// Historical note: this helper used to exist because shipmentToDb did
+// not know about all DB columns (service_level, seal_number, …, plus
+// the FU-4 set: equipment, commodity, rate_id, rate, fuel_surcharge,
+// accessorials, miles, line_items, origin_country, dest_country,
+// dock_issue) and delegating to updateShipment would silently drop
+// the unknown ones. As of FU-4 (post-#168) shipmentToDb is at parity
+// with the table, so this helper is no longer load-bearing for column
+// preservation.
 //
-// Instead, the generic /api/db/:table/:id PATCH handler calls this
-// helper AFTER the raw dbUpdate succeeds. We replay the same audit +
-// OMS-mirror logic that updateShipment runs, but driven by a DB-shape
-// (snake_case) patch body and the existing/updated DB rows. Best-
-// effort: the patch is already committed — audit failures must not
-// roll back the user's update.
+// We keep it because the generic /api/db/:table/:id PATCH endpoint
+// is still in active use (dock-scheduling edits, OMS bridge, ad-hoc
+// admin patches) and going through it bypasses updateShipment(). The
+// helper replays the same audit + OMS-mirror logic that
+// updateShipment runs, driven by a DB-shape (snake_case) patch body
+// and the existing/updated DB rows. Best-effort: the patch is already
+// committed — audit failures must not roll back the user's update.
+//
+// Future: once every caller is migrated to PATCH /api/shipments/:id
+// (which uses updateShipment), this helper can be retired.
 // ────────────────────────────────────────────────────────────────────
 async function recordRawPatchAudit({ id, before, after, user, via }) {
   if (!id || !before || !after) return;
@@ -433,4 +513,190 @@ async function recordRawPatchAudit({ id, before, after, user, via }) {
   }
 }
 
-module.exports = { listShipments, getShipment, createShipment, updateShipment, estimateCost, recordRawPatchAudit };
+// ════════════════════════════════════════════════════════════════════
+// FU-3 (post-#168): canonical mapper for the *create* path.
+//
+// The active POST /api/shipments handler in api/server.js used to do
+// `dbUpsert('shipments', req.body, null)` directly, which meant the
+// snake_case-vs-camelCase mapping AND the column whitelist lived in
+// every caller (web, mobile, OMS bridge). Three separate hand-built
+// mappers had drifted apart — equipment, commodity, rate_id, rate,
+// fuel_surcharge, accessorials, miles, line_items were known to one
+// caller but not another, and no `shipmentToDb` knew about them
+// either (`shipmentToDb` is intentionally update-shaped — see the
+// comment around recordRawPatchAudit for why we don't extend it).
+//
+// `buildShipmentInsertRow` is the create-path canonicalizer. It
+// accepts either shape per key (the `pick` pattern shipmentToDb
+// already uses), enumerates every column the shipments table accepts
+// at insert time, and returns a clean snake_case row. New columns
+// added to the table only need a line here, not three places.
+//
+// Strips audit-only metadata (`copiedFrom`, `_carrier`, `_commodity`,
+// `_linkedOrders`, …) so the row write doesn't 400 on unknown columns.
+// Caller is responsible for pulling those back out of req.body before
+// calling us if they need them for the change_history row (the POST
+// handler already does this for `copiedFrom`).
+// ════════════════════════════════════════════════════════════════════
+function buildShipmentInsertRow(input) {
+  if (!input || typeof input !== 'object') return {};
+  const s = input;
+  const pick = (camel, snake) =>
+    s[camel] !== undefined && s[camel] !== null && s[camel] !== ''
+      ? s[camel]
+      : s[snake];
+
+  const num = (camel, snake) => {
+    const v = pick(camel, snake);
+    if (v === undefined || v === null || v === '') return 0;
+    const n = parseFloat(String(v).replace(/[$,]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const intOrZero = (camel, snake) => {
+    const v = pick(camel, snake);
+    if (v === undefined || v === null || v === '') return 0;
+    const n = parseInt(String(v).replace(/,/g, ''), 10);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const blankToNull = (v) => {
+    if (v === undefined || v === null) return null;
+    if (typeof v === 'string' && v.trim() === '') return null;
+    return v;
+  };
+
+  const equipmentRaw = pick('equipment', 'equipment');
+  const equipment =
+    typeof equipmentRaw === 'string' ? equipmentRaw.trim() || null : (equipmentRaw ?? null);
+
+  const lineItemsRaw = pick('lineItems', 'line_items');
+  const lineItems = Array.isArray(lineItemsRaw) ? lineItemsRaw : null;
+
+  const orderIds = Array.isArray(s.consolidatedOrders)
+    ? s.consolidatedOrders
+    : Array.isArray(s.order_ids)
+      ? s.order_ids
+      : [];
+
+  // Only set id when the caller supplied one. The POST handler decides
+  // whether to pre-fill (legacy clients) or let generateUniqueShipmentId
+  // assign one (post-#168 clients).
+  const row = {
+    carrier:        s.carrier || '',
+    mode:           s.mode || 'TL',
+    origin:         s.origin || null,
+    dest:           s.destination || s.dest || null,
+    weight:         intOrZero('weight', 'weight'),
+    pieces:         intOrZero('pieces', 'pieces'),
+    status:         s.status || 'Planned',
+    pickup_date:    blankToNull(pick('pickupDate',    'pickup_date')),
+    delivery_date:  blankToNull(pick('deliveryDate',  'delivery_date')),
+    total_cost:     num('cost',           'total_cost'),
+    bol_number:     blankToNull(pick('bolNumber',     'bol_number')),
+    pro_number:     blankToNull(pick('proNumber',     'pro_number')),
+    tracking_number:blankToNull(pick('trackingNumber','tracking_number')),
+    order_ids:      orderIds,
+    spot_rate:      !!(s.spotRate     ?? s.spot_rate),
+    czarlite_rate:  !!(s.czarliteRate ?? s.czarlite_rate),
+    notes:          s.notes ?? null,
+    loading_start:  blankToNull(pick('loadingStart',  'loading_start')),
+    loading_end:    blankToNull(pick('loadingEnd',    'loading_end')),
+    dock_door:      blankToNull(pick('dockDoor',      'dock_door')),
+    dock_time:      blankToNull(pick('dockTime',      'dock_time')),
+    service_level:  pick('serviceLevel', 'service_level') || null,
+    seal_number:    blankToNull(pick('sealNumber',    'seal_number')),
+    origin_zip:     blankToNull(pick('originZip',     'origin_zip')),
+    dest_zip:       blankToNull(pick('destZip',       'dest_zip')),
+    ship_from_name: blankToNull(pick('shipFromName',  'ship_from_name')),
+    ship_to_name:   blankToNull(pick('shipToName',    'ship_to_name')),
+    shipped_at:     blankToNull(pick('shippedAt',     'shipped_at')),
+    delivered_at:   blankToNull(pick('deliveredAt',   'delivered_at')),
+    // ── New: previously diverging across mappers ────────────────────
+    equipment,
+    commodity:      blankToNull(pick('commodity',    'commodity')),
+    rate_id:        blankToNull(pick('rateId',       'rate_id')),
+    rate:           num('rate',          'rate'),
+    fuel_surcharge: num('fuelSurcharge', 'fuel_surcharge'),
+    accessorials:   num('accessorials',  'accessorials'),
+    miles:          num('miles',         'miles'),
+    line_items:     lineItems,
+    // Migration 021: international parity columns. Default of 'USA' is
+    // applied at the DB level; only forward when the caller actually
+    // sets them so we don't stomp the default with NULL.
+    origin_country: pick('originCountry', 'origin_country') || undefined,
+    dest_country:   pick('destCountry',   'dest_country')   || undefined,
+    // Migration 004: planning-time exception tag. Bulk-plan path sets
+    // this; the canonicalizer surfaces it for any future create
+    // caller that needs it (copyShipment carrying forward the tag,
+    // EDI ingest, etc.).
+    dock_issue:     pick('dockIssue', 'dock_issue') || null,
+  };
+
+  // Strip any keys whose value resolved to `undefined` so we don't
+  // ship `{ origin_country: undefined }` to PostgREST (which would
+  // otherwise overwrite the column default with NULL).
+  for (const k of Object.keys(row)) {
+    if (row[k] === undefined) delete row[k];
+  }
+
+  if (s.id) row.id = s.id;
+  return row;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FU-2 (post-#168): server-issued shipment IDs with widened entropy.
+//
+// The previous client-side generator picked a 4-digit random suffix,
+// giving roughly 1/9_000 collision odds at any given year-tenant
+// combination. The server's `dbUpsert` uses `Prefer:
+// resolution=merge-duplicates`, so a colliding id silently merged
+// into the existing row instead of erroring — manifesting as a
+// "phantom overwrite" of an unrelated shipment. We saw this in
+// production once already (QA #168 reproduction) on the mobile path.
+//
+// 6-digit suffix drops collision odds to ~1/900_000, and we
+// pre-check existence via dbSelect with a small retry loop so even a
+// rare collision lands on a fresh id. Pure deterministic behaviour
+// in tests is preserved by allowing the caller to inject `random`
+// (Math.random by default).
+//
+// Ids are still SHP-YYYY-N… so they remain user-recognizable and
+// every screen / search / clipboard recipe that already special-cases
+// the prefix keeps working.
+// ════════════════════════════════════════════════════════════════════
+async function generateUniqueShipmentId({
+  maxAttempts = 5,
+  random = Math.random,
+  exists = defaultIdExists,
+} = {}) {
+  const year = new Date().getFullYear();
+  for (let i = 0; i < maxAttempts; i++) {
+    const suffix = Math.floor(100000 + random() * 900000); // 6 digits
+    const candidate = `SHP-${year}-${suffix}`;
+    // eslint-disable-next-line no-await-in-loop
+    const taken = await exists(candidate).catch(() => false);
+    if (!taken) return candidate;
+  }
+  // Extreme fallback: timestamp-based suffix. Collision now requires
+  // two creates in the same millisecond on the same year — acceptable.
+  return `SHP-${year}-${(Date.now() % 1_000_000).toString().padStart(6, '0')}`;
+}
+
+async function defaultIdExists(id) {
+  const rows = await db
+    .dbSelect('shipments', { filters: [['id', 'eq', id]], limit: 1 }, null)
+    .catch(() => []);
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+module.exports = {
+  listShipments,
+  getShipment,
+  createShipment,
+  updateShipment,
+  estimateCost,
+  recordRawPatchAudit,
+  buildShipmentInsertRow,
+  generateUniqueShipmentId,
+};

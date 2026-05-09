@@ -67,6 +67,12 @@ async function syncTenderAcceptToOms(payload, user) {
   setIf(baseUpdates, 'tms_shipment_id',           shipmentId);
   setIf(baseUpdates, 'carrier',                   payload.carrier);
   setIf(baseUpdates, 'service_level',             payload.serviceLevel);
+  // Bug #BOL-PRO-MODE-OMS-PICK: payload.mode (e.g. "LTL", "TL", "Parcel")
+  // was being received from POST /api/oms/push but never written to
+  // oms_orders. The OMS reads `r.ship_mode` (zoree-oms.html, dbToOrder)
+  // so the warehouse modals showed Mode as empty after tender-accept.
+  // Mirror it onto ship_mode here, alongside service_level/bol/pro.
+  setIf(baseUpdates, 'ship_mode',                 payload.mode);
   setIf(baseUpdates, 'bol_number',                payload.bolNumber);
   setIf(baseUpdates, 'pro_number',                payload.proNumber);
   setIf(baseUpdates, 'seal_number',               payload.sealNumber);
@@ -132,6 +138,9 @@ async function syncTenderAcceptToOms(payload, user) {
         omsRowsSkipped: skipped.length,
         orderIds: orderIds,
         carrier: payload.carrier || null,
+        // Mode added alongside the omsSync writer fix so the audit
+        // record matches what was actually mirrored onto oms_orders.
+        mode: payload.mode || null,
         serviceLevel: payload.serviceLevel || null,
         bolNumber: payload.bolNumber || null,
         proNumber: payload.proNumber || null,

@@ -184,6 +184,15 @@ export const DbApi = {
   orders() {
     return api("/orders").then((res) => res.orders || []);
   },
+  // True row count for the orders table — paired with `orders()` above
+  // because that call is hard-capped at 500 rows server-side. The
+  // dashboard tile, the "All" status chip on OrdersScreen, and "View
+  // All N Orders" footer should call this instead of reading
+  // data.orders.length. Returns just a number; backend endpoint:
+  // GET /api/orders/count → { total }.
+  ordersCount() {
+    return api("/orders/count").then((r) => Number(r?.total) || 0);
+  },
   shipments() {
     return api("/db/shipments?q=select=*%26order=created_at.desc%26limit=500");
   },
@@ -358,6 +367,15 @@ export const ShipmentsApi = {
   /** QA bug #57: cascade-aware delete (server unassigns linked orders). */
   remove(id) {
     return api(`/shipments/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  /**
+   * QA bug #168: REQ-02 change history for the shipment timeline. Mirrors
+   * the web client's frontend/src/services/historyService.getShipmentHistory
+   * which calls the same endpoint. Caller is expected to shape the rows
+   * (see services/shipmentDetailService.shapeShipmentHistoryRows).
+   */
+  history(id, limit = 200) {
+    return api(`/shipments/${encodeURIComponent(id)}/history?limit=${encodeURIComponent(limit)}`);
   },
 };
 

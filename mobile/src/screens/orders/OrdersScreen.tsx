@@ -71,13 +71,21 @@ export default function OrdersScreen() {
 
   /** Count orders per status for filter badges */
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: data.orders.length };
+    // `All` is the true table total from /api/orders/count, not
+    // `data.orders.length` (which tops out at the 500-row page
+    // DbApi.orders returns). Per-status entries below remain derived
+    // from the loaded page — promoting those would need per-status
+    // count endpoints and isn't part of this fix. Falls back to the
+    // loaded length for the brief pre-fetch window.
+    const counts: Record<string, number> = {
+      All: data.ordersTotal || data.orders.length,
+    };
     data.orders.forEach((o) => {
       const s = o.status || 'Unplanned';
       counts[s] = (counts[s] || 0) + 1;
     });
     return counts;
-  }, [data.orders]);
+  }, [data.orders, data.ordersTotal]);
 
   const filteredOrders = useMemo(() => {
     let orders = data.orders;
