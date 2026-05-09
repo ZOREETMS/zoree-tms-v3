@@ -14,6 +14,10 @@
 const router = require('express').Router();
 const orderIngest = require('../services/orderIngest');
 const { bus, EVENTS } = require('../services/eventBus');
+// Messaging Hub plan §6 hook 1 — record each OMS→TMS order creation
+// batch as a single inbound message in the hub ledger. Best-effort.
+const hubWriter = require('../services/messagingHub/writer');
+const { MESSAGE_TYPE, SYSTEM_PARTY } = require('../services/messagingHub/types');
 
 // ── Middleware auth check ────────────────────────────────────────
 // The middleware authenticates with a shared INGEST_API_KEY (configured
@@ -35,7 +39,26 @@ function requireIngestKey(req, res, next) {
 // trigger in the TMS UI.
 router.post('/oms-orders', requireIngestKey, async (req, res) => {
   try {
-    const result = await orderIngest.ingestOmsBatch(req.body || {});
+    const body   = req.body || {};
+    const result = await orderIngest.ingestOmsBatch(body);
+
+    // Messaging Hub hook 1 — best-effort, must never fail the ingest.
+    try {
+      const orders = Array.isArray(body.orders) ? body.orders : [];
+      await hubWriter.recordInbound({
+        messageType: MESSAGE_TYPE.ORDER_CREATION,
+        source:      SYSTEM_PARTY.OMS,
+        target:      SYSTEM_PARTY.TMS,
+        payload:     body,
+        headers:     { ip: req.ip, userAgent: req.headers['user-agent'] || null },
+        externalRef: orders.length === 1 ? String(orders[0].id || '') : null,
+        orderId:     orders.length === 1 ? String(orders[0].id || '') : null,
+        actor:       'oms-ingest',
+      });
+    } catch (hubErr) {
+      console.error('[ingest:oms-orders] hub write failed:', hubErr.message);
+    }
+
     res.status(202).json({ ok: true, ...result });
   } catch (err) {
     const status = err.status || 500;

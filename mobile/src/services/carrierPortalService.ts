@@ -16,7 +16,7 @@
  *     migration 014 / shipmentOrderService.confirmOrdersForShipment.
  */
 
-import { DbApi, OmsApi } from '../lib/api';
+import { DbApi, OmsApi, NotifyApi } from '../lib/api';
 import { resolveCarrierName } from '../shared/utils/carrierPortal';
 
 /** Override-able default. Apps can pass a different value to listTenders / pickActiveTenders. */
@@ -353,6 +353,28 @@ export async function saveTenderResponse(
       // eslint-disable-next-line no-console
       console.warn('[carrierPortal] OMS push failed:', err?.message || err);
     }
+  }
+
+  // Bug #159: WebSocket fan-out so the web TMS (and zoree-oms.html)
+  // refresh without a manual reload. The web equivalent lives in
+  // frontend/src/services/tenderAcceptanceNotifier.js — we mirror the
+  // event name and payload shape here so existing listeners light up
+  // identically whether the action originated on web or mobile.
+  // Best-effort: a failed broadcast must not roll back the DB writes.
+  try {
+    const event = normalized.action === 'accept' ? 'tender_accepted' : 'tender_rejected';
+    const orderIds = Array.isArray(extra.orders)
+      ? extra.orders.filter((o: any) => o && o.id).map((o: any) => String(o.id))
+      : [];
+    await NotifyApi.broadcast(event, {
+      shipmentId: shipment.id,
+      proNumber:  normalized.proNumber || '',
+      orderIds,
+      via:        'mobile-carrier-portal',
+    });
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.warn('[carrierPortal] notify broadcast failed:', err?.message || err);
   }
 
   return normalized;

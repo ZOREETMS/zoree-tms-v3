@@ -25,6 +25,12 @@
 const db = require('./supabase');
 const history = require('./changeHistory');
 const { bus, EVENTS } = require('./eventBus');
+// Messaging Hub plan §6 hooks 4 + 6 — record every TMS→OMS push as an
+// outbound message in the hub ledger. The writer is feature-flagged
+// (MESSAGING_HUB_PERSIST=false short-circuits) and best-effort: a hub
+// write must never fail the actual OMS sync (CLAUDE_RULES §10).
+const hubWriter = require('./messagingHub/writer');
+const { MESSAGE_TYPE, SYSTEM_PARTY } = require('./messagingHub/types');
 
 // Classify a PG / Supabase error so the caller can surface a useful
 // reason to the UI instead of opaque raw text. Keys are stable strings
@@ -170,6 +176,22 @@ async function syncTenderAcceptToOms(payload, user) {
     }
   }
 
+  // Messaging Hub hook 4 (TMS → OMS shipment_details) — best-effort.
+  try {
+    await hubWriter.recordOutbound({
+      messageType: MESSAGE_TYPE.SHIPMENT_DETAILS,
+      source:      SYSTEM_PARTY.TMS,
+      target:      SYSTEM_PARTY.OMS,
+      payload:     { ...payload, omsRowsUpdated: updated, omsRowsSkipped: skipped },
+      shipmentId,
+      externalRef: payload.bolNumber || payload.proNumber || null,
+      actor:       (user && user.email) || 'tms-tender-accept-auto-sync',
+      tenantId:    user && user.tenantId,
+    });
+  } catch (hubErr) {
+    console.error('[omsSync] hub write (shipment_details) failed:', hubErr.message);
+  }
+
   return { shipmentId, pushedAt: nowIso, updated, skipped, skippedByReason };
 }
 
@@ -244,6 +266,29 @@ async function syncDeliveredToOms(payload, user) {
     acc[k] = (acc[k] || 0) + 1;
     return acc;
   }, {});
+
+  // Messaging Hub hook 6 (TMS → OMS delivered) — best-effort.
+  try {
+    await hubWriter.recordOutbound({
+      messageType: MESSAGE_TYPE.DELIVERED,
+      source:      SYSTEM_PARTY.TMS,
+      target:      SYSTEM_PARTY.OMS,
+      payload: {
+        shipmentId,
+        deliveredAt:    deliveredIso,
+        note:           payload.note          || null,
+        podReceivedBy:  payload.podReceivedBy || null,
+        omsRowsUpdated: updated,
+        omsRowsSkipped: skipped,
+      },
+      shipmentId,
+      actor:       (user && user.email) || 'tms-delivered-auto-sync',
+      tenantId:    user && user.tenantId,
+      status:      'delivered', // outbound terminal
+    });
+  } catch (hubErr) {
+    console.error('[omsSync] hub write (delivered) failed:', hubErr.message);
+  }
 
   return {
     shipmentId,

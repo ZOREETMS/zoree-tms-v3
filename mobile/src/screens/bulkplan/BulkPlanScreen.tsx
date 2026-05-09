@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Alert,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,29 @@ export default function BulkPlanScreen() {
 
   const [search, setSearch] = useState('');
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  // Bug #162 / #168: optional dock/loading + preferred-carrier defaults
+  // applied to every plan produced by this run. Empty values are not
+  // sent — per-plan/per-lane values produced by planAllLanes survive
+  // untouched. The carrier override partially addresses #168 ("only one
+  // carrier is shown") by letting the planner force a specific carrier
+  // on every lane in this run; a full per-lane multi-quote review
+  // screen (web parity: PlanRateReview) is tracked separately.
+  const [planOptionsOpen, setPlanOptionsOpen] = useState(false);
+  const [dockDoor, setDockDoor] = useState('');
+  const [dockTime, setDockTime] = useState('');
+  const [loadingStart, setLoadingStart] = useState('');
+  const [loadingEnd, setLoadingEnd] = useState('');
+  const [preferredCarrier, setPreferredCarrier] = useState('');
+  const planningDefaults = useMemo(
+    () => ({
+      dockDoor:         dockDoor.trim() || null,
+      dockTime:         dockTime.trim() || null,
+      loadingStart:     loadingStart.trim() || null,
+      loadingEnd:       loadingEnd.trim() || null,
+      preferredCarrier: preferredCarrier.trim() || null,
+    }),
+    [dockDoor, dockTime, loadingStart, loadingEnd, preferredCarrier],
+  );
 
   /**
    * Pre-select orders handed off from OrdersScreen's "Plan Selected"
@@ -139,6 +163,92 @@ export default function BulkPlanScreen() {
         }
       />
 
+      {/* Bug #162: collapsible Dock & Loading defaults so the planner
+          can stamp Dock Door / Dock Time / Loading Start / Loading End
+          on every shipment produced by this run. Web parity:
+          PlanConfirmationModal.jsx. The values flow through useBulkPlan
+          → /bulk-plan/execute, which already accepts them per plan. */}
+      {selectionSummary.count > 0 && (
+        <View style={styles.planOptionsCard}>
+          <TouchableOpacity
+            style={styles.planOptionsHeader}
+            onPress={() => setPlanOptionsOpen((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={planOptionsOpen ? 'chevron-down' : 'chevron-forward'}
+              size={16}
+              color={colors.text2}
+            />
+            <Text style={styles.planOptionsHeaderText}>
+              Dock & Loading (optional)
+            </Text>
+          </TouchableOpacity>
+          {planOptionsOpen && (
+            <View style={styles.planOptionsBody}>
+              <View style={styles.planOptionsRow}>
+                <View style={styles.planOptionsField}>
+                  <Text style={styles.planOptionsLabel}>DOCK DOOR</Text>
+                  <TextInput
+                    style={styles.planOptionsInput}
+                    value={dockDoor}
+                    onChangeText={setDockDoor}
+                    placeholder="e.g. D7"
+                    placeholderTextColor={colors.text3}
+                  />
+                </View>
+                <View style={styles.planOptionsField}>
+                  <Text style={styles.planOptionsLabel}>DOCK TIME</Text>
+                  <TextInput
+                    style={styles.planOptionsInput}
+                    value={dockTime}
+                    onChangeText={setDockTime}
+                    placeholder="HH:MM"
+                    placeholderTextColor={colors.text3}
+                  />
+                </View>
+              </View>
+              <View style={styles.planOptionsRow}>
+                <View style={styles.planOptionsField}>
+                  <Text style={styles.planOptionsLabel}>LOADING START</Text>
+                  <TextInput
+                    style={styles.planOptionsInput}
+                    value={loadingStart}
+                    onChangeText={setLoadingStart}
+                    placeholder="HH:MM"
+                    placeholderTextColor={colors.text3}
+                  />
+                </View>
+                <View style={styles.planOptionsField}>
+                  <Text style={styles.planOptionsLabel}>LOADING END</Text>
+                  <TextInput
+                    style={styles.planOptionsInput}
+                    value={loadingEnd}
+                    onChangeText={setLoadingEnd}
+                    placeholder="HH:MM"
+                    placeholderTextColor={colors.text3}
+                  />
+                </View>
+              </View>
+              {/* Bug #168: preferred-carrier override. When set, the
+                  planner ignores the auto-picked bestQuote and forces
+                  this carrier on every plan in the run. */}
+              <View style={styles.planOptionsField}>
+                <Text style={styles.planOptionsLabel}>PREFERRED CARRIER (OVERRIDE)</Text>
+                <TextInput
+                  style={styles.planOptionsInput}
+                  value={preferredCarrier}
+                  onChangeText={setPreferredCarrier}
+                  placeholder="Leave blank to use the cheapest quote"
+                  placeholderTextColor={colors.text3}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* QA bug #53 fix: Plan & Create Shipments button now confirms
           before firing executePlan, mirroring web's BulkPlanPage label. */}
       {selectionSummary.count > 0 && (
@@ -156,7 +266,7 @@ export default function BulkPlanScreen() {
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Plan & Create',
-                  onPress: () => executePlan('cost'),
+                  onPress: () => executePlan('cost', planningDefaults),
                 },
               ],
             );
@@ -242,5 +352,55 @@ const styles = StyleSheet.create({
   },
   planBtnText: {
     color: colors.white, fontSize: fontSize.lg, fontWeight: fontWeight.bold,
+  },
+  // Bug #162: collapsible Dock & Loading defaults card.
+  planOptionsCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.bg2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  planOptionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  planOptionsHeaderText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text2,
+  },
+  planOptionsBody: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  planOptionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  planOptionsField: {
+    flex: 1,
+  },
+  planOptionsLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text2,
+    marginBottom: spacing.xs,
+    letterSpacing: 0.5,
+  },
+  planOptionsInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.md,
+    color: colors.text,
+    backgroundColor: colors.bg,
   },
 });

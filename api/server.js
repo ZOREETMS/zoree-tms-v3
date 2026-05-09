@@ -22,7 +22,7 @@ const fusionPublisher = require('./services/fusionPublisher');
 const { bus, EVENTS } = require('./services/eventBus');
 const { executeBulkPlans } = require('./services/bulkPlanExecution');
 const { matchRate, matchAllRates } = require('./services/rateMatcher');
-const { getLtlMaxWeight } = require('./services/equipmentLimits');
+const { getLtlMaxWeight, getTlMaxWeight } = require('./services/equipmentLimits');
 const { shouldFetchLtl } = require('./services/ltlFetchGate');
 const {
   apiOrderToDbPatch,
@@ -61,6 +61,8 @@ const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
 const locationsRouter = require('./routes/locations');  // REQ-29 / REQ-30
+const messagingHubRouter = require('./routes/messagingHub'); // Messaging Hub (plan: docs/messaging-hub/plan.md)
+const tenderingRouter    = require('./routes/tendering');    // Carrier-edge tendering (hooks 2 + 3)
 
 // Fields on orders we record diffs for (label used in change_history.field).
 //
@@ -656,6 +658,24 @@ app.use('/api/mw-queue', buildMwQueueAdminRouter({ verifyToken, getUserRole }));
 
 // REQ-29 / REQ-30 — location master search + create
 app.use('/api/locations', locationsRouter);
+
+// Messaging Hub (read API for the Hub UI + compose target)
+//   GET  /api/messaging-hub/messages           — list with filters
+//   GET  /api/messaging-hub/messages/:id       — detail
+//   GET  /api/messaging-hub/kpis               — header KPI bar
+//   POST /api/messaging-hub/messages/:id/retry — replay
+//   POST /api/messaging-hub/compose            — UI compose target
+app.use('/api/messaging-hub', messagingHubRouter);
+
+// Carrier-edge tendering (Messaging Hub plan §6 hooks 2 + 3)
+//   POST /api/tendering/out                    — TMS → Carrier emit
+//   POST /api/tendering/response               — Carrier → TMS (auth: INGEST key)
+// The carrier-response endpoint is also surfaced on the /api/ingest
+// path so external partners can use the existing /api/ingest auth.
+app.use('/api/tendering',                         tenderingRouter);
+app.post('/api/ingest/carrier-tender-response',
+  tenderingRouter.requireIngestKey,
+  tenderingRouter.carrierTenderResponseHandler);
 
 // ── POST /api/tender/email — notify carrier when a shipment is tendered ──
 function getSmtpTransport() {
@@ -3093,7 +3113,18 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         detail: e.message,
       });
     }
-    console.log(`[BulkPlan/rate] LTL ceiling sourced from equipment_types: ${LTL_MAX} lb`);
+    // Bug #164: also resolve the TL ceiling so we can publish it back to
+    // the mobile/web caller in `meta.equipment` and reject overweight
+    // consolidations there. Failure here is non-fatal — the LTL path
+    // still works and the client will fall back to per-order plans
+    // because it has no consolidation guardrail without this number.
+    let TL_MAX = null;
+    try {
+      TL_MAX = await getTlMaxWeight();
+    } catch (e) {
+      console.warn('[BulkPlan/rate] equipment_types TL ceiling unavailable:', e.message);
+    }
+    console.log(`[BulkPlan/rate] LTL ceiling sourced from equipment_types: ${LTL_MAX} lb` + (TL_MAX ? `, TL ceiling: ${TL_MAX} lb` : ''));
 
     let cacheHits = 0;
     let cacheMisses = 0;
@@ -3447,6 +3478,16 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
           misses: cacheMisses,
           ratesVersion,
           ...laneQuoteCache.stats(),
+        },
+        // Bug #164: surface the equipment ceilings so callers (mobile
+        // bulkPlanService, web BulkPlanPage) can refuse to consolidate
+        // a subset whose totalWeight exceeds the TL trailer max — the
+        // root cause of "5×45,000 lb orders combined into one
+        // 225,000 lb shipment" because consolidation was decided on
+        // cost alone with no weight feasibility gate.
+        equipment: {
+          ltlMaxWeight: LTL_MAX,
+          tlMaxWeight:  TL_MAX,
         },
       },
     });

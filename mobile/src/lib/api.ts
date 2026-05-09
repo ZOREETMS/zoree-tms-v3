@@ -47,6 +47,7 @@ export {
   OmsApi,
   InvoicesApi,
   MileageApi,
+  NotifyApi,
   BulkPlanApi,
   configureAuthHooks,
 } from '../shared/api';

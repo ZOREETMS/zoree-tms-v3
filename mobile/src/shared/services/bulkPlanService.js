@@ -38,9 +38,25 @@ export function calcDates(quote, dueDate, readyDate) {
 
 /* Rating helper */
 
+// Bug #164: cache the TL trailer ceiling published by the server in
+// `meta.equipment.tlMaxWeight`. Used by planLaneWithSplit to refuse a
+// consolidated subset whose total weight wouldn't fit on a single
+// trailer. The cache is populated on the first successful rate call
+// and cleared at the start of each planAllLanes() run so admins
+// editing Equipment Master see new ceilings on the next plan.
+let _cachedTlMaxWeight = null;
+export function _resetEquipmentLimitsCacheForTest() { _cachedTlMaxWeight = null; }
+export function getCachedTlMaxWeight() { return _cachedTlMaxWeight; }
+
 async function rateLane(lane, optimizeBy = 'cost') {
   try {
     const res = await BulkPlanApi.rate([lane], optimizeBy);
+    // Capture the TL ceiling from server meta the first time we see it
+    // so subsequent consolidation feasibility checks have a number to
+    // compare against. Falsy values stay null and the consolidation
+    // gate will skip (no number → no consolidation, the safer default).
+    const tlMax = Number(res?.meta?.equipment?.tlMaxWeight);
+    if (Number.isFinite(tlMax) && tlMax > 0) _cachedTlMaxWeight = tlMax;
     const results = Array.isArray(res?.results) ? res.results : [];
     const match = results.find((r) => r.laneKey === lane.laneKey);
     return match?.bestQuote || null;
@@ -153,6 +169,18 @@ export async function planLaneWithSplit(lane, laneOrders, allOrders, optimizeBy 
         totalPieces: subset.reduce((s, o) => s + Number(o.pieces || 0), 0),
         orderIds: subsetIds,
       };
+
+      // Bug #164: refuse to consolidate a subset whose totalWeight
+      // exceeds the TL trailer ceiling — this is the gate the original
+      // algorithm was missing, which let 5×45,000 lb orders collapse
+      // into one 225,000 lb shipment because consolidation was decided
+      // on cost alone. The ceiling is sourced from the server's rate
+      // response meta (equipment_types.DV53.max_weight). When the
+      // server hasn't told us the ceiling yet we skip consolidation
+      // (the safer default) — individual plans still produce.
+      if (_cachedTlMaxWeight && consolidatedLane.totalWeight > _cachedTlMaxWeight) {
+        continue;
+      }
 
       const consolidatedQuote = await rateLane(consolidatedLane, optimizeBy);
       if (!consolidatedQuote) continue;

@@ -368,6 +368,42 @@ async function tenderShipmentAction(p, { shipments, orders, carriers }) {
   return `Shipment ${ship.id} tendered to ${carrierName} · ${emailStatus}${mbolNote}`;
 }
 
+/* ── Action: WITHDRAW_TENDER ────────────────────────────────────
+ *
+ * Bug #165 / #175: previously the chat had no way to take a Tendered
+ * shipment back to Planned — when the user said "withdraw tender for
+ * SHP-...", the model fell through to CANCEL_SHIPMENT, which threw
+ * "Shipment is Tendered — withdraw the tender before cancelling" and
+ * the user got stuck in a loop. Mirrors ShipmentsPage.withdrawTender:
+ *   - Only valid when status === 'Tendered'.
+ *   - Patches status back to 'Planned' through the audited
+ *     /api/shipments/:id PATCH route.
+ *   - Cascades the same status flip to every CBOL when the row is an
+ *     MBOL (matches the UI behaviour).
+ */
+
+async function withdrawTenderAction(p, { shipments }) {
+  const ship = findShipment(shipments, p.shipmentId);
+  if (ship.status !== "Tendered") {
+    throw new Error(
+      `Cannot withdraw tender for ${ship.id}: status is ${ship.status} (must be Tendered).`
+    );
+  }
+
+  const isMbol = ship.bol_type === "MBOL";
+  const children = isMbol
+    ? shipments.filter((s) => s.master_shipment_id === ship.id && s.bol_type === "CBOL")
+    : [];
+
+  await Promise.all([
+    ShipmentsApi.update(ship.id, { status: "Planned" }),
+    ...children.map((c) => ShipmentsApi.update(c.id, { status: "Planned" })),
+  ]);
+
+  const mbolNote = isMbol ? ` · ${children.length} CBOL(s) withdrawn` : "";
+  return `Tender withdrawn for ${ship.id}${mbolNote}. Status reverted to Planned.`;
+}
+
 /* ── Action: TENDER_ACCEPT ──────────────────────────────────────
  *
  * Carrier-side accept driven from chat. Fixes Bug #62: previously the
@@ -576,6 +612,10 @@ export async function executeChatAction(actionData, ctx = {}) {
     case "COPY_ORDER":            return copyOrderAction(params, safeCtx);
     case "TENDER_SHIPMENT":       return tenderShipmentAction(params, safeCtx);
     case "TENDER_ACCEPT":         return tenderAcceptAction(params, safeCtx);
+    // Bug #165/#175: WITHDRAW_TENDER reverses a Tendered shipment back
+    // to Planned. Without this the AI used to fall through to
+    // CANCEL_SHIPMENT and hit its "withdraw the tender first" guard.
+    case "WITHDRAW_TENDER":       return withdrawTenderAction(params, safeCtx);
     case "GET_RATES":             return getRatesAction(params);
     default: throw new Error(`Unknown action: ${action}`);
   }

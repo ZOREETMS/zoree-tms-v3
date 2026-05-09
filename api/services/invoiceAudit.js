@@ -43,6 +43,28 @@ function genInvoiceId() {
   return `INV-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
+// Bug #163: NET-term lookup so submitInvoice can compute and persist
+// `due_date` at insert time. The number is days added to invoice_date.
+// Anything outside the dictionary falls back to NET30. Mirrors the
+// frontend computeDueDate helper (frontend/src/services/invoiceService.js)
+// so the value the UI was already optimistically rendering is the same
+// value the DB now stores.
+const PAYMENT_TERM_DAYS = Object.freeze({
+  NET15: 15,
+  NET30: 30,
+  NET45: 45,
+  NET60: 60,
+});
+
+function computeDueDateIso(invoiceDateIso, paymentTerms) {
+  if (!invoiceDateIso) return null;
+  const days = PAYMENT_TERM_DAYS[paymentTerms] ?? PAYMENT_TERM_DAYS.NET30;
+  const base = new Date(invoiceDateIso);
+  if (Number.isNaN(base.getTime())) return null;
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
 // ── Shipment resolution (REQ-07) ────────────────────────────────
 // Takes an array of shipment ids and returns:
 //   {
@@ -248,6 +270,11 @@ async function submitInvoice({
     // trail shows exactly what was submitted)
     shipment_ids: ids.length ? ids : null,
     invoice_date: invoiceDate || null,
+    // Bug #163: persist due_date at insert time so the edit modal —
+    // which reads invoices.due_date directly — never opens with an
+    // empty field. Falls back to today + NET30 when the caller didn't
+    // pass an invoiceDate (the table allows NULL but the UI doesn't).
+    due_date: computeDueDateIso(invoiceDate || nowIso.slice(0, 10), paymentTerms),
     received_at: nowIso,
     agreed_cost: agreedCost,
     invoiced_amount: amount,
@@ -433,6 +460,142 @@ async function manualDecide({ invoiceId, decision, reason, user }) {
   return updated;
 }
 
+// ── Edit an existing invoice (Bug #157) ─────────────────────────
+// Accepts a camelCase patch from the UI and maps to DB columns. This
+// replaces the legacy raw PATCH /api/db/invoices/:id path that used to
+// fail with "column 'agreed_rate' not in schema cache" because the UI
+// was sending a column name that never existed (the DB column has
+// always been agreed_cost — see migration 008).
+//
+// Allowed editable fields and their DB mappings:
+//   invoiceNumber  → invoice_number
+//   carrier        → carrier
+//   carrierId      → carrier_id
+//   shipmentId     → shipment_id
+//   shipmentIds    → shipment_ids       (REQ-07 consolidated)
+//   invoiceDate    → invoice_date
+//   dueDate        → due_date
+//   agreedCost     → agreed_cost        (ALSO accepts agreedRate / agreed
+//                                        as legacy aliases — never persisted
+//                                        as a separate column)
+//   invoicedAmount → invoiced_amount
+//   status         → status             (must be in the lifecycle whitelist)
+//   paymentTerms   → payment_terms
+//   notes          → notes
+//
+// REQ-02: every changed field is recorded in change_history under
+// entity_type='invoice'. Untouched fields are left alone (patch semantics).
+const EDIT_FIELD_MAP = Object.freeze({
+  invoiceNumber:  'invoice_number',
+  carrier:        'carrier',
+  carrierId:      'carrier_id',
+  shipmentId:     'shipment_id',
+  shipmentIds:    'shipment_ids',
+  invoiceDate:    'invoice_date',
+  dueDate:        'due_date',
+  agreedCost:     'agreed_cost',
+  invoicedAmount: 'invoiced_amount',
+  status:         'status',
+  paymentTerms:   'payment_terms',
+  notes:          'notes',
+});
+
+// Legacy snake_case keys the old generic-PATCH UI used to send. Mapped to
+// the canonical DB column so a stale frontend (or 3rd-party caller) keeps
+// working through one release. agreed_rate is the headline alias from #157.
+const EDIT_LEGACY_ALIASES = Object.freeze({
+  invoice_number:  'invoice_number',
+  carrier_id:      'carrier_id',
+  shipment_id:     'shipment_id',
+  shipment_ids:    'shipment_ids',
+  invoice_date:    'invoice_date',
+  due_date:        'due_date',
+  agreed_cost:     'agreed_cost',
+  agreed_rate:     'agreed_cost',   // ← Bug #157: legacy alias
+  agreed:          'agreed_cost',
+  invoiced_amount: 'invoiced_amount',
+  payment_terms:   'payment_terms',
+});
+
+const EDIT_VALID_STATUSES = Object.freeze([
+  'Pending', 'Approved', 'Rejected', 'Disputed', 'On Hold', 'Cancelled', 'Paid',
+]);
+
+function buildInvoicePatch(rawPatch) {
+  const patch = {};
+  if (!rawPatch || typeof rawPatch !== 'object') return patch;
+
+  // Camel/domain keys win when both are present.
+  for (const [k, col] of Object.entries(EDIT_LEGACY_ALIASES)) {
+    if (k in rawPatch && rawPatch[k] !== undefined) patch[col] = rawPatch[k];
+  }
+  for (const [k, col] of Object.entries(EDIT_FIELD_MAP)) {
+    if (k in rawPatch && rawPatch[k] !== undefined) patch[col] = rawPatch[k];
+  }
+
+  // Type coercion + light validation
+  if ('agreed_cost' in patch)     patch.agreed_cost     = num(patch.agreed_cost, null);
+  if ('invoiced_amount' in patch) patch.invoiced_amount = num(patch.invoiced_amount, null);
+  if ('shipment_ids' in patch && patch.shipment_ids != null && !Array.isArray(patch.shipment_ids)) {
+    patch.shipment_ids = String(patch.shipment_ids).split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  if ('status' in patch && !EDIT_VALID_STATUSES.includes(patch.status)) {
+    const e = new Error(`Invalid status '${patch.status}'. Allowed: ${EDIT_VALID_STATUSES.join(', ')}`);
+    e.status = 400;
+    throw e;
+  }
+  if ('invoiced_amount' in patch && patch.invoiced_amount != null && patch.invoiced_amount < 0) {
+    const e = new Error('invoicedAmount must be >= 0'); e.status = 400; throw e;
+  }
+  return patch;
+}
+
+async function editInvoice({ invoiceId, patch: rawPatch, user }) {
+  if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
+  const patch = buildInvoicePatch(rawPatch);
+  if (!Object.keys(patch).length) {
+    const e = new Error('No editable fields provided'); e.status = 400; throw e;
+  }
+
+  // Read current row so we can diff for REQ-02 history.
+  const beforeRows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
+  const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
+  if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+
+  patch.updated_at = new Date().toISOString();
+  const updated = await db.dbUpdate('invoices', invoiceId, patch);
+
+  try {
+    await history.recordFieldDiffs({
+      entityType: 'invoice',
+      entityId:   invoiceId,
+      before,
+      after:      updated,
+      user,
+      // Only diff the columns the editor actually exposes — internal
+      // fields (variance, decided_at, etc.) are written by other paths.
+      fields: {
+        invoice_number:  'invoice_number',
+        carrier:         'carrier',
+        carrier_id:      'carrier_id',
+        shipment_id:     'shipment_id',
+        shipment_ids:    'shipment_ids',
+        invoice_date:    'invoice_date',
+        due_date:        'due_date',
+        agreed_cost:     'agreed_cost',
+        invoiced_amount: 'invoiced_amount',
+        status:          'status',
+        payment_terms:   'payment_terms',
+        notes:           'notes',
+      },
+      metadata: { via: 'invoice-edit' },
+    });
+  } catch (auditErr) {
+    console.error('[invoiceAudit.editInvoice] history write failed:', auditErr.message);
+  }
+  return updated;
+}
+
 // ── Mark an Approved invoice as sent to AP (idempotent) ─────────
 async function sendToAp({ invoiceId, user }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
@@ -474,4 +637,7 @@ module.exports = {
   submitInvoice,
   manualDecide,
   sendToAp,
+  editInvoice,
+  // Exposed for unit testing of the field mapper / alias coverage.
+  _internals: { buildInvoicePatch, EDIT_FIELD_MAP, EDIT_LEGACY_ALIASES },
 };

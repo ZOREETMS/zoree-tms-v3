@@ -1,6 +1,21 @@
 import { MESSAGE_TYPE_LABELS, MESSAGE_STATUS_COLORS } from "../types/messaging";
 
+// ═══════════════════════════════════════════════════════════════════
+// Production helpers (filterMessages, computeMessagingKpis,
+// buildComposePayload, getTypeLabel, getStatusColor) operate on the
+// real message list returned by services/messagingApi.js.
+//
+// generateMessages / __seed__ stay exported but are NO LONGER called
+// in production paths. They remain for storybook / Playwright tests
+// and as a reference shape (CLAUDE_RULES §13 — separate seed/demo
+// data from production logic; matches zoree_db_rules §Operational 1).
+// hooks/useMessaging.js no longer imports generateMessages.
+// ═══════════════════════════════════════════════════════════════════
+
 /**
+ * @deprecated Production code now reads from services/messagingApi.js.
+ * Kept for tests and storybook.
+ *
  * Generate seed TMS messages from shipments data.
  */
 export function generateMessages(shipments = []) {

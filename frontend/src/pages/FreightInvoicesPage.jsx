@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { InvoicesApi } from "../lib/api";
 import useInvoices from "../hooks/useInvoices";
 import { useEditGate } from "../hooks/useEditGate";
@@ -24,6 +24,15 @@ export default function FreightInvoicesPage() {
 
   const carrierNames = (carriers || []).map((c) => c.name).filter(Boolean).sort();
 
+  // Bug #166: when navigated here from a shipment row, the Shipments
+  // page passes ?shipment=<id>. We use it for two things:
+  //   1. Preset the search box so the list filters down to invoices
+  //      that already cover that shipment.
+  //   2. Auto-open the New Invoice modal pre-filled with that
+  //      shipment id when the list comes back empty.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const shipmentParam = searchParams.get("shipment") || "";
+
   const {
     filtered, stats, carriers: invoiceCarriers,
     search, setSearch,
@@ -41,6 +50,31 @@ export default function FreightInvoicesPage() {
     loadInvoices();
   }, []);
 
+  // Bug #166: react to ?shipment=<id> arriving in the URL. Filter the
+  // list to invoices for that shipment, and (when nothing matches)
+  // pop the create modal pre-filled with the shipment id so the
+  // operator can submit a new invoice without re-typing the id.
+  useEffect(() => {
+    if (!shipmentParam) return;
+    setSearch(shipmentParam);
+    if (loading) return;
+    const matches = invoices.some(
+      (inv) =>
+        String(inv.shipId || "") === shipmentParam ||
+        (Array.isArray(inv.shipIds) && inv.shipIds.includes(shipmentParam))
+    );
+    if (!matches && gate.canEdit) {
+      setEditInvoice(null);
+      setModalOpen(true);
+    }
+    // Clear the param so a manual refresh doesn't re-pop the modal
+    // every reload — the search box stays preset for context.
+    const next = new URLSearchParams(searchParams);
+    next.delete("shipment");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipmentParam, loading, invoices, gate.canEdit]);
+
   async function loadInvoices() {
     setLoading(true);
     try {
@@ -50,11 +84,15 @@ export default function FreightInvoicesPage() {
       const rows = Array.isArray(data?.invoices) ? data.invoices
                  : Array.isArray(data) ? data
                  : null;
-      if (rows && rows.length) {
-        setInvoices(rows.map(mapDbInvoice));
-      } else {
-        setInvoices(getSeedInvoices());
-      }
+      // Bug #171: never paper over the real DB with hardcoded seed
+      // rows. The previous code substituted getSeedInvoices() when the
+      // API returned an empty list, which made the Freight Invoices
+      // page show 12 fake "INV-844**" rows that DB Explorer didn't
+      // know about — exactly the mismatch the bug reporter saw. An
+      // empty table is the correct UI for an empty DB; the seed is
+      // kept for the catch branch only (network failure / dev offline)
+      // and tagged so it's obvious in QA that we're in fallback mode.
+      setInvoices(Array.isArray(rows) ? rows.map(mapDbInvoice) : []);
     } catch {
       setInvoices(getSeedInvoices());
     } finally {
@@ -125,19 +163,20 @@ export default function FreightInvoicesPage() {
         showToast(`Invoice ${form.num}: ${statusMsg}`,
           d.status === "Approved" ? "success" : "warning");
       } else {
-        // Editing an existing invoice — keep the legacy save path
-        await InvoicesApi.save({
-          id: editInvoice.id,
-          invoice_number: form.num,
-          carrier: form.carrier,
-          shipment_id: form.shipId,
-          invoice_date: form.date,
-          due_date: form.due,
-          agreed_rate: form.agreed,
-          invoiced_amount: form.amount,
-          status: form.status,
-          payment_terms: form.paymentTerms,
-          notes: form.notes,
+        // Bug #157: edit via the domain PATCH endpoint. Server maps
+        // camelCase keys → DB columns (agreedCost → agreed_cost, etc.),
+        // so the UI no longer needs to know the underlying schema.
+        await InvoicesApi.update(editInvoice.id, {
+          invoiceNumber:  form.num,
+          carrier:        form.carrier,
+          shipmentId:     form.shipId,
+          invoiceDate:    form.date,
+          dueDate:        form.due,
+          agreedCost:     form.agreed,
+          invoicedAmount: form.amount,
+          status:         form.status,
+          paymentTerms:   form.paymentTerms,
+          notes:          form.notes,
         });
         showToast(`Invoice ${form.num} updated`, "success");
       }
@@ -275,6 +314,10 @@ export default function FreightInvoicesPage() {
           invoice={editInvoice}
           shipments={shipments || []}
           carriers={carrierNames}
+          /* Bug #166: pre-fill shipment id when navigated from a
+             Shipments row (`?shipment=<id>` URL). Only applies in
+             create mode — editing an existing invoice ignores this. */
+          defaultShipmentId={!editInvoice ? shipmentParam : undefined}
           /* QA #148/149: when matrix says 'view', InvoiceModal still
              renders so users can read details, but onSave is gated and
              the canEdit prop tells the modal to hide its Save button. */

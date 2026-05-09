@@ -58,20 +58,66 @@ export function buildBlankInvoice(): InvoiceFormState {
   };
 }
 
-/** Seed form state from an existing invoice row (edit flow). */
+/**
+ * Seed form state from an existing invoice row (edit flow).
+ *
+ * Bug #161: the row coming from DbApi.invoices() is the raw DB shape —
+ * `invoice_number`, `invoiced_amount`, `due_date`, `payment_terms`,
+ * `agreed_cost`, `shipment_ids` — not the camelCase shape the web's
+ * mapDbInvoice produces. Reading only the camelCase keys made the edit
+ * modal open with blank Invoice #, Amount, and Due Date fields. We now
+ * fall back to the actual DB column names so the form hydrates whether
+ * it's handed a raw row or a pre-mapped one.
+ */
 export function buildInvoiceFormFromRow(invoice: any): InvoiceFormState {
   if (!invoice) return buildBlankInvoice();
+
+  // shipment_ids[] is the canonical (REQ-07) consolidated list. When the
+  // form opens we keep the primary in `shipId` and surface the rest as a
+  // comma-joined string in `extraShipIds`, matching the create-flow input.
+  const shipmentIds: string[] = Array.isArray(invoice.shipment_ids)
+    ? invoice.shipment_ids.map((s: any) => String(s || '').trim()).filter(Boolean)
+    : Array.isArray(invoice.shipmentIds)
+      ? invoice.shipmentIds.map((s: any) => String(s || '').trim()).filter(Boolean)
+      : [];
+  const primaryShipId =
+    invoice.shipId
+    || invoice.ship_id
+    || invoice.shipment_id
+    || shipmentIds[0]
+    || '';
+  const extraShipIds =
+    invoice.extraShipIds
+    || invoice.extra_ship_ids
+    || (shipmentIds.length > 1 ? shipmentIds.slice(1).join(', ') : '');
+
+  // Amount / agreed cost: tolerate every shape we've seen flow through
+  // the mobile codebase — the raw DB column (invoiced_amount /
+  // agreed_cost), the web-mapped shape (amount / agreed), and the legacy
+  // alias agreed_rate that lingered in old payloads pre-#157.
+  const amountSource =
+    invoice.invoiced_amount ?? invoice.invoicedAmount ?? invoice.amount ?? null;
+  const agreedSource =
+    invoice.agreed_cost ?? invoice.agreedCost
+    ?? invoice.agreed ?? invoice.agreed_rate ?? null;
+
   return {
-    num: invoice.num || invoice.invoice_num || '',
+    num:
+      invoice.invoice_number
+      || invoice.invoiceNumber
+      || invoice.num
+      || invoice.invoice_num
+      || '',
     carrier: invoice.carrier || '',
-    shipId: invoice.shipId || invoice.ship_id || invoice.shipment_id || '',
-    extraShipIds: invoice.extraShipIds || invoice.extra_ship_ids || '',
+    shipId: primaryShipId,
+    extraShipIds,
     status: invoice.status || 'Pending',
-    date: invoice.date || invoice.invoice_date || '',
-    due: invoice.due || invoice.due_date || '',
-    paymentTerms: invoice.paymentTerms || invoice.payment_terms || 'NET30',
-    amount: invoice.amount != null ? String(invoice.amount) : '',
-    agreed: invoice.agreed != null ? String(invoice.agreed) : '',
+    date: invoice.invoice_date || invoice.invoiceDate || invoice.date || '',
+    due:  invoice.due_date     || invoice.dueDate     || invoice.due  || '',
+    paymentTerms:
+      invoice.payment_terms || invoice.paymentTerms || 'NET30',
+    amount: amountSource != null ? String(amountSource) : '',
+    agreed: agreedSource != null ? String(agreedSource) : '',
     notes: invoice.notes || '',
   };
 }

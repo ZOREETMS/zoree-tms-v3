@@ -484,6 +484,19 @@ export const MileageApi = {
   },
 };
 
+// Bug #159: thin wrapper over POST /api/notify. Lets the mobile services
+// layer fan-out events (tender_accepted, status_changed, …) to the TMS
+// WebSocket so connected web tabs and the OMS bridge update without a
+// manual refresh — same shape as the web NotifyApi.
+export const NotifyApi = {
+  broadcast(event, data) {
+    return api("/notify", {
+      method: "POST",
+      body: JSON.stringify({ event, data: data || {} }),
+    });
+  },
+};
+
 export const BulkPlanApi = {
   rate(lanes, optimizeBy = "cost") {
     return api("/bulk-plan/rate", {

@@ -238,6 +238,60 @@
     return tmsDb().from('orders').upsert(clean, { onConflict: 'id' });
   }
 
+  /**
+   * Bug #174: record the OMS→TMS order push in the Messaging Hub
+   * ledger (`message_log`) so the Inbound tab in the Messaging Hub
+   * picks up "order_creation" events. The OMS bundle writes directly
+   * to Supabase with the anon key (it bypasses /api/ingest/oms-orders
+   * entirely, which is where the existing inbound write lived), so
+   * without this companion insert the hub's Inbound tab stays empty
+   * even though orders are flowing into the TMS table.
+   *
+   * Migration 040 grants anon a scoped INSERT-only policy on
+   * message_log so this write succeeds without service-role auth.
+   * Best-effort: a failed hub write must NEVER unwind the order push.
+   */
+  async function recordHubInbound(tmsDb, tmsRow, lines) {
+    try {
+      var hubRow = {
+        message_type:   'order_creation',
+        direction:      'inbound',
+        source_system:  'oms',
+        target_system:  'tms',
+        order_id:       tmsRow.id || null,
+        external_ref:   tmsRow.id || null,
+        // Snapshot the headline order fields so the Hub UI's row
+        // detail panel has enough to render without re-querying the
+        // orders table on every render.
+        payload:        {
+          order: {
+            id:          tmsRow.id,
+            customer:    tmsRow.customer || tmsRow.customer_name || null,
+            origin:      tmsRow.origin   || null,
+            destination: tmsRow.destination || tmsRow.dest || null,
+            weight:      tmsRow.weight   || null,
+            pieces:      tmsRow.pieces   || null,
+            ship_mode:   tmsRow.ship_mode || tmsRow.shipMode || null,
+            ready_date:  tmsRow.ready_date || tmsRow.readyDate || null,
+            due_date:    tmsRow.due_date  || tmsRow.dueDate   || null,
+          },
+          line_count:    Array.isArray(lines) ? lines.length : 0,
+        },
+        actor:          'oms-push',
+        status:         'received',
+        attempt_count:  0,
+      };
+      var res = await tmsDb().from('message_log').insert(hubRow);
+      if (res && res.error) {
+        // eslint-disable-next-line no-console
+        console.warn('[pushOrder] message_log insert failed:', res.error.message);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[pushOrder] message_log insert threw:', err && err.message);
+    }
+  }
+
   async function upsertOrderLines(tmsDb, orderId, lines) {
     var errors = [];
     for (var i = 0; i < lines.length; i++) {
@@ -305,6 +359,9 @@
       await tracking.stampOrderPushed(omsDb, o.id);
 
       var lineErrors = await upsertOrderLines(tmsDb, o.id, lines);
+
+      // Bug #174: best-effort Messaging Hub inbound row.
+      await recordHubInbound(tmsDb, tmsRow, lines);
 
       pushed++;
       var lineStatus = lineErrors.length

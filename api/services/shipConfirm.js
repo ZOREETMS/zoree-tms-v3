@@ -25,6 +25,11 @@
 const db = require('./supabase');
 const history = require('./changeHistory');
 const { bus, EVENTS } = require('./eventBus');
+// Messaging Hub plan §6 hook 5 — every OMS→TMS ship-confirm becomes
+// an inbound message in the hub ledger. Best-effort; never fail the
+// warehouse ship-out flow.
+const hubWriter = require('./messagingHub/writer');
+const { MESSAGE_TYPE, SYSTEM_PARTY } = require('./messagingHub/types');
 
 // Mirror BOL / PRO from the TMS shipment into the matching oms_orders row.
 // Skips empty values so an unset field on the shipment can't blow away
@@ -182,6 +187,32 @@ async function applyShipConfirm(body) {
       console.error(`[shipConfirm] order transition failed (${oid}):`, perOrderErr.message);
       skipped.push({ id: oid, reason: perOrderErr.message });
     }
+  }
+
+  // Messaging Hub hook 5 (OMS → TMS ship_confirmation). Best-effort.
+  try {
+    await hubWriter.recordInbound({
+      messageType: MESSAGE_TYPE.SHIP_CONFIRMATION,
+      source:      SYSTEM_PARTY.OMS,
+      target:      SYSTEM_PARTY.TMS,
+      payload: {
+        shipmentId,
+        shippedAt,
+        sealNumber:    sealNumber || ship.seal_number || null,
+        orderIds,
+        ordersShipped: transitioned,
+        ordersSkipped: skipped,
+        source,
+      },
+      shipmentId,
+      externalRef: ship.bol_number || ship.pro_number || null,
+      actor:       source || 'oms-ship-confirm',
+      // Mark immediately as processed since shipConfirm has already
+      // run the business logic by this point.
+      status:      'received',
+    });
+  } catch (hubErr) {
+    console.error('[shipConfirm] hub write failed:', hubErr.message);
   }
 
   return {

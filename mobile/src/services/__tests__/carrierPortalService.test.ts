@@ -24,6 +24,13 @@ jest.mock('../../lib/api', () => ({
   OmsApi: {
     push: jest.fn(),
   },
+  // Bug #159: saveTenderResponse now calls NotifyApi.broadcast after a
+  // successful PATCH so the web TMS refreshes without a manual reload.
+  // Existing tests don't assert on it; we mock it as a no-op so the
+  // best-effort broadcast doesn't log warnings during the run.
+  NotifyApi: {
+    broadcast: jest.fn().mockResolvedValue({ ok: true }),
+  },
 }));
 
 describe('isCarrierShipment / getUniqueCarrierNames', () => {

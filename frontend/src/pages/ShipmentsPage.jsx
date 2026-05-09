@@ -420,7 +420,18 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
                   <>
                     {ds.ship_from_name && <div style={{ fontWeight: 700, fontSize: 13, marginTop: 3 }}>{ds.ship_from_name}</div>}
                     <div style={{ fontWeight: ds.ship_from_name ? 500 : 700, fontSize: ds.ship_from_name ? 12 : 14, marginTop: 2, color: ds.ship_from_name ? "var(--text2)" : "inherit" }}>{ds.origin || "—"}</div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Pickup: {ds.pickup_date || "—"}</div>
+                    {/* Bug #160: prefer shipped_at (TIMESTAMPTZ — set by
+                        updateShipment when status flips to "In Transit",
+                        either from the web or from the mobile status
+                        screen) so the banner shows the actual pickup
+                        date AND time. Fall back to pickup_date so
+                        Planned/Tendered shipments still show their
+                        scheduled date. */}
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                      Pickup: {ds.shipped_at
+                        ? new Date(ds.shipped_at).toLocaleString()
+                        : (ds.pickup_date || "—")}
+                    </div>
                   </>
                 )}
               </div>
@@ -743,6 +754,10 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <button className="btn btn-secondary btn-sm" onClick={fetchChangeCarrierQuotes}>🔄 Change Carrier</button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/dock-scheduling"); }}>🚪 Dock schedule</button>
+          {/* Bug #166: jump straight to Freight Invoices scoped to this
+              shipment so the planner can view existing invoices or
+              raise a new one without re-typing the shipment id. */}
+          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/freight-invoices?shipment=${encodeURIComponent(ds.id)}`); }}>🧾 Invoice</button>
           <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onNavigate(`/documents?shipmentId=${encodeURIComponent(ds.id)}`); onClose(); }}>📄 Documents</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/messaging`); }}>📧 Contact Carrier</button>
           {/* REQ-18: Send-to-WMS is only meaningful after the carrier has
@@ -1641,6 +1656,17 @@ export default function ShipmentsPage() {
                 {s._displayStatus === "Tender Accepted" && (
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Tender Accepted</span>
                 )}
+                {/* Bug #166: quick jump to Freight Invoices, scoped to
+                    this shipment. Lists existing invoices for the row
+                    and offers "New Invoice" pre-filled with this id. */}
+                <button
+                  title="View / create invoice for this shipment"
+                  style={{ background: "rgba(217,119,6,.08)", color: "#b45309", border: "1px solid rgba(217,119,6,.30)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: "pointer", lineHeight: 1 }}
+                  disabled={busyId === s.id}
+                  onClick={() => navigate(`/freight-invoices?shipment=${encodeURIComponent(s.id)}`)}
+                >
+                  🧾
+                </button>
                 <button
                   title={canEditShipments ? "Copy Shipment" : noEditShipmentsTitle}
                   style={{ background: "rgba(59,130,246,.08)", color: "#2563eb", border: "1px solid rgba(59,130,246,.25)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: canEditShipments ? "pointer" : "not-allowed", lineHeight: 1, opacity: canEditShipments ? 1 : 0.5 }}

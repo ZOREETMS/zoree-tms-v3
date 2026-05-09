@@ -71,9 +71,20 @@ export default function useBulkPlan() {
     setSelectedIds(new Set());
   }, []);
 
-  /** Execute the full plan: rate → consolidate → create shipments */
+  /**
+   * Execute the full plan: rate → consolidate → create shipments.
+   *
+   * Bug #162: accepts an optional `planningDefaults` object so the
+   * mobile BulkPlanScreen can surface Dock Door / Dock Time / Loading
+   * Start / Loading End at planning time (parity with the web's
+   * PlanConfirmationModal). The values are folded into every produced
+   * plan before /bulk-plan/execute runs, which means each created
+   * shipment row is written WITH those columns populated — fixing the
+   * "fields are empty in Web Application after shipment creation"
+   * complaint from the bug report.
+   */
   const executePlan = useCallback(
-    async (optimizeBy = 'cost') => {
+    async (optimizeBy = 'cost', planningDefaults = null) => {
       if (selectedIds.size === 0) return;
 
       setBusy(true);
@@ -103,7 +114,25 @@ export default function useBulkPlan() {
 
         // Phase 2: Execute — create shipments
         setProgress(`Creating ${planResult.plans.length} shipment(s)...`);
-        const executeResult = await BulkPlanApi.execute(planResult.plans);
+        // Bug #162 / #168: fold dock/loading + preferred-carrier
+        // defaults into every plan so the backend writes them on the
+        // created shipment rows. Only keys with truthy values clobber
+        // the per-plan values produced by planAllLanes.
+        const dockDefaults = planningDefaults && typeof planningDefaults === 'object'
+          ? planningDefaults
+          : null;
+        const enrichedPlans = !dockDefaults
+          ? planResult.plans
+          : planResult.plans.map((plan) => {
+              const next = { ...plan };
+              if (dockDefaults.dockDoor)         next.dockDoor     = dockDefaults.dockDoor;
+              if (dockDefaults.dockTime)         next.dockTime     = dockDefaults.dockTime;
+              if (dockDefaults.loadingStart)     next.loadingStart = dockDefaults.loadingStart;
+              if (dockDefaults.loadingEnd)       next.loadingEnd   = dockDefaults.loadingEnd;
+              if (dockDefaults.preferredCarrier) next.carrier      = dockDefaults.preferredCarrier;
+              return next;
+            });
+        const executeResult = await BulkPlanApi.execute(enrichedPlans);
 
         // Build a structured failure list so the results screen can
         // render *why* each order dropped, instead of a bare count.

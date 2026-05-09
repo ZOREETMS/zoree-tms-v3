@@ -52,6 +52,12 @@ function dbToShipment(r) {
     destZip:            r.dest_zip       || null,
     shipFromName:       r.ship_from_name || null,
     shipToName:         r.ship_to_name   || null,
+    // Bug #160: shipped_at / delivered_at carry the actual milestone
+    // *timestamp* (TIMESTAMPTZ) — distinct from pickup_date / delivery_date
+    // (DATE). The web pickup/delivery banners now read these so the
+    // status flip from In Transit / Delivered surfaces with date AND time.
+    shippedAt:          r.shipped_at     || null,
+    deliveredAt:        r.delivered_at   || null,
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
   };
@@ -83,6 +89,8 @@ const SHIPMENT_DB_TO_APP = Object.freeze({
   dest_zip:       'destZip',
   ship_from_name: 'shipFromName',
   ship_to_name:   'shipToName',
+  shipped_at:     'shippedAt',
+  delivered_at:   'deliveredAt',
   dest:           'destination',
 });
 function normalizeShipmentUpdates(updates) {
@@ -133,6 +141,10 @@ function shipmentToDb(s) {
     dest_zip:         pick('destZip',      'dest_zip')          || null,
     ship_from_name:   pick('shipFromName', 'ship_from_name')    || null,
     ship_to_name:     pick('shipToName',   'ship_to_name')      || null,
+    // Bug #160: round-trip shipped_at / delivered_at so updateShipment's
+    // auto-stamp on "In Transit" / "Delivered" actually persists.
+    shipped_at:       pick('shippedAt',    'shipped_at')        || null,
+    delivered_at:     pick('deliveredAt',  'delivered_at')      || null,
   };
 }
 
@@ -200,6 +212,36 @@ async function updateShipment(id, updates, tenantConfig = null, context = {}) {
   // tie-breaker in shipmentToDb. Normalizing once here keeps the rest
   // of the function simple.
   const normalizedUpdates = normalizeShipmentUpdates(updates);
+
+  // Bug #160: auto-stamp pickup / delivery milestones when the caller
+  // is moving status to a milestone state and hasn't supplied a date of
+  // their own. Mobile's StatusUpdateScreen (and the legacy
+  // /api/shipments/:id/status route the mobile uses) only sends
+  // { status: 'In Transit' }, so the web "Pickup: <date>" display
+  // showed "—" forever. Mirrors the dateField/tsField semantics that
+  // shipmentEvents.applyShipmentEvent uses for "Picked Up" / "Delivered".
+  // Idempotent guards (`!existing.pickupDate`, etc.) keep manually-set
+  // values intact.
+  const incomingStatus = normalizedUpdates.status;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const nowIso   = new Date().toISOString();
+  if (incomingStatus === 'In Transit' && existing.status !== 'In Transit') {
+    if (!existing.pickupDate && !('pickupDate' in normalizedUpdates)) {
+      normalizedUpdates.pickupDate = todayIso;
+    }
+    if (!existing.shippedAt && !('shippedAt' in normalizedUpdates)) {
+      normalizedUpdates.shippedAt = nowIso;
+    }
+  }
+  if (incomingStatus === 'Delivered' && existing.status !== 'Delivered') {
+    if (!existing.deliveryDate && !('deliveryDate' in normalizedUpdates)) {
+      normalizedUpdates.deliveryDate = todayIso;
+    }
+    if (!existing.deliveredAt && !('deliveredAt' in normalizedUpdates)) {
+      normalizedUpdates.deliveredAt = nowIso;
+    }
+  }
+
   const merged   = { ...existing, ...normalizedUpdates, id };
   const row = await db.dbUpdate('shipments', id, shipmentToDb(merged), tenantConfig);
   const next = dbToShipment(row || merged);

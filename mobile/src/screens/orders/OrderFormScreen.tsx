@@ -470,73 +470,23 @@ export default function OrderFormScreen() {
             onCreateNew={() => openCreateLocation('destination')}
             createNewLabel="Create new destination location"
           />
-          {/* QA bug #106: Ship-from Name / Ship-to Name removed; the
-              mobile new-order flow now collects City + State per side
-              (the canonical orders.origin / orders.dest column already
-              stores "City, ST ZIP" — saveOrder composes that string
-              from the camelCase camel fields below in
-              ordersService.buildOrderSavePayload). The DB columns
-              ship_from_name / ship_to_name remain editable on the web. */}
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <FormInput
-                label="Origin City"
-                value={form.originCity}
-                onChangeText={(v: string) => updateField('originCity', v)}
-                autoCapitalize="words"
-              />
-            </View>
-            <View style={styles.flex}>
-              <FormInput
-                label="Origin State"
-                value={form.originState}
-                onChangeText={(v: string) =>
-                  updateField('originState', v.toUpperCase())
-                }
-                autoCapitalize="characters"
-                maxLength={2}
-              />
-            </View>
-          </View>
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <FormInput
-                label="Dest City"
-                value={form.destCity}
-                onChangeText={(v: string) => updateField('destCity', v)}
-                autoCapitalize="words"
-              />
-            </View>
-            <View style={styles.flex}>
-              <FormInput
-                label="Dest State"
-                value={form.destState}
-                onChangeText={(v: string) =>
-                  updateField('destState', v.toUpperCase())
-                }
-                autoCapitalize="characters"
-                maxLength={2}
-              />
-            </View>
-          </View>
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <FormInput
-                label="Origin ZIP"
-                value={form.originZip}
-                onChangeText={(v: string) => updateField('originZip', v)}
-                keyboardType="number-pad"
-              />
-            </View>
-            <View style={styles.flex}>
-              <FormInput
-                label="Dest ZIP"
-                value={form.destZip}
-                onChangeText={(v: string) => updateField('destZip', v)}
-                keyboardType="number-pad"
-              />
-            </View>
-          </View>
+          {/* Bug #158: Origin / Destination now show only the main full
+              address (City, ST ZIP) — the redundant separate City / State /
+              ZIP input rows were causing the destination block to look
+              "duplicated" against the address picker above it. The
+              underlying form state still carries originCity / destCity /
+              originZip / destZip — they're hydrated from `parseAddrString`
+              on edit and from `applyLocationSelection.meta` on pick — so
+              `buildOrderSavePayload` continues to compose the canonical
+              "City, ST ZIP" string for the orders.origin / orders.dest
+              columns without needing redundant inputs.
+
+              Historical context: the prior version of this form (QA bug
+              #106) collected City + State per side because Ship-from /
+              Ship-to *name* had been removed at the same time. The City /
+              State / ZIP columns are still persisted (they back the rate
+              matcher), just sourced from the picker meta + parser instead
+              of duplicate inputs. */}
 
           {/* QA bug #107: standalone Weight / Pieces inputs removed.
               Users now build the freight from a Line Items list (item

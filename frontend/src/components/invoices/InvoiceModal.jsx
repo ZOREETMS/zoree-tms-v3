@@ -6,9 +6,17 @@ export default function InvoiceModal({
   invoice,
   shipments,
   carriers,
+  // Bug #166: when the modal is opened from the Shipments page's
+  // "🧾 Invoice" button (route: /freight-invoices?shipment=<id>),
+  // FreightInvoicesPage passes the id here so the new-invoice form
+  // opens pre-filled with the shipment id and the carrier inferred
+  // from the matching shipment row. No-op for the regular New Invoice
+  // button or for Edit (which gets its values from `invoice`).
+  defaultShipmentId,
   onSave,
   onClose,
   busy,
+  canEdit,
 }) {
   const isNew = !invoice?.num;
   const [form, setForm] = useState(() => {
@@ -16,6 +24,11 @@ export default function InvoiceModal({
     const empty = emptyInvoice();
     empty.num = generateInvoiceNum();
     empty.due = computeDueDate(empty.date, "NET30");
+    if (defaultShipmentId) {
+      empty.shipId = defaultShipmentId;
+      const match = (shipments || []).find((s) => String(s.id) === String(defaultShipmentId));
+      if (match && match.carrier) empty.carrier = match.carrier;
+    }
     return empty;
   });
 
@@ -186,6 +199,86 @@ export default function InvoiceModal({
                 />
               </div>
             </div>
+
+            {/* Bug #167: Consolidated Invoice — shipment-wise breakdown.
+                Renders only when the invoice covers more than one
+                shipment (REQ-07 consolidated case). Each row shows the
+                shipment id, route, mode, status, and that shipment's
+                agreed cost (shipments.total_cost) so finance can see
+                the per-leg numbers that sum to the invoice's
+                "Agreed Rate" total. Sources:
+                  - form.shipIds[]      — the canonical shipment_ids list
+                                          on consolidated invoices.
+                  - form.shipId         — back-compat fallback.
+                  - shipments prop      — the shipments outlet snapshot. */}
+            {(() => {
+              const ids = (Array.isArray(form.shipIds) && form.shipIds.length
+                ? form.shipIds
+                : (form.shipId ? [form.shipId] : [])
+              ).map(String);
+              if (ids.length < 2) return null;
+              const shipById = new Map((shipments || []).map((s) => [String(s.id), s]));
+              const breakdown = ids.map((sid) => ({
+                id: sid,
+                ship: shipById.get(sid) || null,
+              }));
+              const sumAgreed = breakdown.reduce(
+                (acc, b) => acc + (b.ship?.total_cost || 0),
+                0
+              );
+              const sumInvoiced = Number(form.amount) || 0;
+              return (
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 12, padding: "14px 0 0" }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+                    Consolidated Shipments ({ids.length})
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ textAlign: "left", color: "var(--text3)" }}>
+                          <th style={{ padding: "4px 6px" }}>Shipment</th>
+                          <th style={{ padding: "4px 6px" }}>Route</th>
+                          <th style={{ padding: "4px 6px" }}>Mode</th>
+                          <th style={{ padding: "4px 6px" }}>Status</th>
+                          <th style={{ padding: "4px 6px", textAlign: "right" }}>Agreed Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {breakdown.map((b) => (
+                          <tr key={b.id} style={{ borderTop: "1px solid var(--border)" }}>
+                            <td className="mono" style={{ padding: "6px", fontWeight: 600 }}>{b.id}</td>
+                            <td style={{ padding: "6px" }}>
+                              {b.ship
+                                ? `${b.ship.origin || "—"} → ${b.ship.dest || b.ship.destination || "—"}`
+                                : <span style={{ color: "var(--red)" }}>not found</span>}
+                            </td>
+                            <td style={{ padding: "6px" }}>{b.ship?.mode || "—"}</td>
+                            <td style={{ padding: "6px" }}>{b.ship?.status || "—"}</td>
+                            <td className="mono" style={{ padding: "6px", textAlign: "right" }}>
+                              {b.ship?.total_cost != null
+                                ? `$${Number(b.ship.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr style={{ borderTop: "2px solid var(--border)", fontWeight: 700 }}>
+                          <td colSpan={4} style={{ padding: "6px", textAlign: "right" }}>Total Agreed</td>
+                          <td className="mono" style={{ padding: "6px", textAlign: "right" }}>
+                            ${sumAgreed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                        <tr style={{ fontWeight: 700, color: "var(--text2)" }}>
+                          <td colSpan={4} style={{ padding: "6px", textAlign: "right" }}>Invoice Amount</td>
+                          <td className="mono" style={{ padding: "6px", textAlign: "right" }}>
+                            ${sumInvoiced.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="modal-footer">

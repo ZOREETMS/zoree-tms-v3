@@ -421,12 +421,25 @@ export const InvoicesApi = {
   sendToAp(id) {
     return api(`/invoices/${encodeURIComponent(id)}/send-to-ap`, { method: "POST" });
   },
+  // Bug #157: edit an existing invoice via the domain endpoint. Server
+  // maps client camelCase field names → DB columns (the previous /db/*
+  // passthrough required the UI to know that the column was agreed_cost,
+  // not agreed_rate, and quietly 400'd otherwise).
+  update(id, patch) {
+    return api(`/invoices/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch || {}),
+    });
+  },
   // Back-compat wrappers
   dispute(id, reason) { return InvoicesApi.reject(id, reason || "Disputed"); },
   save(invoice) {
-    if (invoice.id) {
-      // Legacy patch path — kept for any editing UX that still uses it.
-      return api(`/db/invoices/${encodeURIComponent(invoice.id)}`, { method: "PATCH", body: JSON.stringify(invoice) });
+    if (invoice && invoice.id) {
+      // Bug #157: route through the domain PATCH endpoint instead of the
+      // generic /db/* passthrough. Strip `id` so it isn't echoed back as
+      // an editable column.
+      const { id, ...rest } = invoice;
+      return InvoicesApi.update(id, rest);
     }
     return InvoicesApi.submit(invoice);
   },

@@ -1,10 +1,57 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { HOS_MAX_HOURS } from "../types/fleet";
+import { DbApi } from "../lib/api";
+
+// Bug #170: dbToDriver normalizes a `drivers` table row from the DB
+// (snake_case columns) into the camelCase shape Fleet Management has
+// always used in-memory. Without this remap the same row would render
+// blank fields whenever the DB row was loaded straight (e.g. after a
+// Fleet Management → DB Explorer cross-check), which is exactly the
+// inconsistency the bug reporter saw.
+function dbToDriver(r) {
+  if (!r || typeof r !== "object") return r;
+  return {
+    id:        r.id        || r.driver_id || "",
+    name:      r.name      || r.full_name || "",
+    cdl:       r.cdl       || r.cdl_number || "",
+    cdlExp:    r.cdl_exp   || r.cdl_expiry || r.cdlExp || "",
+    phone:     r.phone     || r.contact_phone || "",
+    email:     r.email     || r.contact_email || "",
+    homeTerm:  r.home_term || r.homeTerm || "",
+    location:  r.location  || "",
+    vehicle:   r.vehicle   || r.vehicle_unit || "",
+    status:    r.status    || "Available",
+    hosToday:  r.hos_today != null ? Number(r.hos_today) : (r.hosToday || 0),
+    milesYTD:  r.miles_ytd != null ? Number(r.miles_ytd) : (r.milesYTD || 0),
+  };
+}
 
 export function useDrivers(initialDrivers = []) {
   const [drivers, setDrivers] = useState(initialDrivers);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+
+  // Bug #170: hydrate from the real `drivers` DB table on mount so
+  // Fleet Management and DB Explorer agree. SEED_DRIVERS stays as the
+  // initial frame to keep the page interactive while the request is
+  // in flight; once the API returns, it wins. Failures fall back to
+  // the seed so the page is never empty in offline / dev sessions.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await DbApi.drivers();
+        const rows = Array.isArray(resp) ? resp
+                   : Array.isArray(resp?.drivers) ? resp.drivers
+                   : Array.isArray(resp?.rows) ? resp.rows
+                   : [];
+        if (!cancelled && rows.length) setDrivers(rows.map(dbToDriver));
+      } catch (_e) {
+        // Swallow — initialDrivers is already populated.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
     let list = [...drivers];

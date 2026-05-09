@@ -1,4 +1,11 @@
 export const MESSAGE_TYPES = {
+  // Messaging Hub 6-hop lifecycle (kept first for visibility)
+  ORDER_CREATION: "Order Creation",
+  SHIPMENT_TENDER: "Shipment Tender",
+  SHIPMENT_DETAILS: "Shipment Details",
+  SHIP_CONFIRMATION: "Ship Confirmation",
+  DELIVERED: "Delivered",
+  // Existing types — kept for forward-compatibility (db rules §Migration 2)
   TENDER_OFFER: "Tender Offer",
   TENDER_RESPONSE: "Tender Response",
   SHIPMENT_CREATE: "Shipment Create",
@@ -13,7 +20,20 @@ export const MESSAGE_TYPES = {
   INVOICE: "Invoice",
 };
 
+// SYSTEM_PARTY mirrors api/services/messagingHub/types.js — used by
+// the compose modal and message-detail view to render source/target.
+export const SYSTEM_PARTY = {
+  OMS: "OMS",
+  TMS: "TMS",
+  CARRIER: "CARRIER",
+};
+
 export const MESSAGE_TYPE_LABELS = {
+  ORDER_CREATION: "📥 Order Creation",
+  SHIPMENT_TENDER: "📤 Shipment Tender",
+  SHIPMENT_DETAILS: "🧾 Shipment Details",
+  SHIP_CONFIRMATION: "✅ Ship Confirmation",
+  DELIVERED: "🏁 Delivered",
   TENDER_OFFER: "📤 Tender Offer",
   TENDER_RESPONSE: "📥 Tender Response",
   SHIPMENT_CREATE: "📦 Shipment Create",

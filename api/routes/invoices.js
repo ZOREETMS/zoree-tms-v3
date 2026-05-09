@@ -5,6 +5,10 @@
 //   POST   /api/invoices                — submit new invoice; runs the
 //                                         tolerance decision and returns
 //                                         { invoice, decision }.
+//   PATCH  /api/invoices/:id            — edit an existing invoice (Bug
+//                                         #157 — replaces the brittle
+//                                         /api/db/invoices/:id passthrough
+//                                         that exposed raw column names).
 //   POST   /api/invoices/:id/approve    — manual override (admin | finance)
 //   POST   /api/invoices/:id/reject     — manual override (admin | finance)
 //   POST   /api/invoices/:id/send-to-ap — mark approved invoice as sent
@@ -62,6 +66,25 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
         invoicedAmount, invoiceDate, paymentTerms, notes, metadata, user,
       });
       res.status(201).json(out);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // Bug #157: edit an existing invoice via the domain endpoint (the
+  // service layer maps client field names → DB columns and records the
+  // REQ-02 history diff). UI must NOT hit /api/db/invoices/:id directly.
+  router.patch('/:id', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const updated = await invoiceAudit.editInvoice({
+        invoiceId: req.params.id,
+        patch:     req.body || {},
+        user,
+      });
+      res.json(updated);
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
