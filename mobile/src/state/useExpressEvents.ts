@@ -44,22 +44,50 @@ const DEFAULT_DEBOUNCE_MS = 250;
 
 /**
  * Default event allow-list. Every entry is a server-broadcast event
- * the mobile UI must refresh on:
+ * the mobile UI must refresh on.
  *
- *   tender_accepted          — carrier accepted a tendered shipment
- *   shipment_status_updated  — any non-terminal status flip from server
- *   shipment_delivered       — terminal status reached
- *   dock_config_changed      — dock door / loading-window edits from OMS
- *   planning_parameters_changed — admin tweaked planning knobs
- *   rate_updated / rate_deleted — pricing changes affecting open quotes
- *   lane_preference_changed  — preferred-carrier list edits
- *   mw_request_processed     — middleware finished an OMS bridge job
+ * Two naming conventions are intentional and reflect two different
+ * emission paths on the server side:
+ *
+ *   1. Dot-named events come from the in-process EventBus
+ *      (api/services/eventBus.js) and are bridged to wsBroadcast in
+ *      api/server.js. These fire on direct DB writes the API performs
+ *      itself (ship-confirm, POD, manual timeline events, the
+ *      shipment-status PATCH that mobile and web both call).
+ *
+ *        shipment.updated  — any shipment row change worth a refresh
+ *                            (status flip, dock edit, OMS POD landing)
+ *        shipment.deleted  — shipment row removed; orders cascade to
+ *                            Unplanned, so the list view must refresh
+ *
+ *      Without these in the allow-list, mobile is blind to shipment
+ *      writes that don't *also* land in supabase_realtime (e.g. cold
+ *      paths during a Realtime outage, or RLS-filtered cases). Adding
+ *      them is belt-and-suspenders alongside useRealtimeData.ts.
+ *
+ *   2. Snake_cased events come from the OMS middleware via POST
+ *      /api/notify (api/server.js wsBroadcast passthrough). These
+ *      cover OMS/middleware-driven signals that don't always touch
+ *      the orders/shipments tables.
+ *
+ *        tender_accepted          — carrier accepted a tendered shipment
+ *        shipment_status_updated  — non-terminal status flip via OMS
+ *        shipment_delivered       — terminal status reached via OMS
+ *        dock_config_changed      — dock door / loading-window edits
+ *        planning_parameters_changed — admin tweaked planning knobs
+ *        rate_updated / rate_deleted — pricing changes affecting quotes
+ *        lane_preference_changed  — preferred-carrier list edits
+ *        mw_request_processed     — middleware finished an OMS bridge job
  *
  * Add to this list (and ensure the server emits the matching event)
  * before relying on a new event. Quietly receiving an unknown event
  * is fine — we just ignore it.
  */
 export const DEFAULT_EVENT_ALLOW_LIST: readonly string[] = Object.freeze([
+  // In-process bus → wsBroadcast bridge (see api/server.js ~4169-4180).
+  'shipment.updated',
+  'shipment.deleted',
+  // OMS middleware → POST /api/notify → wsBroadcast.
   'tender_accepted',
   'shipment_status_updated',
   'shipment_delivered',

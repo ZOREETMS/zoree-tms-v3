@@ -222,8 +222,19 @@ export function canManualReject(status) {
   return status !== "Rejected";
 }
 export function canAutoDecide(status) {
-  // Auto-decide is meaningful only when the invoice is still movable.
-  // "On Hold" is included because finance often parks invoices there
-  // waiting for cost-line edits before re-running the decision.
-  return ["Pending", "On Hold", "Disputed"].includes(status);
+  // REQ-191: Auto Approve must be available on EVERY non-terminal
+  // invoice — not just the initial Pending/On Hold/Disputed ones.
+  //
+  // Why: integration-imported invoices and manually-created invoices
+  // both flow through invoiceAudit.submitInvoice, which auto-decides
+  // them on creation (status is set to 'Approved' or 'Rejected'
+  // immediately). With the old predicate the Auto button never showed
+  // on those rows, so finance couldn't re-run the carrier-tolerance
+  // comparison after a shipment cost was corrected, after the carrier's
+  // tolerance was adjusted, or after a cost line was edited.
+  //
+  // Only 'Cancelled' is truly terminal — re-running a tolerance check
+  // on a voided invoice is meaningless. 'Approved', 'Rejected',
+  // 'Pending', 'On Hold', and 'Disputed' all permit a re-decide.
+  return status !== "Cancelled" && status !== "Paid";
 }

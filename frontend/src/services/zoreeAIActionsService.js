@@ -432,18 +432,54 @@ async function tenderAcceptAction(p, { shipments, orders }) {
     throw new Error(`Cannot accept tender for ${ship.id}: status is ${raw || "empty"} (must be Tendered)`);
   }
 
+  // Bug #192: chat-supplied carrier-response fields. The user
+  // typically types "accept tender for SHP-123 with PRO ABC456",
+  // and the model emits { shipmentId, proNumber } in the action
+  // params. The previous version read pro_number / bol_number /
+  // seal_number / pickup_date / service_level / dock_door from
+  // ship.* only, so the chat-supplied values were silently
+  // dropped — same shipment, same OMS row, no PRO. Pull from the
+  // params first and fall back to whatever is already on the
+  // shipment row so an "accept with no extras" call still works.
+  //
+  // String-trim before testing falsiness so a stray space the
+  // model may add doesn't get persisted as an empty PRO.
+  const trim = (v) => (v == null ? "" : String(v).trim());
+  const proNumber    = trim(p.proNumber)    || trim(ship.pro_number);
+  const bolNumber    = trim(p.bolNumber)    || trim(ship.bol_number);
+  const sealNumber   = trim(p.sealNumber)   || trim(ship.seal_number);
+  const pickupDate   = trim(p.pickupDate)   || trim(ship.pickup_date);
+  const serviceLevel = trim(p.serviceLevel) || trim(ship.service_level);
+  const dockDoor     = trim(p.dockDoor)     || trim(ship.dock_door);
+
   // 1. Move shipment status to "Tender Accepted" — the canonical post-
   //    accept value (migration 036). Cascades to linked CBOLs when
   //    this is a master shipment, mirroring ShipmentsPage.
   // Bug #38 follow-up: audited PATCH route. Status transition writes a
   // change_history row that the Shipment Timeline picks up, and the
   // linked-order cascade fires inside shipService.updateShipment.
-  await ShipmentsApi.update(ship.id, { status: "Tender Accepted" });
+  //
+  // Bug #192: persist any chat-supplied carrier-response fields onto
+  // the shipment row in the SAME audited update so the History tab
+  // shows the new PRO / BOL / seal alongside the status change. Fields
+  // that weren't supplied (and weren't already on the row) are sent as
+  // null so the UI mapper drops them — never overwrites a real value
+  // with a blank.
+  const shipmentPatch = { status: "Tender Accepted" };
+  if (proNumber    && proNumber    !== ship.pro_number)     shipmentPatch.proNumber    = proNumber;
+  if (bolNumber    && bolNumber    !== ship.bol_number)     shipmentPatch.bolNumber    = bolNumber;
+  if (sealNumber   && sealNumber   !== ship.seal_number)    shipmentPatch.sealNumber   = sealNumber;
+  if (pickupDate   && pickupDate   !== ship.pickup_date)    shipmentPatch.pickupDate   = pickupDate;
+  if (serviceLevel && serviceLevel !== ship.service_level)  shipmentPatch.serviceLevel = serviceLevel;
+  if (dockDoor     && dockDoor     !== ship.dock_door)      shipmentPatch.dockDoor     = dockDoor;
+  await ShipmentsApi.update(ship.id, shipmentPatch);
   const isMbol = ship.bol_type === "MBOL";
   const children = isMbol
     ? shipments.filter((s) => s.master_shipment_id === ship.id && s.bol_type === "CBOL")
     : [];
   if (isMbol && children.length) {
+    // CBOLs only get the status flip — PRO/BOL/seal are master-level
+    // identifiers in this codebase, so we don't propagate them down.
     await Promise.all(
       children.map((c) => ShipmentsApi.update(c.id, { status: "Tender Accepted" }))
     );
@@ -453,20 +489,21 @@ async function tenderAcceptAction(p, { shipments, orders }) {
   const linkedOrders = await confirmOrdersForShipment(ship, shipments, orders);
 
   // 3. OMS mirror + WS broadcast (REQ-24 / REQ-13 parity with the UI).
-  //    Carrier-supplied fields default to whatever is already on the
-  //    shipment row — a chat accept doesn't have access to the form
-  //    dialog the planner would otherwise fill in.
+  //    Carrier-supplied fields prefer the chat-supplied values, falling
+  //    back to whatever is already on the shipment row. Bug #192: the
+  //    previous version ignored p.proNumber here, so an OMS-side
+  //    consumer never saw the PRO the user typed in chat.
   let propagation = null;
   try {
     propagation = await propagateTenderAcceptance({
       shipment: ship,
       response: {
-        proNumber:         ship.pro_number || "",
-        carrierPickupDate: ship.pickup_date || "",
-        serviceLevel:      ship.service_level || "",
-        bolNumber:         ship.bol_number || "",
-        sealNumber:        ship.seal_number || "",
-        dockDoor:          ship.dock_door || "",
+        proNumber,
+        carrierPickupDate: pickupDate,
+        serviceLevel,
+        bolNumber,
+        sealNumber,
+        dockDoor,
         dockLoadStart:     "",
         dockLoadEnd:       "",
         notes:             p.note || `Accepted via ZoreeAI chat`,
@@ -482,7 +519,11 @@ async function tenderAcceptAction(p, { shipments, orders }) {
     ? "OMS synced"
     : "OMS push best-effort";
   const mbolNote = isMbol ? ` · ${children.length} CBOL(s) accepted` : "";
-  return `Shipment ${ship.id} tender accepted · ${linkedOrders.length} order(s) updated · ${omsNote}${mbolNote}`;
+  // Surface the PRO so the user can see the value they typed actually
+  // landed on the shipment — a quick visual confirmation that fixes the
+  // silent-drop bug from before.
+  const proNote = proNumber ? ` · PRO ${proNumber}` : "";
+  return `Shipment ${ship.id} tender accepted${proNote} · ${linkedOrders.length} order(s) updated · ${omsNote}${mbolNote}`;
 }
 
 /* ── Action: GET_RATES ─────────────────────────────────────────── */

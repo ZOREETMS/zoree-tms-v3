@@ -493,8 +493,15 @@ export const InvoicesApi = {
     });
     return res?.invoice || res;
   },
-  remove(id) {
-    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  // REQ-192: route deletes through the domain endpoint so the REQ-02
+  // audit pipeline writes the 'delete' change_history row (and the
+  // mirroring row on each linked shipment). The legacy /db/invoices
+  // DELETE bypassed audit entirely.
+  remove(id, reason) {
+    return api(`/invoices/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason: reason || undefined }),
+    });
   },
   approve(id) {
     return api(`/db/invoices/${encodeURIComponent(id)}`, {
