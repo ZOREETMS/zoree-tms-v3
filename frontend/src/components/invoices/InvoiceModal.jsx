@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { INVOICE_STATUSES, PAYMENT_TERMS, emptyInvoice } from "../../types/invoice";
 import { generateInvoiceNum, computeDueDate } from "../../services/invoiceService";
+import InvoiceCostLines from "./InvoiceCostLines";
 
 export default function InvoiceModal({
   invoice,
@@ -108,6 +109,28 @@ export default function InvoiceModal({
                 </div>
               </div>
 
+              {/* REQ-187: BOL identifier(s) on the invoice. Carrier-
+                  submitted invoices include the BOL the carrier billed
+                  for; the server validates it against the shipment of
+                  record before approving costs. Direct-create invoices
+                  inherit this from shipment.bol_number automatically. */}
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                <label>BOL ID(s)</label>
+                <input
+                  type="text"
+                  placeholder="Comma-separated. Leave blank for direct-create invoices."
+                  value={
+                    Array.isArray(form.bolIds)
+                      ? form.bolIds.join(", ")
+                      : (form.bolIds || "")
+                  }
+                  onChange={(e) => handleField("bolIds", e.target.value)}
+                />
+                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
+                  When the carrier sends an invoice with a BOL, finance can validate the BOL against the shipment of record. Mismatches are auto-rejected.
+                </div>
+              </div>
+
               <div className="form-group">
                 <label>Status</label>
                 <select
@@ -199,6 +222,20 @@ export default function InvoiceModal({
                 />
               </div>
             </div>
+
+            {/* REQ-186: per-line cost breakdown. Only renders for
+                existing invoices (we need the invoice id to fetch its
+                lines). For new invoices the user fills the high-level
+                Invoiced Amount above; cost lines are written by the
+                server when the invoice is created. */}
+            {form.id && (
+              <InvoiceCostLines
+                invoiceId={form.id}
+                canEdit={canEdit !== false}
+                legacyAgreed={form.agreed}
+                legacyAmount={form.amount}
+              />
+            )}
 
             {/* Bug #167: Consolidated Invoice — shipment-wise breakdown.
                 Renders only when the invoice covers more than one

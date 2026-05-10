@@ -1990,6 +1990,40 @@ app.post('/api/shipments/:id/change-carrier', async (req, res) => {
   }
 });
 
+// POST /api/shipments/:id/invoice — REQ-184/185/187.
+//
+// Auto-creates an invoice from this shipment in one round-trip. The
+// service module copies the shipment's costs into invoice_cost_lines,
+// sets status='On Hold', links shipment_id + bol_ids, and writes the
+// REQ-02 change_history rows (invoice + per-shipment 'invoice' action).
+// Idempotent — if the shipment already has an open (non-Cancelled)
+// invoice, the response carries that one with `reused: true`.
+//
+// Edit access on shipments is required (planners trigger this from the
+// shipment row); finance owns the resulting approval workflow on the
+// invoice page.
+app.post('/api/shipments/:id/invoice', async (req, res) => {
+  const u = await verifyToken(req, res);
+  if (!u) return;
+  if (!(await canWriteTable(u, 'shipments', 'POST', getTenantId(u)))) {
+    const role = getUserRole(u);
+    return res.status(403).json({
+      error: `Role '${role}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
+    });
+  }
+  try {
+    const invoiceFromShipment = require('./services/invoiceFromShipment');
+    const result = await invoiceFromShipment.createInvoiceFromShipment({
+      shipmentId: req.params.id,
+      user:       u,
+    });
+    res.status(result.reused ? 200 : 201).json(result);
+  } catch (e) {
+    const status = e.status || 500;
+    res.status(status).json({ error: e.message });
+  }
+});
+
 // PATCH /api/shipments/:id/status — quick status transition used by the
 // mobile detail screen for the Tender / Confirm / In-Transit / Delivered
 // chip row (QA bugs #101, #102). Validates against the canonical enum

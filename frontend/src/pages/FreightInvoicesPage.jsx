@@ -24,14 +24,19 @@ export default function FreightInvoicesPage() {
 
   const carrierNames = (carriers || []).map((c) => c.name).filter(Boolean).sort();
 
-  // Bug #166: when navigated here from a shipment row, the Shipments
-  // page passes ?shipment=<id>. We use it for two things:
-  //   1. Preset the search box so the list filters down to invoices
-  //      that already cover that shipment.
-  //   2. Auto-open the New Invoice modal pre-filled with that
-  //      shipment id when the list comes back empty.
+  // Bug #166 / REQ-184: when navigated here from a shipment row, the
+  // Shipments page passes ?shipment=<id>. We use it ONLY to preset the
+  // search box so the list filters down to invoices for that shipment.
+  // We do NOT auto-open the create modal anymore — the planner now
+  // creates the invoice from the shipment with one click (REQ-184), and
+  // the Shipments page sends them here with ?invoice=<id> instead.
+  //
+  // ?invoice=<id> (REQ-184) — open the matching existing invoice in
+  // the edit modal so the planner sees the auto-created invoice
+  // immediately instead of an empty form.
   const [searchParams, setSearchParams] = useSearchParams();
   const shipmentParam = searchParams.get("shipment") || "";
+  const invoiceParam  = searchParams.get("invoice")  || "";
 
   const {
     filtered, stats, carriers: invoiceCarriers,
@@ -50,30 +55,41 @@ export default function FreightInvoicesPage() {
     loadInvoices();
   }, []);
 
-  // Bug #166: react to ?shipment=<id> arriving in the URL. Filter the
-  // list to invoices for that shipment, and (when nothing matches)
-  // pop the create modal pre-filled with the shipment id so the
-  // operator can submit a new invoice without re-typing the id.
+  // REQ-184: react to ?shipment=<id> by filtering the list only.
+  // The auto-open-create-modal behavior (old Bug #166) is gone — the
+  // Shipments page now creates the invoice server-side and redirects
+  // here with ?invoice=<id>, which the next effect handles.
   useEffect(() => {
     if (!shipmentParam) return;
     setSearch(shipmentParam);
-    if (loading) return;
-    const matches = invoices.some(
-      (inv) =>
-        String(inv.shipId || "") === shipmentParam ||
-        (Array.isArray(inv.shipIds) && inv.shipIds.includes(shipmentParam))
-    );
-    if (!matches && gate.canEdit) {
-      setEditInvoice(null);
-      setModalOpen(true);
-    }
-    // Clear the param so a manual refresh doesn't re-pop the modal
-    // every reload — the search box stays preset for context.
     const next = new URLSearchParams(searchParams);
     next.delete("shipment");
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shipmentParam, loading, invoices, gate.canEdit]);
+  }, [shipmentParam]);
+
+  // REQ-184: react to ?invoice=<id> by opening that invoice in the
+  // edit modal — typically the invoice that was just auto-created from
+  // a shipment row. Falls back to a list-filter (search by id) if the
+  // invoice isn't in the loaded page.
+  useEffect(() => {
+    if (!invoiceParam) return;
+    if (loading) return;
+    const match = invoices.find(
+      (inv) => String(inv.id || "") === invoiceParam || String(inv.num || "") === invoiceParam
+    );
+    if (match) {
+      setEditInvoice(match);
+      setModalOpen(true);
+    } else {
+      // Surface the id as a search filter so the user can spot it.
+      setSearch(invoiceParam);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("invoice");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceParam, loading, invoices]);
 
   async function loadInvoices() {
     setLoading(true);
@@ -135,11 +151,18 @@ export default function FreightInvoicesPage() {
           .map((s) => s.trim())
           .filter(Boolean);
         const ids = [...new Set([primary, ...extras].filter(Boolean))];
+        // REQ-187: BOL ids are entered as a comma-separated string in
+        // the modal; normalize before sending so the server receives
+        // an array regardless of how the user typed them.
+        const bolList = Array.isArray(form.bolIds)
+          ? form.bolIds
+          : String(form.bolIds || "").split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
         const res = await InvoicesApi.submit({
           invoiceNumber: form.num,
           carrier: form.carrier,
           shipmentIds: ids.length ? ids : undefined,
           shipmentId: ids.length === 0 ? null : undefined,
+          bolIds: bolList.length ? bolList : undefined,
           invoicedAmount: Number(form.amount) || 0,
           invoiceDate: form.date,
           paymentTerms: form.paymentTerms,
@@ -166,10 +189,17 @@ export default function FreightInvoicesPage() {
         // Bug #157: edit via the domain PATCH endpoint. Server maps
         // camelCase keys → DB columns (agreedCost → agreed_cost, etc.),
         // so the UI no longer needs to know the underlying schema.
+        // REQ-187: pass bolIds through on edit as well so finance can
+        // attach a BOL to a previously-imported invoice or correct one
+        // the carrier sent without a BOL.
+        const editBols = Array.isArray(form.bolIds)
+          ? form.bolIds
+          : String(form.bolIds || "").split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
         await InvoicesApi.update(editInvoice.id, {
           invoiceNumber:  form.num,
           carrier:        form.carrier,
           shipmentId:     form.shipId,
+          bolIds:         editBols,
           invoiceDate:    form.date,
           dueDate:        form.due,
           agreedCost:     form.agreed,
@@ -349,6 +379,8 @@ function mapDbInvoice(row) {
     // REQ-07: the full list (consolidated invoices have >1 id)
     shipIds: Array.isArray(row.shipment_ids) ? row.shipment_ids
             : (row.shipment_id ? [row.shipment_id] : []),
+    // REQ-187: BOL identifiers — empty array for legacy rows.
+    bolIds: Array.isArray(row.bol_ids) ? row.bol_ids : [],
     date: row.invoice_date || row.date || "",
     due: row.due_date || row.due || "",
     agreed: parseFloat(row.agreed_cost ?? row.agreed_rate ?? row.agreed) || 0,

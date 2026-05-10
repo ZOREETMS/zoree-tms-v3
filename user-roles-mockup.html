@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Zoree TMS — User Roles (Mockup)</title>
+<style>
+  :root{
+    --bg:#f6f7f9;
+    --panel:#ffffff;
+    --line:#e6e8ec;
+    --line-2:#eef0f3;
+    --ink:#0f172a;
+    --ink-2:#475569;
+    --muted:#94a3b8;
+    --brand:#1f3bff;
+    --brand-2:#1633e6;
+
+    --edit-bg:#ecfdf5;     --edit-bd:#a7f3d0;     --edit-ink:#047857;
+    --view-bg:#fffbeb;     --view-bd:#fcd34d;     --view-ink:#92400e;
+    --hide-bg:#f1f5f9;     --hide-bd:#cbd5e1;     --hide-ink:#475569;
+
+    --row-h:56px;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.04);
+    --shadow-md:0 6px 24px rgba(15,23,42,.08);
+    --radius:12px;
+    --radius-sm:8px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+  /* ===== Page shell ===== */
+  .page{max-width:1480px;margin:0 auto;padding:24px 28px 140px}
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:18px}
+  .title-block .eyebrow{font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;font-weight:600}
+  .title-block h1{margin:6px 0 4px;font-size:22px;letter-spacing:-.01em}
+  .title-block p{margin:0;color:var(--ink-2);font-size:13px}
+
+  .head-actions{display:flex;gap:10px;align-items:center}
+  .search{position:relative}
+  .search input{
+    height:36px;width:280px;border:1px solid var(--line);background:#fff;border-radius:10px;
+    padding:0 12px 0 34px;font-size:13px;color:var(--ink);outline:none;transition:border .15s, box-shadow .15s;
+  }
+  .search input:focus{border-color:#c7d2fe;box-shadow:0 0 0 3px rgba(31,59,255,.12)}
+  .search svg{position:absolute;left:11px;top:10px;opacity:.5}
+
+  .btn{
+    height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);
+    display:inline-flex;align-items:center;gap:8px;font-weight:500;font-size:13px;transition:background .15s,border-color .15s;
+  }
+  .btn:hover{background:#f8fafc}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-2)}
+  .btn.ghost{border-color:transparent;background:transparent}
+  .btn.ghost:hover{background:#eef2ff;color:var(--brand)}
+
+  /* ===== Role summary row ===== */
+  .role-strip{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px;
+  }
+  .role-card{
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 14px 12px;
+    position:relative;box-shadow:var(--shadow-sm);
+  }
+  .role-card .role-name{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+  .role-card .role-tag{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:2px}
+  .role-card .role-tag.custom{color:#7c3aed}
+  .role-card .role-counts{display:flex;gap:8px;margin-top:10px}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid transparent}
+  .pill .dot{width:6px;height:6px;border-radius:50%}
+  .pill.edit{background:var(--edit-bg);color:var(--edit-ink);border-color:var(--edit-bd)}
+  .pill.edit .dot{background:#10b981}
+  .pill.view{background:var(--view-bg);color:var(--view-ink);border-color:var(--view-bd)}
+  .pill.view .dot{background:#f59e0b}
+  .pill.hide{background:var(--hide-bg);color:var(--hide-ink);border-color:var(--hide-bd)}
+  .pill.hide .dot{background:#94a3b8}
+  .role-card .row-tools{position:absolute;top:10px;right:10px;display:flex;gap:2px;opacity:0;transition:opacity .15s}
+  .role-card:hover .row-tools{opacity:1}
+  .icon-btn{width:26px;height:26px;border-radius:6px;display:inline-grid;place-items:center;color:var(--muted)}
+  .icon-btn:hover{background:#f1f5f9;color:var(--ink)}
+  .role-card.locked::after{
+    content:"LOCKED";position:absolute;top:10px;right:12px;font-size:9.5px;letter-spacing:.12em;
+    color:var(--muted);font-weight:700;background:#f1f5f9;padding:3px 7px;border-radius:6px;
+  }
+
+  /* ===== Toolbar above matrix ===== */
+  .matrix-toolbar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius) var(--radius) 0 0;
+    padding:10px 14px;border-bottom:none;
+  }
+  .toolbar-left{display:flex;align-items:center;gap:8px;color:var(--ink-2);font-size:13px}
+  .chip-filter{
+    display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);
+    border-radius:8px;background:#fff;font-size:12.5px;color:var(--ink-2)
+  }
+  .chip-filter:hover{background:#f8fafc}
+  .chip-filter.active{color:var(--brand);border-color:#c7d2fe;background:#eef2ff}
+  .toolbar-right{display:flex;align-items:center;gap:8px}
+
+  /* ===== Matrix ===== */
+  .matrix-wrap{
+    background:#fff;border:1px solid var(--line);border-radius:0 0 var(--radius) var(--radius);
+    overflow:hidden;box-shadow:var(--shadow-sm);
+  }
+  .matrix-scroll{overflow:auto;max-height:calc(100vh - 380px);position:relative}
+
+  table.matrix{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+  .matrix col.col-mod{width:300px}
+  .matrix col.col-role{width:180px}
+  .matrix col.col-set{width:140px}
+
+  .matrix thead th{
+    position:sticky;top:0;z-index:3;background:#fbfcfd;border-bottom:1px solid var(--line);
+    text-align:left;padding:14px 16px;font-weight:600;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)
+  }
+  .matrix thead th .sub{display:block;font-size:10px;color:var(--muted);font-weight:600;margin-top:3px;letter-spacing:.06em}
+  .matrix thead th.first-col{position:sticky;left:0;z-index:4}
+  .matrix tbody td{padding:10px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle;height:var(--row-h)}
+  .matrix tbody tr:last-child td{border-bottom:none}
+  .matrix tbody tr:hover td{background:#fafbfc}
+
+  .mod-cell{position:sticky;left:0;background:#fff;z-index:2;border-right:1px solid var(--line-2)}
+  .matrix tbody tr:hover .mod-cell{background:#fafbfc}
+
+  .mod{display:flex;align-items:center;gap:12px}
+  .mod-ico{
+    width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:#eef2ff;color:var(--brand);flex:none
+  }
+  .mod-ico.alt-1{background:#fef3c7;color:#92400e}
+  .mod-ico.alt-2{background:#dcfce7;color:#15803d}
+  .mod-ico.alt-3{background:#fee2e2;color:#b91c1c}
+  .mod-ico.alt-4{background:#f3e8ff;color:#6b21a8}
+  .mod-ico.alt-5{background:#cffafe;color:#155e75}
+  .mod-name{font-weight:600;color:var(--ink);font-size:13.5px;line-height:1.2}
+  .mod-key{display:block;color:var(--muted);font-size:11px;margin-top:3px;letter-spacing:.04em}
+
+  /* Group divider rows */
+  .grp-row td{
+    background:#f8fafc;border-bottom:1px solid var(--line);padding:10px 16px;
+    font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-weight:700
+  }
+  .grp-row td.first-col{position:sticky;left:0;background:#f8fafc;z-index:2}
+  .grp-row .grp-toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+  .grp-row .chev{transition:transform .15s}
+  .grp-row.collapsed .chev{transform:rotate(-90deg)}
+  .grp-row .grp-count{margin-left:8px;color:var(--muted);font-weight:600}
+
+  /* Permission segmented control */
+  .perm{
+    display:inline-flex;align-items:center;background:#f1f5f9;border:1px solid var(--line);
+    border-radius:9px;padding:2px;gap:2px;height:34px;width:100%;max-width:160px;justify-content:space-between
+  }
+  .perm.locked{opacity:.65;pointer-events:none}
+  .perm button{
+    flex:1;height:28px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--ink-2);
+    letter-spacing:.02em;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    transition:background .15s,color .15s, box-shadow .15s
+  }
+  .perm button .swatch{width:6px;height:6px;border-radius:50%;background:#cbd5e1}
+  .perm button:hover{color:var(--ink)}
+  .perm button[aria-pressed="true"]{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .perm button[data-v="edit"][aria-pressed="true"]{color:var(--edit-ink)}
+  .perm button[data-v="edit"][aria-pressed="true"] .swatch{background:#10b981}
+  .perm button[data-v="view"][aria-pressed="true"]{color:var(--view-ink)}
+  .perm button[data-v="view"][aria-pressed="true"] .swatch{background:#f59e0b}
+  .perm button[data-v="hide"][aria-pressed="true"]{color:var(--hide-ink)}
+  .perm button[data-v="hide"][aria-pressed="true"] .swatch{background:#94a3b8}
+
+  /* Row "Set all" select */
+  .setrow{
+    height:34px;width:100%;border:1px solid var(--line);background:#fff;border-radius:9px;padding:0 10px;
+    color:var(--ink-2);font-size:12.5px;outline:none
+  }
+  .setrow:hover{border-color:#cbd5e1}
+
+  /* Legend */
+  .legend{display:flex;align-items:center;gap:18px;color:var(--ink-2);font-size:12.5px;padding:12px 16px;border-top:1px solid var(--line-2);background:#fbfcfd}
+  .legend .item{display:inline-flex;align-items:center;gap:8px}
+  .legend .swatch{width:10px;height:10px;border-radius:3px;border:1px solid transparent}
+  .legend .swatch.edit{background:var(--edit-bg);border-color:var(--edit-bd)}
+  .legend .swatch.view{background:var(--view-bg);border-color:var(--view-bd)}
+  .legend .swatch.hide{background:var(--hide-bg);border-color:var(--hide-bd)}
+
+  /* Save bar */
+  .savebar{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:50;
+    display:flex;align-items:center;gap:14px;background:#0f172a;color:#fff;
+    padding:10px 12px 10px 18px;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.35);
+    transition:opacity .2s, transform .2s;
+  }
+  .savebar.hidden{opacity:0;pointer-events:none;transform:translate(-50%,12px)}
+  .savebar .count{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+  .savebar .count .dot{width:8px;height:8px;border-radius:50%;background:#fbbf24;box-shadow:0 0 0 4px rgba(251,191,36,.18)}
+  .savebar .actions{display:flex;gap:8px}
+  .savebar .btn{height:34px;border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff}
+  .savebar .btn:hover{background:rgba(255,255,255,.12)}
+  .savebar .btn.primary{background:#22c55e;border-color:#22c55e;color:#06281a}
+  .savebar .btn.primary:hover{background:#16a34a;color:#fff}
+
+  /* Bulk action menu */
+  .menu-wrap{position:relative}
+  .menu{
+    position:absolute;right:0;top:42px;min-width:230px;background:#fff;border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow-md);padding:6px;z-index:30;display:none
+  }
+  .menu.open{display:block}
+  .menu button{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 10px;border-radius:8px;color:var(--ink);font-size:13px
+  }
+  .menu button:hover{background:#f1f5f9}
+  .menu hr{border:none;border-top:1px solid var(--line-2);margin:6px 4px}
+  .menu .danger{color:#b91c1c}
+
+  /* Hidden rows */
+  tr.hidden-row{display:none}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-head">
+    <div class="title-block">
+      <div class="eyebrow">System · Access Control</div>
+      <h1>User Roles</h1>
+      <p>Module-level access (Edit / View / No View) per role · 33 modules</p>
+    </div>
+    <div class="head-actions">
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search" type="search" placeholder="Search modules…" />
+      </div>
+      <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Add Role</button>
+      <button class="btn primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg> Save Changes</button>
+    </div>
+  </div>
+
+  <!-- Role summary cards -->
+  <div class="role-strip" id="roleStrip"></div>
+
+  <!-- Toolbar -->
+  <div class="matrix-toolbar">
+    <div class="toolbar-left">
+      <span style="font-weight:600;color:var(--ink)">Role Permission Matrix</span>
+      <span style="color:var(--muted)">·</span>
+      <button class="chip-filter active" data-filter="all">All groups</button>
+      <button class="chip-filter" data-filter="Planning">Planning</button>
+      <button class="chip-filter" data-filter="Insights">Insights</button>
+      <button class="chip-filter" data-filter="Documents">Documents</button>
+      <button class="chip-filter" data-filter="Integration">Integration</button>
+      <button class="chip-filter" data-filter="System">System</button>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn" id="expandAll"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> Expand all</button>
+      <button class="btn" id="collapseAll"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg> Collapse all</button>
+      <div class="menu-wrap">
+        <button class="btn" id="bulkBtn">
+          Bulk actions
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="menu" id="bulkMenu">
+          <button data-act="setall-view">Set all visible to View</button>
+          <button data-act="setall-edit">Set all visible to Edit</button>
+          <button data-act="setall-hide">Set all visible to Hidden</button>
+          <hr/>
+          <button data-act="copy">Copy from another role…</button>
+          <button data-act="clone">Clone an existing role…</button>
+          <hr/>
+          <button data-act="reset" class="danger">Reset all to defaults</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matrix -->
+  <div class="matrix-wrap">
+    <div class="matrix-scroll">
+      <table class="matrix" id="matrix">
+        <colgroup>
+          <col class="col-mod" />
+          <col class="col-role" /><col class="col-role" /><col class="col-role" /><col class="col-role" /><col class="col-role" />
+          <col class="col-set" />
+        </colgroup>
+        <thead>
+          <tr id="headRow">
+            <th class="first-col">Module</th>
+            <!-- role headers injected -->
+            <th>Set Row</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span class="item"><span class="swatch edit"></span> <strong style="color:var(--edit-ink)">Edit</strong> — full create / update / delete</span>
+      <span class="item"><span class="swatch view"></span> <strong style="color:var(--view-ink)">View</strong> — read-only</span>
+      <span class="item"><span class="swatch hide"></span> <strong style="color:var(--hide-ink)">No View</strong> — module is hidden</span>
+      <span style="margin-left:auto;color:var(--muted)">Admin column is locked</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Save bar -->
+<div class="savebar hidden" id="savebar">
+  <div class="count"><span class="dot"></span> <span id="changeCount">0 unsaved changes</span></div>
+  <div class="actions">
+    <button class="btn" id="discardBtn">Discard</button>
+    <button class="btn primary" id="saveBtn">Save changes</button>
+  </div>
+</div>
+
+<script>
+  /* ----- Data ----- */
+  const ROLES = [
+    { key:"admin",     name:"Admin",        tag:"System · Locked", locked:true },
+    { key:"planner",   name:"Planner",      tag:"System" },
+    { key:"finance",   name:"Finance User", tag:"System" },
+    { key:"viewer",    name:"Viewer",       tag:"System" },
+    { key:"dispatch",  name:"Dispatcher",   tag:"Custom",         custom:true }
+  ];
+
+  // icons via inline SVG paths (lucide-style)
+  const I = {
+    home:'<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+    dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+    box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+    pin: '<path d="M12 22s7-7.58 7-13a7 7 0 1 0-14 0c0 5.42 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/>',
+    truck:'<path d="M1 7h13v10H1zM14 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
+    pkg: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4V11M21 7v10l-9 4"/>',
+    map: '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/>',
+    layers:'<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5M3 18l9 5 9-5"/>',
+    route:'<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M6 17V9a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v0"/>',
+    sliders:'<path d="M4 21V14M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    bid: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    audit:'<path d="M14 3h-9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/>',
+    doc: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+    portal:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+    msg: '<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    net: '<circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><path d="M6 7l4 3M18 7l-4 3M6 17l4-3M18 17l-4-3"/>',
+    chart:'<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',
+    rep:  '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',
+    db:   '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    cog:  '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+  };
+
+  // Module groups & rows. Defaults map to roles array order.
+  // Values: edit | view | hide
+  const GROUPS = [
+    { name:"Overview", icon:"alt-1", modules:[
+      { name:"Home",       key:"home",      ico:"home",  tone:"alt-1", def:["edit","edit","view","view","view"] },
+      { name:"Dashboard",  key:"dashboard", ico:"dash",  tone:"alt-1", def:["edit","edit","view","view","hide"] }
+    ]},
+    { name:"Planning", icon:"alt-2", modules:[
+      { name:"Item Master",       key:"items",        ico:"box",    tone:"alt-2", def:["edit","edit","edit","view","hide"] },
+      { name:"Location Master",   key:"locations",    ico:"pin",    tone:"alt-2", def:["edit","edit","hide","view","hide"] },
+      { name:"Equipment Master",  key:"equipments",   ico:"truck",  tone:"alt-2", def:["edit","edit","hide","view","hide"] },
+      { name:"Shipments",         key:"shipments",    ico:"pkg",    tone:"alt-2", def:["edit","view","view","view","view"] },
+      { name:"Orders",            key:"orders",       ico:"pkg",    tone:"alt-2", def:["edit","view","view","view","hide"] },
+      { name:"Route Optimizer",   key:"route_opt",    ico:"route",  tone:"alt-2", def:["edit","edit","view","view","hide"] },
+      { name:"Bulk Plan",         key:"bulk_plan",    ico:"layers", tone:"alt-2", def:["edit","edit","view","view","hide"] },
+      { name:"Multi-Stop Routes", key:"multi_stop",   ico:"map",    tone:"alt-2", def:["edit","edit","view","view","hide"] },
+      { name:"Planning Params",   key:"plan_params",  ico:"sliders",tone:"alt-2", def:["edit","edit","hide","view","hide"] }
+    ]},
+    { name:"Documents", icon:"alt-3", modules:[
+      { name:"Carrier Bids",     key:"carrier_bids", ico:"bid",   tone:"alt-3", def:["edit","view","edit","view","view"] },
+      { name:"Freight Audit",    key:"freight_audit",ico:"audit", tone:"alt-3", def:["edit","view","edit","view","hide"] },
+      { name:"Documents & BOL",  key:"documents_bol",ico:"doc",   tone:"alt-3", def:["edit","edit","view","view","view"] },
+      { name:"Customer Portal",  key:"customer_portal",ico:"portal",tone:"alt-3", def:["edit","view","view","view","hide"] }
+    ]},
+    { name:"Integration", icon:"alt-4", modules:[
+      { name:"Messaging Hub",    key:"messaging_hub",ico:"msg",   tone:"alt-4", def:["edit","view","view","view","hide"] }
+    ]},
+    { name:"Insights", icon:"alt-5", modules:[
+      { name:"Network Modeling", key:"network_modeling",ico:"net",tone:"alt-5", def:["edit","edit","view","view","hide"] },
+      { name:"Analytics",        key:"analytics",    ico:"chart", tone:"alt-5", def:["edit","view","view","view","hide"] },
+      { name:"Reports",          key:"reports",      ico:"rep",   tone:"alt-5", def:["edit","view","view","view","hide"] },
+      { name:"Alerts",           key:"alerts",       ico:"bell",  tone:"alt-5", def:["edit","view","view","view","hide"] },
+      { name:"DB Explorer",      key:"db_explorer",  ico:"db",    tone:"alt-5", def:["edit","hide","hide","hide","hide"] }
+    ]},
+    { name:"System", icon:"alt-3", modules:[
+      { name:"User Management",  key:"user_mgmt",    ico:"user",  tone:"alt-3", def:["edit","hide","hide","hide","hide"] },
+      { name:"User Roles",       key:"user_roles",   ico:"lock",  tone:"alt-3", def:["edit","hide","hide","hide","hide"] },
+      { name:"Settings",         key:"settings",     ico:"cog",   tone:"alt-3", def:["edit","view","view","view","hide"] }
+    ]}
+  ];
+
+  /* ----- State ----- */
+  const state = {};      // state[modKey][roleKey] = "edit"|"view"|"hide"
+  const original = {};   // snapshot for diff
+  GROUPS.forEach(g => g.modules.forEach(m => {
+    state[m.key] = {}; original[m.key] = {};
+    ROLES.forEach((r,i) => { state[m.key][r.key] = m.def[i]; original[m.key][r.key] = m.def[i]; });
+  }));
+
+  /* ----- Render head ----- */
+  const headRow = document.getElementById("headRow");
+  // insert role headers between Module and Set Row
+  ROLES.forEach(r => {
+    const th = document.createElement("th");
+    th.innerHTML = `${r.name} <span class="sub">${r.tag}</span>`;
+    headRow.insertBefore(th, headRow.lastElementChild);
+  });
+
+  /* ----- Render role summary strip ----- */
+  function renderRoleStrip(){
+    const strip = document.getElementById("roleStrip");
+    strip.innerHTML = "";
+    ROLES.forEach(r => {
+      let edit=0,view=0,hide=0;
+      Object.values(state).forEach(row => {
+        const v = row[r.key];
+        if(v==="edit")edit++; else if(v==="view")view++; else hide++;
+      });
+      const card = document.createElement("div");
+      card.className = "role-card" + (r.locked ? " locked":"");
+      card.innerHTML = `
+        <div class="role-name">${r.name}</div>
+        <div class="role-tag ${r.custom?'custom':''}">${r.tag}</div>
+        <div class="role-counts">
+          <span class="pill edit"><span class="dot"></span>${edit} Edit</span>
+          <span class="pill view"><span class="dot"></span>${view} View</span>
+          <span class="pill hide"><span class="dot"></span>${hide} Hidden</span>
+        </div>
+        ${r.locked ? "" : `
+          <div class="row-tools">
+            <button class="icon-btn" title="Clone role">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><rect x="4" y="4" width="11" height="11" rx="2"/></svg>
+            </button>
+            <button class="icon-btn" title="Rename">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+          </div>`}
+      `;
+      strip.appendChild(card);
+    });
+  }
+
+  /* ----- Render matrix body ----- */
+  function svgMod(d, tone){
+    return `<span class="mod-ico ${tone||''}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg></span>`;
+  }
+
+  function permCell(modKey, role){
+    const v = state[modKey][role.key];
+    const lock = role.locked ? " locked" : "";
+    return `
+      <td>
+        <div class="perm${lock}" data-mod="${modKey}" data-role="${role.key}" role="group" aria-label="Permission">
+          <button data-v="hide" aria-pressed="${v==='hide'}"><span class="swatch"></span>Hide</button>
+          <button data-v="view" aria-pressed="${v==='view'}"><span class="swatch"></span>View</button>
+          <button data-v="edit" aria-pressed="${v==='edit'}"><span class="swatch"></span>Edit</button>
+        </div>
+      </td>`;
+  }
+
+  function renderBody(){
+    const tb = document.getElementById("tbody");
+    tb.innerHTML = "";
+    GROUPS.forEach(g => {
+      // Group header row
+      const gtr = document.createElement("tr");
+      gtr.className = "grp-row";
+      gtr.dataset.group = g.name;
+      gtr.innerHTML = `
+        <td class="first-col" colspan="${ROLES.length + 2}">
+          <span class="grp-toggle" data-toggle="${g.name}">
+            <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+            ${g.name}
+            <span class="grp-count">· ${g.modules.length}</span>
+          </span>
+        </td>`;
+      tb.appendChild(gtr);
+
+      g.modules.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.dataset.group = g.name;
+        tr.dataset.mod = m.key;
+        tr.dataset.name = m.name.toLowerCase();
+        tr.innerHTML = `
+          <td class="mod-cell">
+            <div class="mod">
+              ${svgMod(I[m.ico], m.tone)}
+              <div>
+                <div class="mod-name">${m.name}</div>
+                <span class="mod-key">${m.key.toUpperCase()}</span>
+              </div>
+            </div>
+          </td>
+          ${ROLES.map(r => permCell(m.key, r)).join("")}
+          <td>
+            <select class="setrow" data-mod="${m.key}">
+              <option value="">Set all →</option>
+              <option value="edit">All Edit</option>
+              <option value="view">All View</option>
+              <option value="hide">All Hidden</option>
+            </select>
+          </td>`;
+        tb.appendChild(tr);
+      });
+    });
+  }
+
+  /* ----- Diff & save bar ----- */
+  function diffCount(){
+    let n = 0;
+    Object.keys(state).forEach(mk => {
+      ROLES.forEach(r => { if(state[mk][r.key] !== original[mk][r.key]) n++; });
+    });
+    return n;
+  }
+  function refreshSavebar(){
+    const n = diffCount();
+    const bar = document.getElementById("savebar");
+    document.getElementById("changeCount").textContent = `${n} unsaved change${n===1?'':'s'}`;
+    bar.classList.toggle("hidden", n === 0);
+  }
+
+  /* ----- Interactions ----- */
+  function setPerm(modKey, roleKey, v){
+    const role = ROLES.find(r => r.key === roleKey);
+    if(role && role.locked) return;
+    state[modKey][roleKey] = v;
+    // update buttons in that perm group
+    document.querySelectorAll(`.perm[data-mod="${modKey}"][data-role="${roleKey}"] button`).forEach(b => {
+      b.setAttribute("aria-pressed", b.dataset.v === v ? "true" : "false");
+    });
+    renderRoleStrip();
+    refreshSavebar();
+  }
+
+  document.getElementById("tbody").addEventListener("click", e => {
+    const btn = e.target.closest(".perm button");
+    if(btn){
+      const grp = btn.closest(".perm");
+      if(grp.classList.contains("locked")) return;
+      setPerm(grp.dataset.mod, grp.dataset.role, btn.dataset.v);
+      return;
+    }
+    const tog = e.target.closest(".grp-toggle");
+    if(tog){
+      const name = tog.dataset.toggle;
+      const grpRow = document.querySelector(`.grp-row[data-group="${name}"]`);
+      grpRow.classList.toggle("collapsed");
+      const collapsed = grpRow.classList.contains("collapsed");
+      document.querySelectorAll(`tr[data-group="${name}"]:not(.grp-row)`).forEach(tr => {
+        tr.style.display = collapsed ? "none" : "";
+      });
+    }
+  });
+
+  document.getElementById("tbody").addEventListener("change", e => {
+    const sel = e.target.closest(".setrow");
+    if(!sel || !sel.value) return;
+    const modKey = sel.dataset.mod;
+    ROLES.forEach(r => { if(!r.locked) setPerm(modKey, r.key, sel.value); });
+    sel.value = "";
+  });
+
+  // Search
+  document.getElementById("search").addEventListener("input", e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll("#tbody tr[data-mod]").forEach(tr => {
+      const match = !q || tr.dataset.name.includes(q) || tr.dataset.mod.includes(q);
+      tr.classList.toggle("hidden-row", !match);
+    });
+    // Hide empty groups when searching
+    document.querySelectorAll(".grp-row").forEach(gr => {
+      const grpName = gr.dataset.group;
+      const visible = [...document.querySelectorAll(`tr[data-group="${grpName}"]:not(.grp-row)`)]
+        .some(tr => !tr.classList.contains("hidden-row"));
+      gr.style.display = visible ? "" : "none";
+    });
+  });
+
+  // Group filter chips
+  document.querySelectorAll(".chip-filter").forEach(chip => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".chip-filter").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      const f = chip.dataset.filter;
+      document.querySelectorAll("#tbody tr").forEach(tr => {
+        if(tr.classList.contains("grp-row")){
+          tr.style.display = (f === "all" || tr.dataset.group === f) ? "" : "none";
+        } else {
+          tr.style.display = (f === "all" || tr.dataset.group === f) ? "" : "none";
+        }
+      });
+    });
+  });
+
+  // Expand/collapse all
+  document.getElementById("expandAll").addEventListener("click", () => {
+    document.querySelectorAll(".grp-row").forEach(gr => {
+      gr.classList.remove("collapsed");
+      document.querySelectorAll(`tr[data-group="${gr.dataset.group}"]:not(.grp-row)`).forEach(tr => tr.style.display = "");
+    });
+  });
+  document.getElementById("collapseAll").addEventListener("click", () => {
+    document.querySelectorAll(".grp-row").forEach(gr => {
+      gr.classList.add("collapsed");
+      document.querySelectorAll(`tr[data-group="${gr.dataset.group}"]:not(.grp-row)`).forEach(tr => tr.style.display = "none");
+    });
+  });
+
+  // Bulk menu
+  const bulkBtn = document.getElementById("bulkBtn");
+  const bulkMenu = document.getElementById("bulkMenu");
+  bulkBtn.addEventListener("click", e => { e.stopPropagation(); bulkMenu.classList.toggle("open"); });
+  document.addEventListener("click", () => bulkMenu.classList.remove("open"));
+  bulkMenu.addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    const act = b.dataset.act;
+    if(act && act.startsWith("setall-")){
+      const v = act.split("-")[1];
+      document.querySelectorAll("#tbody tr[data-mod]").forEach(tr => {
+        if(tr.classList.contains("hidden-row") || tr.style.display === "none") return;
+        const mk = tr.dataset.mod;
+        ROLES.forEach(r => { if(!r.locked) setPerm(mk, r.key, v); });
+      });
+    } else if(act === "reset"){
+      Object.keys(state).forEach(mk => ROLES.forEach(r => { state[mk][r.key] = original[mk][r.key]; }));
+      renderBody(); renderRoleStrip(); refreshSavebar();
+    } else {
+      alert("Mockup: '" + b.textContent.trim() + "' would open a dialog.");
+    }
+    bulkMenu.classList.remove("open");
+  });
+
+  // Save / discard
+  document.getElementById("saveBtn").addEventListener("click", () => {
+    Object.keys(state).forEach(mk => ROLES.forEach(r => { original[mk][r.key] = state[mk][r.key]; }));
+    refreshSavebar();
+  });
+  document.getElementById("discardBtn").addEventListener("click", () => {
+    Object.keys(state).forEach(mk => ROLES.forEach(r => { state[mk][r.key] = original[mk][r.key]; }));
+    renderBody(); renderRoleStrip(); refreshSavebar();
+  });
+
+  /* ----- boot ----- */
+  renderBody();
+  renderRoleStrip();
+  refreshSavebar();
+</script>
+</body>
+</html>

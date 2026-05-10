@@ -123,7 +123,7 @@ function InfoBox({ icon, label, value }) {
 }
 
 /* ── Shipment Detail Modal ── */
-function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, STATUS_BADGES, shipments, onChangeCarrier, onShipmentPatched, canEdit = true }) {
+function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, onNavigate, onCreateInvoice, STATUS_BADGES, shipments, onChangeCarrier, onShipmentPatched, canEdit = true }) {
   const linked = ds._linkedOrders || [];
   // Derive commodity from linked orders so it stays correct even when ds
   // was opened before the parent's `orders` list picked up the new
@@ -754,10 +754,20 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <button className="btn btn-secondary btn-sm" onClick={fetchChangeCarrierQuotes}>🔄 Change Carrier</button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate("/dock-scheduling"); }}>🚪 Dock schedule</button>
-          {/* Bug #166: jump straight to Freight Invoices scoped to this
-              shipment so the planner can view existing invoices or
-              raise a new one without re-typing the shipment id. */}
-          <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/freight-invoices?shipment=${encodeURIComponent(ds.id)}`); }}>🧾 Invoice</button>
+          {/* REQ-184/185/187: one-click invoice creation. Calls the
+              shipment→invoice service which sets status='On Hold',
+              copies costs into invoice_cost_lines, and links bol_ids
+              from the shipment. Redirects to the invoice page in edit
+              mode so finance can review/approve. The previous behavior
+              (Bug #166) sent the user to a New Invoice form; the
+              requirements rejected that as redundant. */}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              if (typeof onCreateInvoice === "function") onCreateInvoice(ds.id);
+              onClose();
+            }}
+          >🧾 Invoice</button>
           <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onNavigate(`/documents?shipmentId=${encodeURIComponent(ds.id)}`); onClose(); }}>📄 Documents</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { onClose(); onNavigate(`/messaging`); }}>📧 Contact Carrier</button>
           {/* REQ-18: Send-to-WMS is only meaningful after the carrier has
@@ -992,6 +1002,34 @@ export default function ShipmentsPage() {
     // Lets the user actually read action confirmations like
     // "Shipment copied as SHP-2026-9999" before they vanish.
     setTimeout(() => setMessage({ text: "", type: "" }), TOAST_DURATIONS.DEFAULT);
+  }
+
+  // REQ-184/185/187: Auto-create an invoice from a shipment in one
+  // click. Goes through ShipmentsApi.createInvoice (POST
+  // /api/shipments/:id/invoice). The server copies costs into
+  // invoice_cost_lines, sets status='On Hold', links shipment_id +
+  // bol_ids, and writes the audit trail. Idempotent — if the shipment
+  // already has an open invoice, the response carries that one with
+  // `reused: true` and we open it instead of creating another.
+  async function handleCreateInvoiceFromShipment(shipmentId) {
+    if (!shipmentId) return;
+    try {
+      const result = await ShipmentsApi.createInvoice(shipmentId);
+      const inv = result?.invoice;
+      if (!inv?.id) {
+        toast(`Could not create invoice for ${shipmentId}.`, "error");
+        return;
+      }
+      toast(
+        result.reused
+          ? `Reusing existing invoice ${inv.invoice_number || inv.id} for ${shipmentId}.`
+          : `Invoice ${inv.invoice_number || inv.id} created (On Hold) for ${shipmentId}.`,
+        "success",
+      );
+      navigate(`/freight-invoices?invoice=${encodeURIComponent(inv.id)}`);
+    } catch (e) {
+      toast(`Invoice creation failed: ${e?.message || "unknown error"}`, "error");
+    }
   }
 
   async function unassignOrder(orderId, shipmentId) {
@@ -1656,14 +1694,21 @@ export default function ShipmentsPage() {
                 {s._displayStatus === "Tender Accepted" && (
                   <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green)" }}>✅ Tender Accepted</span>
                 )}
-                {/* Bug #166: quick jump to Freight Invoices, scoped to
-                    this shipment. Lists existing invoices for the row
-                    and offers "New Invoice" pre-filled with this id. */}
+                {/* REQ-184/185/187: one-click invoice. Auto-creates an
+                    invoice from this shipment (status='On Hold', costs
+                    copied from shipment, bol_ids inherited) via the
+                    server, then jumps straight to the invoice page in
+                    edit mode. Idempotent — if an open invoice already
+                    exists for this shipment, we open that one. The
+                    previous behavior (Bug #166) was to navigate to
+                    /freight-invoices?shipment=<id> and pop a New
+                    Invoice modal asking the user to fill in the form
+                    again, which the requirements rejected. */}
                 <button
-                  title="View / create invoice for this shipment"
+                  title="Create / open invoice for this shipment"
                   style={{ background: "rgba(217,119,6,.08)", color: "#b45309", border: "1px solid rgba(217,119,6,.30)", padding: "4px 7px", borderRadius: 6, fontSize: 12, cursor: "pointer", lineHeight: 1 }}
                   disabled={busyId === s.id}
-                  onClick={() => navigate(`/freight-invoices?shipment=${encodeURIComponent(s.id)}`)}
+                  onClick={() => handleCreateInvoiceFromShipment(s.id)}
                 >
                   🧾
                 </button>
@@ -1807,7 +1852,7 @@ export default function ShipmentsPage() {
       )}
 
       {/* Shipment Detail Modal */}
-      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} onShipmentPatched={(patch) => { setDetailShipment((prev) => prev ? { ...prev, ...patch } : prev); refreshData(); }} canEdit={canEditShipments} />}
+      {detailShipment && <ShipmentDetailModal ds={detailShipment} onClose={() => setDetailShipment(null)} onTender={onTender} onWithdraw={(s) => { withdrawTender(s); setDetailShipment(null); }} onUnassign={unassignOrder} onNavigate={navigate} onCreateInvoice={handleCreateInvoiceFromShipment} STATUS_BADGES={STATUS_BADGES} shipments={shipments} onChangeCarrier={() => { setDetailShipment(null); refreshData(); }} onShipmentPatched={(patch) => { setDetailShipment((prev) => prev ? { ...prev, ...patch } : prev); refreshData(); }} canEdit={canEditShipments} />}
 
       {/* Tender Result Modal */}
       <TenderResultModal

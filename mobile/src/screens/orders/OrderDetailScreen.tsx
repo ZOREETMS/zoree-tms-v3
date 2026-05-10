@@ -29,6 +29,19 @@ import {
   isFailure,
   type SingleOrderCarrierQuote,
 } from '../../services/planSingleOrderService';
+// QA #182: presentation helpers + view-model builder live in the
+// service layer so this screen stays a dumb renderer (CLAUDE_RULES
+// §1, §3, §4, §6). Adds Ship From, Ship To, Ship Mode, Service Level,
+// Incoterms on the order, and Qty / Unit Wt / Total Wt per line so
+// mobile reaches field-parity with the web OrderDetailModal.
+import {
+  buildOrderDetailViewModel,
+  buildOrderLineViewModels,
+  dashIfBlank,
+  formatInt,
+  formatLbs,
+  type OrderLineViewModel,
+} from '../../services/orderDetailService';
 import CarrierPickerModal from '../../components/orders/CarrierPickerModal';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -258,13 +271,11 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const status = order.status || 'Unplanned';
-  const readyDate = (order.readyDate || order.ready_date || order.ready)
-    ? new Date(order.readyDate || order.ready_date || order.ready).toLocaleDateString()
-    : '--';
-  const dueDate = (order.dueDate || order.due_date || order.due)
-    ? new Date(order.dueDate || order.due_date || order.due).toLocaleDateString()
-    : '--';
+  // QA #182: every field below is resolved by the service layer so
+  // both API casings (camelCase from dbToOrder, snake_case from the
+  // inline /api routes) render identically.
+  const vm = buildOrderDetailViewModel(order);
+  const lineVms = buildOrderLineViewModels(lines);
 
   return (
     <View style={styles.container}>
@@ -274,52 +285,56 @@ export default function OrderDetailScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {order.order_id || order.id}
+            {vm.orderId}
           </Text>
         </View>
-        <StatusBadge status={status} />
+        <StatusBadge status={vm.status} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Order Information</Text>
 
-          <InfoRow label="Customer" value={order.customer || order.customer_name || '--'} />
-          <InfoRow label="Origin" value={order.origin || order.origin_city || '--'} />
-          <InfoRow label="Destination" value={order.destination || order.destination_city || '--'} />
-          <InfoRow label="Ready Date" value={readyDate} />
-          <InfoRow label="Due Date" value={dueDate} />
-          <InfoRow
-            label="Weight"
-            value={
-              (order.weight ?? order.total_weight) != null
-                ? `${Number(order.weight ?? order.total_weight).toLocaleString()} lbs`
-                : '--'
-            }
-          />
-          <InfoRow
-            label="Pieces"
-            value={
-              (order.pieces ?? order.total_pieces) != null
-                ? `${Number(order.pieces ?? order.total_pieces).toLocaleString()}`
-                : '--'
-            }
-          />
-          <InfoRow label="Commodity" value={order.commodity || '--'} />
+          <InfoRow label="Customer" value={vm.customer} />
+          <InfoRow label="Origin" value={vm.origin} />
+          <InfoRow label="Destination" value={vm.destination} />
+          {/* QA #182: surface ship-from/to names + mode + service
+              level + incoterms only when present, so unset fields
+              don't push noise into the card. Renders match the
+              web OrderDetailModal labels. */}
+          {vm.shipFromName ? (
+            <InfoRow label="Ship From" value={vm.shipFromName} />
+          ) : null}
+          {vm.shipToName ? (
+            <InfoRow label="Ship To" value={vm.shipToName} />
+          ) : null}
+          {vm.shipMode ? (
+            <InfoRow label="Mode" value={vm.shipMode} />
+          ) : null}
+          {vm.serviceLevel ? (
+            <InfoRow label="Service Level" value={vm.serviceLevel} />
+          ) : null}
+          {vm.incoterms ? (
+            <InfoRow label="Incoterms" value={vm.incoterms} />
+          ) : null}
+          <InfoRow label="Ready Date" value={vm.readyDate} />
+          <InfoRow label="Due Date" value={vm.dueDate} />
+          <InfoRow label="Weight" value={formatLbs(vm.weightLbs)} />
+          <InfoRow label="Pieces" value={formatInt(vm.pieces)} />
+          <InfoRow label="Commodity" value={dashIfBlank(vm.commodity)} />
           <TouchableOpacity
-            disabled={!(order.shipmentId || order.shipment_id)}
+            disabled={!vm.shipmentId}
             activeOpacity={0.6}
             onPress={() => {
-              const sid = order.shipmentId || order.shipment_id;
-              if (sid) navigation.navigate('ShipmentDetail', { shipmentId: sid });
+              if (vm.shipmentId) navigation.navigate('ShipmentDetail', { shipmentId: vm.shipmentId });
             }}
           >
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Shipment ID</Text>
-              {(order.shipmentId || order.shipment_id) ? (
+              {vm.shipmentId ? (
                 <View style={styles.shipmentLink}>
                   <Text style={styles.shipmentLinkText} numberOfLines={1}>
-                    {order.shipmentId || order.shipment_id}
+                    {vm.shipmentId}
                   </Text>
                   <Ionicons name="open-outline" size={14} color={colors.accent} />
                 </View>
@@ -328,38 +343,25 @@ export default function OrderDetailScreen() {
               )}
             </View>
           </TouchableOpacity>
-          {(order.preferredCarrier || order.preferred_carrier) ? (
-            <InfoRow label="Preferred Carrier" value={order.preferredCarrier || order.preferred_carrier} />
+          {vm.preferredCarrier ? (
+            <InfoRow label="Preferred Carrier" value={vm.preferredCarrier} />
           ) : null}
-          {order.notes ? <InfoRow label="Notes" value={order.notes} /> : null}
+          {vm.notes ? <InfoRow label="Notes" value={vm.notes} /> : null}
         </Card>
 
         <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Order Lines</Text>
           {linesLoading ? (
             <ActivityIndicator color={colors.accent} style={styles.linesLoader} />
-          ) : lines.length === 0 ? (
+          ) : lineVms.length === 0 ? (
             <Text style={styles.emptyLines}>No line items</Text>
           ) : (
-            lines.map((line, idx) => (
-              <View
-                key={line.id ?? idx}
-                style={[styles.lineItem, idx < lines.length - 1 && styles.lineItemBorder]}
-              >
-                <View style={styles.lineItemHeader}>
-                  <Text style={styles.lineItemName} numberOfLines={1}>
-                    {line.item_name || line.description || `Line ${idx + 1}`}
-                  </Text>
-                  <Text style={styles.lineItemQty}>
-                    {line.quantity != null ? `Qty: ${line.quantity}` : ''}
-                  </Text>
-                </View>
-                {line.weight != null && (
-                  <Text style={styles.lineItemMeta}>
-                    Weight: {Number(line.weight).toLocaleString()} lbs
-                  </Text>
-                )}
-              </View>
+            lineVms.map((line, idx) => (
+              <OrderLineRow
+                key={line.key}
+                line={line}
+                isLast={idx === lineVms.length - 1}
+              />
             ))
           )}
         </Card>
@@ -440,6 +442,44 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * QA #182: per-line row showing Qty, Unit Wt, and Total Wt — the same
+ * three values the web's OrderLinesEditor exposes. Single-purpose
+ * presentation component (CLAUDE_RULES §2). Display values come from
+ * the view-model formatter so empty/zero rendering is consistent
+ * across the screen.
+ */
+function OrderLineRow({ line, isLast }: { line: OrderLineViewModel; isLast: boolean }) {
+  return (
+    <View style={[styles.lineItem, !isLast && styles.lineItemBorder]}>
+      <View style={styles.lineItemHeader}>
+        <Text style={styles.lineItemName} numberOfLines={1}>
+          {line.itemId ? `${line.itemId} — ${line.description}` : line.description}
+        </Text>
+        <Text style={styles.lineItemLineNum}>
+          {line.lineNum != null ? `#${line.lineNum}` : ''}
+        </Text>
+      </View>
+      <View style={styles.lineMetricsRow}>
+        <LineMetric label="Qty" value={formatInt(line.qty)} />
+        <LineMetric label="Unit Wt" value={formatLbs(line.unitWeightLbs)} />
+        <LineMetric label="Total Wt" value={formatLbs(line.totalWeightLbs)} />
+      </View>
+    </View>
+  );
+}
+
+function LineMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.lineMetric}>
+      <Text style={styles.lineMetricLabel}>{label}</Text>
+      <Text style={styles.lineMetricValue} numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -531,8 +571,30 @@ const styles = StyleSheet.create({
   lineItemBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   lineItemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   lineItemName: { fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.text, flex: 1, marginRight: spacing.sm },
-  lineItemQty: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text2 },
-  lineItemMeta: { fontSize: fontSize.sm, fontWeight: fontWeight.regular, color: colors.text3, marginTop: spacing.xs },
+  lineItemLineNum: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text3 },
+  // QA #182: three-up metrics row mirrors the web order-lines table
+  // columns (Qty / Unit Wt / Total Wt). Each cell is a fixed third so
+  // values align across rows when a line has very long descriptions.
+  lineMetricsRow: {
+    flexDirection: 'row',
+    marginTop: spacing.sm,
+  },
+  lineMetric: {
+    flex: 1,
+  },
+  lineMetricLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.text3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  lineMetricValue: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   actionBtn: {
     flex: 1,

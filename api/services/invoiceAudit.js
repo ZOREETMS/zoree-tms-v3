@@ -90,7 +90,10 @@ async function resolveShipments(shipmentIds) {
     try {
       const rows = await db.dbSelect('shipments', {
         filters: [['id', 'eq', sid]], limit: 1,
-        select: 'id,total_cost,carrier,mode,status,order_ids',
+        // REQ-187: include bol_number so submitInvoice can validate the
+        // BOL on a carrier-submitted invoice against the shipment of
+        // record before running the cost decision.
+        select: 'id,total_cost,carrier,mode,status,order_ids,bol_number',
       });
       const row = Array.isArray(rows) && rows.length ? rows[0] : null;
       if (row) found.push(row);
@@ -209,6 +212,7 @@ function decide({ agreedCost, invoicedAmount, tolerancePct, toleranceAbs }) {
 // decision payload with { shipmentsIdentified, missingShipments }.
 async function submitInvoice({
   invoiceNumber, carrier, carrierId, shipmentId, shipmentIds,
+  bolId, bolIds,                                    // REQ-187 (additive)
   invoicedAmount, invoiceDate, paymentTerms = 'NET30',
   notes, metadata, user,
 }) {
@@ -222,6 +226,17 @@ async function submitInvoice({
     ids = [...new Set(shipmentIds.map((x) => String(x || '').trim()).filter(Boolean))];
   } else if (shipmentId) {
     ids = [String(shipmentId).trim()].filter(Boolean);
+  }
+
+  // 1b. Normalize BOL inputs the same way. Carriers typically send a
+  //     single bolId per invoice but consolidated invoices can carry
+  //     multiple. Empty arrays are treated as "no BOL provided" — the
+  //     audit only enforces a match when at least one BOL was sent.
+  let bols = [];
+  if (Array.isArray(bolIds) && bolIds.length) {
+    bols = [...new Set(bolIds.map((x) => String(x || '').trim()).filter(Boolean))];
+  } else if (bolId) {
+    bols = [String(bolId).trim()].filter(Boolean);
   }
 
   // 2. Resolve all referenced shipments
@@ -241,6 +256,17 @@ async function submitInvoice({
     carrierId,
   });
 
+  // 3b. REQ-187: when the carrier supplies BOL ids, verify they match
+  //     the BOLs on the shipments of record before running the cost
+  //     decision. A mismatch means the carrier's invoice references a
+  //     different load than the one we have — the audit isn't trustworthy
+  //     until ops reconciles, so we reject up front with a specific reason.
+  const bolsOnRecord = resolved.found
+    .map((s) => s.bol_number)
+    .filter(Boolean);
+  const bolMismatched = bols.length > 0 && bolsOnRecord.length > 0
+    && bols.some((b) => !bolsOnRecord.includes(b));
+
   // 4. Decide
   let decision;
   if (hasMissing) {
@@ -249,6 +275,13 @@ async function submitInvoice({
       variance: agreedCost != null ? round2(amount - agreedCost) : null,
       variancePct: (agreedCost && agreedCost > 0) ? round2(((amount - agreedCost) / agreedCost) * 100) : null,
       reason: `${resolved.missing.length} referenced shipment${resolved.missing.length > 1 ? 's' : ''} not found: ${resolved.missing.join(', ')}.`,
+    };
+  } else if (bolMismatched) {
+    decision = {
+      status: 'Rejected',
+      variance: agreedCost != null ? round2(amount - agreedCost) : null,
+      variancePct: (agreedCost && agreedCost > 0) ? round2(((amount - agreedCost) / agreedCost) * 100) : null,
+      reason: `BOL on submitted invoice (${bols.join(', ')}) does not match shipment of record (${bolsOnRecord.join(', ')}).`,
     };
   } else {
     decision = decide({
@@ -269,6 +302,10 @@ async function submitInvoice({
     // REQ-07: array of all referenced ids (found + missing, so the audit
     // trail shows exactly what was submitted)
     shipment_ids: ids.length ? ids : null,
+    // REQ-187: BOL identifier(s) the carrier sent on this invoice. Stored
+    // alongside shipment_ids so finance can audit that what the carrier
+    // billed for matches the load we tendered.
+    bol_ids: bols.length ? bols : null,
     invoice_date: invoiceDate || null,
     // Bug #163: persist due_date at insert time so the edit modal —
     // which reads invoices.due_date directly — never opens with an
@@ -319,6 +356,8 @@ async function submitInvoice({
           invoiceNumber, carrier: row.carrier,
           shipmentId: row.shipment_id,
           shipmentIds: foundIds,
+          bolIds: bols,                    // REQ-187
+          bolMismatched,                   // REQ-187
           missingShipments: resolved.missing,
           consolidated: isConsolidated,
           invoicedAmount: amount, agreedCost,
@@ -491,6 +530,7 @@ const EDIT_FIELD_MAP = Object.freeze({
   carrierId:      'carrier_id',
   shipmentId:     'shipment_id',
   shipmentIds:    'shipment_ids',
+  bolIds:         'bol_ids',          // REQ-187
   invoiceDate:    'invoice_date',
   dueDate:        'due_date',
   agreedCost:     'agreed_cost',
@@ -508,6 +548,7 @@ const EDIT_LEGACY_ALIASES = Object.freeze({
   carrier_id:      'carrier_id',
   shipment_id:     'shipment_id',
   shipment_ids:    'shipment_ids',
+  bol_ids:         'bol_ids',         // REQ-187
   invoice_date:    'invoice_date',
   due_date:        'due_date',
   agreed_cost:     'agreed_cost',
@@ -538,6 +579,9 @@ function buildInvoicePatch(rawPatch) {
   if ('invoiced_amount' in patch) patch.invoiced_amount = num(patch.invoiced_amount, null);
   if ('shipment_ids' in patch && patch.shipment_ids != null && !Array.isArray(patch.shipment_ids)) {
     patch.shipment_ids = String(patch.shipment_ids).split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  if ('bol_ids' in patch && patch.bol_ids != null && !Array.isArray(patch.bol_ids)) {
+    patch.bol_ids = String(patch.bol_ids).split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
   }
   if ('status' in patch && !EDIT_VALID_STATUSES.includes(patch.status)) {
     const e = new Error(`Invalid status '${patch.status}'. Allowed: ${EDIT_VALID_STATUSES.join(', ')}`);
@@ -580,6 +624,7 @@ async function editInvoice({ invoiceId, patch: rawPatch, user }) {
         carrier_id:      'carrier_id',
         shipment_id:     'shipment_id',
         shipment_ids:    'shipment_ids',
+        bol_ids:         'bol_ids',         // REQ-187
         invoice_date:    'invoice_date',
         due_date:        'due_date',
         agreed_cost:     'agreed_cost',

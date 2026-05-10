@@ -4,6 +4,7 @@
 
 const router = require('express').Router();
 const shipService = require('../services/shipments');
+const invoiceFromShipment = require('../services/invoiceFromShipment');
 const { requireRole, requireFeature } = require('../middleware/auth');
 
 // GET /api/shipments
@@ -77,6 +78,28 @@ router.patch('/:id/status', requireRole('admin', 'planner', 'dispatcher'), async
       { user: req.user || null, via: 'shipment-status-patch' },
     );
     res.json(shipment);
+  } catch (err) { next(err); }
+});
+
+// POST /api/shipments/:id/invoice — REQ-184/185/187.
+//
+// Auto-creates an invoice from this shipment (status='On Hold') in a
+// single round-trip so the planner doesn't fill in another form. Costs
+// (rate, fuel surcharge, accessorials) are copied off the shipment into
+// invoice_cost_lines with approved_cost defaulted to invoice_cost.
+//
+// Idempotent: if the shipment already has an open invoice, that one is
+// returned with `reused: true`.
+//
+// Finance | admin | planner — planners trigger this from the shipments
+// table action button; finance owns the resulting approval workflow.
+router.post('/:id/invoice', requireRole('admin', 'planner', 'finance'), async (req, res, next) => {
+  try {
+    const result = await invoiceFromShipment.createInvoiceFromShipment({
+      shipmentId: req.params.id,
+      user:       req.user || null,
+    });
+    res.status(result.reused ? 200 : 201).json(result);
   } catch (err) { next(err); }
 });
 

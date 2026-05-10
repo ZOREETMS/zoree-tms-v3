@@ -15,6 +15,11 @@ export function emptyInvoice() {
     num: "",
     carrier: "",
     shipId: "",
+    // REQ-187: BOL identifiers — empty array on a fresh form. The
+    // direct-from-shipment path inherits these from the shipment of
+    // record; manual entry accepts a comma-separated string in the
+    // modal that the page normalizes to an array on submit.
+    bolIds: [],
     date: new Date().toISOString().slice(0, 10),
     due: "",
     agreed: 0,

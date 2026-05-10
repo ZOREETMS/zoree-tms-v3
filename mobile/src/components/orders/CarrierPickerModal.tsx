@@ -27,6 +27,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { SingleOrderCarrierQuote } from '../../services/planSingleOrderService';
@@ -60,6 +61,13 @@ export default function CarrierPickerModal({
   onCancel,
   onConfirm,
 }: CarrierPickerModalProps) {
+  // QA #180: respect the device's bottom safe-area inset (home
+  // indicator on iOS, gesture bar on Android) so the Confirm /
+  // Cancel buttons in the footer don't get clipped by the system UI.
+  // Falls back to spacing.lg when there is no inset reported.
+  const insets = useSafeAreaInsets();
+  const footerBottomPad = Math.max(insets.bottom, spacing.lg);
+
   // Pre-select the recommended quote (or the first one) so a single
   // tap on Confirm matches what the legacy "auto-pick cheapest" flow
   // would have done. Reset whenever the sheet reopens with new data.
@@ -149,7 +157,7 @@ export default function CarrierPickerModal({
             })}
           </ScrollView>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: footerBottomPad }]}>
             <TouchableOpacity
               style={[styles.btn, styles.btnGhost]}
               onPress={onCancel}
@@ -193,7 +201,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius.lg,
     borderTopRightRadius: borderRadius.lg,
     maxHeight: '85%',
-    paddingBottom: spacing.lg,
+    // QA #180: bottom padding is owned by `footer` so it can be
+    // safe-area-aware via useSafeAreaInsets. Keep this 0 to avoid
+    // doubling the inset.
+    paddingBottom: 0,
   },
   header: {
     flexDirection: 'row',

@@ -17,10 +17,14 @@ import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useData } from '../../state/DataContext';
 import { TenderApi } from '../../lib/api';
+// QA #181: `updateShipmentStatus` is intentionally NOT imported here.
+// The mobile detail screen no longer exposes a manual status flip —
+// status changes must flow through events (tender accept/reject, BOL
+// capture, delivery confirmation) so the audit trail stays intact.
+// The service export still exists for event-driven callers.
 import {
   copyShipment,
   deleteShipmentById,
-  updateShipmentStatus,
 } from '../../services/shipmentService';
 // QA bug #128 — shipment Detail must show the full-precision cost (e.g.
 // "$6,961.00") so it matches the web TMS view of the same shipment.
@@ -51,18 +55,13 @@ import type { PlanningTabParamList } from '../../navigation/types';
 
 type DetailRoute = RouteProp<PlanningTabParamList, 'ShipmentDetail'>;
 
-/**
- * QA bug #63 fix: align mobile's status flow with the canonical enum
- * the API enforces. The previous list contained "Picked Up", which
- * the server rejected with a 400.
- *
- * Note (2026-05-05): the QA report on #63 has been deferred pending
- * a decision on whether 'Picked Up' should become a first-class
- * shipment status. The shipment-lifecycle design doc currently
- * treats it as order-only, with the timeline event mapping directly
- * to 'In Transit' (see api/services/shipmentEvents.js EVENT_MAP).
- */
-const STATUS_FLOW = ['Planned', 'Tendered', 'Confirmed', 'In Transit', 'Delivered'] as const;
+// QA #181: STATUS_FLOW used to drive a row of "Update Status" buttons
+// at the bottom of this screen. Those buttons let the user flip
+// shipment status without firing the corresponding events, which
+// broke the audit trail and the order-side cascade. The buttons —
+// and STATUS_FLOW itself — were removed. Status displays come from
+// `vm.status` (set by upstream events); the timeline still renders
+// from change_history rows, so the visible state is unchanged.
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
@@ -315,31 +314,10 @@ export default function ShipmentDetailScreen() {
     );
   }, [shipment, refreshData, navigation]);
 
-  /**
-   * QA bug #63 fix: previously this only mutated local state - the
-   * API was never called. Now we patch through /api/shipments/:id/status
-   * (which validates against the canonical enum + cascades to linked
-   * orders via shipmentEvents) and refresh the data layer.
-   */
-  const handleStatusUpdate = useCallback(
-    async (newStatus: string) => {
-      if (!shipment || mutating) return;
-      const key = String(
-        shipment.id || shipment.shipment_id || shipment.shipmentId || '',
-      );
-      if (!key) return;
-      setMutating(true);
-      try {
-        await updateShipmentStatus(key, newStatus);
-        if (refreshData) await refreshData();
-      } catch (e: any) {
-        Alert.alert('Status update failed', e?.message || 'Could not update status');
-      } finally {
-        setMutating(false);
-      }
-    },
-    [shipment, mutating, refreshData],
-  );
+  // QA #181: `handleStatusUpdate` was removed alongside the manual
+  // status-button row. Re-introduce only via an event-driven path
+  // (tender accept, delivery confirmation, etc.) — never as a free-
+  // form button on this screen.
 
   if (!shipment || !vm) {
     return (
@@ -354,7 +332,6 @@ export default function ShipmentDetailScreen() {
     );
   }
 
-  const currentStatusIndex = STATUS_FLOW.indexOf(vm.status as any);
   const equipmentLabel = vm.equipmentSource === 'rate' ? 'Equipment (from rate)' : 'Equipment';
   const discountLabel = vm.discount.hasDiscount
     ? `Discount (${vm.discount.pct}%${vm.discount.flat ? ` + $${vm.discount.flat}` : ''})`
@@ -600,35 +577,12 @@ export default function ShipmentDetailScreen() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Update Status</Text>
-        <View style={styles.statusButtonsRow}>
-          {STATUS_FLOW.map((s, i) => {
-            const isCurrent = s === vm.status;
-            const isPast = i < currentStatusIndex;
-            return (
-              <TouchableOpacity
-                key={s}
-                style={[
-                  styles.statusButton,
-                  isCurrent && styles.statusButtonCurrent,
-                  isPast && styles.statusButtonPast,
-                ]}
-                activeOpacity={0.7}
-                disabled={isCurrent || mutating}
-                onPress={() => handleStatusUpdate(s)}>
-                <Text
-                  style={[
-                    styles.statusButtonLabel,
-                    isCurrent && styles.statusButtonLabelCurrent,
-                    isPast && styles.statusButtonLabelPast,
-                  ]}
-                  numberOfLines={1}>
-                  {s}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* QA #181: manual "Update Status" buttons removed. Status
+            transitions now flow exclusively through events (tender
+            accept/reject, BOL capture, delivery confirmation) so the
+            change_history audit and the order-side cascade remain
+            authoritative. The Tender Email button above is still the
+            valid trigger for moving from Planned → Tendered. */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -779,18 +733,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   tenderButtonText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white },
-  statusButtonsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  statusButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg2,
-  },
-  statusButtonCurrent: { backgroundColor: colors.accent, borderColor: colors.accent },
-  statusButtonPast: { backgroundColor: colors.bg3, borderColor: colors.border2 },
-  statusButtonLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.text2 },
-  statusButtonLabelCurrent: { color: colors.white, fontWeight: fontWeight.semibold },
-  statusButtonLabelPast: { color: colors.text3 },
+  // QA #181: statusButtonsRow / statusButton / statusButton{Current,Past}
+  // / statusButtonLabel{,Current,Past} were removed alongside the manual
+  // status-flip UI. If a future event-driven control needs styles, add
+  // them under a different name so the prior UX cannot be revived by
+  // accident.
 });

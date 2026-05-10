@@ -20,6 +20,7 @@
 
 const router = require('express').Router();
 const invoiceAudit = require('../services/invoiceAudit');
+const invoiceCostLines = require('../services/invoiceCostLines');
 
 module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
   function requireFinance(res, user) {
@@ -57,12 +58,16 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
     try {
       const {
         invoiceNumber, carrier, carrierId, shipmentId, shipmentIds,
+        bolId, bolIds,                                  // REQ-187
         invoicedAmount, invoiceDate, paymentTerms, notes, metadata,
       } = req.body || {};
       // REQ-07: forward shipmentIds[] so consolidated invoices reach the
       // service layer. Was previously dropped at this destructure (DEFECT-001).
+      // REQ-187: forward bol* so the audit can validate the carrier-sent
+      // BOL against the shipment of record before deciding.
       const out = await invoiceAudit.submitInvoice({
         invoiceNumber, carrier, carrierId, shipmentId, shipmentIds,
+        bolId, bolIds,
         invoicedAmount, invoiceDate, paymentTerms, notes, metadata, user,
       });
       res.status(201).json(out);
@@ -113,6 +118,41 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
       const updated = await invoiceAudit.manualDecide({
         invoiceId: req.params.id, decision: 'Rejected',
         reason: req.body?.reason, user,
+      });
+      res.json(updated);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // ── Cost lines (REQ-186) ─────────────────────────────────────────
+  // GET  /api/invoices/:id/cost-lines           — list lines for an invoice
+  // PATCH /api/invoices/:id/cost-lines/:lineId  — edit one line
+  //
+  // Each line carries (invoice_cost, approved_cost). Edits are recorded
+  // in change_history under the parent invoice via recordFieldDiffs.
+  router.get('/:id/cost-lines', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const lines = await invoiceCostLines.listForInvoice(req.params.id);
+      res.json({ costLines: lines, total: lines.length });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  router.patch('/:id/cost-lines/:lineId', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const updated = await invoiceCostLines.updateLine({
+        invoiceId: req.params.id,
+        lineId:    req.params.lineId,
+        patch:     req.body || {},
+        user,
       });
       res.json(updated);
     } catch (e) {

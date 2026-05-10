@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Zoree TMS — Access Control Center</title>
+<style>
+  :root{
+    --bg:#f7f8fa;
+    --panel:#ffffff;
+    --line:#eceef2;
+    --line-2:#f1f3f6;
+    --ink:#0b1220;
+    --ink-2:#475569;
+    --ink-3:#64748b;
+    --muted:#94a3b8;
+    --brand:#3344ff;
+    --brand-2:#2738e6;
+    --brand-soft:#eef0ff;
+
+    --edit-bg:#ecfdf5;     --edit-bd:#bbf7d0;     --edit-ink:#047857;     --edit-dot:#10b981;
+    --view-bg:#fffbeb;     --view-bd:#fde68a;     --view-ink:#92400e;     --view-dot:#f59e0b;
+    --hide-bg:#f1f5f9;     --hide-bd:#e2e8f0;     --hide-ink:#64748b;     --hide-dot:#94a3b8;
+
+    --radius:14px;
+    --radius-sm:10px;
+    --shadow-xs:0 1px 1px rgba(15,23,42,.04);
+    --shadow-sm:0 1px 2px rgba(15,23,42,.05), 0 1px 1px rgba(15,23,42,.03);
+    --shadow-md:0 12px 36px rgba(15,23,42,.10);
+
+    --nav-bg:#0c1322;
+    --nav-ink:#cbd5e1;
+    --nav-muted:#64748b;
+    --nav-active-bg:rgba(255,255,255,.06);
+    --nav-active-ink:#ffffff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,select{font:inherit;color:inherit}
+
+  /* ===== Shell ===== */
+  .app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+  .nav{
+    background:var(--nav-bg);color:var(--nav-ink);
+    padding:18px 14px;display:flex;flex-direction:column;gap:6px;
+    position:sticky;top:0;height:100vh
+  }
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px}
+  .brand-mark{
+    width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#3344ff,#7c3aed);
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;letter-spacing:.04em
+  }
+  .brand-name{color:#fff;font-weight:700;letter-spacing:.02em}
+  .brand-sub{color:var(--nav-muted);font-size:11px;margin-top:2px;letter-spacing:.06em}
+
+  .nav-group-title{
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#475569;
+    padding:14px 10px 6px
+  }
+  .nav-item{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--nav-ink);font-size:13.5px
+  }
+  .nav-item:hover{background:rgba(255,255,255,.04);color:#fff}
+  .nav-item.active{background:var(--nav-active-bg);color:var(--nav-active-ink);position:relative}
+  .nav-item.active::before{
+    content:"";position:absolute;left:-14px;top:7px;bottom:7px;width:3px;background:#7c3aed;border-radius:0 3px 3px 0
+  }
+  .nav-item .badge{margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:2px 7px}
+  .nav-item svg{opacity:.7}
+  .nav-item.active svg{opacity:1}
+
+  .nav-foot{margin-top:auto;border-top:1px solid rgba(255,255,255,.06);padding:12px 8px 4px;display:flex;align-items:center;gap:10px}
+  .avatar{width:30px;height:30px;border-radius:8px;background:#7c3aed;color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px}
+  .nav-foot .who{display:flex;flex-direction:column;line-height:1.15}
+  .nav-foot .who b{color:#fff;font-size:13px;font-weight:600}
+  .nav-foot .who span{color:var(--nav-muted);font-size:11px}
+
+  /* ===== Main ===== */
+  .main{padding:26px 32px 140px;max-width:1480px;width:100%}
+  .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:18px}
+  .crumbs{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  h1{font-size:24px;letter-spacing:-.01em;margin:6px 0 4px}
+  .lede{color:var(--ink-2);font-size:13.5px;margin:0}
+
+  .top-actions{display:flex;gap:10px;align-items:center}
+  .btn{
+    height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);
+    display:inline-flex;align-items:center;gap:8px;font-weight:500;font-size:13px;transition:all .15s
+  }
+  .btn:hover{background:#f8fafc;border-color:#dde1e8}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-2)}
+  .btn.ghost{border-color:transparent;background:transparent}
+  .btn.ghost:hover{background:#eef2ff;color:var(--brand)}
+  .btn.danger-ghost{color:#b91c1c}
+  .btn.danger-ghost:hover{background:#fef2f2;border-color:#fecaca}
+
+  /* ===== Tabs ===== */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:6px 0 22px}
+  .tab{
+    position:relative;padding:11px 14px;color:var(--ink-3);font-size:13.5px;font-weight:500;border-radius:8px 8px 0 0
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--ink);font-weight:600}
+  .tab.active::after{
+    content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--brand);border-radius:2px
+  }
+  .tab .count{margin-left:6px;background:#eef2ff;color:var(--brand);font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px}
+
+  /* ===== Two-pane content ===== */
+  .pane{display:grid;grid-template-columns:300px 1fr;gap:22px;align-items:start}
+  .panel{
+    background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow-sm);
+    border:1px solid var(--line);overflow:hidden
+  }
+
+  /* ----- Roles list ----- */
+  .roles-panel .roles-head{padding:14px 14px 10px;display:flex;align-items:center;justify-content:space-between}
+  .roles-head h3{margin:0;font-size:13px;letter-spacing:.04em;color:var(--ink-2);text-transform:uppercase;font-weight:700}
+  .roles-search{padding:0 12px 10px}
+  .roles-search input{
+    width:100%;height:34px;border:1px solid var(--line);border-radius:9px;background:#fbfcfe;
+    padding:0 12px;font-size:13px;outline:none;transition:all .15s
+  }
+  .roles-search input:focus{border-color:#c7d2fe;box-shadow:0 0 0 3px rgba(51,68,255,.12);background:#fff}
+
+  .roles-list{padding:6px;display:flex;flex-direction:column;gap:2px}
+  .role-item{
+    padding:10px 12px;border-radius:10px;display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;
+    cursor:pointer;transition:background .12s;position:relative
+  }
+  .role-item:hover{background:#f6f7fa}
+  .role-item.active{background:var(--brand-soft)}
+  .role-item.active::before{
+    content:"";position:absolute;left:-6px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)
+  }
+  .role-avatar{
+    width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;letter-spacing:.04em;
+    background:linear-gradient(135deg,#3344ff,#7c3aed)
+  }
+  .role-avatar.c2{background:linear-gradient(135deg,#10b981,#0ea5e9)}
+  .role-avatar.c3{background:linear-gradient(135deg,#f59e0b,#ef4444)}
+  .role-avatar.c4{background:linear-gradient(135deg,#64748b,#334155)}
+  .role-avatar.c5{background:linear-gradient(135deg,#a855f7,#ec4899)}
+  .role-meta b{display:block;font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.2}
+  .role-meta span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+  .role-tag-mini{
+    font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    padding:2px 7px;border-radius:6px;background:#f1f5f9;color:var(--ink-3)
+  }
+  .role-tag-mini.custom{background:#f3e8ff;color:#7c3aed}
+  .role-tag-mini.locked{background:#fef3c7;color:#92400e}
+
+  .roles-foot{padding:8px 12px 12px;border-top:1px solid var(--line-2);margin-top:6px}
+  .roles-foot .btn{width:100%;justify-content:center}
+
+  /* ----- Detail panel ----- */
+  .detail-head{padding:20px 22px 16px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:18px}
+  .role-hero{
+    width:46px;height:46px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:16px;letter-spacing:.04em;
+    background:linear-gradient(135deg,#10b981,#0ea5e9);flex:none
+  }
+  .role-hero.c1{background:linear-gradient(135deg,#3344ff,#7c3aed)}
+  .role-hero.c3{background:linear-gradient(135deg,#f59e0b,#ef4444)}
+  .role-hero.c4{background:linear-gradient(135deg,#64748b,#334155)}
+  .role-hero.c5{background:linear-gradient(135deg,#a855f7,#ec4899)}
+
+  .role-id .name{display:flex;align-items:center;gap:10px}
+  .role-id .name h2{margin:0;font-size:19px;letter-spacing:-.01em}
+  .role-id .desc{color:var(--ink-2);margin-top:4px;font-size:13.5px}
+  .role-id .desc input{
+    width:100%;max-width:520px;border:1px dashed transparent;background:transparent;padding:2px 6px;border-radius:6px;color:var(--ink-2)
+  }
+  .role-id .desc input:hover{border-color:var(--line)}
+  .role-id .desc input:focus{border-color:#c7d2fe;border-style:solid;background:#fff;outline:none;box-shadow:0 0 0 3px rgba(51,68,255,.10)}
+
+  .head-pills{display:flex;gap:8px;margin-left:auto;align-items:center}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid transparent}
+  .pill .dot{width:6px;height:6px;border-radius:50%}
+  .pill.edit{background:var(--edit-bg);color:var(--edit-ink);border-color:var(--edit-bd)}
+  .pill.edit .dot{background:var(--edit-dot)}
+  .pill.view{background:var(--view-bg);color:var(--view-ink);border-color:var(--view-bd)}
+  .pill.view .dot{background:var(--view-dot)}
+  .pill.hide{background:var(--hide-bg);color:var(--hide-ink);border-color:var(--hide-bd)}
+  .pill.hide .dot{background:var(--hide-dot)}
+  .pill.assigned{background:#eef0ff;color:var(--brand);border-color:#dee2ff}
+  .pill.assigned .dot{background:var(--brand)}
+
+  /* ----- View switcher ----- */
+  .view-bar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line-2)
+  }
+  .view-switch{display:inline-flex;background:#f1f3f7;border-radius:10px;padding:3px;gap:2px}
+  .view-switch button{
+    padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ink-3);display:inline-flex;align-items:center;gap:7px
+  }
+  .view-switch button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+
+  .perm-search{display:flex;gap:8px;align-items:center}
+  .perm-search .search{position:relative}
+  .perm-search input{
+    height:34px;width:240px;border:1px solid var(--line);background:#fff;border-radius:9px;
+    padding:0 12px 0 32px;font-size:13px;outline:none;transition:all .15s
+  }
+  .perm-search input:focus{border-color:#c7d2fe;box-shadow:0 0 0 3px rgba(51,68,255,.12)}
+  .perm-search svg{position:absolute;left:10px;top:9px;opacity:.5}
+
+  .menu-wrap{position:relative}
+  .menu{
+    position:absolute;right:0;top:42px;min-width:240px;background:#fff;border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow-md);padding:6px;z-index:30;display:none
+  }
+  .menu.open{display:block}
+  .menu button{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 10px;border-radius:8px;color:var(--ink);font-size:13px
+  }
+  .menu button:hover{background:#f6f7fa}
+  .menu hr{border:none;border-top:1px solid var(--line-2);margin:6px 4px}
+  .menu .danger{color:#b91c1c}
+
+  /* ----- Permission groups (Detail view) ----- */
+  .perm-body{padding:8px 14px 16px}
+  .pgroup{padding:14px 8px 6px;border-bottom:1px solid var(--line-2)}
+  .pgroup:last-child{border-bottom:none}
+  .pgroup-head{
+    display:flex;align-items:center;gap:10px;padding:6px 8px 10px;color:var(--ink-2);
+    cursor:pointer;user-select:none
+  }
+  .pgroup-head .chev{transition:transform .15s}
+  .pgroup.collapsed .chev{transform:rotate(-90deg)}
+  .pgroup-head .gname{font-size:12.5px;letter-spacing:.10em;text-transform:uppercase;font-weight:700;color:var(--ink-2)}
+  .pgroup-head .gcount{font-size:11.5px;color:var(--muted);font-weight:600;margin-left:6px}
+  .pgroup-head .ginfo{margin-left:auto;display:flex;gap:6px}
+
+  .prow{
+    display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px;
+    padding:10px 8px;border-radius:10px;transition:background .12s
+  }
+  .prow:hover{background:#fafbfd}
+  .pmod{display:flex;align-items:center;gap:12px}
+  .mod-ico{
+    width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:none;
+    background:#eef0ff;color:var(--brand)
+  }
+  .mod-ico.t1{background:#fef3c7;color:#92400e}
+  .mod-ico.t2{background:#dcfce7;color:#15803d}
+  .mod-ico.t3{background:#fee2e2;color:#b91c1c}
+  .mod-ico.t4{background:#f3e8ff;color:#6b21a8}
+  .mod-ico.t5{background:#cffafe;color:#155e75}
+  .mod-name{font-weight:600;font-size:13.5px;color:var(--ink);line-height:1.2}
+  .mod-key{display:block;color:var(--muted);font-size:11px;margin-top:3px;letter-spacing:.04em}
+
+  .perm{
+    display:inline-flex;align-items:center;background:#f1f3f7;border-radius:10px;padding:3px;gap:2px;height:34px
+  }
+  .perm.locked{opacity:.55;pointer-events:none}
+  .perm button{
+    height:28px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--ink-3);
+    display:inline-flex;align-items:center;gap:6px;transition:all .12s
+  }
+  .perm button .swatch{width:6px;height:6px;border-radius:50%;background:#cbd5e1}
+  .perm button:hover{color:var(--ink)}
+  .perm button[aria-pressed="true"]{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.10)}
+  .perm button[data-v="edit"][aria-pressed="true"]{color:var(--edit-ink)}
+  .perm button[data-v="edit"][aria-pressed="true"] .swatch{background:var(--edit-dot)}
+  .perm button[data-v="view"][aria-pressed="true"]{color:var(--view-ink)}
+  .perm button[data-v="view"][aria-pressed="true"] .swatch{background:var(--view-dot)}
+  .perm button[data-v="hide"][aria-pressed="true"]{color:var(--hide-ink)}
+  .perm button[data-v="hide"][aria-pressed="true"] .swatch{background:var(--hide-dot)}
+
+  /* ----- Heatmap view ----- */
+  .heat{padding:6px 14px 18px}
+  .heat-grid{display:grid;grid-template-columns:minmax(220px, 1.5fr) repeat(5, minmax(110px, 1fr));align-items:center}
+  .heat-head{
+    position:sticky;top:0;background:linear-gradient(#fff,#fff);z-index:2;
+    display:contents
+  }
+  .heat-head > div{
+    padding:12px 10px;font-size:11px;letter-spacing:.10em;text-transform:uppercase;font-weight:700;color:var(--ink-2);
+    border-bottom:1px solid var(--line)
+  }
+  .heat-head > div:first-child{padding-left:18px}
+  .heat-grouprow{
+    display:contents
+  }
+  .heat-grouprow > div{
+    padding:12px 10px;background:#fafbfd;border-bottom:1px solid var(--line-2);
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:700
+  }
+  .heat-grouprow > div:first-child{padding-left:18px}
+
+  .heat-row{display:contents;cursor:pointer}
+  .heat-row > div{
+    padding:14px 10px;border-bottom:1px solid var(--line-2);transition:background .12s
+  }
+  .heat-row:hover > div{background:#fafbfd}
+  .heat-row > div:first-child{padding-left:18px;display:flex;align-items:center;gap:10px}
+
+  .heat-cell{display:flex;align-items:center;gap:8px;justify-content:flex-start}
+  .heat-dot{
+    width:14px;height:14px;border-radius:50%;flex:none;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)
+  }
+  .heat-dot.edit{background:var(--edit-dot)}
+  .heat-dot.view{background:var(--view-dot)}
+  .heat-dot.hide{background:#cbd5e1}
+  .heat-cell .lbl{font-size:11.5px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+
+  /* Inline detail expansion (heatmap) */
+  .heat-detail{
+    grid-column:1 / -1;background:#fafbfd;border-bottom:1px solid var(--line-2);padding:14px 18px;display:none
+  }
+  .heat-detail.open{display:block}
+  .heat-detail h4{margin:0 0 10px;font-size:12px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-2)}
+  .heat-detail .role-line{
+    display:grid;grid-template-columns:170px 1fr auto;align-items:center;gap:14px;padding:8px 4px;border-top:1px solid var(--line-2)
+  }
+  .heat-detail .role-line:first-of-type{border-top:none}
+  .heat-detail .role-line .nm{font-weight:600}
+  .heat-detail .role-line .tg{font-size:11px;color:var(--muted);margin-left:6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+
+  /* ----- Matrix link card ----- */
+  .matrix-card{padding:24px}
+  .matrix-cta{
+    border:1px dashed #c7d2fe;background:#f8faff;border-radius:14px;padding:20px;display:flex;align-items:center;gap:18px
+  }
+  .matrix-cta .ico{width:46px;height:46px;border-radius:11px;background:#eef0ff;color:var(--brand);display:grid;place-items:center;flex:none}
+  .matrix-cta .copy h4{margin:0 0 4px;font-size:14.5px}
+  .matrix-cta .copy p{margin:0;color:var(--ink-2);font-size:13px}
+  .matrix-cta .btn.primary{margin-left:auto}
+
+  /* Save bar */
+  .savebar{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:50;
+    display:flex;align-items:center;gap:14px;background:#0c1322;color:#fff;
+    padding:10px 12px 10px 18px;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.35);
+    transition:opacity .2s, transform .2s;
+  }
+  .savebar.hidden{opacity:0;pointer-events:none;transform:translate(-50%,12px)}
+  .savebar .count{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+  .savebar .count .dot{width:8px;height:8px;border-radius:50%;background:#fbbf24;box-shadow:0 0 0 4px rgba(251,191,36,.18)}
+  .savebar .actions{display:flex;gap:8px}
+  .savebar .btn{height:34px;border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff}
+  .savebar .btn:hover{background:rgba(255,255,255,.12)}
+  .savebar .btn.primary{background:#22c55e;border-color:#22c55e;color:#06281a}
+  .savebar .btn.primary:hover{background:#16a34a;color:#fff}
+
+  /* ===== Matrix view (full) ===== */
+  .matrix-wrap{padding:8px 14px 16px}
+  .matrix-toolbar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 8px 14px
+  }
+  .chip-filter{
+    display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);
+    border-radius:8px;background:#fff;font-size:12.5px;color:var(--ink-2)
+  }
+  .chip-filter:hover{background:#f6f7fa}
+  .chip-filter.active{color:var(--brand);border-color:#c7d2fe;background:#eef0ff}
+  .matrix-scroll{overflow:auto;max-height:65vh;border:1px solid var(--line);border-radius:12px;background:#fff}
+  table.matrix{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+  .matrix col.col-mod{width:280px}
+  .matrix col.col-role{width:170px}
+  .matrix thead th{
+    position:sticky;top:0;z-index:3;background:#fbfcfd;border-bottom:1px solid var(--line);
+    text-align:left;padding:14px 16px;font-weight:700;font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-2)
+  }
+  .matrix thead th.first-col{position:sticky;left:0;z-index:4}
+  .matrix thead th .sub{display:block;font-size:10px;color:var(--muted);font-weight:600;margin-top:3px;letter-spacing:.06em}
+  .matrix tbody td{padding:10px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle;height:56px}
+  .matrix tbody tr:hover td{background:#fafbfd}
+  .mod-cell{position:sticky;left:0;background:#fff;z-index:2;border-right:1px solid var(--line-2)}
+  .matrix tbody tr:hover .mod-cell{background:#fafbfd}
+  .grp-row td{
+    background:#f8fafc;border-bottom:1px solid var(--line);padding:10px 16px;
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-weight:700
+  }
+  .grp-row td.first-col{position:sticky;left:0;background:#f8fafc;z-index:2}
+
+  .legend{display:flex;align-items:center;gap:18px;color:var(--ink-2);font-size:12.5px;padding:14px 8px 4px}
+  .legend .item{display:inline-flex;align-items:center;gap:8px}
+  .legend .swatch{width:10px;height:10px;border-radius:3px;border:1px solid transparent}
+  .legend .swatch.edit{background:var(--edit-bg);border-color:var(--edit-bd)}
+  .legend .swatch.view{background:var(--view-bg);border-color:var(--view-bd)}
+  .legend .swatch.hide{background:var(--hide-bg);border-color:var(--hide-bd)}
+
+  /* Hidden helpers */
+  .view-pane{display:none}
+  .view-pane.active{display:block}
+  tr.hidden-row{display:none}
+  .empty{padding:32px;text-align:center;color:var(--muted);font-size:13px}
+
+  @media (max-width:1100px){
+    .pane{grid-template-columns:1fr}
+    .roles-panel{order:2}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Side nav ===== -->
+  <aside class="nav">
+    <div class="brand">
+      <div class="brand-mark">Z</div>
+      <div>
+        <div class="brand-name">Zoree</div>
+        <div class="brand-sub">TMS · v3.11</div>
+      </div>
+    </div>
+
+    <div class="nav-group-title">Workspace</div>
+    <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Dashboard</a>
+    <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4V11M21 7v10l-9 4"/></svg> Shipments</a>
+    <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg> Documents</a>
+    <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg> Analytics</a>
+
+    <div class="nav-group-title">System</div>
+    <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg> Users</a>
+    <a class="nav-item active" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> Access Control</a>
+    <a class="nav-item" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> Settings</a>
+
+    <div class="nav-foot">
+      <div class="avatar">AD</div>
+      <div class="who">
+        <b>admin@zoree.io</b>
+        <span>Admin · Zoree</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <div class="crumbs">System · Security</div>
+        <h1>Access Control Center</h1>
+        <p class="lede">Manage users, roles, policies, and API keys across your Zoree workspace.</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l4 4M15 15l4 4M5 19l4-4M15 9l4-4"/></svg> Audit log</button>
+        <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Export</button>
+        <button class="btn primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg> Save changes</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg> Users <span class="count">142</span></button>
+      <button class="tab active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> Roles <span class="count">5</span></button>
+      <button class="tab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14l2 2 4-4"/></svg> Policies</button>
+      <button class="tab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M3 12h18M12 3a16 16 0 0 1 0 18M12 3a16 16 0 0 0 0 18"/></svg> API Access</button>
+    </div>
+
+    <!-- ===== Two-pane layout ===== -->
+    <div class="pane">
+
+      <!-- Roles list -->
+      <section class="panel roles-panel">
+        <div class="roles-head">
+          <h3>Roles</h3>
+          <button class="btn ghost" style="height:30px;padding:0 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New</button>
+        </div>
+        <div class="roles-search">
+          <input id="roleSearch" type="search" placeholder="Search roles…" />
+        </div>
+        <div class="roles-list" id="rolesList"></div>
+        <div class="roles-foot">
+          <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><rect x="4" y="4" width="11" height="11" rx="2"/></svg> Clone selected role</button>
+        </div>
+      </section>
+
+      <!-- Detail -->
+      <section class="panel detail-panel">
+
+        <div class="detail-head">
+          <div class="role-hero" id="roleHero">PL</div>
+          <div class="role-id" style="flex:1;min-width:0">
+            <div class="name">
+              <h2 id="roleName">Planner</h2>
+              <span class="role-tag-mini" id="roleTag">SYSTEM</span>
+            </div>
+            <div class="desc">
+              <input id="roleDesc" value="Can create and manage transportation planning workflows" />
+            </div>
+          </div>
+          <div class="head-pills">
+            <span class="pill assigned"><span class="dot"></span><span id="cAssigned">42</span> users</span>
+            <span class="pill edit"><span class="dot"></span><span id="cEdit">0</span> Edit</span>
+            <span class="pill view"><span class="dot"></span><span id="cView">0</span> View</span>
+            <span class="pill hide"><span class="dot"></span><span id="cHide">0</span> Hidden</span>
+          </div>
+        </div>
+
+        <div class="view-bar">
+          <div class="view-switch" role="tablist">
+            <button data-view="detail" aria-pressed="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+              Permissions
+            </button>
+            <button data-view="heat" aria-pressed="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="12" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="12" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/></svg>
+              Heatmap
+            </button>
+            <button data-view="matrix" aria-pressed="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+              Matrix
+            </button>
+          </div>
+
+          <div class="perm-search">
+            <div class="search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="permSearch" type="search" placeholder="Search permissions…" />
+            </div>
+            <div class="menu-wrap">
+              <button class="btn" id="bulkBtn">
+                Bulk
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="menu" id="bulkMenu">
+                <button data-act="setall-edit">Set all visible to Edit</button>
+                <button data-act="setall-view">Set all visible to View</button>
+                <button data-act="setall-hide">Set all visible to Hidden</button>
+                <hr/>
+                <button data-act="copy">Copy permissions from another role…</button>
+                <button data-act="reset" class="danger">Reset to role default</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail view (default) -->
+        <div class="view-pane active" id="paneDetail">
+          <div class="perm-body" id="permBody"></div>
+        </div>
+
+        <!-- Heatmap view -->
+        <div class="view-pane" id="paneHeat">
+          <div class="heat">
+            <div class="heat-grid" id="heatGrid"></div>
+            <div class="legend">
+              <span class="item"><span class="heat-dot edit" style="width:10px;height:10px"></span> Edit</span>
+              <span class="item"><span class="heat-dot view" style="width:10px;height:10px"></span> View</span>
+              <span class="item"><span class="heat-dot hide" style="width:10px;height:10px"></span> Hidden</span>
+              <span style="margin-left:auto;color:var(--muted)">Click a row to expand role-by-role detail</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Matrix view (power admins) -->
+        <div class="view-pane" id="paneMatrix">
+          <div class="matrix-wrap">
+            <div class="matrix-toolbar">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <button class="chip-filter active" data-filter="all">All groups</button>
+                <button class="chip-filter" data-filter="Planning">Planning</button>
+                <button class="chip-filter" data-filter="Insights">Insights</button>
+                <button class="chip-filter" data-filter="Documents">Documents</button>
+                <button class="chip-filter" data-filter="Integration">Integration</button>
+                <button class="chip-filter" data-filter="System">System</button>
+              </div>
+              <div style="color:var(--muted);font-size:12.5px">Power-admin view — edit any role · any module</div>
+            </div>
+            <div class="matrix-scroll">
+              <table class="matrix">
+                <colgroup>
+                  <col class="col-mod" />
+                  <col class="col-role" /><col class="col-role" /><col class="col-role" /><col class="col-role" /><col class="col-role" />
+                </colgroup>
+                <thead>
+                  <tr id="mxHead"><th class="first-col">Module</th></tr>
+                </thead>
+                <tbody id="mxBody"></tbody>
+              </table>
+            </div>
+            <div class="legend">
+              <span class="item"><span class="swatch edit"></span> <strong style="color:var(--edit-ink)">Edit</strong></span>
+              <span class="item"><span class="swatch view"></span> <strong style="color:var(--view-ink)">View</strong></span>
+              <span class="item"><span class="swatch hide"></span> <strong style="color:var(--hide-ink)">Hidden</strong></span>
+              <span style="margin-left:auto;color:var(--muted)">Admin column is locked</span>
+            </div>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Save bar -->
+<div class="savebar hidden" id="savebar">
+  <div class="count"><span class="dot"></span> <span id="changeCount">0 unsaved changes</span></div>
+  <div class="actions">
+    <button class="btn" id="discardBtn">Discard</button>
+    <button class="btn primary" id="saveBtn">Save changes</button>
+  </div>
+</div>
+
+<script>
+/* ============ Data ============ */
+const ROLES = [
+  { key:"admin",    name:"Admin",         tag:"SYSTEM", initials:"AD", color:"c1", desc:"Full access to all modules and configuration. Cannot be edited.", users:8,  locked:true },
+  { key:"planner",  name:"Planner",       tag:"SYSTEM", initials:"PL", color:"",   desc:"Can create and manage transportation planning workflows", users:42 },
+  { key:"finance",  name:"Finance User",  tag:"SYSTEM", initials:"FI", color:"c3", desc:"Reviews freight charges, audits invoices, and exports financial reports", users:11 },
+  { key:"viewer",   name:"Viewer",        tag:"SYSTEM", initials:"VW", color:"c4", desc:"Read-only access to operational dashboards", users:63 },
+  { key:"dispatch", name:"Dispatcher",    tag:"CUSTOM", initials:"DS", color:"c5", desc:"Coordinates carrier assignments and live shipment status", users:18, custom:true }
+];
+
+const I = {
+  home:'<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+  dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  pin: '<path d="M12 22s7-7.58 7-13a7 7 0 1 0-14 0c0 5.42 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/>',
+  truck:'<path d="M1 7h13v10H1zM14 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
+  pkg: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4V11M21 7v10l-9 4"/>',
+  map: '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5M3 18l9 5 9-5"/>',
+  route:'<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M6 17V9a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v0"/>',
+  sliders:'<path d="M4 21V14M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  bid: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  audit:'<path d="M14 3h-9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/>',
+  doc: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+  portal:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  msg: '<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  net: '<circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><path d="M6 7l4 3M18 7l-4 3M6 17l4-3M18 17l-4-3"/>',
+  chart:'<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',
+  rep:  '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',
+  db:   '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  cog:  '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+};
+
+const GROUPS = [
+  { name:"Overview", modules:[
+    { name:"Home",       key:"home",      ico:"home",  tone:"t1", def:["edit","edit","view","view","view"] },
+    { name:"Dashboard",  key:"dashboard", ico:"dash",  tone:"t1", def:["edit","edit","view","view","hide"] }
+  ]},
+  { name:"Planning", modules:[
+    { name:"Item Master",       key:"items",        ico:"box",    tone:"t2", def:["edit","edit","edit","view","hide"] },
+    { name:"Location Master",   key:"locations",    ico:"pin",    tone:"t2", def:["edit","edit","hide","view","hide"] },
+    { name:"Equipment Master",  key:"equipments",   ico:"truck",  tone:"t2", def:["edit","edit","hide","view","hide"] },
+    { name:"Shipments",         key:"shipments",    ico:"pkg",    tone:"t2", def:["edit","view","view","view","view"] },
+    { name:"Orders",            key:"orders",       ico:"pkg",    tone:"t2", def:["edit","view","view","view","hide"] },
+    { name:"Route Optimizer",   key:"route_opt",    ico:"route",  tone:"t2", def:["edit","edit","view","view","hide"] },
+    { name:"Bulk Plan",         key:"bulk_plan",    ico:"layers", tone:"t2", def:["edit","edit","view","view","hide"] },
+    { name:"Multi-Stop Routes", key:"multi_stop",   ico:"map",    tone:"t2", def:["edit","edit","view","view","hide"] },
+    { name:"Planning Params",   key:"plan_params",  ico:"sliders",tone:"t2", def:["edit","edit","hide","view","hide"] }
+  ]},
+  { name:"Documents", modules:[
+    { name:"Carrier Bids",     key:"carrier_bids", ico:"bid",   tone:"t3", def:["edit","view","edit","view","view"] },
+    { name:"Freight Audit",    key:"freight_audit",ico:"audit", tone:"t3", def:["edit","view","edit","view","hide"] },
+    { name:"Documents & BOL",  key:"documents_bol",ico:"doc",   tone:"t3", def:["edit","edit","view","view","view"] },
+    { name:"Customer Portal",  key:"customer_portal",ico:"portal",tone:"t3", def:["edit","view","view","view","hide"] }
+  ]},
+  { name:"Integration", modules:[
+    { name:"Messaging Hub",    key:"messaging_hub",ico:"msg",   tone:"t4", def:["edit","view","view","view","hide"] }
+  ]},
+  { name:"Insights", modules:[
+    { name:"Network Modeling", key:"network_modeling",ico:"net",tone:"t5", def:["edit","edit","view","view","hide"] },
+    { name:"Analytics",        key:"analytics",    ico:"chart", tone:"t5", def:["edit","view","view","view","hide"] },
+    { name:"Reports",          key:"reports",      ico:"rep",   tone:"t5", def:["edit","view","view","view","hide"] },
+    { name:"Alerts",           key:"alerts",       ico:"bell",  tone:"t5", def:["edit","view","view","view","hide"] },
+    { name:"DB Explorer",      key:"db_explorer",  ico:"db",    tone:"t5", def:["edit","hide","hide","hide","hide"] }
+  ]},
+  { name:"System", modules:[
+    { name:"User Management",  key:"user_mgmt",    ico:"user",  tone:"t3", def:["edit","hide","hide","hide","hide"] },
+    { name:"User Roles",       key:"user_roles",   ico:"lock",  tone:"t3", def:["edit","hide","hide","hide","hide"] },
+    { name:"Settings",         key:"settings",     ico:"cog",   tone:"t3", def:["edit","view","view","view","hide"] }
+  ]}
+];
+
+/* ============ State ============ */
+const state = {};      // state[modKey][roleKey]
+const original = {};
+GROUPS.forEach(g => g.modules.forEach(m => {
+  state[m.key] = {}; original[m.key] = {};
+  ROLES.forEach((r,i) => { state[m.key][r.key] = m.def[i]; original[m.key][r.key] = m.def[i]; });
+}));
+
+let currentRole = "planner";
+let currentView = "detail"; // detail | heat | matrix
+
+/* ============ Helpers ============ */
+function svgIco(d){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`; }
+function role(k){ return ROLES.find(r => r.key === k); }
+
+function counts(roleKey){
+  let edit=0,view=0,hide=0;
+  Object.values(state).forEach(row => {
+    const v = row[roleKey];
+    if(v==="edit")edit++; else if(v==="view")view++; else hide++;
+  });
+  return {edit,view,hide};
+}
+
+function diffCount(){
+  let n=0;
+  Object.keys(state).forEach(mk => ROLES.forEach(r => { if(state[mk][r.key]!==original[mk][r.key]) n++; }));
+  return n;
+}
+
+/* ============ Render: roles list ============ */
+function renderRolesList(filter=""){
+  const list = document.getElementById("rolesList");
+  const q = filter.trim().toLowerCase();
+  list.innerHTML = "";
+  ROLES.filter(r => !q || r.name.toLowerCase().includes(q)).forEach(r => {
+    const el = document.createElement("div");
+    el.className = "role-item" + (r.key === currentRole ? " active" : "");
+    el.dataset.role = r.key;
+    el.innerHTML = `
+      <div class="role-avatar ${r.color||''}">${r.initials}</div>
+      <div class="role-meta">
+        <b>${r.name}</b>
+        <span>${r.users} user${r.users===1?'':'s'}</span>
+      </div>
+      <span class="role-tag-mini ${r.locked?'locked':''} ${r.custom?'custom':''}">${r.locked?'LOCKED':r.tag}</span>
+    `;
+    el.addEventListener("click", () => { currentRole = r.key; renderAll(); });
+    list.appendChild(el);
+  });
+}
+
+/* ============ Render: detail header ============ */
+function renderHead(){
+  const r = role(currentRole);
+  document.getElementById("roleHero").className = "role-hero " + (r.color||"");
+  document.getElementById("roleHero").textContent = r.initials;
+  document.getElementById("roleName").textContent = r.name;
+  const tag = document.getElementById("roleTag");
+  tag.textContent = r.locked ? "LOCKED" : r.tag;
+  tag.className = "role-tag-mini " + (r.locked?'locked':'') + (r.custom?' custom':'');
+  document.getElementById("roleDesc").value = r.desc;
+  document.getElementById("roleDesc").disabled = !!r.locked;
+  document.getElementById("cAssigned").textContent = r.users;
+  const c = counts(currentRole);
+  document.getElementById("cEdit").textContent = c.edit;
+  document.getElementById("cView").textContent = c.view;
+  document.getElementById("cHide").textContent = c.hide;
+}
+
+/* ============ Render: Detail (Permissions) view ============ */
+function renderDetail(){
+  const body = document.getElementById("permBody");
+  const r = role(currentRole);
+  const lock = r.locked;
+  body.innerHTML = "";
+  GROUPS.forEach(g => {
+    const grp = document.createElement("div");
+    grp.className = "pgroup";
+    grp.dataset.group = g.name;
+    let edit=0,view=0,hide=0;
+    g.modules.forEach(m => {
+      const v = state[m.key][currentRole];
+      if(v==="edit")edit++; else if(v==="view")view++; else hide++;
+    });
+    grp.innerHTML = `
+      <div class="pgroup-head" data-toggle="${g.name}">
+        <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+        <span class="gname">${g.name}</span>
+        <span class="gcount">· ${g.modules.length} modules</span>
+        <span class="ginfo">
+          ${edit?`<span class="pill edit"><span class="dot"></span>${edit}</span>`:""}
+          ${view?`<span class="pill view"><span class="dot"></span>${view}</span>`:""}
+          ${hide?`<span class="pill hide"><span class="dot"></span>${hide}</span>`:""}
+        </span>
+      </div>
+      <div class="pgroup-body">
+        ${g.modules.map(m => `
+          <div class="prow" data-mod="${m.key}" data-name="${m.name.toLowerCase()}">
+            <div class="pmod">
+              <span class="mod-ico ${m.tone||''}">${svgIco(I[m.ico])}</span>
+              <div>
+                <div class="mod-name">${m.name}</div>
+                <span class="mod-key">${m.key.toUpperCase()}</span>
+              </div>
+            </div>
+            <div class="perm${lock?' locked':''}" data-mod="${m.key}">
+              <button data-v="hide" aria-pressed="${state[m.key][currentRole]==='hide'}"><span class="swatch"></span>Hide</button>
+              <button data-v="view" aria-pressed="${state[m.key][currentRole]==='view'}"><span class="swatch"></span>View</button>
+              <button data-v="edit" aria-pressed="${state[m.key][currentRole]==='edit'}"><span class="swatch"></span>Edit</button>
+            </div>
+          </div>`).join("")}
+      </div>
+    `;
+    body.appendChild(grp);
+  });
+}
+
+/* ============ Render: Heatmap view ============ */
+function renderHeat(){
+  const grid = document.getElementById("heatGrid");
+  grid.innerHTML = "";
+  // Header
+  const head = document.createElement("div");
+  head.className = "heat-head";
+  head.innerHTML = `<div>Module</div>${ROLES.map(r => `<div>${r.name}</div>`).join("")}`;
+  grid.appendChild(head);
+
+  GROUPS.forEach(g => {
+    const gr = document.createElement("div");
+    gr.className = "heat-grouprow";
+    gr.innerHTML = `<div>${g.name}</div>${ROLES.map(()=>`<div></div>`).join("")}`;
+    grid.appendChild(gr);
+
+    g.modules.forEach(m => {
+      const row = document.createElement("div");
+      row.className = "heat-row";
+      row.dataset.mod = m.key;
+      row.innerHTML = `
+        <div>
+          <span class="mod-ico ${m.tone||''}" style="width:28px;height:28px;border-radius:8px">${svgIco(I[m.ico])}</span>
+          <div>
+            <div class="mod-name">${m.name}</div>
+            <span class="mod-key">${m.key.toUpperCase()}</span>
+          </div>
+        </div>
+        ${ROLES.map(r => {
+          const v = state[m.key][r.key];
+          return `<div><div class="heat-cell"><span class="heat-dot ${v}"></span><span class="lbl">${v==='hide'?'Hidden':v==='view'?'View':'Edit'}</span></div></div>`;
+        }).join("")}
+      `;
+      grid.appendChild(row);
+
+      // expandable detail for power-edit per role
+      const detail = document.createElement("div");
+      detail.className = "heat-detail";
+      detail.dataset.detailFor = m.key;
+      detail.innerHTML = `
+        <h4>${m.name} — per-role permission</h4>
+        ${ROLES.map(r => {
+          const v = state[m.key][r.key];
+          const lock = r.locked ? " locked" : "";
+          return `
+            <div class="role-line">
+              <div><span class="nm">${r.name}</span><span class="tg">${r.tag}</span></div>
+              <div></div>
+              <div>
+                <div class="perm${lock}" data-mod="${m.key}" data-role="${r.key}">
+                  <button data-v="hide" aria-pressed="${v==='hide'}"><span class="swatch"></span>Hide</button>
+                  <button data-v="view" aria-pressed="${v==='view'}"><span class="swatch"></span>View</button>
+                  <button data-v="edit" aria-pressed="${v==='edit'}"><span class="swatch"></span>Edit</button>
+                </div>
+              </div>
+            </div>`;
+        }).join("")}
+      `;
+      grid.appendChild(detail);
+
+      row.addEventListener("click", () => {
+        const open = detail.classList.toggle("open");
+        // Close others optionally — we leave open; users can compare
+      });
+    });
+  });
+}
+
+/* ============ Render: Matrix view ============ */
+function renderMatrix(){
+  // header
+  const head = document.getElementById("mxHead");
+  head.innerHTML = `<th class="first-col">Module</th>` + ROLES.map(r =>
+    `<th>${r.name}<span class="sub">${r.tag}${r.locked?' · LOCKED':''}</span></th>`
+  ).join("");
+
+  const tb = document.getElementById("mxBody");
+  tb.innerHTML = "";
+  GROUPS.forEach(g => {
+    const gr = document.createElement("tr");
+    gr.className = "grp-row";
+    gr.dataset.group = g.name;
+    gr.innerHTML = `<td class="first-col" colspan="${ROLES.length+1}">${g.name} <span style="color:var(--muted);font-weight:600;margin-left:6px">· ${g.modules.length}</span></td>`;
+    tb.appendChild(gr);
+
+    g.modules.forEach(m => {
+      const tr = document.createElement("tr");
+      tr.dataset.group = g.name;
+      tr.dataset.mod = m.key;
+      tr.dataset.name = m.name.toLowerCase();
+      tr.innerHTML = `
+        <td class="mod-cell">
+          <div class="pmod">
+            <span class="mod-ico ${m.tone||''}">${svgIco(I[m.ico])}</span>
+            <div><div class="mod-name">${m.name}</div><span class="mod-key">${m.key.toUpperCase()}</span></div>
+          </div>
+        </td>
+        ${ROLES.map(r => {
+          const v = state[m.key][r.key];
+          const lock = r.locked ? " locked" : "";
+          return `<td>
+            <div class="perm${lock}" data-mod="${m.key}" data-role="${r.key}">
+              <button data-v="hide" aria-pressed="${v==='hide'}"><span class="swatch"></span>Hide</button>
+              <button data-v="view" aria-pressed="${v==='view'}"><span class="swatch"></span>View</button>
+              <button data-v="edit" aria-pressed="${v==='edit'}"><span class="swatch"></span>Edit</button>
+            </div>
+          </td>`;
+        }).join("")}`;
+      tb.appendChild(tr);
+    });
+  });
+}
+
+/* ============ Save bar ============ */
+function refreshSavebar(){
+  const n = diffCount();
+  document.getElementById("changeCount").textContent = `${n} unsaved change${n===1?'':'s'}`;
+  document.getElementById("savebar").classList.toggle("hidden", n === 0);
+}
+
+/* ============ Mutation ============ */
+function setPerm(modKey, roleKey, v){
+  const r = role(roleKey);
+  if(r && r.locked) return;
+  state[modKey][roleKey] = v;
+  // update any visible perm group with same mod+role
+  document.querySelectorAll(`.perm[data-mod="${modKey}"][data-role="${roleKey}"] button`).forEach(b => {
+    b.setAttribute("aria-pressed", b.dataset.v === v ? "true":"false");
+  });
+  // detail view perms only have data-mod (current role implicit)
+  if(roleKey === currentRole){
+    document.querySelectorAll(`#paneDetail .perm[data-mod="${modKey}"]:not([data-role]) button`).forEach(b => {
+      b.setAttribute("aria-pressed", b.dataset.v === v ? "true":"false");
+    });
+  }
+  // refresh heatmap dot for that mod+role
+  const heatRow = document.querySelector(`.heat-row[data-mod="${modKey}"]`);
+  if(heatRow){
+    const idx = ROLES.findIndex(r => r.key === roleKey);
+    const cells = heatRow.children;
+    if(cells[idx+1]){
+      cells[idx+1].querySelector(".heat-cell").innerHTML =
+        `<span class="heat-dot ${v}"></span><span class="lbl">${v==='hide'?'Hidden':v==='view'?'View':'Edit'}</span>`;
+    }
+  }
+  renderHead(); // updates counts
+  renderRolesList(document.getElementById("roleSearch").value);
+  refreshSavebar();
+}
+
+/* ============ View switching ============ */
+function setView(v){
+  currentView = v;
+  document.querySelectorAll(".view-switch button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view===v ? "true":"false"));
+  document.getElementById("paneDetail").classList.toggle("active", v==="detail");
+  document.getElementById("paneHeat").classList.toggle("active", v==="heat");
+  document.getElementById("paneMatrix").classList.toggle("active", v==="matrix");
+  if(v==="heat") renderHeat();
+  if(v==="matrix") renderMatrix();
+}
+
+/* ============ Wire up events ============ */
+function renderAll(){
+  renderRolesList(document.getElementById("roleSearch").value);
+  renderHead();
+  renderDetail();
+  if(currentView==="heat") renderHeat();
+  if(currentView==="matrix") renderMatrix();
+  refreshSavebar();
+}
+
+// Detail body interactions (per-role implicit = currentRole)
+document.getElementById("permBody").addEventListener("click", e => {
+  const btn = e.target.closest(".perm button");
+  if(btn){
+    const grp = btn.closest(".perm");
+    if(grp.classList.contains("locked")) return;
+    setPerm(grp.dataset.mod, currentRole, btn.dataset.v);
+    return;
+  }
+  const tog = e.target.closest(".pgroup-head");
+  if(tog){
+    tog.parentElement.classList.toggle("collapsed");
+    const body = tog.nextElementSibling;
+    body.style.display = tog.parentElement.classList.contains("collapsed") ? "none" : "";
+  }
+});
+
+// Heatmap clicks (row toggle handled in renderHeat); inline perm clicks here:
+document.getElementById("paneHeat").addEventListener("click", e => {
+  const btn = e.target.closest(".perm button");
+  if(!btn) return;
+  e.stopPropagation();
+  const grp = btn.closest(".perm");
+  if(grp.classList.contains("locked")) return;
+  setPerm(grp.dataset.mod, grp.dataset.role, btn.dataset.v);
+});
+
+// Matrix interactions
+document.getElementById("paneMatrix").addEventListener("click", e => {
+  const btn = e.target.closest(".perm button");
+  if(!btn) return;
+  const grp = btn.closest(".perm");
+  if(grp.classList.contains("locked")) return;
+  setPerm(grp.dataset.mod, grp.dataset.role, btn.dataset.v);
+});
+
+// View switch
+document.querySelectorAll(".view-switch button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+
+// Roles search
+document.getElementById("roleSearch").addEventListener("input", e => renderRolesList(e.target.value));
+
+// Permissions search
+document.getElementById("permSearch").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  // Detail
+  document.querySelectorAll("#paneDetail .prow").forEach(row => {
+    row.style.display = (!q || row.dataset.name.includes(q) || row.dataset.mod.includes(q)) ? "" : "none";
+  });
+  document.querySelectorAll("#paneDetail .pgroup").forEach(g => {
+    const any = [...g.querySelectorAll(".prow")].some(r => r.style.display !== "none");
+    g.style.display = any ? "" : "none";
+  });
+  // Matrix
+  document.querySelectorAll("#mxBody tr[data-mod]").forEach(tr => {
+    tr.classList.toggle("hidden-row", !!q && !(tr.dataset.name.includes(q) || tr.dataset.mod.includes(q)));
+  });
+});
+
+// Matrix group filter chips
+document.querySelectorAll(".chip-filter").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll(".chip-filter").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    const f = chip.dataset.filter;
+    document.querySelectorAll("#mxBody tr").forEach(tr => {
+      tr.style.display = (f==="all" || tr.dataset.group===f) ? "" : "none";
+    });
+  });
+});
+
+// Bulk menu
+const bulkBtn = document.getElementById("bulkBtn");
+const bulkMenu = document.getElementById("bulkMenu");
+bulkBtn.addEventListener("click", e => { e.stopPropagation(); bulkMenu.classList.toggle("open"); });
+document.addEventListener("click", () => bulkMenu.classList.remove("open"));
+bulkMenu.addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  const act = b.dataset.act;
+  if(act && act.startsWith("setall-")){
+    const v = act.split("-")[1];
+    if(currentView==="detail"){
+      // Apply to currently visible modules in detail view, for currentRole
+      document.querySelectorAll("#paneDetail .prow").forEach(row => {
+        if(row.style.display === "none") return;
+        setPerm(row.dataset.mod, currentRole, v);
+      });
+    } else if(currentView==="matrix"){
+      document.querySelectorAll("#mxBody tr[data-mod]").forEach(tr => {
+        if(tr.classList.contains("hidden-row") || tr.style.display==="none") return;
+        ROLES.forEach(r => { if(!r.locked) setPerm(tr.dataset.mod, r.key, v); });
+      });
+    } else {
+      // heat
+      document.querySelectorAll(".heat-row").forEach(tr => {
+        ROLES.forEach(r => { if(!r.locked) setPerm(tr.dataset.mod, r.key, v); });
+      });
+    }
+  } else if(act === "reset"){
+    Object.keys(state).forEach(mk => ROLES.forEach(r => { state[mk][r.key] = original[mk][r.key]; }));
+    renderAll();
+  } else {
+    alert("Mockup: '" + b.textContent.trim() + "' would open a dialog.");
+  }
+  bulkMenu.classList.remove("open");
+});
+
+// Save / discard
+document.getElementById("saveBtn").addEventListener("click", () => {
+  Object.keys(state).forEach(mk => ROLES.forEach(r => { original[mk][r.key] = state[mk][r.key]; }));
+  refreshSavebar();
+});
+document.getElementById("discardBtn").addEventListener("click", () => {
+  Object.keys(state).forEach(mk => ROLES.forEach(r => { state[mk][r.key] = original[mk][r.key]; }));
+  renderAll();
+});
+
+// Description (mock — store on role object so it survives view switch)
+document.getElementById("roleDesc").addEventListener("change", e => {
+  const r = role(currentRole);
+  if(!r.locked) r.desc = e.target.value;
+});
+
+/* ============ Boot ============ */
+renderAll();
+</script>
+
+</body>
+</html>

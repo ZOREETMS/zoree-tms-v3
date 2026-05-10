@@ -353,6 +353,16 @@ export const ShipmentsApi = {
       body: JSON.stringify({ orderId }),
     });
   },
+  // REQ-184/185/187: auto-create an invoice from this shipment. Backend
+  // copies costs into invoice_cost_lines, sets status='On Hold', links
+  // shipment_id + bol_ids, and writes the audit trail. Idempotent — if
+  // the shipment already has an open invoice, the response carries the
+  // existing one with `reused: true`.
+  createInvoice(shipmentId) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/invoice`, {
+      method: "POST",
+    });
+  },
   // Carrier (re)assignment for an existing shipment. Goes through the
   // dedicated endpoint so the backend writes change_history rows and
   // broadcasts SHIPMENT_UPDATED — the previous DbApi.patch("shipments",
@@ -471,6 +481,18 @@ export const InvoicesApi = {
   // not agreed_rate, and quietly 400'd otherwise).
   update(id, patch) {
     return api(`/invoices/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch || {}),
+    });
+  },
+  // REQ-186: per-line cost breakdown. Each line has invoice_cost
+  // (carrier-billed) and approved_cost (finance-approved). Edits are
+  // recorded in the parent invoice's change_history.
+  listCostLines(invoiceId) {
+    return api(`/invoices/${encodeURIComponent(invoiceId)}/cost-lines`);
+  },
+  updateCostLine(invoiceId, lineId, patch) {
+    return api(`/invoices/${encodeURIComponent(invoiceId)}/cost-lines/${encodeURIComponent(lineId)}`, {
       method: "PATCH",
       body: JSON.stringify(patch || {}),
     });
