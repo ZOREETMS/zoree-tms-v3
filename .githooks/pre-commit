@@ -10,8 +10,8 @@
 #      die silently after frontend/zoree-oms.html was truncated mid-string.
 #   3. JS files that fail node --check — last line of defense against
 #      shipping syntactically broken server code.
-#   4. Stray backup files (*.bak, *.orig, *.corrupted-*) — git history is
-#      the backup, the working tree is not.
+#   4. Stray backup / scratch files (*.bak, *.orig, *.corrupted-*, .tmp_*)
+#      — git history is the backup, the working tree is not.
 #
 # Bypass with `git commit --no-verify` (only if you know what you're doing).
 # Install once with `npm install` (auto-wired via the root `prepare` script)
@@ -47,6 +47,9 @@ check_backup_file() {
   case "$f" in
     *.bak|*.orig|*.swp|*.corrupted-*|*~)
       fail "$f — backup/scratch file should not be committed (use git history instead)."
+      return 1 ;;
+    .tmp_*|*/.tmp_*)
+      fail "$f — looks like a scratch artifact (.tmp_* prefix). Don't commit; .gitignore handles it."
       return 1 ;;
   esac
   return 0
