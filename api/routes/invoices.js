@@ -9,6 +9,11 @@
 //                                         #157 — replaces the brittle
 //                                         /api/db/invoices/:id passthrough
 //                                         that exposed raw column names).
+//   DELETE /api/invoices/:id            — delete an invoice (REQ-192).
+//                                         Writes a 'delete' audit row on
+//                                         the invoice and a mirroring
+//                                         row on each linked shipment
+//                                         BEFORE removing the row.
 //   POST   /api/invoices/:id/approve    — manual override (admin | finance)
 //   POST   /api/invoices/:id/reject     — manual override (admin | finance)
 //   POST   /api/invoices/:id/send-to-ap — mark approved invoice as sent
@@ -95,6 +100,29 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
     }
   });
 
+  // POST /api/invoices/:id/decide — Approve Invoice button.
+  //
+  // Runs the carrier-tolerance check on this invoice (sum of approved
+  // cost lines vs invoices.agreed_cost). On a pass: status='Approved'
+  // and auto-sent to AP. On a fail: status='Rejected' with the variance
+  // breakdown in decision_reason. Differs from /approve and /reject
+  // (which are manual force-overrides) — this endpoint is the
+  // automated decision path bound to the modal's primary action.
+  router.post('/:id/decide', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const out = await invoiceAudit.decideInvoice({
+        invoiceId: req.params.id,
+        user,
+      });
+      res.json(out);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   router.post('/:id/approve', async (req, res) => {
     const user = await verifyToken(req, res);
     if (!user) return;
@@ -155,6 +183,31 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
         user,
       });
       res.json(updated);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // REQ-192: DELETE /api/invoices/:id — remove an invoice. Replaces the
+  // legacy generic /api/db/invoices/:id DELETE the UI used to hit; that
+  // path bypassed the REQ-02 audit pipeline and left no record of who
+  // deleted what. The domain endpoint writes a 'delete' change_history
+  // row on the invoice plus a mirroring row on each linked shipment
+  // BEFORE removing the row, so the shipment history drawer still
+  // shows what happened.
+  //
+  // Body (optional): { reason: string } — captured into change_history.
+  router.delete('/:id', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const out = await invoiceAudit.deleteInvoice({
+        invoiceId: req.params.id,
+        reason:    req.body?.reason,
+        user,
+      });
+      res.json(out);
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }

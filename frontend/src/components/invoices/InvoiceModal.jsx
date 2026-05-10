@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { INVOICE_STATUSES, PAYMENT_TERMS, emptyInvoice } from "../../types/invoice";
 import { generateInvoiceNum, computeDueDate } from "../../services/invoiceService";
+import {
+  canManualApprove,
+  canManualReject,
+  canAutoDecide,
+} from "../../services/invoiceActionsService";
 import InvoiceCostLines from "./InvoiceCostLines";
 
 export default function InvoiceModal({
@@ -15,6 +20,21 @@ export default function InvoiceModal({
   // button or for Edit (which gets its values from `invoice`).
   defaultShipmentId,
   onSave,
+  // REQ-191: three distinct write actions on every existing invoice
+  // (integration-created or manually created). The modal renders each
+  // button only when the corresponding service predicate
+  // (canManualApprove / canManualReject / canAutoDecide) says the
+  // action is meaningful for the current status, and only when the
+  // caller has wired the handler.
+  //
+  //   onManualApprove — POST /api/invoices/:id/approve (force Approved)
+  //   onManualReject  — POST /api/invoices/:id/reject  (force Rejected)
+  //   onDecide        — POST /api/invoices/:id/decide  (auto tolerance)
+  //   onDelete        — DELETE /api/invoices/:id       (REQ-192)
+  onManualApprove,
+  onManualReject,
+  onDecide,
+  onDelete,
   onClose,
   busy,
   canEdit,
@@ -322,6 +342,98 @@ export default function InvoiceModal({
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
+
+            {/* REQ-192: Delete Invoice — destructive action, kept
+                visually separate from Approve/Reject/Auto so finance
+                can't fat-finger it. Two confirms (browser confirm + a
+                reason prompt) gate the call. Hidden in create mode and
+                when the caller didn't wire the handler. The server
+                writes the audit trail BEFORE deleting, so the shipment
+                history drawer still shows the delete even though the
+                invoice row is gone. */}
+            {!isNew && form.id && typeof onDelete === "function" && canEdit !== false && (
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={busy}
+                style={{ marginRight: "auto" }}
+                onClick={() => {
+                  if (typeof window === "undefined" || !window.confirm) return;
+                  const confirmed = window.confirm(
+                    `Delete invoice ${form.num}? This cannot be undone. ` +
+                    `The change_history audit row will be preserved.`
+                  );
+                  if (!confirmed) return;
+                  const reason = window.prompt
+                    ? window.prompt("Reason for deletion (optional):", "")
+                    : "";
+                  // Treat null (cancelled prompt) as abort; empty string is OK.
+                  if (reason === null) return;
+                  onDelete(form.id, reason || undefined);
+                }}
+                title="Permanently delete this invoice. The audit trail is preserved."
+              >
+                {busy ? "Deleting..." : "🗑️ Delete Invoice"}
+              </button>
+            )}
+
+            {/* REQ-190 / REQ-191: three write actions, shown for every
+                existing invoice (integration-imported or manually
+                created), gated by status via the service predicates.
+                The actions are mutually independent — a finance user
+                can force Approved or Rejected at any time, or run the
+                automated tolerance comparison. canEdit gates the whole
+                group for view-only roles. */}
+            {!isNew && form.id && canEdit !== false && (
+              <>
+                {typeof onManualReject === "function" && canManualReject(form.status) && (
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={busy}
+                    onClick={() => {
+                      // Capture a reason so the audit row + decision_reason
+                      // column has context. We use a simple prompt for v1;
+                      // a richer dialog can replace this later without
+                      // changing the handler contract.
+                      const reason = (typeof window !== "undefined" && window.prompt)
+                        ? window.prompt("Reason for rejection?", "")
+                        : "";
+                      if (reason === null) return; // user cancelled the prompt
+                      onManualReject(form.id, reason || undefined);
+                    }}
+                    title="Force this invoice to Rejected. Status moves to 'Rejected' and the reason is recorded in history."
+                  >
+                    {busy ? "Rejecting..." : "❌ Reject Invoice"}
+                  </button>
+                )}
+
+                {typeof onManualApprove === "function" && canManualApprove(form.status) && (
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    disabled={busy}
+                    onClick={() => onManualApprove(form.id)}
+                    title="Force this invoice to Approved (manual override). Bypasses the tolerance check and auto-sends to AP."
+                  >
+                    {busy ? "Approving..." : "🟢 Approve Invoice"}
+                  </button>
+                )}
+
+                {typeof onDecide === "function" && canAutoDecide(form.status) && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={() => onDecide(form.id)}
+                    title="Compare approved cost vs shipment cost against the carrier's tolerance. Within tolerance → Approved & sent to AP. Outside → Rejected with a reason."
+                  >
+                    {busy ? "Deciding..." : "⚖️ Auto Approve"}
+                  </button>
+                )}
+              </>
+            )}
+
             <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? "Saving..." : isNew ? "Create Invoice" : "Save Changes"}
             </button>

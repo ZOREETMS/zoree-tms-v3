@@ -3,7 +3,17 @@ const clears = require('./changeHistoryClears');
 
 const TABLE = 'change_history';
 
-const ALLOWED_ENTITIES = new Set(['order', 'shipment', 'rate', 'carrier', 'invoice']);
+// Migration 043 broadens the DB CHECK constraint to cover master-data
+// tables written via the generic /api/db/:table routes (Phase-4 audit
+// fix from the 2026-05-09 web↔mobile parity audit). The JS whitelist
+// must stay in lockstep — buildRow() validates against this set before
+// the row reaches the DB, so a missing entry here surfaces as a clean
+// error instead of a CHECK constraint violation at insert time.
+const ALLOWED_ENTITIES = new Set([
+  'order', 'shipment', 'rate', 'carrier', 'invoice',
+  'lane_preference', 'location', 'driver', 'vehicle',
+  'equipment', 'dock_appointment', 'document', 'planning_param',
+]);
 const ALLOWED_ACTIONS  = new Set([
   'create', 'edit', 'delete', 'plan', 'unassign', 'tender', 'untender', 'status',
   'invoice',

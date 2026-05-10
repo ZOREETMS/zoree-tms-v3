@@ -45,6 +45,33 @@ import {
 import CarrierPickerModal from '../../components/orders/CarrierPickerModal';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
+// REQ-02 Phase 1 (mobile parity, 2026-05-10): bring the order History
+// tab to mobile. The service does data-shaping; HistoryList does pure
+// presentation; this screen orchestrates the load. Web mirror lives in
+// frontend/src/services/historyService.js + the OrderDetailModal
+// History tab — keep field labels and bucketing in lockstep.
+import HistoryList from '../../components/history/HistoryList';
+import {
+  loadOrderHistory,
+  type OrderHistoryEntry,
+} from '../../services/orderHistoryService';
+// Web↔mobile order sync (2026-05-10): derives a tick from data.orders
+// so we refetch lines + history when the realtime channel reports the
+// order has changed on the server. Without this, an order edited on
+// web only refreshed the header (which reads from data.orders directly)
+// and left the per-line table + change-history list stale until the
+// user pull-to-refreshed the screen.
+import { useOrderDetailLiveSync } from '../../hooks/useOrderDetailLiveSync';
+// REQ-OFFLINE Phase 5 (2026-05-10): route order status changes
+// through the offline-aware façade. When the device is online this
+// is a thin pass-through to OrdersApi.update (so the server-side
+// cascade + audit still fire — QA bugs #58/#61 unchanged). When
+// offline, the action is queued and the user gets an immediate
+// "Queued for sync" Alert instead of a network-error toast.
+// Plan/Tender stay online-only — server orchestration too complex
+// to queue safely in the MVP.
+import { updateOrderStatus } from '../../services/offline/offlineOrderActions';
+import { useOffline } from '../../state/OfflineContext';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 import type { PlanningTabParamList } from '../../navigation/types';
 
@@ -56,10 +83,22 @@ export default function OrderDetailScreen() {
   const { orderId } = route.params;
 
   const { data, refreshData } = useData();
+  // REQ-OFFLINE Phase 5: action buttons that require server
+  // orchestration (Plan, Tender) are disabled when offline. Plain
+  // status flips + Delete still work — they enqueue and replay on
+  // reconnect via offlineOrderActions.
+  const { isOnline } = useOffline();
 
   const [lines, setLines] = useState<any[]>([]);
   const [linesLoading, setLinesLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
+  // REQ-02 Phase 1 (mobile parity): change-history rows for this
+  // order. `historyTick` is bumped after any local mutation so the
+  // History section re-fetches without us having to thread a callback
+  // through every action handler.
+  const [history, setHistory] = useState<OrderHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTick, setHistoryTick] = useState(0);
 
   // Carrier-picker state. `pickerQuotes` is the rated list shown in
   // the modal; `pickerBusy` blocks the Confirm button while we run
@@ -74,14 +113,51 @@ export default function OrderDetailScreen() {
     [data.orders, orderId],
   );
 
+  // Web↔mobile sync tick. Increments when the live data.orders entry
+  // for this order changes (after Supabase Realtime fires refreshData)
+  // OR when the app returns from background. Adding it to the deps
+  // below keeps lines + history aligned with whatever the web just
+  // wrote, so the user no longer has to pull-to-refresh.
+  const syncTick = useOrderDetailLiveSync(orderId);
+
   useEffect(() => {
     if (!orderId || orderId === 'new') return;
+    let alive = true;
     setLinesLoading(true);
     OrdersApi.lines(orderId)
-      .then((res: any) => setLines(Array.isArray(res) ? res : []))
-      .catch(() => setLines([]))
-      .finally(() => setLinesLoading(false));
-  }, [orderId]);
+      .then((res: any) => { if (alive) setLines(Array.isArray(res) ? res : []); })
+      .catch(() => { if (alive) setLines([]); })
+      .finally(() => { if (alive) setLinesLoading(false); });
+    return () => { alive = false; };
+    // syncTick re-runs this effect whenever the parent order's
+    // updated_at changes server-side, so a web-side line edit appears
+    // in the per-line table without manual refresh.
+  }, [orderId, syncTick]);
+
+  // REQ-02 Phase 1: load change-history for this order. Soft-fails to
+  // empty list — the service swallows network errors so the rest of
+  // the screen renders unaffected. Re-runs when historyTick bumps OR
+  // when syncTick increments (web-side edit observed via realtime).
+  useEffect(() => {
+    if (!orderId || orderId === 'new') {
+      setHistory([]);
+      return;
+    }
+    let alive = true;
+    setHistoryLoading(true);
+    loadOrderHistory(orderId, 200)
+      .then((rows) => { if (alive) setHistory(rows); })
+      .finally(() => { if (alive) setHistoryLoading(false); });
+    return () => { alive = false; };
+  }, [orderId, historyTick, syncTick]);
+
+  // After any mutation (status change, copy, delete, plan) the parent
+  // refreshes DataContext; we also bump the local tick so the History
+  // section reloads. Wrapped so each handler can call this without
+  // duplicating the setter call.
+  const bumpHistory = useCallback(() => {
+    setHistoryTick((t) => t + 1);
+  }, []);
 
   const handleCopy = useCallback(() => {
     if (!order) return;
@@ -132,8 +208,23 @@ export default function OrderDetailScreen() {
             onPress: async () => {
               setUpdating(true);
               try {
-                await OrdersApi.update(id, { status: newStatus });
+                // REQ-OFFLINE Phase 5: route through the offline-aware
+                // façade. Online → identical to the pre-Phase-5
+                // behaviour (PATCH /api/orders/:id with cascade +
+                // audit). Offline → enqueued; replays on reconnect.
+                const result = await updateOrderStatus(
+                  String(id),
+                  newStatus,
+                  order,
+                );
                 await refreshData();
+                bumpHistory();
+                if (result.status === 'queued') {
+                  Alert.alert(
+                    'Queued for sync',
+                    `Status change saved locally and will apply when you're back online.`,
+                  );
+                }
               } catch (e: any) {
                 Alert.alert('Error', e.message || 'Failed to update status');
               } finally {
@@ -207,6 +298,7 @@ export default function OrderDetailScreen() {
         }
         setPickerQuotes(null);
         await refreshData();
+        bumpHistory();
         Alert.alert('Shipment created', `${exec.shipment.id} on ${exec.shipment.carrier}`);
       } catch (e: any) {
         Alert.alert('Plan failed', e.message || 'Could not create shipment');
@@ -366,6 +458,21 @@ export default function OrderDetailScreen() {
           )}
         </Card>
 
+        {/* REQ-02 Phase 1 (mobile parity, 2026-05-10): change-history
+            section. Mirrors the web OrderDetailModal History tab —
+            same field labels, same per-second bucketing for "N fields
+            changed" — so an order edited on web shows the same trail
+            on mobile. Loader is non-blocking; the rest of the screen
+            renders even if /api/orders/:id/history is unavailable. */}
+        <Card style={styles.infoCard}>
+          <Text style={styles.sectionTitle}>History</Text>
+          <HistoryList
+            entries={history}
+            loading={historyLoading && history.length === 0}
+            emptyLabel="No changes recorded yet."
+          />
+        </Card>
+
         {/* QA bugs #120 / #121 / #122: action gating now flows from
             services/orderActionRules so the screen never re-implements
             the status rules. Disabled buttons stay visible (familiar
@@ -393,14 +500,21 @@ export default function OrderDetailScreen() {
             icon="git-merge-outline"
             color={colors.purple}
             onPress={planThisOrder}
-            disabled={updating || !canPlanOrder(order)}
+            // REQ-OFFLINE Phase 5: planning is server-orchestrated
+            // (rates → quotes → shipment creation → cascade). Too
+            // complex to queue safely; require connectivity.
+            disabled={updating || !canPlanOrder(order) || !isOnline}
           />
           <ActionButton
             label="Tender"
             icon="send-outline"
             color={colors.cyan}
             onPress={() => changeStatus('Tendered')}
-            disabled={updating || !canTenderOrder(order)}
+            // REQ-OFFLINE Phase 5: tendering hits carrier-portal APIs
+            // and email sends — also server-orchestrated. Require
+            // connectivity. (Plain status edits like Cancel still
+            // queue via offlineOrderActions.)
+            disabled={updating || !canTenderOrder(order) || !isOnline}
           />
           <ActionButton
             label="Cancel"

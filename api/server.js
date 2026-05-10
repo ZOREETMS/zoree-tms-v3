@@ -45,6 +45,15 @@ const shipmentMutations = require('./services/shipmentMutations');
 // inline so the existing /api/shipments/* inline routes stay
 // authoritative for the paths they already serve.
 const shipService = require('./services/shipments');
+// REQ-02 Phase 4: audit-trail coverage for the generic /api/db/:table
+// writers. The dedicated /api/orders/:id and /api/shipments/:id routes
+// already fire change_history; this service closes the gap for the
+// master-data tables written via DbApi.upsert / patch / remove
+// (rates, carriers, lane_preferences, locations, drivers, vehicles,
+// equipment_types, dock_appointments, documents, planning_parameters).
+// The generic POST/PATCH/DELETE handlers below delegate diff/write to
+// this service — no audit logic lives inline (CLAUDE_RULES §6 + §9).
+const genericTableAudit = require('./services/genericTableAudit');
 // Defense-in-depth guard reused by the inline app.patch('/api/orders/:id')
 // handler below. Lives in the orders service so there's one source of
 // truth for the "Planned requires shipment_id" rule (root cause of the
@@ -1204,6 +1213,10 @@ app.post('/api/db/:table', async (req, res) => {
     if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
       invalidateLaneRateCaches();
     }
+    // REQ-02 Phase 4: best-effort audit. No-op for tables not in the
+    // genericTableAudit allow-list (oms_*, mw_*, system_config, …).
+    // Failures are logged but never break the user-visible insert.
+    await genericTableAudit.recordCreate({ table: req.params.table, row, user });
     res.status(201).json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1267,6 +1280,22 @@ app.patch('/api/db/:table/:id', async (req, res) => {
       } catch (_e) { /* best-effort; audit will no-op without before */ }
     }
 
+    // REQ-02 Phase 4: same before-snapshot pattern for the master-data
+    // tables genericTableAudit covers (rates, carriers, lane_preferences,
+    // locations, drivers, vehicles, equipment_types, dock_appointments,
+    // documents, planning_parameters). Skipped for shipments (already
+    // handled above) and for tables outside the audit allow-list.
+    let genericBefore = null;
+    if (req.params.table !== 'shipments' && genericTableAudit.isAuditedTable(req.params.table)) {
+      try {
+        const beforeRows = await dbSelect(
+          req.params.table,
+          `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`,
+        );
+        genericBefore = beforeRows && beforeRows[0] ? beforeRows[0] : null;
+      } catch (_e) { /* best-effort */ }
+    }
+
     // Use service role for all allowed tables (RLS blocks writes with user JWT)
     const row = await dbUpdate(req.params.table, req.params.id, body, null);
     if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
@@ -1291,6 +1320,17 @@ app.patch('/api/db/:table/:id', async (req, res) => {
       }
     }
 
+    // REQ-02 Phase 4: master-data tables (non-shipment). Same contract
+    // as recordRawPatchAudit above — best-effort, no throw.
+    if (genericBefore && row) {
+      await genericTableAudit.recordPatch({
+        table:  req.params.table,
+        before: genericBefore,
+        after:  row,
+        user,
+      });
+    }
+
     res.json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1305,10 +1345,35 @@ app.delete('/api/db/:table/:id', async (req, res) => {
     return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot delete ${req.params.table}` });
   }
   try {
+    // REQ-02 Phase 4: snapshot the row before delete so the audit log
+    // can carry a compact (audited-fields-only) restore snapshot for a
+    // future undo UI. Best-effort — a missing snapshot still records
+    // the delete event itself.
+    let beforeSnapshot = null;
+    if (genericTableAudit.isAuditedTable(req.params.table)) {
+      try {
+        const beforeRows = await dbSelect(
+          req.params.table,
+          `select=*&id=eq.${encodeURIComponent(req.params.id)}&limit=1`,
+        );
+        beforeSnapshot = beforeRows && beforeRows[0] ? beforeRows[0] : null;
+      } catch (_e) { /* best-effort */ }
+    }
+
     await dbDelete(req.params.table, req.params.id, null);
     if (['rates', 'lane_preferences', 'planning_parameters'].includes(req.params.table)) {
       invalidateLaneRateCaches();
     }
+
+    // REQ-02 Phase 4: best-effort audit, identical contract to the
+    // POST/PATCH side — no-op for tables outside the allow-list.
+    await genericTableAudit.recordDelete({
+      table:  req.params.table,
+      id:     req.params.id,
+      before: beforeSnapshot,
+      user,
+    });
+
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

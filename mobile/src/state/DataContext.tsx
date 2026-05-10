@@ -8,6 +8,19 @@ import React, {
 import { DbApi } from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useRealtimeData } from './useRealtimeData';
+// REQ-02 Phase 2 (mobile parity, 2026-05-10): Express WebSocket bridge.
+// Sibling to useRealtimeData — covers OMS/middleware events that don't
+// land in the orders/shipments tables (dock-config edits, mw_*
+// mappings, planning-parameter tweaks). See risk #2 in the 2026-05-09
+// audit report.
+import { useExpressEvents } from './useExpressEvents';
+// REQ-OFFLINE Phase 5 (2026-05-10): write-through orders/shipments
+// to the local SQLite cache after each successful refresh so the
+// detail screens can serve from cache while offline. The repos are
+// no-ops on the read side from DataContext's perspective — we only
+// prime them with whatever the network returned.
+import * as ordersRepo from '../services/offline/ordersRepo';
+import * as shipmentsRepo from '../services/offline/shipmentsRepo';
 
 export interface TmsData {
   orders: any[];
@@ -127,6 +140,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         DbApi.ordersCount().catch(() => undefined),
       ]);
 
+      // REQ-OFFLINE Phase 5: write-through orders + shipments to the
+      // SQLite cache so the detail screens still render while offline.
+      // Best-effort — a SQLite hiccup here mustn't block the in-memory
+      // state update below.
+      if (Array.isArray(orders))    ordersRepo.primeFromServer(orders).catch(() => {});
+      if (Array.isArray(shipments)) shipmentsRepo.primeFromServer(shipments).catch(() => {});
+
       setData((prev) => ({
         orders: Array.isArray(orders) ? orders : [],
         ordersTotal: typeof ordersTotal === 'number' ? ordersTotal : prev.ordersTotal ?? 0,
@@ -156,6 +176,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       refreshData();
     } else {
       setData(emptyData);
+      // REQ-OFFLINE Phase 5: a queue + cache belong to a session.
+      // On logout, clear both so the next user doesn't see the
+      // previous user's cached orders / pending writes.
+      ordersRepo.clearAll().catch(() => {});
+      shipmentsRepo.clearAll().catch(() => {});
     }
   }, [isAuthenticated, refreshData]);
 
@@ -165,6 +190,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // no-ops when supabaseClient isn't configured, so unauthenticated /
   // dev builds keep working.
   useRealtimeData({
+    enabled: isAuthenticated,
+    onChange: refreshData,
+  });
+
+  // REQ-02 Phase 2 (mobile parity, 2026-05-10): subscribe to the
+  // Express WebSocket bridge so OMS/middleware-driven events
+  // (dock_config_changed, mw_request_processed, planning_parameters_changed,
+  // tender_accepted, …) refresh DataContext without pull-to-refresh.
+  // useRealtimeData covers Supabase postgres_changes on orders +
+  // shipments; this hook covers everything else the server broadcasts.
+  // The two together replace the audit Risk #2 gap from the
+  // 2026-05-09 web↔mobile parity audit.
+  useExpressEvents({
     enabled: isAuthenticated,
     onChange: refreshData,
   });

@@ -434,6 +434,159 @@ async function submitInvoice({
   };
 }
 
+// ── Run-tolerance decision on an existing invoice (REQ-184/186) ──
+//
+// Used by the "Approve Invoice" button in the invoice modal. Reads the
+// current invoice + its cost lines, computes the finance-approved
+// total, looks up the carrier's tolerance, and runs the same decide()
+// helper that submitInvoice uses on carrier-submitted invoices.
+//
+// Approved-total source order:
+//   1. SUM(approved_cost) over invoice_cost_lines for this invoice
+//      (the new path — cost lines were added in migration 042 and are
+//       what finance edited).
+//   2. invoices.invoiced_amount scalar (legacy invoices that don't
+//      have cost lines yet).
+//
+// Comparison target: invoices.agreed_cost — that's the shipment-side
+// cost we recorded at invoice creation. For direct-from-shipment
+// invoices it equals shipment.total_cost (REQ-185).
+//
+// Side effects:
+//   - Updates status to Approved or Rejected, decision_reason, and
+//     decided_*. On Approved, also stamps sent_to_ap_* (mirrors
+//     submitInvoice's auto-send-to-AP behavior).
+//   - Writes a 'status' change_history row on the invoice and a
+//     per-shipment 'invoice' row mirroring the decision.
+async function decideInvoice({ invoiceId, user }) {
+  if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
+
+  // Read the current invoice
+  const beforeRows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
+  const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
+  if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+
+  // Pull cost lines (require()'d here to avoid a circular import at
+  // module-load — invoiceCostLines.js doesn't depend back on this file
+  // but keeping the require local makes the dependency direction
+  // obvious to readers).
+  const costLines = require('./invoiceCostLines');
+  const lines = await costLines.listForInvoice(invoiceId);
+  const approvedTotal = (Array.isArray(lines) && lines.length)
+    ? costLines.sumApproved(lines)
+    : num(before.invoiced_amount, 0);
+
+  const agreedCost = num(before.agreed_cost, null);
+
+  // Tolerance lookup — same source order as submitInvoice
+  const tol = await resolveCarrierTolerance({
+    carrier:   before.carrier,
+    carrierId: before.carrier_id,
+  });
+
+  const decision = decide({
+    agreedCost,
+    invoicedAmount: approvedTotal,
+    tolerancePct:   tol.tolerancePct,
+    toleranceAbs:   tol.toleranceAbs,
+  });
+
+  const nowIso = new Date().toISOString();
+  const patch = {
+    status:          decision.status,
+    decision_reason: decision.reason,
+    decided_at:      nowIso,
+    decided_by:      user?.email || 'system',
+    variance:        decision.variance,
+    variance_pct:    decision.variancePct,
+    tolerance_pct:   tol.tolerancePct,
+    tolerance_abs_usd: tol.toleranceAbs,
+    updated_at:      nowIso,
+    // REQ-184: keep `invoiced_amount` in sync with the approved total so
+    // downstream readers (lists, AP exports) reflect what finance just
+    // approved instead of the original carrier-billed amount. The cost
+    // lines remain the source of truth for the per-line detail.
+    invoiced_amount: approvedTotal,
+  };
+  if (decision.status === 'Approved' && !before.sent_to_ap_at) {
+    patch.sent_to_ap_at = nowIso;
+    patch.sent_to_ap_by = user?.email || 'system';
+  }
+
+  const updated = await db.dbUpdate('invoices', invoiceId, patch);
+
+  // REQ-02: history. Emit a status row on the invoice and mirror the
+  // outcome on each linked shipment so the shipment history drawer
+  // shows the approve/reject just like submitInvoice does.
+  try {
+    const rows = [history.buildRow({
+      entityType: 'invoice',
+      entityId:   invoiceId,
+      action:     'status',
+      field:      'status',
+      before:     before.status,
+      after:      decision.status,
+      user,
+      metadata: {
+        reason:          decision.reason,
+        variance:        decision.variance,
+        variancePct:     decision.variancePct,
+        approvedTotal,
+        agreedCost,
+        tolerancePct:    tol.tolerancePct,
+        toleranceAbs:    tol.toleranceAbs,
+        toleranceSource: tol.source,
+        sentToAp:        !!patch.sent_to_ap_at,
+        via:             'approve-invoice-button',
+      },
+    })];
+    const shipmentIdsForHistory = Array.isArray(before.shipment_ids) && before.shipment_ids.length
+      ? before.shipment_ids
+      : (before.shipment_id ? [before.shipment_id] : []);
+    for (const sid of shipmentIdsForHistory) {
+      rows.push(history.buildRow({
+        entityType: 'shipment',
+        entityId:   sid,
+        action:     'invoice',
+        field:      'status',
+        before:     before.status,
+        after:      decision.status,
+        user,
+        metadata: {
+          invoiceId,
+          invoiceNumber: before.invoice_number,
+          carrier:       before.carrier,
+          approvedTotal,
+          agreedCost,
+          variance:      decision.variance,
+          decisionReason: decision.reason,
+          via:           'approve-invoice-button',
+          sentToAp:      !!patch.sent_to_ap_at,
+        },
+      }));
+    }
+    await history.recordChangeBatch(rows);
+  } catch (auditErr) {
+    console.error('[invoiceAudit.decideInvoice] history write failed:', auditErr.message);
+  }
+
+  return {
+    invoice: updated,
+    decision: {
+      status:          decision.status,
+      reason:          decision.reason,
+      variance:        decision.variance,
+      variancePct:     decision.variancePct,
+      approvedTotal,
+      agreedCost,
+      tolerancePct:    tol.tolerancePct,
+      toleranceAbs:    tol.toleranceAbs,
+      toleranceSource: tol.source,
+      sentToAp:        !!patch.sent_to_ap_at,
+    },
+  };
+}
+
 // ── Manual override paths (finance/admin can force a decision) ──
 async function manualDecide({ invoiceId, decision, reason, user }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
@@ -641,6 +794,85 @@ async function editInvoice({ invoiceId, patch: rawPatch, user }) {
   return updated;
 }
 
+// ── Delete an invoice (REQ-192) ─────────────────────────────────
+//
+// Used by the "Delete Invoice" button. Removes the invoice row from
+// the `invoices` table after recording a final 'delete' audit row on
+// the invoice itself AND a mirroring row on each linked shipment
+// (mirrors what manualDecide does for status changes — REQ-20).
+//
+// Why we write the audit rows BEFORE deleting:
+//   - REQ-02 requires every mutation to be attributable. If the
+//     invoice row disappears first and the history write then fails,
+//     we'd have lost the record of who deleted what.
+//   - change_history.entity_id is a free string (not an FK), so the
+//     audit rows survive the delete and stay queryable from the
+//     shipment's history drawer.
+//
+// Throws:
+//   400 — missing invoiceId
+//   404 — invoice not found
+async function deleteInvoice({ invoiceId, reason, user }) {
+  if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
+
+  // Read first — we need the row data for the audit trail, and to know
+  // which shipments to mirror the delete onto.
+  const rows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
+  const before = Array.isArray(rows) && rows.length ? rows[0] : null;
+  if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+
+  const finalReason = reason || `Deleted by ${user?.email || 'admin'}.`;
+  const shipmentIdsForHistory = Array.isArray(before.shipment_ids) && before.shipment_ids.length
+    ? before.shipment_ids
+    : (before.shipment_id ? [before.shipment_id] : []);
+
+  // Write audit rows up front so a downstream delete failure still
+  // leaves a record. If the audit batch fails we abort the whole op so
+  // we never delete without an audit trail.
+  const auditRows = [history.buildRow({
+    entityType: 'invoice',
+    entityId:   invoiceId,
+    action:     'delete',
+    user,
+    metadata: {
+      reason:         finalReason,
+      invoiceNumber:  before.invoice_number,
+      carrier:        before.carrier,
+      shipmentId:     before.shipment_id,
+      shipmentIds:    shipmentIdsForHistory,
+      invoicedAmount: before.invoiced_amount,
+      agreedCost:     before.agreed_cost,
+      status:         before.status,
+    },
+  })];
+  for (const sid of shipmentIdsForHistory) {
+    auditRows.push(history.buildRow({
+      entityType: 'shipment',
+      entityId:   sid,
+      action:     'invoice',
+      field:      'status',
+      before:     before.status,
+      after:      'Deleted',
+      user,
+      metadata: {
+        invoiceId,
+        invoiceNumber:  before.invoice_number,
+        carrier:        before.carrier,
+        invoicedAmount: before.invoiced_amount,
+        agreedCost:     before.agreed_cost,
+        decisionReason: finalReason,
+        deleted:        true,
+      },
+    }));
+  }
+  await history.recordChangeBatch(auditRows);
+
+  // Audit trail is in place — proceed with the hard delete.
+  await db.dbDelete('invoices', invoiceId);
+
+  return { deleted: true, id: invoiceId, reason: finalReason };
+}
+
 // ── Mark an Approved invoice as sent to AP (idempotent) ─────────
 async function sendToAp({ invoiceId, user }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
@@ -680,9 +912,11 @@ module.exports = {
   resolveCarrierTolerance,
   resolveShipments,
   submitInvoice,
+  decideInvoice,
   manualDecide,
   sendToAp,
   editInvoice,
+  deleteInvoice,     // REQ-192
   // Exposed for unit testing of the field mapper / alias coverage.
   _internals: { buildInvoicePatch, EDIT_FIELD_MAP, EDIT_LEGACY_ALIASES },
 };

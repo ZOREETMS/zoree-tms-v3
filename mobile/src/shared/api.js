@@ -328,6 +328,28 @@ export const OrdersApi = {
   remove(id) {
     return api(`/orders/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
+  /**
+   * REQ-02 Phase 1 (mobile parity, 2026-05-10): mirror ShipmentsApi.history
+   * so the mobile OrderDetailScreen can render the same change-history
+   * timeline the web OrderDetailModal already shows. Backend endpoint:
+   * GET /api/orders/:id/history?limit=N — returns { rows: [...] } where
+   * each row carries entity_type='order', action, field, old_value,
+   * new_value, username, user_role, created_at, metadata. Caller is
+   * expected to shape the rows (see services/orderHistoryService).
+   */
+  history(id, limit = 200) {
+    return api(`/orders/${encodeURIComponent(id)}/history?limit=${encodeURIComponent(limit)}`);
+  },
+  /**
+   * REQ-02 / TMS bug #1 mobile parity: persistent Clear History marker.
+   * Subsequent history() calls return only rows newer than the marker.
+   */
+  clearHistory(id) {
+    return api(`/orders/${encodeURIComponent(id)}/history/clear`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
 };
 
 /**

@@ -458,6 +458,16 @@ export const InvoicesApi = {
       body: JSON.stringify(payload),
     });
   },
+  // REQ-184: run the carrier-tolerance check on an existing invoice.
+  // Server compares sum(approved_cost) vs agreed_cost and returns
+  // { invoice, decision: { status: Approved|Rejected, reason, variance,
+  // variancePct, tolerancePct, toleranceAbs, sentToAp, ... } }.
+  // Approved invoices are auto-sent to AP (mirrors submitInvoice).
+  decide(id) {
+    return api(`/invoices/${encodeURIComponent(id)}/decide`, {
+      method: "POST",
+    });
+  },
   // Manual override — finance/admin can force Approved/Rejected regardless
   // of tolerance decision (e.g. accessorials or disputed adjustments).
   approve(id, reason) {
@@ -509,8 +519,14 @@ export const InvoicesApi = {
     }
     return InvoicesApi.submit(invoice);
   },
-  remove(id) {
-    return api(`/db/invoices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  // REQ-192: route deletes through the domain endpoint so the audit
+  // pipeline gets the 'delete' history row. The previous generic
+  // /db/invoices DELETE path bypassed it.
+  remove(id, reason) {
+    return api(`/invoices/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason: reason || undefined }),
+    });
   },
 };
 

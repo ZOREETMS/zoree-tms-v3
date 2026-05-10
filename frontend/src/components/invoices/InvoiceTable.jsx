@@ -1,4 +1,9 @@
 import { STATUS_BADGES } from "../../types/invoice";
+import {
+  canManualApprove,
+  canManualReject,
+  canAutoDecide,
+} from "../../services/invoiceActionsService";
 
 function Badge({ status }) {
   const style = STATUS_BADGES[status] || STATUS_BADGES.Pending;
@@ -53,9 +58,19 @@ function SortHeader({ label, col, sortCol, sortAsc, onSort }) {
 
 export default function InvoiceTable({
   invoices, sortCol, sortAsc, onSort,
-  onApprove, onDispute, onSendToAp,
+  // REQ-190 / REQ-191:
+  //   onApprove    — manual force-approve (handler receives invoice.num)
+  //   onReject     — manual force-reject  (handler receives invoice.num)
+  //   onAutoDecide — run carrier-tolerance comparison (handler receives invoice.num)
+  // `onDispute` is accepted as a back-compat alias for onReject so older
+  // callers (and the QA gate in FreightInvoicesPage) keep working through
+  // one release while we migrate.
+  onApprove, onReject, onDispute, onAutoDecide, onSendToAp,
   onOpenInvoice,
 }) {
+  // Resolve the reject handler from either prop name. Prefer the new
+  // canonical name when both are provided.
+  const rejectHandler = onReject || onDispute;
   // Action-column buttons live inside a row that is itself clickable
   // (to open the invoice detail modal). Stop propagation so an action
   // click doesn't also trigger the row's open handler.
@@ -158,21 +173,49 @@ export default function InvoiceTable({
                   )}
                 </td>
                 <td style={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                  {/* REQ-06: manual override is always available to admin/finance.
-                      stopPropagation on the cell keeps action clicks from also
-                      opening the row's detail modal. */}
-                  {inv.status !== "Approved" && (
-                    <button className="btn btn-success btn-sm" onClick={actionClick(onApprove, inv.num)} style={{ marginRight: 4 }}>
+                  {/* REQ-190 / REQ-191: row-level actions mirror the
+                      modal footer so finance can approve/reject/auto-
+                      decide without opening the row. stopPropagation on
+                      the cell keeps action clicks from also opening the
+                      row's detail modal. Visibility is driven by the
+                      same predicates the modal uses so the two surfaces
+                      cannot drift. */}
+                  {onApprove && canManualApprove(inv.status) && (
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={actionClick(onApprove, inv.num)}
+                      style={{ marginRight: 4 }}
+                      title="Force this invoice to Approved (manual override)."
+                    >
                       Approve
                     </button>
                   )}
-                  {inv.status !== "Rejected" && inv.status !== "Disputed" && (
-                    <button className="btn btn-danger btn-sm" onClick={actionClick(onDispute, inv.num)} style={{ marginRight: 4 }}>
+                  {rejectHandler && canManualReject(inv.status) && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={actionClick(rejectHandler, inv.num)}
+                      style={{ marginRight: 4 }}
+                      title="Force this invoice to Rejected (manual override)."
+                    >
                       Reject
                     </button>
                   )}
+                  {onAutoDecide && canAutoDecide(inv.status) && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={actionClick(onAutoDecide, inv.num)}
+                      style={{ marginRight: 4 }}
+                      title="Run the carrier-tolerance check. Within tolerance → Approved & sent to AP. Outside → Rejected."
+                    >
+                      Auto
+                    </button>
+                  )}
                   {inv.status === "Approved" && !inv.sentToApAt && onSendToAp && (
-                    <button className="btn btn-primary btn-sm" onClick={actionClick(onSendToAp, inv.num)} style={{ background: "#059669", borderColor: "#059669" }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={actionClick(onSendToAp, inv.num)}
+                      style={{ background: "#059669", borderColor: "#059669" }}
+                    >
                       Send to AP
                     </button>
                   )}

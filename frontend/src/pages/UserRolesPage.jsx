@@ -1,26 +1,28 @@
 // ════════════════════════════════════════════════════════════════════
-// UserRolesPage — pivoted role × module access matrix.
+// UserRolesPage — "Access Control Center".
 //
 // Layout:
-//   Rows    : modules, grouped by sidebar section (collapsible).
-//   Columns : roles (Admin locked, then planner/finance/viewer/custom).
-//   Cells   : RoleAccessSelect dropdown (Edit / View / No View).
+//   ┌──────────────────────────────────────────────────────────────┐
+//   │ Tabs: Users · Roles · Policies · API Access                  │
+//   ├───────────────┬──────────────────────────────────────────────┤
+//   │ RolesRail     │ RoleHeader (hero + counts + delete)          │
+//   │  (left)       │ ViewSwitcher · search · bulk menu            │
+//   │               │ PermissionsView | HeatmapView | MatrixView   │
+//   └───────────────┴──────────────────────────────────────────────┘
 //
-// UX:
-//   - Search box filters modules by label.
-//   - Sticky header row + sticky module column keep context while
-//     scrolling through ~30 modules.
-//   - Per-row "Set all →" lets an admin push one level to every role
-//     for that module in one shot.
-//   - QA #140: changes are STAGED locally and persisted only when the
-//     admin clicks Save Changes. Discard reverts all pending edits.
-//     The previous auto-save-per-cell flow (a) gave admins no way to
-//     undo and (b) issued one mutation per cell which made bulk edits
-//     feel slow (QA #137 — same fix lands both tickets).
-//   - Admin can add/delete custom roles; system roles are protected.
+// This file is the orchestrator: it owns query/mutation wiring, the
+// staged `pending` map, and the active role + view selection. Render
+// belongs to the small components in components/access-control/*.
+//
+// Save semantics (preserved from QA #137 / #140 — see git history):
+//   • Edits stage locally in `pending` so admins can Discard / Save.
+//   • On Save we issue ONE mutateAsync per touched role with the full
+//     merged feature map — bulk edits stay one round-trip per role.
 // ════════════════════════════════════════════════════════════════════
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import "../components/access-control/access-control.css";
+
 import { useAuth } from "../state/AuthContext";
 import {
   useRolePermissions,
@@ -28,62 +30,49 @@ import {
   useCreateRole,
   useDeleteRole,
 } from "../hooks/useRolePermissions";
-import RoleAccessSelect from "../components/user-roles/RoleAccessSelect";
-import AddRoleModal from "../components/user-roles/AddRoleModal";
 
-const ADMIN_ROLE_KEY = "admin";
-const SECTION_ORDER = [
-  "Overview", "Planning", "Execution", "Finance",
-  "Documents", "Integration", "Insights", "System",
-];
+import RolesRail        from "../components/access-control/RolesRail";
+import RoleHeader       from "../components/access-control/RoleHeader";
+import ViewSwitcher     from "../components/access-control/ViewSwitcher";
+import PermissionsView  from "../components/access-control/PermissionsView";
+import HeatmapView      from "../components/access-control/HeatmapView";
+import MatrixView       from "../components/access-control/MatrixView";
+import SaveBar          from "../components/access-control/SaveBar";
+import AddRoleModal     from "../components/user-roles/AddRoleModal";
+
+const ADMIN_ROLE_KEY    = "admin";
+const SECTION_ORDER     = ["Overview", "Planning", "Execution", "Finance", "Documents", "Integration", "Insights", "System"];
 const SYSTEM_ROLE_ORDER = ["admin", "planner", "finance", "viewer"];
 
 export default function UserRolesPage() {
   const { user } = useAuth();
-  const isAdmin = (user?.activeRole || user?.role || "").toLowerCase() === "admin";
+  const isAdmin  = (user?.activeRole || user?.role || "").toLowerCase() === "admin";
 
-  const roleQuery = useRolePermissions();
+  const roleQuery      = useRolePermissions();
   const updateMutation = useUpdateRolePermissions();
   const createMutation = useCreateRole();
   const deleteMutation = useDeleteRole();
 
   const features    = roleQuery.data?.features     || [];
-  const featureKeys = roleQuery.data?.featureKeys  || features.map((f) => f.feature_key);
   const roles       = roleQuery.data?.roles        || {};
   const roleMeta    = roleQuery.data?.roleMetadata || [];
+  const loading     = roleQuery.isLoading;
+  const loadError   = roleQuery.error?.message     || "";
 
   // ── Local UI state ──────────────────────────────────────────────────
+  const [activeRole,   setActiveRole]   = useState("");
+  const [view,         setView]         = useState("detail"); // 'detail' | 'heat' | 'matrix'
+  const [search,       setSearch]       = useState("");
+  const [pending,      setPending]      = useState({}); // { [roleKey]: { [featureKey]: level } }
+  const [saving,       setSaving]       = useState(false);
   const [saveError,    setSaveError]    = useState("");
   const [showAdd,      setShowAdd]      = useState(false);
   const [createError,  setCreateError]  = useState("");
   const [deletingRole, setDeletingRole] = useState("");
-  const [search,       setSearch]       = useState("");
-  const [collapsed,    setCollapsed]    = useState(() => new Set());
+  const [bulkOpen,     setBulkOpen]     = useState(false);
+  const [descDraft,    setDescDraft]    = useState({}); // local-only, until backend supports it
 
-  // QA #140 / #137: stage all matrix edits in `pending` until the admin
-  // clicks Save. Shape: { [roleKey]: { [featureKey]: 'edit'|'view'|'none' } }
-  // Only roles/features that actually changed appear in this map, so we
-  // can issue a minimum number of mutateAsync calls (one per touched
-  // role) on save instead of one per cell.
-  const [pending, setPending] = useState({});
-  const [saving,  setSaving]  = useState(false);
-  const pendingCount = useMemo(() => {
-    let n = 0;
-    for (const roleKey of Object.keys(pending)) {
-      n += Object.keys(pending[roleKey] || {}).length;
-    }
-    return n;
-  }, [pending]);
-  const dirty = pendingCount > 0;
-
-  /** Resolve the displayed level for a cell: pending wins over saved. */
-  function effectiveLevel(roleKey, featureKey) {
-    const p = pending[roleKey];
-    if (p && Object.prototype.hasOwnProperty.call(p, featureKey)) return p[featureKey];
-    return roles?.[roleKey]?.[featureKey] || "none";
-  }
-
-  // ── Derived: ordered role columns ───────────────────────────────────
+  // ── Derived: ordered role columns ──────────────────────────────────
   const sortedRoleKeys = useMemo(() => {
     const all = Object.keys(roles);
     const sys = SYSTEM_ROLE_ORDER.filter((k) => all.includes(k));
@@ -91,19 +80,40 @@ export default function UserRolesPage() {
     return [...sys, ...custom];
   }, [roles]);
 
+  // Default selection: first non-admin role (admin is locked → not the
+  // most useful starting point for editing). Falls back to admin if
+  // that's all there is.
+  useEffect(() => {
+    if (activeRole && sortedRoleKeys.includes(activeRole)) return;
+    const firstEditable = sortedRoleKeys.find((k) => k !== ADMIN_ROLE_KEY);
+    setActiveRole(firstEditable || sortedRoleKeys[0] || "");
+  }, [sortedRoleKeys, activeRole]);
+
   const metaByKey = useMemo(() => {
     const m = {};
-    roleMeta.forEach((r) => { m[r.role_key] = r; });
+    for (const r of roleMeta) m[r.role_key] = r;
     return m;
   }, [roleMeta]);
 
-  const isSystemRole = (key) =>
-    !!metaByKey[key]?.is_system || SYSTEM_ROLE_ORDER.includes(key);
-
-  const displayRole = (key) =>
-    metaByKey[key]?.display_name
-    || (key === "finance" ? "Finance user"
-        : key.charAt(0).toUpperCase() + key.slice(1));
+  function isSystemRole(key) {
+    return !!metaByKey[key]?.is_system || SYSTEM_ROLE_ORDER.includes(key);
+  }
+  function isLockedRole(key) {
+    return key === ADMIN_ROLE_KEY;
+  }
+  function displayRole(key) {
+    return metaByKey[key]?.display_name
+      || (key === "finance" ? "Finance user"
+          : key.charAt(0).toUpperCase() + key.slice(1));
+  }
+  function descriptionFor(key) {
+    if (Object.prototype.hasOwnProperty.call(descDraft, key)) return descDraft[key];
+    return metaByKey[key]?.description || "";
+  }
+  function userCountFor(key) {
+    const n = metaByKey[key]?.user_count;
+    return Number.isFinite(n) ? n : undefined;
+  }
 
   // ── Derived: features grouped by section, search-filtered ──────────
   const sections = useMemo(() => {
@@ -118,78 +128,92 @@ export default function UserRolesPage() {
       if (!bySection.has(section)) bySection.set(section, []);
       bySection.get(section).push(f);
     }
-    // Sort within section by sort_order, then label.
     for (const list of bySection.values()) {
-      list.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
-        || String(a.label || "").localeCompare(String(b.label || "")));
+      list.sort((a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0)
+        || String(a.label || "").localeCompare(String(b.label || ""))
+      );
     }
-    // Section iteration order: known order first, then any unknowns alphabetically.
-    const known = SECTION_ORDER.filter((s) => bySection.has(s));
-    const extras = [...bySection.keys()]
-      .filter((s) => !SECTION_ORDER.includes(s))
-      .sort();
+    const known  = SECTION_ORDER.filter((s) => bySection.has(s));
+    const extras = [...bySection.keys()].filter((s) => !SECTION_ORDER.includes(s)).sort();
     return [...known, ...extras].map((name) => ({ name, items: bySection.get(name) }));
   }, [features, search]);
 
-  // ── Handlers ────────────────────────────────────────────────────────
-  // QA #140: stage one cell's change in local state. Only persists on Save.
+  // ── Pending diff helpers ───────────────────────────────────────────
+  const pendingCount = useMemo(() => {
+    let n = 0;
+    for (const k of Object.keys(pending)) n += Object.keys(pending[k] || {}).length;
+    return n;
+  }, [pending]);
+  const dirty = pendingCount > 0;
+
+  function effectiveLevel(roleKey, featureKey) {
+    const p = pending[roleKey];
+    if (p && Object.prototype.hasOwnProperty.call(p, featureKey)) return p[featureKey];
+    return roles?.[roleKey]?.[featureKey] || "none";
+  }
+  function isPendingCell(roleKey, featureKey) {
+    const p = pending[roleKey];
+    return !!(p && Object.prototype.hasOwnProperty.call(p, featureKey));
+  }
+
+  // Pre-compute counts for the active role (header pills).
+  const counts = useMemo(() => {
+    const c = { edit: 0, view: 0, none: 0 };
+    if (!activeRole) return c;
+    for (const f of features) {
+      const v = effectiveLevel(activeRole, f.feature_key);
+      if (v === "edit") c.edit++;
+      else if (v === "view") c.view++;
+      else c.none++;
+    }
+    return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [features, activeRole, pending, roles]);
+
+  // ── Mutations ──────────────────────────────────────────────────────
   function handleLevelChange(roleKey, featureKey, nextLevel) {
     if (!isAdmin) return;
-    if (roleKey === ADMIN_ROLE_KEY) return;
+    if (isLockedRole(roleKey)) return;
     setSaveError("");
     setPending((prev) => {
       const next = { ...prev };
       const savedLevel = roles?.[roleKey]?.[featureKey] || "none";
       const roleMap = { ...(next[roleKey] || {}) };
       if (nextLevel === savedLevel) {
-        // Reverting to saved value — drop the pending entry so dirty
-        // counts stay accurate.
         delete roleMap[featureKey];
       } else {
         roleMap[featureKey] = nextLevel;
       }
-      if (Object.keys(roleMap).length === 0) {
-        delete next[roleKey];
-      } else {
-        next[roleKey] = roleMap;
-      }
+      if (Object.keys(roleMap).length === 0) delete next[roleKey];
+      else next[roleKey] = roleMap;
       return next;
     });
   }
 
-  // QA #140: "Set all" stages the same level for every non-admin role.
-  function handleSetRow(featureKey, level) {
-    if (!isAdmin) return;
-    setSaveError("");
-    setPending((prev) => {
-      const next = { ...prev };
-      const targets = sortedRoleKeys.filter((r) => r !== ADMIN_ROLE_KEY);
-      for (const roleKey of targets) {
-        const savedLevel = roles?.[roleKey]?.[featureKey] || "none";
-        const roleMap = { ...(next[roleKey] || {}) };
-        if (level === savedLevel) {
-          delete roleMap[featureKey];
-        } else {
-          roleMap[featureKey] = level;
-        }
-        if (Object.keys(roleMap).length === 0) delete next[roleKey];
-        else next[roleKey] = roleMap;
+  // Apply one level to every visible feature for one role (Detail / Heat / Matrix bulk).
+  function bulkSetLevelForRole(roleKey, level) {
+    if (!isAdmin || isLockedRole(roleKey)) return;
+    for (const sec of sections) {
+      for (const f of sec.items) {
+        handleLevelChange(roleKey, f.feature_key, level);
       }
-      return next;
-    });
+    }
+  }
+  function bulkSetLevelAllRoles(level) {
+    for (const k of sortedRoleKeys) {
+      if (isLockedRole(k)) continue;
+      bulkSetLevelForRole(k, level);
+    }
   }
 
-  // QA #140 + #137: persist all staged edits in one click. We issue one
-  // mutateAsync per ROLE (not per cell) — saveRolePermissions on the
-  // backend already accepts the full per-role access map, so an admin
-  // touching N cells across a role still only makes one round-trip.
   async function handleSavePending() {
     if (!isAdmin || !dirty || saving) return;
     setSaveError("");
     setSaving(true);
     try {
-      const touchedRoles = Object.keys(pending);
-      for (const roleKey of touchedRoles) {
+      // QA #140 + #137: one round-trip per touched role, not per cell.
+      for (const roleKey of Object.keys(pending)) {
         const merged = { ...(roles[roleKey] || {}), ...(pending[roleKey] || {}) };
         await updateMutation.mutateAsync({ roleName: roleKey, permissions: merged });
       }
@@ -200,7 +224,6 @@ export default function UserRolesPage() {
       setSaving(false);
     }
   }
-
   function handleDiscardPending() {
     setPending({});
     setSaveError("");
@@ -211,20 +234,24 @@ export default function UserRolesPage() {
     try {
       await createMutation.mutateAsync({ roleKey, displayName: dn, description, defaultLevel });
       setShowAdd(false);
+      setActiveRole(roleKey);   // jump to it
     } catch (e) {
       setCreateError(e.message || "Failed to create role");
     }
   }
 
   async function handleDeleteRole(roleKey) {
-    if (!isAdmin) return;
-    if (isSystemRole(roleKey)) return;
+    if (!isAdmin || isSystemRole(roleKey)) return;
     const ok = window.confirm(`Delete role '${displayRole(roleKey)}'? This cannot be undone.`);
     if (!ok) return;
     setDeletingRole(roleKey);
     setSaveError("");
     try {
       await deleteMutation.mutateAsync(roleKey);
+      // If we just deleted the active role, drop the local pending edits
+      // for it and let the effect above re-pick a default.
+      setPending((prev) => { const n = { ...prev }; delete n[roleKey]; return n; });
+      if (activeRole === roleKey) setActiveRole("");
     } catch (e) {
       setSaveError(e.message || "Failed to delete role");
     } finally {
@@ -232,86 +259,71 @@ export default function UserRolesPage() {
     }
   }
 
-  function toggleSection(name) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
+  // ── Bulk menu actions ──────────────────────────────────────────────
+  function handleBulk(action) {
+    setBulkOpen(false);
+    if (!isAdmin || !activeRole) return;
+    if (action === "setall-edit" || action === "setall-view" || action === "setall-none") {
+      const lvl = action.split("-")[1];
+      if (view === "matrix") bulkSetLevelAllRoles(lvl);
+      else bulkSetLevelForRole(activeRole, lvl);
+      return;
+    }
+    if (action === "reset") {
+      // Drop pending edits for the active role; saved values remain.
+      setPending((prev) => { const n = { ...prev }; delete n[activeRole]; return n; });
+    }
   }
 
-  // ── Styles ──────────────────────────────────────────────────────────
-  const stickyHeader = {
-    position: "sticky", top: 0, zIndex: 3,
-    background: "#f7f9fc", borderBottom: "1px solid #e3e7ee",
-  };
-  const stickyFirstCol = {
-    position: "sticky", left: 0, zIndex: 2,
-    background: "#fff", borderRight: "1px solid #eef0f3",
-  };
-  const stickyHeaderFirstCol = {
-    ...stickyFirstCol, ...stickyHeader, zIndex: 4, background: "#f7f9fc",
-  };
-
-  const loading   = roleQuery.isLoading;
-  const loadError = roleQuery.error?.message || "";
+  // ── Render ─────────────────────────────────────────────────────────
   const totalModules = features.length;
 
-  // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+    <div className="acc-root">
+      {/* Top header */}
+      <div className="acc-topbar">
         <div>
-          <div className="page-title">User Roles</div>
-          <div className="page-sub">
-            Module-level access (Edit / View / No View) per role
-            {totalModules > 0 && <span style={{ marginLeft: 6, color: "#888" }}>· {totalModules} modules</span>}
-          </div>
+          <div className="acc-crumbs">System · Security</div>
+          <h1 className="acc-h1">Access Control Center</h1>
+          <p className="acc-lede">
+            Manage roles and module-level access across your Zoree workspace.
+            {totalModules > 0 && <> · {totalModules} modules</>}
+          </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="search"
-            placeholder="Search modules…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            disabled={loading}
-            style={{ padding: "6px 10px", border: "1px solid #d4d8e0", borderRadius: 6, fontSize: 13, width: 220 }}
-          />
-          {/* QA #140: explicit Save / Discard. Hidden until something is
-              actually staged so non-admin / clean states stay tidy. */}
-          {dirty && (
-            <>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleDiscardPending}
-                disabled={saving}
-              >
-                Discard
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSavePending}
-                disabled={saving || !isAdmin}
-                title={!isAdmin ? "Admin role required" : ""}
-              >
-                {saving ? "Saving…" : `Save Changes (${pendingCount})`}
-              </button>
-            </>
-          )}
+        <div className="acc-actions">
           <button
-            className="btn btn-primary"
+            type="button"
+            className="acc-btn primary"
             onClick={() => { setCreateError(""); setShowAdd(true); }}
             disabled={!isAdmin || loading}
             title={!isAdmin ? "Admin role required" : ""}
           >
-            + Add Role
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add role
           </button>
         </div>
       </div>
 
-      <div className="page-content">
+      {/* Top tabs (Roles is the active tab; Users / Policies / API Access are placeholders) */}
+      <div className="acc-tabs">
+        <button type="button" className="acc-tab" disabled title="Coming soon">
+          Users
+        </button>
+        <button type="button" className="acc-tab active">
+          Roles <span className="count">{sortedRoleKeys.length}</span>
+        </button>
+        <button type="button" className="acc-tab" disabled title="Coming soon">
+          Policies
+        </button>
+        <button type="button" className="acc-tab" disabled title="Coming soon">
+          API Access
+        </button>
+      </div>
+
+      {/* Alerts */}
+      <div style={{ padding: "0 28px" }}>
         {!isAdmin && (
           <div className="alert alert-warning" style={{ marginBottom: 16 }}>
             <div className="alert-icon">⚠️</div>
@@ -337,100 +349,145 @@ export default function UserRolesPage() {
             </div>
           </div>
         )}
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Role Permission Matrix</span>
-            {loading && <span className="text-sm text-muted">Loading…</span>}
-          </div>
-
-          <div className="card-body" style={{ padding: 0 }}>
-            <div style={{ maxHeight: "calc(100vh - 260px)", overflow: "auto", borderTop: "1px solid #eef0f3" }}>
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 720 }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...stickyHeaderFirstCol, padding: "10px 12px", textAlign: "left", minWidth: 240 }}>
-                      Module
-                    </th>
-                    {sortedRoleKeys.map((roleKey) => (
-                      <th
-                        key={roleKey}
-                        style={{ ...stickyHeader, padding: "10px 8px", textAlign: "left", minWidth: 120 }}
-                      >
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                          <span style={{ fontWeight: 600 }}>{displayRole(roleKey)}</span>
-                          <span style={{ fontSize: 10, color: "#999" }}>
-                            {roleKey === ADMIN_ROLE_KEY
-                              ? "system · locked"
-                              : isSystemRole(roleKey) ? "system" : "custom"}
-                            {!isSystemRole(roleKey) && isAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteRole(roleKey)}
-                                disabled={deletingRole === roleKey}
-                                style={{
-                                  marginLeft: 6, fontSize: 10, color: "#c73a3a",
-                                  background: "none", border: "none", cursor: "pointer",
-                                  padding: 0,
-                                }}
-                                title={`Delete ${displayRole(roleKey)}`}
-                              >
-                                {deletingRole === roleKey ? "…" : "delete"}
-                              </button>
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                    ))}
-                    <th style={{ ...stickyHeader, padding: "10px 8px", textAlign: "left", minWidth: 90 }}>
-                      Set row
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sections.length === 0 && !loading && (
-                    <tr>
-                      <td colSpan={sortedRoleKeys.length + 2} className="text-muted" style={{ padding: 16 }}>
-                        {search ? `No modules match "${search}".` : "No module data found."}
-                      </td>
-                    </tr>
-                  )}
-
-                  {sections.map((section) => {
-                    const isCollapsed = collapsed.has(section.name);
-                    return (
-                      <ModuleSectionRows
-                        key={section.name}
-                        section={section}
-                        collapsed={isCollapsed}
-                        onToggleSection={() => toggleSection(section.name)}
-                        sortedRoleKeys={sortedRoleKeys}
-                        // QA #140: pass the resolver instead of the raw map
-                        // so cells render the staged value when present.
-                        levelFor={effectiveLevel}
-                        pending={pending}
-                        deletingRole={deletingRole}
-                        isAdmin={isAdmin}
-                        onLevelChange={handleLevelChange}
-                        onSetRow={handleSetRow}
-                        stickyFirstCol={stickyFirstCol}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ padding: "10px 14px", fontSize: 12, color: "#666", borderTop: "1px solid #eef0f3" }}>
-              <strong style={{ color: "#0a8754" }}>Edit</strong> — full create / update / delete.
-              <strong style={{ color: "#b86e00", marginLeft: 10 }}>View</strong> — read-only.
-              <strong style={{ color: "#888", marginLeft: 10 }}>No View</strong> — module is hidden.
-              The Admin column is locked.
-            </div>
-          </div>
-        </div>
       </div>
 
+      {/* Two-pane body */}
+      <div className="acc-pane">
+
+        <RolesRail
+          roleKeys={sortedRoleKeys}
+          selected={activeRole}
+          onSelect={setActiveRole}
+          displayName={displayRole}
+          isSystemRole={isSystemRole}
+          isLocked={isLockedRole}
+          userCount={userCountFor}
+          canManage={isAdmin}
+          onAdd={() => { setCreateError(""); setShowAdd(true); }}
+          onClone={() => alert("Clone role: coming soon — backend support pending.")}
+        />
+
+        <section className="acc-panel">
+          {activeRole && (
+            <RoleHeader
+              roleKey={activeRole}
+              displayName={displayRole(activeRole)}
+              description={descriptionFor(activeRole)}
+              isSystem={isSystemRole(activeRole)}
+              isLocked={isLockedRole(activeRole)}
+              userCount={userCountFor(activeRole)}
+              counts={counts}
+              canManage={isAdmin}
+              onDescriptionChange={(v) => setDescDraft((d) => ({ ...d, [activeRole]: v }))}
+              onDelete={
+                isAdmin && !isSystemRole(activeRole)
+                  ? () => handleDeleteRole(activeRole)
+                  : undefined
+              }
+            />
+          )}
+
+          {/* View switch + search + bulk */}
+          <div className="acc-view-bar">
+            <ViewSwitcher value={view} onChange={setView} />
+
+            <div className="acc-search-row">
+              <div className="acc-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="Search permissions…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="acc-menu-wrap">
+                <button
+                  type="button"
+                  className="acc-btn"
+                  onClick={() => setBulkOpen((v) => !v)}
+                  disabled={!isAdmin || !activeRole}
+                  title={!isAdmin ? "Admin role required" : ""}
+                >
+                  Bulk
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {bulkOpen && (
+                  <div className="acc-menu">
+                    <button type="button" onClick={() => handleBulk("setall-edit")}>Set all visible to Edit</button>
+                    <button type="button" onClick={() => handleBulk("setall-view")}>Set all visible to View</button>
+                    <button type="button" onClick={() => handleBulk("setall-none")}>Set all visible to Hidden</button>
+                    <hr />
+                    <button type="button" className="danger" onClick={() => handleBulk("reset")}>
+                      Reset pending edits
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Active view */}
+          {view === "detail" && (
+            <PermissionsView
+              sections={sections}
+              roleKey={activeRole}
+              isLocked={isLockedRole(activeRole)}
+              canEdit={isAdmin}
+              levelFor={effectiveLevel}
+              isPendingCell={isPendingCell}
+              onLevelChange={handleLevelChange}
+            />
+          )}
+          {view === "heat" && (
+            <HeatmapView
+              sections={sections}
+              roleKeys={sortedRoleKeys}
+              displayName={displayRole}
+              isLocked={isLockedRole}
+              canEdit={isAdmin}
+              levelFor={effectiveLevel}
+              onLevelChange={handleLevelChange}
+            />
+          )}
+          {view === "matrix" && (
+            <MatrixView
+              sections={sections}
+              roleKeys={sortedRoleKeys}
+              displayName={displayRole}
+              isSystemRole={isSystemRole}
+              isLocked={isLockedRole}
+              canEdit={isAdmin}
+              levelFor={effectiveLevel}
+              isPendingCell={isPendingCell}
+              onLevelChange={handleLevelChange}
+            />
+          )}
+
+          {loading && (
+            <div style={{ padding: 18, color: "var(--acc-muted)", fontSize: 13 }}>
+              Loading roles…
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Save bar */}
+      <SaveBar
+        pendingCount={pendingCount}
+        saving={saving}
+        disabled={!isAdmin}
+        onDiscard={handleDiscardPending}
+        onSave={handleSavePending}
+      />
+
+      {/* Existing modal — kept as-is. */}
       <AddRoleModal
         open={showAdd}
         busy={createMutation.isPending}
@@ -439,111 +496,11 @@ export default function UserRolesPage() {
         onClose={() => setShowAdd(false)}
         onCreate={handleCreate}
       />
+
+      {/* If `deletingRole` is set we briefly disable the corresponding
+          Delete button via the spinner indicator that lives in
+          RoleHeader's onDelete handler chain. Nothing to render here. */}
+      {deletingRole && null}
     </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// One sidebar section + its module rows. Extracted so the per-section
-// collapse state stays cheap.
-// ──────────────────────────────────────────────────────────────────────
-function ModuleSectionRows({
-  section, collapsed, onToggleSection,
-  sortedRoleKeys, levelFor, pending, deletingRole,
-  isAdmin, onLevelChange, onSetRow, stickyFirstCol,
-}) {
-  function isPendingCell(roleKey, featureKey) {
-    return !!(pending?.[roleKey] && Object.prototype.hasOwnProperty.call(pending[roleKey], featureKey));
-  }
-
-  return (
-    <>
-      <tr style={{ background: "#f4f6fa" }}>
-        <td
-          colSpan={sortedRoleKeys.length + 2}
-          style={{ padding: "8px 12px", borderTop: "1px solid #e3e7ee", borderBottom: "1px solid #e3e7ee", cursor: "pointer", fontSize: 11, letterSpacing: 0.4, fontWeight: 700, color: "#525c6e", textTransform: "uppercase" }}
-          onClick={onToggleSection}
-        >
-          <span style={{ display: "inline-block", width: 14 }}>{collapsed ? "▸" : "▾"}</span>
-          {section.name} <span style={{ color: "#9aa3b0", fontWeight: 500, marginLeft: 6 }}>· {section.items.length}</span>
-        </td>
-      </tr>
-      {!collapsed && section.items.map((feature) => (
-        <tr key={feature.feature_key} style={{ borderBottom: "1px solid #f2f3f5" }}>
-          <td style={{ ...stickyFirstCol, padding: "8px 12px" }}>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span style={{ fontSize: 13 }}>{feature.label || feature.feature_key}</span>
-              <span style={{ fontSize: 10, color: "#9aa3b0" }}>{feature.feature_key}</span>
-            </div>
-          </td>
-          {sortedRoleKeys.map((roleKey) => {
-            const isAdminCol  = roleKey === ADMIN_ROLE_KEY;
-            const cellId      = `${roleKey}:${feature.feature_key}`;
-            const isDeleting  = deletingRole === roleKey;
-            const disabled    = !isAdmin || isAdminCol || isDeleting;
-            const level       = levelFor ? levelFor(roleKey, feature.feature_key) : "none";
-            const dirtyCell   = isPendingCell(roleKey, feature.feature_key);
-            return (
-              <td
-                key={cellId}
-                style={{
-                  padding: "6px 8px",
-                  // QA #140: subtle accent so admins see what's staged.
-                  background: dirtyCell ? "rgba(245,158,11,0.08)" : undefined,
-                  outline: dirtyCell ? "1px dashed rgba(245,158,11,0.5)" : undefined,
-                  outlineOffset: dirtyCell ? "-2px" : undefined,
-                }}
-              >
-                <RoleAccessSelect
-                  level={level}
-                  disabled={disabled}
-                  rowKey={roleKey}
-                  colKey={feature.feature_key}
-                  onChange={(next) => onLevelChange(roleKey, feature.feature_key, next)}
-                />
-              </td>
-            );
-          })}
-          <td style={{ padding: "6px 8px" }}>
-            <RowQuickActions
-              disabled={!isAdmin}
-              onPick={(level) => onSetRow(feature.feature_key, level)}
-            />
-          </td>
-        </tr>
-      ))}
-    </>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Tiny "set row to X" helper — applies the chosen level to every
-// non-admin role for the row.
-// ──────────────────────────────────────────────────────────────────────
-function RowQuickActions({ disabled, onPick }) {
-  return (
-    <select
-      defaultValue=""
-      disabled={disabled}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (!v) return;
-        onPick?.(v);
-        e.target.value = "";       // reset so it can be picked again
-      }}
-      title="Apply this level to all non-admin roles for this module"
-      style={{
-        width: "100%", minWidth: 84, padding: "4px 6px",
-        borderRadius: 6, border: "1px solid #d4d8e0",
-        background: disabled ? "#f7f7f7" : "#fff",
-        color: disabled ? "#aaa" : "#444",
-        fontSize: 11, cursor: disabled ? "not-allowed" : "pointer",
-      }}
-    >
-      <option value="">Set all →</option>
-      <option value="edit">All Edit</option>
-      <option value="view">All View</option>
-      <option value="none">All No View</option>
-    </select>
   );
 }

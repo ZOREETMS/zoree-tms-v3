@@ -6,6 +6,13 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 
 import { AuthProvider } from './state/AuthContext';
 import { DataProvider } from './state/DataContext';
+// REQ-OFFLINE Phase 5 (2026-05-10): offline-first wiring. The provider
+// owns connectivity + the SQLite-backed write queue; the banner renders
+// system-wide status (offline / pending / conflict). Mount the provider
+// ABOVE DataProvider so DataContext can consume `useOffline()` in a
+// follow-up without restructuring the tree.
+import { OfflineProvider } from './state/OfflineContext';
+import OfflineBanner from './components/offline/OfflineBanner';
 import RootNavigator from './navigation/RootNavigator';
 import { initializeApi } from './lib/api';
 import { storage } from './lib/storage';
@@ -47,11 +54,21 @@ export default function App() {
       <SafeAreaProvider>
         <AppBootLoader>
           <AuthProvider>
-            <DataProvider>
-              <NavigationContainer>
-                <RootNavigator />
-              </NavigationContainer>
-            </DataProvider>
+            {/* REQ-OFFLINE Phase 5 — OfflineProvider lives BETWEEN
+                AuthProvider and DataProvider. Auth above so that on
+                logout we can stop the sync engine; Data below so a
+                future "DataContext consumes offline queue counts"
+                refactor doesn't require moving providers. */}
+            <OfflineProvider>
+              <DataProvider>
+                <NavigationContainer>
+                  {/* Banner sits inside the NavigationContainer so it
+                      shadows the nav header on every screen. */}
+                  <OfflineBanner />
+                  <RootNavigator />
+                </NavigationContainer>
+              </DataProvider>
+            </OfflineProvider>
           </AuthProvider>
         </AppBootLoader>
       </SafeAreaProvider>
