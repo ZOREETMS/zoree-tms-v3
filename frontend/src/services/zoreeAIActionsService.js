@@ -14,6 +14,11 @@
  */
 
 import { ShipmentsApi, OrdersApi, BulkPlanApi, InvoicesApi } from "../lib/api";
+// QA P213 (2026-05-11): use the existing copyShipment service so the
+// AI's COPY_SHIPMENT action ends up producing the same row shape as
+// the manual Duplicate button on ShipmentsPage — line items snapshot,
+// projected transit window, audited insert path, the works.
+import { copyShipment as copyShipmentService } from "./shipmentService";
 import { planOrdersAsSingleShipment } from "./bulkPlanService";
 import {
   unplanOrderFromShipment,
@@ -99,6 +104,79 @@ async function planOrder(p, { orders }) {
         ? `Order ${ids} failed planning — due date ${pastDue[0].due} is in the past`
         : `Orders failed planning — due dates in the past: ${dueList}`
     );
+  }
+
+  // QA P216 (2026-05-11): weight-aware auto-split. The AI previously
+  // bundled every supplied orderId into a single shipment, which broke
+  // when the combined weight blew past a TL trailer cap (the QA repro
+  // was 5 × 40,000 lb = 200,000 lbs in one shipment). The fix runs in
+  // the AI caller — NOT the production bulkPlanExecution service — so
+  // production paths are untouched and the manual planner's behavior
+  // is unchanged. Cap is a conservative single-trailer max (45,000 lb,
+  // matching the standard 53' dry-van legal limit); the model can pass
+  // `maxWeightLbs` to override. We only split when bundling actually
+  // overflows the cap, so single-shipment plans below the limit run
+  // exactly the same code path as before.
+  const totalWeight = planOrders.reduce(
+    (s, o) => s + (Number(o?.weight) || 0),
+    0,
+  );
+  const cap = Number(p.maxWeightLbs) > 0 ? Number(p.maxWeightLbs) : 45000;
+  const autoSplit = p.autoSplit !== false;
+  if (autoSplit && planOrders.length > 1 && totalWeight > cap) {
+    // Greedy first-fit bin-packing. Orders are sorted descending by
+    // weight so heavy ones go first, then we fit lighter orders into
+    // any group that still has headroom. Anything heavier than the cap
+    // becomes its own group (the planner will reject it downstream
+    // with a clear error rather than producing an oversize shipment).
+    const sorted = [...planOrders].sort(
+      (a, b) => (Number(b.weight) || 0) - (Number(a.weight) || 0),
+    );
+    const bins = [];
+    for (const o of sorted) {
+      const w = Number(o.weight) || 0;
+      let placed = false;
+      for (const bin of bins) {
+        if (bin.weight + w <= cap) {
+          bin.orders.push(o);
+          bin.weight += w;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) bins.push({ orders: [o], weight: w });
+    }
+
+    const summaries = [];
+    const failures = [];
+    for (const bin of bins) {
+      try {
+        const r = await planOrdersAsSingleShipment(bin.orders, { carrier: p.carrier });
+        if (!r.ok) {
+          failures.push(
+            `${bin.orders.map((x) => x.id).join(", ")}: ${r.errorMessage || "failed"}`,
+          );
+          continue;
+        }
+        const s = r.shipment;
+        summaries.push(
+          `**${s.id}** (${bin.orders.length} order${bin.orders.length === 1 ? "" : "s"}, ${bin.weight.toLocaleString()} lbs, ${s.carrier}, $${(s.total_cost || 0).toLocaleString()})`,
+        );
+      } catch (err) {
+        failures.push(
+          `${bin.orders.map((x) => x.id).join(", ")}: ${err?.message || err}`,
+        );
+      }
+    }
+    const lines = [
+      `Bundled weight ${totalWeight.toLocaleString()} lbs > ${cap.toLocaleString()} lb cap — auto-split into ${bins.length} shipment${bins.length === 1 ? "" : "s"}:`,
+      ...summaries.map((s) => `• ${s}`),
+    ];
+    if (failures.length) {
+      lines.push("", `Failed bins (${failures.length}):`);
+      failures.forEach((f) => lines.push(`• ${f}`));
+    }
+    return lines.join("\n");
   }
 
   const result = await planOrdersAsSingleShipment(planOrders, { carrier: p.carrier });
@@ -316,6 +394,22 @@ async function copyOrderAction(p, { orders }) {
   const source = findOrder(orders, p.orderId);
   const created = await copyOrder(source);
   return `Order ${source.id} copied → **${created.id}** (status: Unplanned)`;
+}
+
+/* ── Action: COPY_SHIPMENT (QA P213, 2026-05-11) ──────────────────
+ * Duplicate an existing shipment row with a fresh id + cleared
+ * order/BOL/timeline fields, identical to what the manual Duplicate
+ * button on ShipmentsPage does. Routes through `copyShipment` in
+ * shipmentService.js so the audit + line-items snapshot + BOL stamp
+ * stays in one place. The new shipment carries no linked orders —
+ * orders can only live on one shipment at a time and the user
+ * typically wants the lane/carrier/cost copied, not the linkage.
+ */
+async function copyShipmentAction(p, { shipments }) {
+  const source = findShipment(shipments, p.shipmentId);
+  const copy = await copyShipmentService(source);
+  const newId = copy?.id || "(new)";
+  return `Shipment ${source.id} copied → **${newId}** (status: Planned, no orders attached)`;
 }
 
 /* ── Action: UPDATE_ORDER (QA P212, 2026-05-11) ───────────────────
@@ -780,6 +874,9 @@ export async function executeChatAction(actionData, ctx = {}) {
     case "GET_RATES":             return getRatesAction(params);
     // QA P212 (2026-05-11) — order metadata edits (PO, dates, etc.).
     case "UPDATE_ORDER":          return updateOrderAction(params, safeCtx);
+    // QA P213 (2026-05-11) — duplicate a shipment with a fresh id.
+    case "COPY_SHIPMENT":
+    case "DUPLICATE_SHIPMENT":    return copyShipmentAction(params, safeCtx);
     // QA P215 (2026-05-11) — create freight invoice from a shipment.
     case "CREATE_INVOICE":
     case "CREATE_INVOICE_FROM_SHIPMENT":
