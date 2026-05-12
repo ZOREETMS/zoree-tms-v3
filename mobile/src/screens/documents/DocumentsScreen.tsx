@@ -291,7 +291,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   generateButton: {
-  generateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
