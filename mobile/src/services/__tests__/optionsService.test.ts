@@ -42,10 +42,6 @@ describe('customerOptions', () => {
     ]);
   });
 
-  // QA bug #113 regression coverage: customerOptions must merge the
-  // OMS customer master with order-derived customers so the dropdown
-  // surfaces every active customer rather than just the few seen on
-  // existing orders.
   describe('QA bug #113 — OMS customer master merge', () => {
     it('merges OMS customers with order-derived names, deduped', () => {
       const orders = [
@@ -58,7 +54,6 @@ describe('customerOptions', () => {
         { id: 3, name: 'Stark Industries', active: true },
       ];
       const opts = customerOptions(orders, customers);
-      // All four distinct names appear; Acme Corp is deduped to one row.
       expect(opts.map((o) => o.value)).toEqual([
         'Acme Corp',
         'Globex',
@@ -69,18 +64,13 @@ describe('customerOptions', () => {
 
     it('falls back gracefully when only orders are provided (back-compat)', () => {
       const orders = [{ customer: 'Acme Corp' }];
-      // Single-arg call — preserves the legacy contract for callers
-      // that haven't been updated to pass the customer master yet.
       expect(customerOptions(orders)).toEqual([
         { value: 'Acme Corp', label: 'Acme Corp' },
       ]);
     });
 
     it('uses the OMS master casing as the canonical display name', () => {
-      // First-seen casing wins — and the OMS source is processed
-      // first, so even if a legacy order row spelled the customer
-      // differently, the master row's casing is what users see.
-      const orders = [{ customer: 'acme  corp' }]; // sloppy whitespace + casing
+      const orders = [{ customer: 'acme  corp' }];
       const customers = [{ id: 1, name: 'ACME Corp', active: true }];
       const opts = customerOptions(orders, customers);
       expect(opts).toEqual([{ value: 'ACME Corp', label: 'ACME Corp' }]);
@@ -98,6 +88,43 @@ describe('customerOptions', () => {
       expect(opts.map((o) => o.value)).toEqual(['Acme Corp', 'Globex']);
     });
   });
+
+  describe('QA P210 — invisible-character dedup', () => {
+    it('treats names differing only by zero-width chars as duplicates', () => {
+      const orders = [
+        { customer: 'AT&T' },
+        { customer: 'AT​&T' },
+        { customer: 'AT‍&T' },
+        { customer: 'AT‌&T' },
+        { customer: '﻿AT&T' },
+      ];
+      const opts = customerOptions(orders);
+      expect(opts).toEqual([{ value: 'AT&T', label: 'AT&T' }]);
+    });
+
+    it('folds Unicode dash variants to a single dedup key', () => {
+      const orders = [
+        { customer: 'Coca-Cola' },
+        { customer: 'Coca‐Cola' },
+        { customer: 'Coca‑Cola' },
+        { customer: 'Coca–Cola' },
+        { customer: 'Coca—Cola' },
+      ];
+      const opts = customerOptions(orders);
+      expect(opts).toEqual([{ value: 'Coca-Cola', label: 'Coca-Cola' }]);
+    });
+
+    it('still keeps genuinely distinct customers distinct', () => {
+      const opts = customerOptions([
+        { customer: 'Acme Corp' },
+        { customer: 'Acme Corporation' },
+      ]);
+      expect(opts.map((o) => o.value)).toEqual([
+        'Acme Corp',
+        'Acme Corporation',
+      ]);
+    });
+  });
 });
 
 describe('locationOptions', () => {
@@ -112,11 +139,6 @@ describe('locationOptions', () => {
       { city: 'Dallas', state: 'TX', zip: '75201' },
     ];
     const opts = locationOptions(locations);
-    // QA bug #115: each option now also carries a `meta` payload
-    // with the source row's structured fields so the form can
-    // auto-populate City / State / ZIP on selection. We assert the
-    // user-visible fields with toMatchObject so this test isn't
-    // brittle to the meta shape — meta itself is verified below.
     expect(opts).toContainEqual(
       expect.objectContaining({
         value: 'Chicago, IL 60601',
@@ -132,8 +154,6 @@ describe('locationOptions', () => {
     );
   });
 
-  // QA bug #115 regression: location options must carry structured
-  // meta so the picker can hydrate City / State / ZIP on selection.
   it('attaches meta with name/city/state/zip for picker auto-populate', () => {
     const locations = [
       { name: 'Chicago DC', city: 'Chicago', state: 'IL', zip: '60601' },
@@ -149,9 +169,6 @@ describe('locationOptions', () => {
   });
 
   it('upper-cases the state code in meta even if the source row was lowercase', () => {
-    // The composeAddress / form code always upper-cases for display;
-    // verify locationOptions normalises in meta too so the auto-
-    // populated form input is consistent.
     const opts = locationOptions([
       { name: 'Chicago DC', city: 'Chicago', state: 'il', zip: '60601' },
     ]);
@@ -169,22 +186,14 @@ describe('locationOptions', () => {
   });
 
   it('skips locations that have no name, city, or state', () => {
-    // Stale test fix: this case was originally expected to return
-    // length 0, but QA bug #105 (already fixed in the source) widened
-    // the inclusion rule to "at least one of name / city / state" so
-    // warehouse rows with only a label (e.g. "College Park") still
-    // surface in the dropdown. The test is updated to match: rows
-    // with a name OR a city/state/zip are kept; only fully-empty rows
-    // are skipped.
     const locations = [
-      { name: '', city: '', state: '', zip: '' }, // fully blank — skipped
-      { name: 'Empty', city: '', state: '', zip: '' }, // name-only — kept
-      { name: 'Just zip', zip: '10001' }, // name + zip — kept
+      { name: '', city: '', state: '', zip: '' },
+      { name: 'Empty', city: '', state: '', zip: '' },
+      { name: 'Just zip', zip: '10001' },
     ];
     const opts = locationOptions(locations);
     expect(opts).toHaveLength(2);
     expect(opts.map((o) => o.label)).toEqual(
-      // Sorted alphabetically by label.
       expect.arrayContaining(['Empty', 'Just zip']),
     );
   });
@@ -195,8 +204,50 @@ describe('locationOptions', () => {
     ];
     const opts = locationOptions(locations);
     expect(opts[0].value).toBe('Toronto, ON M5H');
-    // The meta carries the resolved zip value too so the picker can
-    // hydrate the form's ZIP field even for postal_code-sourced rows.
     expect(opts[0].meta?.zip).toBe('M5H');
+  });
+
+  // QA P211 (2026-05-11) regression coverage: the mobile Planning
+  // Origin / Destination dropdowns must surface the union of the TMS
+  // `locations` table AND the OMS `oms_locations` master, matching what
+  // the web's LocationSearchDropdown returns. Without the merge,
+  // OMS-only warehouses (e.g. "College Park") were missing from mobile.
+  describe('QA P211 — OMS locations master merge', () => {
+    it('merges OMS locations with TMS locations, deduped by composed value', () => {
+      const tms = [
+        { name: 'Chicago DC', city: 'Chicago', state: 'IL', zip: '60601' },
+      ];
+      const oms = [
+        { name: 'Chicago DC', city: 'Chicago', state: 'IL', zip: '60601' },
+        { name: 'College Park', city: 'College Park', state: 'MD', zip: '20740' },
+      ];
+      const opts = locationOptions(tms, oms);
+      const values = opts.map((o) => o.value);
+      expect(values).toContain('Chicago, IL 60601');
+      expect(values).toContain('College Park, MD 20740');
+      expect(values.filter((v) => v === 'Chicago, IL 60601')).toHaveLength(1);
+    });
+
+    it('keeps a name-only OMS row (no city/state) in the dropdown', () => {
+      const opts = locationOptions(null, [{ name: 'College Park' }]);
+      expect(opts).toEqual([
+        expect.objectContaining({ value: 'College Park', label: 'College Park' }),
+      ]);
+    });
+
+    it('falls back to TMS-only when the OMS argument is missing (back-compat)', () => {
+      const opts = locationOptions([
+        { name: 'Dallas DC', city: 'Dallas', state: 'TX', zip: '75201' },
+      ]);
+      expect(opts).toEqual([
+        expect.objectContaining({ value: 'Dallas, TX 75201', label: 'Dallas DC' }),
+      ]);
+    });
+
+    it('returns [] when both arguments are empty / nullish', () => {
+      expect(locationOptions(null, null)).toEqual([]);
+      expect(locationOptions(undefined, undefined)).toEqual([]);
+      expect(locationOptions([], [])).toEqual([]);
+    });
   });
 });

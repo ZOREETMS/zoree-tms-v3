@@ -16,9 +16,19 @@ import BulkPlanStack from './tabs/BulkPlanTabs';
 import MultiStopStack from './tabs/MultiStopTabs';
 import ExecutionStack from './tabs/ExecutionTabs';
 import FinanceStack from './tabs/FinanceTabs';
+// QA P205 / P206 (2026-05-11): Documents and Integration were
+// previously inline <PlaceholderScreen> drawer entries; the underlying
+// screens (DocumentsScreen, CustomerPortalScreen, MessagingScreen)
+// already exist. Wire them via real stacks so the QA-reported
+// "module not available" complaints are addressed.
+import DocumentsStack from './tabs/DocumentsTabs';
+import IntegrationStack from './tabs/IntegrationTabs';
 import InsightsStack from './tabs/InsightsTabs';
 import SystemStack from './tabs/SystemTabs';
-import PlaceholderScreen from '../screens/PlaceholderScreen';
+// QA P209 (2026-05-11): Active-role switcher in the drawer footer
+// mirrors web parity (REQ-08). Hidden when the user has <2 assigned
+// roles, so single-role accounts see no change.
+import RoleSwitcher from '../components/admin/RoleSwitcher';
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
 
@@ -39,6 +49,11 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
         <DrawerItemList {...props} />
       </DrawerContentScrollView>
 
+      {/* Active role switcher (QA P209). Renders only when the
+          signed-in user has 2+ assigned roles, so single-role
+          accounts see the previous footer layout unchanged. */}
+      <RoleSwitcher />
+
       {/* User Footer */}
       <View style={styles.footer}>
         <View style={styles.userChip}>
@@ -49,7 +64,14 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
             <Text style={styles.userEmail} numberOfLines={1}>
               {user?.email || 'Not signed in'}
             </Text>
-            <Text style={styles.userRole}>Admin</Text>
+            {/* QA P209: reflect the user's active role instead of the
+                hard-coded 'Admin' string. Falls back gracefully when
+                the field isn't populated (old token / pre-REQ-08). */}
+            <Text style={styles.userRole}>
+              {(user?.activeRole || user?.role || 'User')
+                .toString()
+                .replace(/^./, (c) => c.toUpperCase())}
+            </Text>
           </View>
         </View>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
@@ -121,14 +143,14 @@ export default function AppNavigator() {
       />
       <Drawer.Screen
         name="DocumentsTab"
-        options={{ title: 'Documents', drawerIcon: () => <Text>📄</Text> }}>
-        {() => <PlaceholderScreen title="Documents & BOL" icon="📄" />}
-      </Drawer.Screen>
+        component={DocumentsStack}
+        options={{ title: 'Documents', drawerIcon: () => <Text>📄</Text> }}
+      />
       <Drawer.Screen
         name="IntegrationTab"
-        options={{ title: 'Integration', drawerIcon: () => <Text>📨</Text> }}>
-        {() => <PlaceholderScreen title="Messaging Hub" icon="📨" />}
-      </Drawer.Screen>
+        component={IntegrationStack}
+        options={{ title: 'Integration', drawerIcon: () => <Text>📨</Text> }}
+      />
       <Drawer.Screen
         name="InsightsTab"
         component={InsightsStack}

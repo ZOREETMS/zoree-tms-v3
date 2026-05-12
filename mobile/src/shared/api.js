@@ -178,6 +178,16 @@ export const AuthApi = {
   me() {
     return api("/auth/me");
   },
+  // QA P209 (2026-05-11): mobile parity with web's AuthApiExt.setActiveRole.
+  // PATCH /api/auth/active-role updates the signed-in user's active_role
+  // server-side; the backend returns the refreshed user object so the
+  // mobile AuthContext can persist it without re-fetching /auth/me.
+  setActiveRole(activeRole) {
+    return api("/auth/active-role", {
+      method: "PATCH",
+      body: JSON.stringify({ activeRole }),
+    });
+  },
 };
 
 export const DbApi = {
@@ -227,6 +237,23 @@ export const DbApi = {
   },
   locations() {
     return api("/db/locations?q=select=*%26order=name.asc%26limit=500");
+  },
+  /**
+   * QA P211 (2026-05-11): web's New Order origin/destination picker
+   * searches the OMS locations master (oms_locations, exposed by
+   * api/routes/locations.js GET /locations/search?source=oms). Mobile's
+   * picker previously only saw `locations` (TMS master). The dropdowns
+   * disagreed: any location created in the OMS but not yet propagated
+   * to TMS, or vice versa, was missing from one of the two surfaces.
+   *
+   * Mirroring the customer pattern (QA bug #113) we now expose the OMS
+   * master so the mobile picker can merge both sources via
+   * locationOptions(locations, omsLocations).
+   */
+  omsLocations() {
+    return api(
+      "/db/oms_locations?q=select=id,name,address,city,state,zip,country,active%26active=eq.true%26order=name.asc%26limit=500",
+    );
   },
   packagingUnits() {
     return api("/db/packaging_units?q=select=*%26order=id.asc%26limit=500");
@@ -398,6 +425,33 @@ export const ShipmentsApi = {
    */
   history(id, limit = 200) {
     return api(`/shipments/${encodeURIComponent(id)}/history?limit=${encodeURIComponent(limit)}`);
+  },
+  /**
+   * REQ-184/185/187 mobile parity: auto-create an invoice from this
+   * shipment. Backend copies costs into invoice_cost_lines, sets
+   * status='On Hold', links shipment_id + bol_ids, and writes the
+   * audit trail. Idempotent — if the shipment already has an open
+   * invoice, the response carries the existing one with
+   * `reused: true`. Mirrors web ShipmentsApi.createInvoice.
+   */
+  createInvoice(shipmentId) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/invoice`, {
+      method: "POST",
+    });
+  },
+  /**
+   * Carrier (re)assignment for an existing shipment (mobile parity).
+   * Goes through the dedicated endpoint so the backend writes
+   * change_history rows and broadcasts SHIPMENT_UPDATED — the
+   * generic /db/shipments PATCH path skips both, which would leave
+   * the mobile detail screen showing the previous carrier after a
+   * change. Mirrors web ShipmentsApi.changeCarrier exactly.
+   */
+  changeCarrier(shipmentId, payload) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/change-carrier`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
   },
 };
 

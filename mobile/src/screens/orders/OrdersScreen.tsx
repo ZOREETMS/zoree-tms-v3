@@ -17,11 +17,22 @@ import StatusFilter from '../../components/common/StatusFilter';
 import OrderCard from '../../components/orders/OrderCard';
 import OrderSelectionBar from '../../components/orders/OrderSelectionBar';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
+// QA P218 (2026-05-11): bulk unplan support for the Remove action in
+// the selection bar. The service module owns the per-order cascade
+// (delete shipment when last order leaves) so the screen stays pure UI.
+import { unplanOrdersBulk } from '../../services/ordersService';
 
+// QA P220 (2026-05-11): web Orders status filter includes 'Planning Failed'
+// (orders that went through Plan but raised on rate/equipment/etc.). Adding
+// it here so the mobile filter list matches the web pill set; the value is
+// the same string written to orders.status by api/services/bulkPlanExecution,
+// so no other layer needs to change. Aligns with QA tickets P218–P223 audit
+// for mobile Orders parity.
 const ORDER_STATUSES = [
   'All',
   'Unplanned',
   'Planned',
+  'Planning Failed',
   'Consolidated',
   'Tendered',
   'Delivered',
@@ -126,10 +137,29 @@ export default function OrdersScreen() {
     const unplannedCount = selectedOrders.filter(
       (o: any) => (o.status || '').toLowerCase() === 'unplanned',
     ).length;
+    // QA P218 (2026-05-11): "removable" = currently attached to a
+    // shipment AND in a status the server allows unplanning from. The
+    // status guard mirrors the web: Tender Accepted / In Transit /
+    // Delivered are locked, everything else can be unplanned.
+    const lockedAfter = new Set([
+      'tender accepted',
+      'tendered accepted',
+      'in-transit',
+      'in transit',
+      'delivered',
+      'cancelled',
+    ]);
+    const removableCount = selectedOrders.filter((o: any) => {
+      const sid = o?.shipment_id || o?.shipmentId;
+      if (!sid) return false;
+      const s = String(o?.status || '').toLowerCase();
+      return !lockedAfter.has(s);
+    }).length;
     return {
       count: selectedOrders.length,
       totalWeight,
       unplannedCount,
+      removableCount,
     };
   }, [selectedOrders]);
 
@@ -166,6 +196,60 @@ export default function OrdersScreen() {
    * with a draft pre-built from those orders. Mirrors the web
    * `?orderIds=` deep-link.
    */
+  /**
+   * QA P218 — Remove Shipments. For every selected order that has a
+   * shipment attached AND a status the server permits unplanning
+   * from, detach it (cascade-delete the shipment if it's the last
+   * order on it). Sequenced under the hood; the screen surfaces a
+   * single confirm + summary toast.
+   */
+  const handleRemoveShipments = useCallback(() => {
+    if (selectionSummary.removableCount === 0) {
+      Alert.alert(
+        'Nothing to remove',
+        'Select at least one Planned, Tendered, or Consolidated order to remove from its shipment.',
+      );
+      return;
+    }
+    const targets = selectedOrders
+      .filter((o: any) => {
+        const sid = o?.shipment_id || o?.shipmentId;
+        if (!sid) return false;
+        const s = String(o?.status || '').toLowerCase();
+        return !['tender accepted', 'in-transit', 'in transit', 'delivered', 'cancelled'].includes(s);
+      })
+      .map((o: any) => String(o.id));
+    Alert.alert(
+      'Remove from shipment?',
+      `${targets.length} order${targets.length === 1 ? '' : 's'} will be moved back to Unplanned. If a shipment becomes empty it will be deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await unplanOrdersBulk(targets, data.orders, data.shipments || []);
+              const okCount = res.unplanned.length;
+              const failCount = res.failed.length;
+              const delCount = res.deletedShipments.length;
+              Alert.alert(
+                'Done',
+                `Unplanned ${okCount} order${okCount === 1 ? '' : 's'}.` +
+                  (delCount ? ` Deleted ${delCount} empty shipment${delCount === 1 ? '' : 's'}.` : '') +
+                  (failCount ? ` ${failCount} failed.` : ''),
+              );
+              clearSelection();
+              await refreshData();
+            } catch (err: any) {
+              Alert.alert('Remove failed', err?.message || String(err));
+            }
+          },
+        },
+      ],
+    );
+  }, [selectedOrders, selectionSummary.removableCount, data.orders, data.shipments, refreshData, clearSelection]);
+
   const handleCreateMultiStop = useCallback(() => {
     if (selectionSummary.unplannedCount < 2) {
       Alert.alert(
@@ -184,6 +268,38 @@ export default function OrdersScreen() {
     clearSelection();
   }, [selectedOrders, selectionSummary.unplannedCount, navigation, clearSelection]);
 
+  /**
+   * QA P223 (2026-05-11): per-row overflow menu callbacks. Edit and
+   * Duplicate navigate to existing screens; Add to Shipment and
+   * Cross-Dock Plan hand off to BulkPlan / MultiStop with the row
+   * preselected. Cancel surfaces a confirm and PATCHes status. Delete
+   * is intentionally omitted on mobile (web-only — see triage doc).
+   */
+  const handleRowEdit = useCallback(
+    (orderId: string) => navigation.navigate('OrderForm', { orderId }),
+    [navigation],
+  );
+  const handleRowDuplicate = useCallback(
+    (orderId: string) => navigation.navigate('OrderForm', { orderId: `copy:${orderId}` }),
+    [navigation],
+  );
+  const handleRowAddToShipment = useCallback(
+    (orderId: string) =>
+      navigation.navigate('BulkPlanTab', {
+        screen: 'BulkPlan',
+        params: { initialSelectedIds: [orderId] },
+      }),
+    [navigation],
+  );
+  const handleRowCrossDock = useCallback(
+    (orderId: string) =>
+      navigation.navigate('MultiStopTab', {
+        screen: 'MultiStopRoutes',
+        params: { selectedOrderIds: [orderId] },
+      }),
+    [navigation],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: any }) => {
       const id = String(item.id ?? item.order_id ?? '');
@@ -194,10 +310,23 @@ export default function OrdersScreen() {
           selected={selectedIds.has(id)}
           onToggleSelect={toggleSelected}
           onLongPressSelect={enterSelectionWith}
+          onEdit={handleRowEdit}
+          onDuplicate={handleRowDuplicate}
+          onAddToShipment={handleRowAddToShipment}
+          onCrossDockPlan={handleRowCrossDock}
         />
       );
     },
-    [selectionMode, selectedIds, toggleSelected, enterSelectionWith],
+    [
+      selectionMode,
+      selectedIds,
+      toggleSelected,
+      enterSelectionWith,
+      handleRowEdit,
+      handleRowDuplicate,
+      handleRowAddToShipment,
+      handleRowCrossDock,
+    ],
   );
 
   const keyExtractor = useCallback(
@@ -311,9 +440,11 @@ export default function OrdersScreen() {
           count={selectionSummary.count}
           totalWeight={selectionSummary.totalWeight}
           unplannedCount={selectionSummary.unplannedCount}
+          removableCount={selectionSummary.removableCount}
           onClear={clearSelection}
           onPlanSelected={handlePlanSelected}
           onCreateMultiStop={handleCreateMultiStop}
+          onRemoveShipments={handleRemoveShipments}
         />
       )}
     </View>

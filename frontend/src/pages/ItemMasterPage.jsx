@@ -140,11 +140,20 @@ export default function ItemMasterPage() {
 
   function openNew() { setEditItem({ ...EMPTY_ITEM }); }
   function openEdit(item) {
+    // DB columns (right-hand) → form field names (left-hand). The form
+    // uses len/wid/hgt for the L×W×H inputs but the items table stores
+    // length/width/height; map both directions so existing rows load
+    // populated and buildItemRow can read form.len/wid/hgt on save.
+    // Same idea for class / freight_class — tolerate legacy item_class
+    // / fclass keys from any pre-fix cached data.
     setEditItem({
       ...item,
       description: readItemDescription(item),
       class: item.item_class || item.class || "General",
       freight_class: item.fclass || item.freight_class || "70",
+      len: item.length ?? item.len ?? "",
+      wid: item.width  ?? item.wid ?? "",
+      hgt: item.height ?? item.hgt ?? "",
       _originalId: item.id,
     });
   }

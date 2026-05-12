@@ -172,7 +172,14 @@ export default function OrderEditModal({
     () => customerOptions(data.orders, data.customers),
     [data.orders, data.customers],
   );
-  const locations = useMemo(() => locationOptions(data.locations), [data.locations]);
+  // QA P211 (2026-05-11): merge the TMS + OMS locations masters so the
+  // bulk-plan edit modal's Origin/Destination dropdowns match what the
+  // web's LocationSearchDropdown surfaces. Same call site as
+  // OrderFormScreen — the union/dedup lives in optionsService.
+  const locations = useMemo(
+    () => locationOptions(data.locations, data.omsLocations),
+    [data.locations, data.omsLocations],
+  );
 
   async function handleSave() {
     if (!orderId) return;

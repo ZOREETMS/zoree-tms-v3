@@ -46,6 +46,13 @@ export interface TmsData {
   lanePreferences: any[];
   items: any[];
   locations: any[];
+  /**
+   * QA P211 (2026-05-11): OMS locations master, pulled alongside the
+   * TMS locations array so the OrderForm picker can merge both. Empty
+   * when the tenant's OMS isn't seeded; OrderFormScreen treats the
+   * missing list as a graceful no-op and falls back to TMS-only.
+   */
+  omsLocations: any[];
   packagingUnits: any[];
   rates: any[];
   drivers: any[];
@@ -77,6 +84,7 @@ const emptyData: TmsData = {
   customers: [],
   lanePreferences: [],
   items: [],
+  omsLocations: [],
   locations: [],
   packagingUnits: [],
   rates: [],
@@ -110,6 +118,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         lanePreferences,
         items,
         locations,
+        // QA P211 (2026-05-11): OMS locations master pulled alongside
+        // the TMS one so the OrderForm picker can merge both sources
+        // (web parity — its LocationSearchDropdown queries OMS).
+        // Wrapped in .catch so a tenant without the OMS app seeded
+        // doesn't poison the Promise.all.
+        omsLocations,
         packagingUnits,
         rates,
         drivers,
@@ -130,6 +144,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         DbApi.lanePreferences().catch(() => []),
         DbApi.items().catch(() => []),
         DbApi.locations().catch(() => []),
+        DbApi.omsLocations().catch(() => []),
         DbApi.packagingUnits().catch(() => []),
         DbApi.rates().catch(() => []),
         DbApi.drivers().catch(() => []),
@@ -156,6 +171,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         lanePreferences: Array.isArray(lanePreferences) ? lanePreferences : [],
         items: Array.isArray(items) ? items : [],
         locations: Array.isArray(locations) ? locations : [],
+        // QA P211 (2026-05-11): expose the OMS locations master to the
+        // OrderForm picker so its dropdown matches the web's union.
+        omsLocations: Array.isArray(omsLocations) ? omsLocations : [],
         packagingUnits: Array.isArray(packagingUnits) ? packagingUnits : [],
         rates: Array.isArray(rates) ? rates : [],
         drivers: Array.isArray(drivers) ? drivers : [],

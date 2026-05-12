@@ -22,24 +22,44 @@ export interface OrderSelectionBarProps {
   count: number;
   totalWeight: number;
   unplannedCount: number;
+  /**
+   * QA P218 (2026-05-11): orders eligible for "Remove from Shipment"
+   * are those that currently have a shipment attached (any Planned /
+   * Tendered / Consolidated status, but explicitly not Tender Accepted
+   * / In Transit / Delivered — gating happens at the screen level
+   * before this prop is computed).
+   */
+  removableCount?: number;
   busy?: boolean;
   onClear: () => void;
   onPlanSelected: () => void;
   onCreateMultiStop: () => void;
+  /**
+   * QA P218: bulk "Remove Shipments" — detaches every selected
+   * removable order from its shipment and returns each to Unplanned.
+   * The shipment is deleted when its last order is removed (cascade
+   * mirrors the web). Optional so existing callers keep compiling.
+   */
+  onRemoveShipments?: () => void;
 }
 
 export default function OrderSelectionBar({
   count,
   totalWeight,
   unplannedCount,
+  removableCount = 0,
   busy = false,
   onClear,
   onPlanSelected,
   onCreateMultiStop,
+  onRemoveShipments,
 }: OrderSelectionBarProps) {
   const planDisabled = busy || unplannedCount === 0;
   // Multi-stop needs 2+ unplanned orders to make sense.
   const multiStopDisabled = busy || unplannedCount < 2;
+  // QA P218: Remove only enabled when at least one selected order is
+  // actually attached to a shipment AND the caller supplied a handler.
+  const removeDisabled = busy || removableCount === 0 || !onRemoveShipments;
 
   return (
     <View style={styles.bar}>
@@ -79,6 +99,34 @@ export default function OrderSelectionBar({
             Multi-Stop
           </Text>
         </TouchableOpacity>
+
+        {onRemoveShipments ? (
+          <TouchableOpacity
+            style={[
+              styles.btn,
+              styles.btnGhost,
+              removeDisabled && styles.btnDisabled,
+            ]}
+            onPress={onRemoveShipments}
+            disabled={removeDisabled}
+            activeOpacity={0.8}
+            accessibilityLabel="Remove selected orders from their shipments"
+          >
+            <Ionicons
+              name="unlink-outline"
+              size={16}
+              color={removeDisabled ? colors.text3 : colors.white}
+            />
+            <Text
+              style={[
+                styles.btnText,
+                removeDisabled && styles.btnTextDisabled,
+              ]}
+            >
+              Remove
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.btn, styles.btnPrimary, planDisabled && styles.btnDisabled]}

@@ -12,6 +12,13 @@
 // wrote `desc`, which produced "DB update failed (400) – Could not
 // find the 'desc' column in the schema cache". Centralising the
 // payload shape here ensures the column name lives in one place.
+//
+// 2026-05-11: extended that same fix-class. The mapper used to write
+// item_class / fclass / len / wid / hgt while the items table has
+// columns class / freight_class / length / width / height. Renamed
+// here. Companion migration 20260511_items_add_stack_un_haz_class.sql
+// added the missing stack / un / haz_class columns the form has
+// always written.
 // ════════════════════════════════════════════════════════════════════
 
 /** Read helper that tolerates legacy rows where the column was once `desc`. */
@@ -27,21 +34,31 @@ export function readPkgDescription(p) {
 
 /**
  * Build the items table row payload from the edit-form state.
- * Note the column is `description`, not `desc` (#135).
+ *
+ * Column-name rule: the keys here MUST match the actual `items` table
+ * schema. Same bug-class as QA #135 (`desc` → `description`):
+ *   - the form's internal field names (form.class, form.freight_class,
+ *     form.len, form.wid, form.hgt) are stable for UI binding, but the
+ *     DB columns are `class`, `freight_class`, `length`, `width`,
+ *     `height`. This mapper bridges the two.
+ *   - `stack`, `un`, `haz_class` are real columns as of migration
+ *     20260511_items_add_stack_un_haz_class.sql.
+ * Any drift here surfaces as PostgREST `PGRST204` ("Could not find
+ * the 'X' column of 'items' in the schema cache") on save.
  */
 export function buildItemRow(form) {
   return {
     id:               (form.id || "").toUpperCase(),
     description:      (form.description || "").toUpperCase(),
     customer:         (form.customer || "").toUpperCase(),
-    item_class:       form.class || "General",
+    class:            form.class || "General",
     nmfc:             (form.nmfc || "").toUpperCase(),
-    fclass:           form.freight_class || "70",
+    freight_class:    form.freight_class || "70",
     weight_unit:      parseFloat(form.weight_unit) || 0,
     value_unit:       parseFloat(form.value_unit)  || 0,
-    len:              parseFloat(form.len) || 0,
-    wid:              parseFloat(form.wid) || 0,
-    hgt:              parseFloat(form.hgt) || 0,
+    length:           parseFloat(form.len) || 0,
+    width:            parseFloat(form.wid) || 0,
+    height:           parseFloat(form.hgt) || 0,
     units_per_pallet: parseInt(form.units_per_pallet, 10) || 1,
     pkg:              form.pkg || "Carton",
     stack:            parseInt(form.stack, 10) || 1,

@@ -55,6 +55,12 @@ import { locationDisplayValue as composeLocationDisplay } from '../../services/l
 import LineItemsEditor, {
   rollupLineTotals,
 } from '../../components/orders/LineItemsEditor';
+// 2026-05-11: Ship-from / Ship-to are now four independently editable
+// inputs per side (Name / City / State / ZIP) — see ShipLocationFields
+// for the rationale. The Origin / Destination picker stays as a
+// shortcut: selecting a saved location calls applyLocationSelection
+// below, which auto-fills these inputs without locking them.
+import ShipLocationFields from '../../components/orders/ShipLocationFields';
 import { OrdersApi } from '../../shared/api';
 import type { PlanningTabParamList } from '../../navigation/types';
 
@@ -185,9 +191,16 @@ export default function OrderFormScreen() {
     () => customerOptions(data.orders, data.customers),
     [data.orders, data.customers],
   );
+  // QA P211 (2026-05-11): pass BOTH the TMS locations master and the
+  // OMS locations master so the Origin / Destination dropdowns surface
+  // the same union the web's LocationSearchDropdown sees. Before this,
+  // any location that lived only in oms_locations (e.g. warehouses
+  // created via the OMS app like "College Park") was invisible to the
+  // mobile picker. The merge + dedup is centralised in optionsService
+  // so the bulk-plan OrderEditModal can share the same call site.
   const locations = useMemo(
-    () => locationOptions(data.locations),
-    [data.locations],
+    () => locationOptions(data.locations, data.omsLocations),
+    [data.locations, data.omsLocations],
   );
 
   // QA bug #117: Ship Mode and Service Level were rendered as
@@ -460,6 +473,26 @@ export default function OrderFormScreen() {
             onCreateNew={() => openCreateLocation('origin')}
             createNewLabel="Create new origin location"
           />
+          {/* 2026-05-11: Ship-from is now Name / City / State / ZIP as
+              four directly-editable inputs. The Origin picker above is
+              still a shortcut — selecting a saved location runs
+              applyLocationSelection, which auto-fills these inputs from
+              the row's meta. After autofill the user can correct any
+              single field (e.g. tweak the state) without re-typing the
+              whole address. (Supersedes the QA #158 layout, which had
+              dropped these inputs because they read as duplicated when
+              the picker was the only source of truth.) */}
+          <ShipLocationFields
+            title="Ship From"
+            name={form.shipFromName || ''}
+            city={form.originCity || ''}
+            state={form.originState || ''}
+            zip={form.originZip || ''}
+            onNameChange={(v) => updateField('shipFromName', v)}
+            onCityChange={(v) => updateField('originCity', v)}
+            onStateChange={(v) => updateField('originState', v)}
+            onZipChange={(v) => updateField('originZip', v)}
+          />
           <SelectField
             label="Destination"
             value={form.destination || ''}
@@ -470,23 +503,17 @@ export default function OrderFormScreen() {
             onCreateNew={() => openCreateLocation('destination')}
             createNewLabel="Create new destination location"
           />
-          {/* Bug #158: Origin / Destination now show only the main full
-              address (City, ST ZIP) — the redundant separate City / State /
-              ZIP input rows were causing the destination block to look
-              "duplicated" against the address picker above it. The
-              underlying form state still carries originCity / destCity /
-              originZip / destZip — they're hydrated from `parseAddrString`
-              on edit and from `applyLocationSelection.meta` on pick — so
-              `buildOrderSavePayload` continues to compose the canonical
-              "City, ST ZIP" string for the orders.origin / orders.dest
-              columns without needing redundant inputs.
-
-              Historical context: the prior version of this form (QA bug
-              #106) collected City + State per side because Ship-from /
-              Ship-to *name* had been removed at the same time. The City /
-              State / ZIP columns are still persisted (they back the rate
-              matcher), just sourced from the picker meta + parser instead
-              of duplicate inputs. */}
+          <ShipLocationFields
+            title="Ship To"
+            name={form.shipToName || ''}
+            city={form.destCity || ''}
+            state={form.destState || ''}
+            zip={form.destZip || ''}
+            onNameChange={(v) => updateField('shipToName', v)}
+            onCityChange={(v) => updateField('destCity', v)}
+            onStateChange={(v) => updateField('destState', v)}
+            onZipChange={(v) => updateField('destZip', v)}
+          />
 
           {/* QA bug #107: standalone Weight / Pieces inputs removed.
               Users now build the freight from a Line Items list (item

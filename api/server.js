@@ -86,6 +86,13 @@ const ORDER_HISTORY_FIELDS = {
   commodity: 'commodity', incoterms: 'incoterms', ref_num: 'refNum',
   po_number: 'poNum', ready: 'readyDate', due: 'dueDate', status: 'status',
   shipment_id: 'shipmentId', origin_zip: 'originZip', dest_zip: 'destZip',
+  // REQ-24 + 2026-05-11 mobile UI: ship_from_name / ship_to_name are
+  // now directly editable from both web (NewOrderModal / OrderDetailModal
+  // since migration 018) and mobile (OrderFormScreen via the
+  // ShipLocationFields component). Their human labels already exist in
+  // historyService.js FIELD_LABELS — wire them into ORDER_HISTORY_FIELDS
+  // so edits actually produce auditable rows per REQ-02.
+  ship_from_name: 'shipFromName', ship_to_name: 'shipToName',
   hazmat: 'hazmat', preferred_carrier: 'preferredCarrier',
   excluded_carrier: 'excludedCarrier', no_consolidate: 'noConsolidate',
   dedicated_equip: 'dedicatedEquip', no_contract_rate: 'noContractRate',

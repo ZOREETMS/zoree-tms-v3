@@ -32,7 +32,7 @@
  *     skips. So updates routed through OrdersApi.update get audited.
  */
 
-import { OrdersApi } from '../shared/api';
+import { OrdersApi, ShipmentsApi, DbApi } from '../shared/api';
 // QA bug #121: deleteOrder uses the gating helper to fail fast for
 // non-deletable statuses (Tender Accepted / In Transit / Delivered)
 // before round-tripping. Service file pulled out per CLAUDE_RULES so
@@ -367,6 +367,130 @@ export async function deleteOrder(order: any): Promise<void> {
  * @throws         Validation Error with `.fields` listing the missing
  *                 / invalid fields, OR a network error from the API.
  */
+/**
+ * QA P218 (2026-05-11): mobile parity with web's
+ * frontend/src/services/ordersService.js:unplanOrderFromShipment.
+ *
+ * Move an order back to "Unplanned" and detach it from its current
+ * shipment. If the order was the only one on that shipment, the
+ * shipment is removed (and the master shipment removed when no
+ * siblings remain). Mirrors the web behaviour exactly so a mobile
+ * unplan produces the same audit + cascade as a desktop unplan.
+ *
+ * Routes through OrdersApi.update / ShipmentsApi.update so REQ-02
+ * change-history rows are written by the API layer (not duplicated
+ * client-side).
+ *
+ * @returns { message, deletedShipments } — same shape as the web,
+ *          so screens can re-use the success toast string verbatim.
+ * @throws  Validation / network errors from the API.
+ */
+export async function unplanOrderFromShipment(
+  id: string,
+  orders: any[],
+  shipments: any[],
+): Promise<{ message: string; deletedShipments: string[] }> {
+  if (!id) throw new Error('unplanOrderFromShipment: id is required');
+
+  const deletedShipments: string[] = [];
+  const order = (orders || []).find((o) => String(o?.id) === String(id));
+  const shipmentId: string | undefined =
+    order?.shipment_id || order?.shipmentId;
+
+  await OrdersApi.update(id, { status: 'Unplanned', shipmentId: null });
+
+  let message = `Order ${id} unplanned`;
+
+  if (shipmentId) {
+    const ship = (shipments || []).find(
+      (s) => String(s?.id) === String(shipmentId),
+    );
+    const linked: string[] = Array.isArray(ship?.order_ids) ? ship.order_ids : [];
+    const remaining = linked.filter((oid) => String(oid) !== String(id));
+
+    if (remaining.length === 0) {
+      // No orders remain — delete the shipment via the cascade-aware
+      // endpoint (server unlinks any straggling references). Best-effort.
+      await DbApi.remove?.('shipments', shipmentId).catch(() => {});
+      deletedShipments.push(shipmentId);
+      const masterId: string | undefined = ship?.master_shipment_id;
+      if (masterId) {
+        const siblingCbols = (shipments || []).filter(
+          (s) =>
+            String(s?.master_shipment_id) === String(masterId) &&
+            String(s?.id) !== String(shipmentId),
+        );
+        if (siblingCbols.length === 0) {
+          await DbApi.remove?.('shipments', masterId).catch(() => {});
+          deletedShipments.push(masterId);
+          message = `Order ${id} unplanned. Shipment ${shipmentId} and master ${masterId} deleted.`;
+        } else {
+          message = `Order ${id} unplanned. Shipment ${shipmentId} deleted.`;
+        }
+      } else {
+        message = `Order ${id} unplanned. Shipment ${shipmentId} deleted.`;
+      }
+    } else {
+      // Other orders still on the shipment — patch the remaining list
+      // through the audited PATCH endpoint (shipmentToDb maps
+      // consolidatedOrders → order_ids on the way into the DB).
+      await ShipmentsApi.update(shipmentId, { consolidatedOrders: remaining });
+      message = `Order ${id} unplanned and removed from shipment ${shipmentId}.`;
+    }
+  }
+
+  return { message, deletedShipments };
+}
+
+/**
+ * Bulk variant of `unplanOrderFromShipment` for the mobile selection
+ * bar's "Remove Shipments" action (QA P218). Sequenced rather than
+ * parallel so the per-order shipment-cascade decisions see the latest
+ * shipment state — running in parallel would race on the order_ids
+ * array writes.
+ *
+ * Returns an aggregate result so the UI can render a single toast
+ * instead of N toasts.
+ */
+export async function unplanOrdersBulk(
+  ids: string[],
+  orders: any[],
+  shipments: any[],
+): Promise<{ unplanned: string[]; failed: { id: string; reason: string }[]; deletedShipments: string[] }> {
+  const unplanned: string[] = [];
+  const failed: { id: string; reason: string }[] = [];
+  const deletedShipments: string[] = [];
+
+  // Snapshot then mutate — we don't have a fresh fetch between calls,
+  // but updating the local copies as we go means cascade decisions
+  // (delete vs. patch order_ids) see the running state for the same
+  // shipment when multiple selected orders share it.
+  const liveOrders = Array.isArray(orders) ? [...orders] : [];
+  const liveShipments = Array.isArray(shipments) ? [...shipments] : [];
+
+  for (const id of ids) {
+    try {
+      const res = await unplanOrderFromShipment(id, liveOrders, liveShipments);
+      unplanned.push(id);
+      // Reflect the change locally so a later iteration on the same
+      // shipment doesn't try to delete it twice.
+      const idx = liveOrders.findIndex((o) => String(o?.id) === String(id));
+      if (idx >= 0) {
+        liveOrders[idx] = { ...liveOrders[idx], status: 'Unplanned', shipment_id: null };
+      }
+      for (const sid of res.deletedShipments) {
+        deletedShipments.push(sid);
+        const si = liveShipments.findIndex((s) => String(s?.id) === String(sid));
+        if (si >= 0) liveShipments.splice(si, 1);
+      }
+    } catch (err: any) {
+      failed.push({ id, reason: err?.message || String(err) });
+    }
+  }
+
+  return { unplanned, failed, deletedShipments };
+}
+
 export async function saveOrder(form: any, orderId?: string | null): Promise<any> {
   const isEdit = !!orderId;
   const payload = buildOrderSavePayload(form);

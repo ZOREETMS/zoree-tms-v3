@@ -6,6 +6,13 @@
 // `description`. The fix centralises the payload shape in
 // itemMasterPayload.js, which writes `description` and never `desc`.
 //
+// 2026-05-11 follow-up: the same bug class affected several other
+// keys — the payload was writing `item_class`, `fclass`, `len`, `wid`,
+// `hgt` while the DB columns are `class`, `freight_class`, `length`,
+// `width`, `height`. The test below was previously pinning the WRONG
+// names, so it passed while live saves failed with PGRST204. New
+// assertions verify the payload uses the real DB column names.
+//
 // Run with: node --test api/__tests__/itemMasterPayload.test.mjs
 
 import test from 'node:test';
@@ -64,8 +71,12 @@ test('buildItemRow coerces numeric strings → numbers', () => {
   assert.equal(row.weight_unit,             12.5);
   assert.equal(typeof row.value_unit,       'number');
   assert.equal(row.value_unit,              850);
-  assert.equal(typeof row.len,              'number');
-  assert.equal(row.len,                     24);
+  assert.equal(typeof row.length,           'number');
+  assert.equal(row.length,                  24);
+  assert.equal(typeof row.width,            'number');
+  assert.equal(row.width,                   18);
+  assert.equal(typeof row.height,           'number');
+  assert.equal(row.height,                  6);
   assert.equal(typeof row.units_per_pallet, 'number');
   assert.equal(row.units_per_pallet,        20);
   assert.equal(typeof row.stack,            'number');
@@ -74,13 +85,29 @@ test('buildItemRow coerces numeric strings → numbers', () => {
 
 test('buildItemRow defaults sensible fallbacks when form is sparse', () => {
   const row = buildItemRow({ id: 'A', description: 'X' });
-  assert.equal(row.item_class,       'General');
-  assert.equal(row.fclass,           '70');
+  assert.equal(row.class,            'General');
+  assert.equal(row.freight_class,    '70');
   assert.equal(row.pkg,              'Carton');
   assert.equal(row.stack,            1);
   assert.equal(row.units_per_pallet, 1);
   assert.equal(row.status,           'Active');
   assert.equal(row.weight_unit,      0);
+});
+
+test('buildItemRow writes the actual items table column names (PGRST204 guard)', () => {
+  // Live items table columns (verified via information_schema 2026-05-11):
+  // class, freight_class, length, width, height — NOT item_class,
+  // fclass, len, wid, hgt. Any drift here surfaces as
+  // "Could not find the 'X' column of 'items' in the schema cache".
+  const row = buildItemRow(sampleItemForm);
+  const keys = Object.keys(row);
+  for (const col of ['class', 'freight_class', 'length', 'width', 'height',
+                     'stack', 'un', 'haz_class']) {
+    assert.ok(keys.includes(col), `row MUST carry the '${col}' key`);
+  }
+  for (const bad of ['item_class', 'fclass', 'len', 'wid', 'hgt']) {
+    assert.ok(!keys.includes(bad), `row MUST NOT carry the legacy '${bad}' key`);
+  }
 });
 
 test('buildItemRow coerces handling flags to booleans', () => {
@@ -105,9 +132,6 @@ test('QA #135 — buildPackagingRow writes `description` and never `desc`', () =
 });
 
 test('buildPackagingRow accepts legacy `desc` form field as a fallback', () => {
-  // The packaging form has a legacy code path where the form state
-  // used `desc` instead of `description`. The mapper should still
-  // produce a `description` column write (not a `desc` one).
   const row = buildPackagingRow({
     id: 'CTN-002',
     desc: 'Legacy Carton',
@@ -118,7 +142,6 @@ test('buildPackagingRow accepts legacy `desc` form field as a fallback', () => {
 });
 
 test('readItemDescription tolerates rows that still have `desc`', () => {
-  // Backward compatibility for any pre-fix rows in the DB.
   assert.equal(readItemDescription({ description: 'New Style' }), 'New Style');
   assert.equal(readItemDescription({ desc: 'Old Style' }),        'Old Style');
   assert.equal(
@@ -138,9 +161,6 @@ test('readPkgDescription same fallback logic for packaging_units', () => {
 });
 
 test('No `desc:` key appears in the items column set (regression guard)', () => {
-  // Belt-and-braces: enumerate the keys and assert the bug-key never
-  // shows up. If a future refactor reverts buildItemRow to write `desc`,
-  // this fails loudly.
   const keys = Object.keys(buildItemRow(sampleItemForm));
   assert.ok(keys.includes('description'), 'must write description');
   assert.ok(!keys.includes('desc'),       'must NOT write desc');

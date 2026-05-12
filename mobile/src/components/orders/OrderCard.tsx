@@ -1,5 +1,13 @@
 import React from 'react';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import {
+  ActionSheetIOS,
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../ui/Card';
@@ -25,6 +33,20 @@ interface OrderCardProps {
    * state itself; the parent owns it.
    */
   onLongPressSelect?: (orderId: string) => void;
+  /**
+   * QA P223 (2026-05-11): per-row overflow menu callbacks. When any
+   * of these are supplied the card renders a kebab icon that opens an
+   * ActionSheet (iOS) or Alert-buttons fallback (Android) with the
+   * available actions for that row. All callbacks are optional —
+   * actions for which no callback is supplied are simply omitted from
+   * the sheet. Delete is intentionally NOT exposed on mobile to avoid
+   * destructive taps; users do that on the web (per triage decision).
+   */
+  onEdit?: (orderId: string) => void;
+  onDuplicate?: (orderId: string) => void;
+  onAddToShipment?: (orderId: string) => void;
+  onCrossDockPlan?: (orderId: string) => void;
+  onCancelOrder?: (orderId: string) => void;
 }
 
 const OrderCard: React.FC<OrderCardProps> = ({
@@ -33,6 +55,11 @@ const OrderCard: React.FC<OrderCardProps> = ({
   selected = false,
   onToggleSelect,
   onLongPressSelect,
+  onEdit,
+  onDuplicate,
+  onAddToShipment,
+  onCrossDockPlan,
+  onCancelOrder,
 }) => {
   const navigation = useNavigation<any>();
   const id = (order.id ?? order.order_id ?? '').toString();
@@ -48,6 +75,78 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const handleLongPress = () => {
     onLongPressSelect?.(id);
   };
+
+  /**
+   * QA P223: 3-dot per-row overflow menu. Built as a single action
+   * sheet that lists only the callbacks the parent actually supplied.
+   * "View Details" always appears (it's just the row tap behaviour,
+   * surfaced here for discoverability). Delete is omitted on mobile
+   * — the web has it under a separate confirm dialog and that's where
+   * destructive flows live (per docs/p1_bug_triage_2026-05-11.md
+   * P223 decision).
+   */
+  const handleMorePress = () => {
+    const status = String(order?.status || '').toLowerCase();
+    const isUnplanned = status === 'unplanned';
+    const isCancellable = !['delivered', 'cancelled'].includes(status);
+
+    type SheetItem = { label: string; run: () => void };
+    const items: SheetItem[] = [];
+    items.push({
+      label: 'View Details',
+      run: () => navigation.navigate('OrderDetail', { orderId: id }),
+    });
+    if (onEdit) items.push({ label: 'Edit', run: () => onEdit(id) });
+    if (onDuplicate) items.push({ label: 'Duplicate', run: () => onDuplicate(id) });
+    if (onAddToShipment && isUnplanned) {
+      items.push({ label: 'Add to Shipment', run: () => onAddToShipment(id) });
+    }
+    if (onCrossDockPlan && isUnplanned) {
+      items.push({ label: 'Cross-Dock Plan', run: () => onCrossDockPlan(id) });
+    }
+    if (onCancelOrder && isCancellable) {
+      items.push({ label: 'Cancel Order', run: () => onCancelOrder(id) });
+    }
+    if (items.length === 0) return;
+
+    const labels = items.map((i) => i.label);
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [...labels, 'Close'],
+          cancelButtonIndex: labels.length,
+          // Cancel Order is the only destructive action surfaced here;
+          // identify it by index if present.
+          destructiveButtonIndex: labels.indexOf('Cancel Order') >= 0
+            ? labels.indexOf('Cancel Order')
+            : undefined,
+        },
+        (chosen) => {
+          if (chosen >= 0 && chosen < items.length) items[chosen].run();
+        },
+      );
+    } else {
+      // Android / web fallback: Alert with buttons. RN Alert tops out
+      // at 3 buttons on Android — for longer menus we'd want a custom
+      // bottom-sheet, but the small list here keeps it usable.
+      Alert.alert(
+        `Order ${order.order_id || id}`,
+        undefined,
+        [
+          ...items.map((it) => ({ text: it.label, onPress: it.run })),
+          { text: 'Close', style: 'cancel' as const },
+        ],
+        { cancelable: true },
+      );
+    }
+  };
+
+  // Show the kebab only when at least one row callback is wired AND
+  // we're not in multi-select mode (the selection bar owns bulk
+  // actions in that mode).
+  const showMore =
+    !selectionMode &&
+    Boolean(onEdit || onDuplicate || onAddToShipment || onCrossDockPlan || onCancelOrder);
 
   const readyDate = (order.readyDate || order.ready_date || order.ready)
     ? new Date(order.readyDate || order.ready_date || order.ready).toLocaleDateString()
@@ -82,6 +181,15 @@ const OrderCard: React.FC<OrderCardProps> = ({
             {order.order_id || order.id}
           </Text>
           <StatusBadge status={order.status || 'Unplanned'} />
+          {showMore ? (
+            <TouchableOpacity
+              onPress={handleMorePress}
+              hitSlop={10}
+              accessibilityLabel={`More actions for order ${order.order_id || id}`}
+              style={styles.moreBtn}>
+              <Ionicons name="ellipsis-vertical" size={18} color={colors.text2} />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {(order.customer || order.customer_name) ? (
@@ -146,6 +254,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
     marginRight: spacing.sm,
+  },
+  moreBtn: {
+    marginLeft: spacing.sm,
+    padding: 2,
   },
   customer: {
     fontSize: fontSize.md,

@@ -13,6 +13,13 @@ interface User {
   id?: string;
   email: string;
   role?: string;
+  // QA P209 (2026-05-11): multi-role support mirrors the web's User
+  // shape (REQ-08). `roles` is the full set assigned to this account;
+  // `activeRole` is the one currently in effect. `role` is kept for
+  // back-compat with callers that haven't been updated yet — it tracks
+  // activeRole when present.
+  roles?: string[];
+  activeRole?: string;
   full_name?: string;
   user_metadata?: Record<string, unknown>;
 }
@@ -29,6 +36,13 @@ interface AuthContextValue {
    * should re-prompt login). Mobile-bug 59.
    */
   refreshAccessToken: () => Promise<string | null>;
+  /**
+   * QA P209: switch the currently-active role without re-login.
+   * Mirrors web's AuthContext.switchRole — validates against
+   * `user.roles`, calls PATCH /auth/active-role, persists the
+   * refreshed user object to storage.
+   */
+  switchRole: (nextRole: string) => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -171,6 +185,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       },
       refreshAccessToken: performTokenRefresh,
+      // QA P209 (2026-05-11): role switcher parity with web. Validates
+      // that `nextRole` is in the user's assigned roles, hits the API,
+      // and persists the refreshed user to storage so a relaunch keeps
+      // the chosen role active. The shape of `setActiveRole`'s response
+      // mirrors the web: { user: User }.
+      async switchRole(nextRole: string): Promise<User> {
+        if (!user) throw new Error('Not signed in');
+        const assigned = Array.isArray(user.roles) ? user.roles : [];
+        if (!assigned.includes(nextRole)) {
+          throw new Error(`Role '${nextRole}' not assigned to this user`);
+        }
+        const res = await AuthApi.setActiveRole(nextRole);
+        const next: User =
+          res?.user || { ...user, role: nextRole, activeRole: nextRole };
+        await storage.setItem('zoree_user', JSON.stringify(next));
+        setUser(next);
+        return next;
+      },
     }),
     [user, booting],
   );

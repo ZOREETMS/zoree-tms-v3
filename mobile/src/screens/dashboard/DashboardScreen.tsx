@@ -12,7 +12,14 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
-import { computeKpis } from '../../shared/services/analyticsService';
+// QA P217 (2026-05-11): use computeDashboardStats so the mobile
+// dashboard counts agree with the web. computeKpis stays in use for
+// the older Total/On-Time/Spend rows for now; the new stats object is
+// additive and unblocks parity without rewriting the whole screen.
+import {
+  computeKpis,
+  computeDashboardStats,
+} from '../../shared/services/analyticsService';
 import { formatCurrency } from '../../shared/utils/formatters';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
@@ -25,6 +32,15 @@ export default function DashboardScreen() {
   const { data, loading, refreshData } = useData();
 
   const kpis = useMemo(() => computeKpis(data.shipments), [data.shipments]);
+  // QA P217: shared Dashboard stats so the mobile counts match the
+  // web. The screen currently only renders a subset of this shape; the
+  // remaining fields (inTransit, planned, tendered, exceptions,
+  // unplanned, totalCost) are surfaced here so future PRs can wire
+  // additional cards without re-deriving them.
+  const dashStats = useMemo(
+    () => computeDashboardStats(data.shipments, data.orders),
+    [data.shipments, data.orders],
+  );
 
   const recentOrders = useMemo(
     () =>
@@ -38,11 +54,14 @@ export default function DashboardScreen() {
     [data.orders],
   );
 
+  // QA P217 (2026-05-11): web counts only "In Transit" as the active
+  // bucket on the Dashboard card; mobile previously also folded
+  // "Picked Up" into the same count, which made the same data render
+  // as a higher number here than in the web tile. Trim to In Transit
+  // for parity. Picked-up shipments still appear in the full Shipments
+  // list and in the In Transit/Tendered breakdown if surfaced later.
   const activeShipments = useMemo(
-    () =>
-      data.shipments.filter(
-        (s) => s.status === 'In Transit' || s.status === 'Picked Up',
-      ),
+    () => data.shipments.filter((s) => s.status === 'In Transit'),
     [data.shipments],
   );
 
@@ -98,7 +117,10 @@ export default function DashboardScreen() {
           <View style={styles.kpiHalf}>
             <KpiCard
               label="On-Time %"
-              value={`${kpis.onTimePct}%`}
+              // QA P217: use the shared dashboard stats so the value
+              // matches the web tile exactly. Web renders an integer
+              // ("87%"); we use the integer onTimePct field for parity.
+              value={`${dashStats.onTimePct}%`}
               icon="checkmark-circle-outline"
               color={colors.green}
             />
@@ -106,7 +128,11 @@ export default function DashboardScreen() {
           <View style={styles.kpiHalf}>
             <KpiCard
               label="Total Spend"
-              value={formatCurrency(kpis.totalSpend)}
+              // QA P217: use the shared totalCost (parses total_cost
+              // the same way the web sum does, so the dollar tile
+              // matches) instead of the older computeKpis totalSpend
+              // alias.
+              value={formatCurrency(dashStats.totalCost)}
               icon="wallet-outline"
               color={colors.purple}
             />

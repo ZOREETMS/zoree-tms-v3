@@ -15,8 +15,27 @@ import type { RouteProp } from '@react-navigation/native';
 
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
+import ShipmentActionFooter from '../../components/shipments/ShipmentActionFooter';
+import ChangeCarrierModal from '../../components/shipments/ChangeCarrierModal';
 import { useData } from '../../state/DataContext';
-import { TenderApi } from '../../lib/api';
+// Mobile parity (2026-05-11): the Shipment Detail screen now exposes the
+// full web action footer (Tender / Withdraw / Change Carrier / Dock /
+// Invoice / Documents / Contact Carrier / Send to WMS). Each handler
+// is owned by the service layer so the screen stays a dumb renderer
+// (CLAUDE_RULES §1 / §3 / §4). The previous single "Send Tender Email"
+// button has been replaced by the new ShipmentActionFooter component.
+import {
+  tenderShipment,
+  withdrawTender as withdrawTenderAction,
+  fetchChangeCarrierQuotes,
+  confirmChangeCarrier as confirmChangeCarrierAction,
+  createInvoiceFromShipment,
+  type CarrierQuote,
+} from '../../services/shipmentActionsService';
+// effectiveShipmentStatus mirrors the web's gate logic so the footer
+// shows the same buttons for the same status (e.g. promotes a Tendered
+// shipment with an accept-in-notes response to "Tender Accepted").
+import { effectiveShipmentStatus } from '../../services/carrierPortalService';
 // QA #181: `updateShipmentStatus` is intentionally NOT imported here.
 // The mobile detail screen no longer exposes a manual status flip —
 // status changes must flow through events (tender accept/reject, BOL
@@ -45,7 +64,6 @@ import {
   type TimelinePhase,
 } from '../../services/shipmentDetailService';
 import {
-  borderRadius,
   colors,
   fontSize,
   fontWeight,
@@ -167,17 +185,45 @@ function buildTimelineEvents(
 /* ── Screen ────────────────────────────────────────────────────────── */
 
 export default function ShipmentDetailScreen() {
-  const navigation = useNavigation();
+  // Cross-tab navigation (Dock schedule / Documents / Messaging / Finance)
+  // requires reaching the root drawer navigator. `useNavigation<any>()`
+  // matches how the Dashboard quick-action buttons do it — typing the
+  // cross-tab routes properly would need a CompositeNavigationProp chain
+  // for every drawer, which we've avoided elsewhere.
+  const navigation = useNavigation<any>();
   const route = useRoute<DetailRoute>();
   const { shipmentId } = route.params;
   const { data, refreshData } = useData() as any;
 
-  const [tenderLoading, setTenderLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [lines, setLines] = useState<ShipmentLineRow[]>([]);
   const [linesLoading, setLinesLoading] = useState(true);
   const [historyRows, setHistoryRows] = useState<ShipmentHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+
+  // Tracks which footer button (if any) currently owns the spinner.
+  // Used so the user sees feedback on the *button they tapped* rather
+  // than a generic top-of-screen loader; matches the web's per-action
+  // disabled state.
+  const [busyAction, setBusyAction] = useState<
+    | 'tender'
+    | 'withdraw'
+    | 'changeCarrier'
+    | 'invoice'
+    | 'dock'
+    | 'documents'
+    | 'contact'
+    | 'wms'
+    | null
+  >(null);
+
+  // Change-carrier modal state. Quotes / loading / saving are derived
+  // here rather than in the modal so the same fetch result is reused
+  // across re-opens within the session.
+  const [changeCarrierOpen, setChangeCarrierOpen] = useState(false);
+  const [carrierQuotes, setCarrierQuotes] = useState<CarrierQuote[]>([]);
+  const [carrierQuotesLoading, setCarrierQuotesLoading] = useState(false);
+  const [carrierChangeSaving, setCarrierChangeSaving] = useState(false);
 
   const shipment = useMemo(
     () =>
@@ -217,27 +263,153 @@ export default function ShipmentDetailScreen() {
     return () => { cancelled = true; };
   }, [shipment]);
 
+  /* ── Footer action handlers ───────────────────────────────────────
+   *
+   * Every handler delegates the actual work to the service layer
+   * (services/shipmentActionsService) and limits this screen to:
+   *   - flipping the per-button busy flag,
+   *   - surfacing the result Alert,
+   *   - kicking off a refresh so the timeline / status badge reflects
+   *     the new state without a manual pull-to-refresh.
+   */
+
   const handleTender = useCallback(async () => {
     if (!shipment || !vm) return;
-    setTenderLoading(true);
+    setBusyAction('tender');
     try {
-      await TenderApi.sendEmail({
-        shipmentId: String(vm.id),
-        carrierName: vm.carrier,
-        origin: vm.origin,
-        // QA bug #55: include `dest` (the actual DB column) in the
-        // fallback chain. View model already resolves it.
-        destination: vm.destination,
-        pickupDate: vm.pickupDate || '',
-        deliveryDate: vm.deliveryDate || '',
+      const result = await tenderShipment({
+        vm,
+        shipment,
+        carriers: data.carriers || [],
       });
-      Alert.alert('Tender Sent', `Tender email sent for shipment ${vm.id}.`);
-    } catch (err: any) {
-      Alert.alert('Tender Failed', err.message || 'Could not send tender email.');
+      if (refreshData) await refreshData();
+      Alert.alert(result.ok ? 'Tender Sent' : 'Tender', result.message);
     } finally {
-      setTenderLoading(false);
+      setBusyAction(null);
     }
-  }, [shipment, vm]);
+  }, [shipment, vm, data.carriers, refreshData]);
+
+  const handleWithdraw = useCallback(() => {
+    if (!shipment) return;
+    Alert.alert(
+      'Withdraw Tender',
+      `Withdraw tender for ${shipment.id || shipment.shipment_id}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyAction('withdraw');
+            try {
+              const result = await withdrawTenderAction({
+                shipment,
+                shipments: data.shipments || [],
+              });
+              if (refreshData) await refreshData();
+              Alert.alert(
+                result.ok ? 'Tender Withdrawn' : 'Withdraw Failed',
+                result.message,
+              );
+            } finally {
+              setBusyAction(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [shipment, data.shipments, refreshData]);
+
+  const handleOpenChangeCarrier = useCallback(async () => {
+    if (!shipment) return;
+    setChangeCarrierOpen(true);
+    setCarrierQuotesLoading(true);
+    try {
+      const quotes = await fetchChangeCarrierQuotes(shipment);
+      setCarrierQuotes(quotes);
+    } finally {
+      setCarrierQuotesLoading(false);
+    }
+  }, [shipment]);
+
+  const handleConfirmChangeCarrier = useCallback(
+    async (quote: CarrierQuote) => {
+      if (!shipment) return;
+      setCarrierChangeSaving(true);
+      try {
+        const result = await confirmChangeCarrierAction({ shipment, quote });
+        if (refreshData) await refreshData();
+        setChangeCarrierOpen(false);
+        Alert.alert(
+          result.ok ? 'Carrier Changed' : 'Change Failed',
+          result.message,
+        );
+      } finally {
+        setCarrierChangeSaving(false);
+      }
+    },
+    [shipment, refreshData],
+  );
+
+  const handleInvoice = useCallback(async () => {
+    if (!shipment) return;
+    const id = shipment.id || shipment.shipment_id;
+    setBusyAction('invoice');
+    try {
+      const result = await createInvoiceFromShipment(String(id));
+      // Web parity: the web sends the planner to /freight-invoices?invoice=
+      // after a successful one-click invoice create. Mobile currently
+      // registers the list screen (`FreightInvoices`) but not a detail
+      // route, so the "View Invoices" action lands on the list — the
+      // newly-created invoice surfaces at the top because the list is
+      // sorted by recency. When InvoiceDetailScreen lands, swap the
+      // navigate target to { screen: 'InvoiceDetail', params: {...} }.
+      Alert.alert(
+        result.ok ? 'Invoice Created' : 'Invoice',
+        result.message,
+        result.ok
+          ? [
+              { text: 'Stay', style: 'cancel' },
+              {
+                text: 'View Invoices',
+                onPress: () =>
+                  navigation.navigate('FinanceTab', {
+                    screen: 'FreightInvoices',
+                  }),
+              },
+            ]
+          : undefined,
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  }, [shipment, navigation]);
+
+  const handleDockSchedule = useCallback(() => {
+    navigation.navigate('ExecutionTab', { screen: 'DockScheduling' });
+  }, [navigation]);
+
+  const handleDocuments = useCallback(() => {
+    // Web passes ?shipmentId=… in the URL so the Documents page can
+    // pre-filter. Mobile's DocumentsScreen does not currently support
+    // a `shipmentId` route param (see navigation/types DocumentsTabParamList),
+    // so we land on the unfiltered list. Adding a param + filter is a
+    // separate follow-up — wired the navigation now so the button at
+    // least lands the user on the right screen.
+    navigation.navigate('DocumentsTab', { screen: 'Documents' });
+  }, [navigation]);
+
+  const handleContactCarrier = useCallback(() => {
+    navigation.navigate('IntegrationTab', { screen: 'MessagingHub' });
+  }, [navigation]);
+
+  const handleSendToWms = useCallback(() => {
+    // Web parity: REQ-18 routes Send-to-WMS through the messaging surface
+    // (the carrier-portal acknowledgement path posts the WMS push event
+    // there). Mobile follows the same target until a dedicated WMS
+    // outbox screen exists.
+    navigation.navigate('IntegrationTab', { screen: 'MessagingHub' });
+  }, [navigation]);
 
   /**
    * QA bug #100 fix: previously the copy succeeded silently and the
@@ -562,28 +734,50 @@ export default function ShipmentDetailScreen() {
           </Card>
         ) : null}
 
-        <TouchableOpacity
-          style={styles.tenderButton}
-          activeOpacity={0.8}
-          onPress={handleTender}
-          disabled={tenderLoading}>
-          {tenderLoading ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <>
-              <Ionicons name="send-outline" size={18} color={colors.white} />
-              <Text style={styles.tenderButtonText}>Send Tender Email</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* Action footer — mirrors the web Shipment Details modal.
+            Visibility of each button is driven off `effectiveShipmentStatus`
+            (which promotes Tendered+accept-in-notes to "Tender Accepted")
+            so mobile and web show identical CTAs for the same row. */}
+        <ShipmentActionFooter
+          status={effectiveShipmentStatus(shipment)}
+          busy={busyAction !== null}
+          busyAction={busyAction}
+          onTender={handleTender}
+          onWithdraw={handleWithdraw}
+          onChangeCarrier={handleOpenChangeCarrier}
+          onDockSchedule={handleDockSchedule}
+          onInvoice={handleInvoice}
+          onDocuments={handleDocuments}
+          onContactCarrier={handleContactCarrier}
+          onSendToWms={handleSendToWms}
+        />
 
         {/* QA #181: manual "Update Status" buttons removed. Status
             transitions now flow exclusively through events (tender
             accept/reject, BOL capture, delivery confirmation) so the
             change_history audit and the order-side cascade remain
-            authoritative. The Tender Email button above is still the
-            valid trigger for moving from Planned → Tendered. */}
+            authoritative. The footer's Tender to Carrier button is the
+            valid trigger for moving Planned → Tendered. */}
       </ScrollView>
+
+      {/* Change Carrier bottom-sheet modal. Quotes are fetched on open
+          via the actions service; persistence runs through the audited
+          /api/shipments/:id/change-carrier endpoint so connected web
+          tabs refresh via SHIPMENT_UPDATED. */}
+      <ChangeCarrierModal
+        visible={changeCarrierOpen}
+        loading={carrierQuotesLoading}
+        saving={carrierChangeSaving}
+        shipmentId={vm.id}
+        origin={vm.origin}
+        destination={vm.destination}
+        weight={Number(vm.weight || 0)}
+        currentCarrier={vm.carrier && vm.carrier !== '—' ? vm.carrier : ''}
+        currentCost={Number(shipment.total_cost || 0)}
+        quotes={carrierQuotes}
+        onClose={() => setChangeCarrierOpen(false)}
+        onConfirm={handleConfirmChangeCarrier}
+      />
     </SafeAreaView>
   );
 }
@@ -721,21 +915,9 @@ const styles = StyleSheet.create({
     color: colors.text2,
     lineHeight: 20,
   },
-  tenderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  tenderButtonText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white },
-  // QA #181: statusButtonsRow / statusButton / statusButton{Current,Past}
-  // / statusButtonLabel{,Current,Past} were removed alongside the manual
-  // status-flip UI. If a future event-driven control needs styles, add
-  // them under a different name so the prior UX cannot be revived by
-  // accident.
+  // Mobile parity (2026-05-11): tenderButton / tenderButtonText were
+  // removed alongside the single "Send Tender Email" CTA. The new
+  // ShipmentActionFooter component owns its own styling so the screen
+  // stays a thin renderer. QA #181 note still applies: any future
+  // status-flip UI must run through events, not direct buttons here.
 });

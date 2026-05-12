@@ -1,21 +1,19 @@
 import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
+// QA P217 (2026-05-11): shared stats so the web and mobile dashboards
+// agree. The function lives in services/analyticsService.js with
+// synced copies in shared/ and mobile/src/shared/ — keep them in
+// lockstep until the repo finishes consolidating onto one module.
+import { computeDashboardStats } from "../services/analyticsService";
 
 export default function DashboardPage() {
   const { shipments, orders, carriers, refreshData } = useOutletContext();
   const navigate = useNavigate();
 
-  const stats = useMemo(() => {
-    const inTransit = shipments.filter(s => s.status === "In Transit").length;
-    const planned = shipments.filter(s => s.status === "Planned").length;
-    const tendered = shipments.filter(s => s.status === "Tendered").length;
-    const delivered = shipments.filter(s => s.status === "Delivered").length;
-    const exceptions = shipments.filter(s => s.status === "Exception").length;
-    const unplanned = orders.filter(o => o.status === "Unplanned").length;
-    const totalCost = shipments.reduce((s, sh) => s + (parseFloat(sh.total_cost) || 0), 0);
-    const onTimePct = shipments.length > 0 ? Math.round((delivered / shipments.length) * 100) : 0;
-    return { inTransit, planned, tendered, delivered, exceptions, unplanned, totalCost, onTimePct };
-  }, [shipments, orders]);
+  const stats = useMemo(
+    () => computeDashboardStats(shipments, orders),
+    [shipments, orders],
+  );
 
   const carrierVolume = useMemo(() => {
     const map = {};
