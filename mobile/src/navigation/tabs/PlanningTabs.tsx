@@ -25,8 +25,11 @@ import ItemFormScreen from '../../screens/items/ItemFormScreen';
 // drawer-level stacks (BulkPlanTabs / MultiStopTabs). They're no
 // longer registered here to keep route names unique across navigators.
 
-// Placeholders for future screens
-import PlaceholderScreen from '../../screens/PlaceholderScreen';
+// QA P202 (2026-05-11): real RouteOptimizer screen — read-side
+// template browser + quick actions. Full template authoring stays on
+// the web; this replaces the previous PlaceholderScreen so the
+// drawer's Planning → Route Optimizer entry actually goes somewhere.
+import RouteOptimizerScreen from '../../screens/routes/RouteOptimizerScreen';
 
 const Stack = createNativeStackNavigator<PlanningTabParamList>();
 
@@ -55,10 +58,7 @@ export default function PlanningStack() {
       <Stack.Screen name="LocationDetail" component={LocationDetailScreen} />
       <Stack.Screen name="LocationForm" component={LocationFormScreen} />
 
-      {/* Placeholders */}
-      <Stack.Screen name="RouteOptimizer">
-        {() => <PlaceholderScreen title="Route Optimizer" icon="🗺️" />}
-      </Stack.Screen>
+      <Stack.Screen name="RouteOptimizer" component={RouteOptimizerScreen} />
     </Stack.Navigator>
   );
 }

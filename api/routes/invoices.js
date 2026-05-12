@@ -26,6 +26,13 @@
 const router = require('express').Router();
 const invoiceAudit = require('../services/invoiceAudit');
 const invoiceCostLines = require('../services/invoiceCostLines');
+// QA P215 backend wiring (2026-05-11): public REST entry for the
+// existing api/services/invoiceFromShipment service. The service was
+// already used internally (e.g. by the shipment-confirm flow) but had
+// no addressable route, so the web's "🧾 Invoice" button and the AI
+// CREATE_INVOICE action both had to no-op. Exposing it here keeps the
+// service as the single writer (the route is just a thin transport).
+const invoiceFromShipment = require('../services/invoiceFromShipment');
 
 module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
   function requireFinance(res, user) {
@@ -224,6 +231,40 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
       res.status(e.status || 500).json({ error: e.message });
     }
   });
+
+  // QA P215 backend (2026-05-11): create-an-invoice-from-a-shipment.
+  // Accepts either of two shapes for forward-compat with the manual
+  // "🧾 Invoice" button and the AI CREATE_INVOICE action:
+  //   POST /api/invoices/from-shipment        body: { shipmentId }
+  //   POST /api/invoices/from-shipment/:id    (path-form for REST clients)
+  //
+  // The service is idempotent: a second call against a shipment that
+  // already has an open invoice returns the existing row with
+  // `reused: true`, so this route is safe to double-click and safe to
+  // retry on transient errors.
+  //
+  // Returns { invoice, costLines, reused? }. Finance / admin only.
+  async function handleCreateFromShipment(req, res) {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const shipmentId =
+        String(req.params?.shipmentId || req.body?.shipmentId || '').trim();
+      if (!shipmentId) {
+        return res.status(400).json({ error: 'shipmentId is required' });
+      }
+      const result = await invoiceFromShipment.createInvoiceFromShipment({
+        shipmentId,
+        user,
+      });
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  }
+  router.post('/from-shipment', handleCreateFromShipment);
+  router.post('/from-shipment/:shipmentId', handleCreateFromShipment);
 
   return router;
 };

@@ -4186,6 +4186,33 @@ bus.on(EVENTS.SHIPMENT_DELETED, (payload) => {
   catch (err) { console.error('[WS] shipment delete broadcast failed:', err.message); }
 });
 
+// QA P200 (2026-05-11): order-level fan-out. The existing
+// SHIPMENT_UPDATED bridge above kept the Shipments page live, but the
+// matching order.updated event (already emitted by every PATCH on
+// /api/orders/:id, the OMS sync path, and bulk-plan execute) had no
+// WebSocket consumer — so an OMS-driven status change to In-Transit
+// or Delivered wrote to the orders table, fired the bus event, and
+// went nowhere. The TMS only caught up on manual refresh. Adding the
+// bridge makes every connected web/mobile client refresh the moment
+// the OMS push (POST /api/oms/push, or the fusion ingest) lands.
+//
+// Mirrors the SHIPMENT_UPDATED / SHIPMENT_DELETED shape exactly so
+// the wsClient.js consumer (and useRealtimeOrders fallback) handle
+// it the same way they handle shipment events — no client change
+// required for this bridge alone to take effect.
+bus.on(EVENTS.ORDER_UPDATED, (payload) => {
+  try { wsBroadcast(EVENTS.ORDER_UPDATED, payload || {}); }
+  catch (err) { console.error('[WS] order update broadcast failed:', err.message); }
+});
+bus.on(EVENTS.ORDER_CREATED, (payload) => {
+  try { wsBroadcast(EVENTS.ORDER_CREATED, payload || {}); }
+  catch (err) { console.error('[WS] order create broadcast failed:', err.message); }
+});
+bus.on(EVENTS.ORDER_DELETED, (payload) => {
+  try { wsBroadcast(EVENTS.ORDER_DELETED, payload || {}); }
+  catch (err) { console.error('[WS] order delete broadcast failed:', err.message); }
+});
+
 // POST /api/notify — called by Middleware after pushing data to TMS
 app.post('/api/notify', (req, res) => {
   const { event, data } = req.body || {};

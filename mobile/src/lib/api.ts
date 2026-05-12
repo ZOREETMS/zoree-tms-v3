@@ -49,5 +49,8 @@ export {
   MileageApi,
   NotifyApi,
   BulkPlanApi,
+  // QA P208 (2026-05-11): admin user-management surface for the
+  // mobile UserManagement / UserRoles screens.
+  UsersApi,
   configureAuthHooks,
 } from '../shared/api';

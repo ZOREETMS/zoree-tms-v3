@@ -188,6 +188,56 @@ export const AuthApi = {
       body: JSON.stringify({ activeRole }),
     });
   },
+  // QA P208 (2026-05-11): role catalog + permission edits, mirroring
+  // the web's AuthApi.roles / updateRole / createRole / deleteRole.
+  // Used by the mobile UserRolesScreen to surface what every role can
+  // do without a round-trip to the web app.
+  roles() {
+    return api("/roles");
+  },
+  updateRole(role, permissions) {
+    return api(`/roles/${encodeURIComponent(role)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ permissions }),
+    });
+  },
+  createRole({ roleKey, displayName, description, defaultLevel } = {}) {
+    return api("/roles", {
+      method: "POST",
+      body: JSON.stringify({ roleKey, displayName, description, defaultLevel }),
+    });
+  },
+  deleteRole(role) {
+    return api(`/roles/${encodeURIComponent(role)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// QA P208 (2026-05-11): admin user-management on mobile mirrors the
+// web's UsersApi (REQ-08). Returns { users: [...] } from list();
+// create/update/remove forward straight to the audited /api/users
+// endpoints — the backend enforces admin-only access via the same
+// rolePermissions check the web hits.
+export const UsersApi = {
+  list() {
+    return api("/users");
+  },
+  create({ email, password, fullName, roles, activeRole }) {
+    return api("/users", {
+      method: "POST",
+      body: JSON.stringify({ email, password, fullName, roles, activeRole }),
+    });
+  },
+  update(id, patch) {
+    return api(`/users/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+  remove(id) {
+    return api(`/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
 };
 
 export const DbApi = {

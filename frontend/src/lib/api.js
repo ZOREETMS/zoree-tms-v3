@@ -507,6 +507,23 @@ export const InvoicesApi = {
       body: JSON.stringify(patch || {}),
     });
   },
+  // QA P215 (2026-05-11): one-shot create-from-shipment. Backed by
+  // POST /api/invoices/from-shipment which delegates to
+  // api/services/invoiceFromShipment (idempotent — returns
+  // { invoice, costLines, reused: true } if an open invoice already
+  // exists for the shipment). The web's "🧾 Invoice" button on
+  // ShipmentsPage and the AI CREATE_INVOICE_FROM_SHIPMENT action
+  // both route through this helper so the audit + cost-line
+  // composition stays in one place.
+  createFromShipment(shipmentId) {
+    if (!shipmentId) {
+      return Promise.reject(new Error("shipmentId is required"));
+    }
+    return api("/invoices/from-shipment", {
+      method: "POST",
+      body: JSON.stringify({ shipmentId }),
+    });
+  },
   // Back-compat wrappers
   dispute(id, reason) { return InvoicesApi.reject(id, reason || "Disputed"); },
   save(invoice) {

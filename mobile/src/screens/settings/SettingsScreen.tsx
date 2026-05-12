@@ -11,6 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+// QA P208 remainder (2026-05-11): admin sub-pages (UserManagement /
+// UserRoles) are reachable from this screen via navigation buttons,
+// matching where they sit in the web's System sidebar section.
+import { useNavigation } from '@react-navigation/native';
 
 import Card from '../../components/ui/Card';
 import { useAuth } from '../../state/AuthContext';
@@ -27,6 +31,16 @@ import {
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
+  const navigation = useNavigation<any>();
+  // Admin gate: User Management + User Roles + Equipment Master +
+  // Planning Parameters are admin-only on the web side. We surface the
+  // links only when the signed-in user has 'admin' in their roles, to
+  // avoid teasing a button that 403s on tap. The backend still enforces
+  // permission server-side; this is a UX-level filter only.
+  const isAdmin =
+    (Array.isArray(user?.roles) && user!.roles!.includes('admin')) ||
+    user?.role === 'admin' ||
+    user?.activeRole === 'admin';
 
   // Notification preferences (local state placeholders)
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -101,12 +115,72 @@ export default function SettingsScreen() {
               <Text style={styles.profileEmail}>{user?.email || '--'}</Text>
               <View style={styles.roleBadge}>
                 <Text style={styles.roleText}>
-                  {user?.role || 'Admin'}
+                  {user?.activeRole || user?.role || 'User'}
                 </Text>
               </View>
             </View>
           </View>
         </Card>
+
+        {/*
+          QA P208 remainder (2026-05-11): Admin section. Mirrors the
+          web's System sidebar links — User Management, User Roles,
+          Equipment Master, Planning Parameters — so admins do not
+          have to open the web app to reach the underlying screens
+          we already register in SystemTabs. Hidden when the signed-in
+          user has no admin role; backend still gates the endpoints
+          server-side.
+         */}
+        {isAdmin ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Admin</Text>
+            <Card>
+              <TouchableOpacity
+                style={styles.settingRow}
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('UserManagement')}>
+                <View style={styles.settingLabel}>
+                  <Ionicons name="people-outline" size={20} color={colors.text2} />
+                  <Text style={styles.settingText}>User Management</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.settingRow}
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('UserRoles')}>
+                <View style={styles.settingLabel}>
+                  <Ionicons name="shield-outline" size={20} color={colors.text2} />
+                  <Text style={styles.settingText}>User Roles</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.settingRow}
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('EquipmentMaster')}>
+                <View style={styles.settingLabel}>
+                  <Ionicons name="construct-outline" size={20} color={colors.text2} />
+                  <Text style={styles.settingText}>Equipment Master</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.settingRow}
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('PlanningParameters')}>
+                <View style={styles.settingLabel}>
+                  <Ionicons name="options-outline" size={20} color={colors.text2} />
+                  <Text style={styles.settingText}>Planning Parameters</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
+              </TouchableOpacity>
+            </Card>
+          </View>
+        ) : null}
 
         {/* Notification Preferences */}
         <View style={styles.section}>

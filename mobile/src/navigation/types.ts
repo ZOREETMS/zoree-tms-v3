@@ -132,6 +132,14 @@ export type SystemTabParamList = {
   // Phase-3: Planning parameters — feature toggles + dock loading
   // duration defaults that drive the planner's behavior.
   PlanningParameters: undefined;
+  // QA P208 (2026-05-11): admin user-management + role-permission
+  // screens, mirroring the web sidebar's System section. Admin-only;
+  // backend enforces access. UserDetail is the create/edit form
+  // reached from UserManagement; pass `userId` to edit an existing
+  // user, omit it for the New User flow.
+  UserManagement: undefined;
+  UserDetail: { userId?: string };
+  UserRoles: undefined;
 };
 
 // Driver-specific screens (accessible from Execution tab)

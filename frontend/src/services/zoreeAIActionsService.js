@@ -13,7 +13,7 @@
  * timeline events, and side-effects as a click-driven one.
  */
 
-import { ShipmentsApi, OrdersApi, BulkPlanApi } from "../lib/api";
+import { ShipmentsApi, OrdersApi, BulkPlanApi, InvoicesApi } from "../lib/api";
 import { planOrdersAsSingleShipment } from "./bulkPlanService";
 import {
   unplanOrderFromShipment,
@@ -32,7 +32,17 @@ import {
   gatherOrderDetails,
   sendTenderEmailIfAvailable,
 } from "./tenderService";
-import { buildLaneKey } from "../utils/laneUtils";
+import {
+  buildLaneKey,
+  // QA P214 (2026-05-11): use the same address composer the manual
+  // planner runs in BulkPlanPage / OrdersPage so the AI's success
+  // message renders the canonical "CITY, ST ZIP" form instead of a
+  // raw warehouse name like "Atlanta XDock". Matches the data path
+  // the manual flow takes via lane composition, so chat output and
+  // the Shipments page agree on what the lane "looks like".
+  fullOrderOrigin,
+  fullOrderDest,
+} from "../utils/laneUtils";
 
 /* ── Internal helpers ──────────────────────────────────────────── */
 
@@ -101,12 +111,29 @@ async function planOrder(p, { orders }) {
   // making it look like the planner had only city-level context. The
   // shipment row itself now also carries the full string (lane + plan
   // forward fullOrderOrigin/Dest from laneUtils).
-  const originLabel = ship.ship_from_name
-    ? `${ship.ship_from_name} (${ship.origin || "—"})`
-    : (ship.origin || "—");
-  const destLabel = ship.ship_to_name
-    ? `${ship.ship_to_name} (${ship.dest || "—"})`
-    : (ship.dest || "—");
+  //
+  // QA P214 (2026-05-11): re-derive origin / dest through the canonical
+  // composer so the chat string matches what the manual planner sees
+  // even when ship.origin / ship.dest came back as a bare warehouse
+  // name (data-inconsistency case — see triage doc). We prefer the
+  // composed value, fall back to ship.origin, then to "—". The
+  // warehouse name (`ship_from_name` / `ship_to_name`) is appended only
+  // when it adds info beyond the canonical address.
+  const sourceOrder = planOrders[0] || {};
+  const canonOrigin =
+    fullOrderOrigin(sourceOrder) ||
+    String(ship.origin || "").trim();
+  const canonDest =
+    fullOrderDest(sourceOrder) ||
+    String(ship.dest || "").trim();
+  function combine(canonical, name) {
+    const a = (canonical || "").trim();
+    const b = (name || "").trim();
+    if (a && b && a.toLowerCase() !== b.toLowerCase()) return `${b} (${a})`;
+    return a || b || "—";
+  }
+  const originLabel = combine(canonOrigin, ship.ship_from_name);
+  const destLabel = combine(canonDest, ship.ship_to_name);
   return `Shipment **${ship.id}** created · ${rawIds.length} order(s) · Carrier: ${ship.carrier} · ${ship.mode} · $${(ship.total_cost || 0).toLocaleString()} · ${originLabel} → ${destLabel}`;
 }
 
@@ -289,6 +316,99 @@ async function copyOrderAction(p, { orders }) {
   const source = findOrder(orders, p.orderId);
   const created = await copyOrder(source);
   return `Order ${source.id} copied → **${created.id}** (status: Unplanned)`;
+}
+
+/* ── Action: UPDATE_ORDER (QA P212, 2026-05-11) ───────────────────
+ * Lets the assistant patch order metadata that isn't status — most
+ * commonly PO number and ready / due dates. Routes through the
+ * audited PATCH /api/orders/:id (OrdersApi.update) so REQ-02
+ * change-history rows are produced just like a UI edit.
+ *
+ * Accepts:
+ *   { orderId, poNumber?, readyDate?, dueDate?,
+ *     pickupDate?, deliveryDate?, customer?, notes? }
+ *
+ * Status changes intentionally route through UPDATE_ORDER_STATUS so
+ * the existing cancel/unplan/cascade rules apply — this action
+ * deliberately refuses to set `status`.
+ */
+async function updateOrderAction(p, { orders }) {
+  const ord = findOrder(orders, p.orderId);
+  // Whitelist the fields the AI is allowed to set here — keeps this
+  // action narrow and prevents the model from drifting outside the
+  // intended metadata-edit scope.
+  const allowed = [
+    "poNumber",
+    "readyDate",
+    "dueDate",
+    "pickupDate",
+    "deliveryDate",
+    "customer",
+    "notes",
+  ];
+  const patch = {};
+  for (const k of allowed) {
+    if (p[k] !== undefined && p[k] !== null && p[k] !== "") patch[k] = p[k];
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new Error(
+      "No editable fields supplied. Pass at least one of: " + allowed.join(", "),
+    );
+  }
+  // Snapshot before/after so the success message tells the user what
+  // actually changed, not just "Order X updated".
+  const before = allowed
+    .filter((k) => patch[k] !== undefined)
+    .map((k) => {
+      const prevKey = k === "poNumber" ? "po_number"
+        : k === "readyDate" ? "ready_date"
+        : k === "dueDate" ? "due_date"
+        : k === "pickupDate" ? "pickup_date"
+        : k === "deliveryDate" ? "delivery_date"
+        : k;
+      return [k, ord[prevKey] ?? ord[k] ?? "—"];
+    });
+  await OrdersApi.update(p.orderId, patch);
+  const diff = Object.keys(patch)
+    .map((k) => {
+      const prev = before.find(([key]) => key === k)?.[1] ?? "—";
+      return `${k}: ${prev} → ${patch[k]}`;
+    })
+    .join(", ");
+  return `Order ${p.orderId} updated · ${diff}`;
+}
+
+/* ── Action: CREATE_INVOICE_FROM_SHIPMENT (QA P215, 2026-05-11) ────
+ * Now wired end-to-end. The backend route
+ *   POST /api/invoices/from-shipment   body: { shipmentId }
+ * delegates to api/services/invoiceFromShipment, which is idempotent
+ * (a second call against a shipment with an open invoice returns the
+ * existing row with `reused: true`).
+ *
+ * Status gate mirrors what the manual UI button enforces — invoicing
+ * a shipment that hasn't been tendered yet is almost never what the
+ * user wants and surfaces a clearer error than letting the service
+ * reject it later. "Cancelled" / "Planned" are blocked here.
+ */
+async function createInvoiceFromShipmentAction(p, { shipments }) {
+  const ship = findShipment(shipments, p.shipmentId);
+  const blocked = new Set(["Planned", "Cancelled"]);
+  if (blocked.has(ship.status)) {
+    throw new Error(
+      `Shipment ${p.shipmentId} is ${ship.status} — invoicing requires the shipment to be Tendered, Tender Accepted, In Transit, or Delivered.`,
+    );
+  }
+  const result = await InvoicesApi.createFromShipment(p.shipmentId);
+  const inv = result?.invoice || result;
+  const invoiceId = inv?.id || inv?.invoice_id || "(new)";
+  const total = inv?.invoiced_amount ?? inv?.agreed_cost ?? inv?.total_cost ?? null;
+  const totalStr = total != null
+    ? ` · $${Number(total).toLocaleString()}`
+    : "";
+  const reused = result?.reused
+    ? " (existing open invoice — reused, no duplicate created)"
+    : "";
+  return `Invoice **${invoiceId}** created from shipment ${p.shipmentId}${totalStr}${reused}`;
 }
 
 /* ── Action: TENDER_SHIPMENT ───────────────────────────────────── */
@@ -658,6 +778,12 @@ export async function executeChatAction(actionData, ctx = {}) {
     // CANCEL_SHIPMENT and hit its "withdraw the tender first" guard.
     case "WITHDRAW_TENDER":       return withdrawTenderAction(params, safeCtx);
     case "GET_RATES":             return getRatesAction(params);
+    // QA P212 (2026-05-11) — order metadata edits (PO, dates, etc.).
+    case "UPDATE_ORDER":          return updateOrderAction(params, safeCtx);
+    // QA P215 (2026-05-11) — create freight invoice from a shipment.
+    case "CREATE_INVOICE":
+    case "CREATE_INVOICE_FROM_SHIPMENT":
+                                  return createInvoiceFromShipmentAction(params, safeCtx);
     default: throw new Error(`Unknown action: ${action}`);
   }
 }
