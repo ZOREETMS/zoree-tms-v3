@@ -2,7 +2,9 @@ import StatusBadge from "./StatusBadge";
 import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../ui/SelectionCheckbox";
 
 /** Shipment visibility table for customer portal */
-export default function ShipmentVisibilityTable({ rows, onShare, sel }) {
+// QA 249/254 (2026-05-12): `canEdit` defaults to true and gates the
+// per-row Share button so view-only roles cannot send tracking links.
+export default function ShipmentVisibilityTable({ rows, onShare, sel, canEdit = true }) {
   if (!rows || rows.length === 0) {
     return (
       <div className="card">
@@ -64,12 +66,14 @@ export default function ShipmentVisibilityTable({ rows, onShare, sel }) {
                   {row.lastUpdate}
                 </td>
                 <td>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onShare(row.id, row.customer)}
-                  >
-                    📤 Share
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onShare(row.id, row.customer)}
+                    >
+                      📤 Share
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

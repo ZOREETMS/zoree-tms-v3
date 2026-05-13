@@ -1,5 +1,7 @@
 /** Customer access list — shows customers with portal access + share button */
-export default function CustomerAccessList({ customers, onShare }) {
+// QA 249/254 (2026-05-12): `canEdit` defaults to true and gates the
+// Share button so view-only roles cannot send the portal link.
+export default function CustomerAccessList({ customers, onShare, canEdit = true }) {
   return (
     <div className="card">
       <div className="card-body" style={{ padding: 20 }}>
@@ -34,12 +36,14 @@ export default function CustomerAccessList({ customers, onShare }) {
                   Portal access: {cust.portalStatus}
                 </div>
               </div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => onShare(cust.name)}
-              >
-                🔗 Share
-              </button>
+              {canEdit && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onShare(cust.name)}
+                >
+                  🔗 Share
+                </button>
+              )}
             </div>
           ))}
         </div>

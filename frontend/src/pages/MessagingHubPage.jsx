@@ -6,9 +6,14 @@ import MessagingStats from "../components/messaging/MessagingStats";
 import MessageList from "../components/messaging/MessageList";
 import JsonViewer from "../components/messaging/JsonViewer";
 import ComposeMessageModal from "../components/messaging/ComposeMessageModal";
+// QA 250/256 (2026-05-12): Planner / Viewer have view-only access to
+// Messaging Hub but Compose / Send were unconditional. Gate via
+// useFeatureAccess.
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 export default function MessagingHubPage() {
   const { shipments } = useOutletContext();
+  const { canEdit: canEditMessaging } = useFeatureAccess("messaging");
   const {
     messages, kpis, tab, switchTab, filters, updateFilter,
     selectedId, setSelectedId, selectedMessage, sendMessage, retryMessage,
@@ -18,12 +23,22 @@ export default function MessagingHubPage() {
   const [toast, setToast] = useState(null);
 
   function handleSend(compose) {
+    if (!canEditMessaging) {
+      setToast({ message: "You have view-only access to Messaging Hub", type: "warning" });
+      setTimeout(() => setToast(null), 4000);
+      return;
+    }
     sendMessage(compose);
     setToast({ message: `Message sent to ${compose.dest}`, type: "success" });
     setTimeout(() => setToast(null), 4000);
   }
 
   function handleRetry(id) {
+    if (!canEditMessaging) {
+      setToast({ message: "You have view-only access to Messaging Hub", type: "warning" });
+      setTimeout(() => setToast(null), 4000);
+      return;
+    }
     retryMessage(id);
     setToast({ message: "Message retry initiated", type: "info" });
     setTimeout(() => setToast(null), 4000);
@@ -74,9 +89,11 @@ export default function MessagingHubPage() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <button className="btn btn-primary btn-sm" onClick={() => setComposeOpen(true)}>
-              ✉️ Compose Message
-            </button>
+            {canEditMessaging && (
+              <button className="btn btn-primary btn-sm" onClick={() => setComposeOpen(true)}>
+                ✉️ Compose Message
+              </button>
+            )}
           </div>
         </div>
 

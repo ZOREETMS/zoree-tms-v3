@@ -5,6 +5,7 @@ import {
   sumApprovedCosts,
   sumInvoiceCosts,
   lineVariance,
+  COST_TYPE_LABELS,
 } from "../../services/invoiceService";
 
 /**
@@ -33,6 +34,12 @@ export default function InvoiceCostLines({
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState("");
+  // QA 226 (2026-05-12): "Add Cost" form state — Cost Type + Value.
+  // Stays local; parent gets totals via onTotalsChange after each insert.
+  const [draftType, setDraftType] = useState("accessorial");
+  const [draftValue, setDraftValue] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!invoiceId) { setLines([]); return; }
@@ -68,6 +75,50 @@ export default function InvoiceCostLines({
     );
   }
 
+  // QA 226 (2026-05-12): handler for the Add Cost button. Validates
+  // the value, POSTs to /api/invoices/:id/cost-lines, appends locally,
+  // and notifies the parent so the modal totals refresh.
+  async function handleAddCost() {
+    setError("");
+    if (!invoiceId) {
+      setError("Save the invoice before adding cost lines");
+      return;
+    }
+    const value = Number(draftValue);
+    if (!Number.isFinite(value) || value < 0) {
+      setError("Value must be a non-negative number");
+      return;
+    }
+    if (!draftType) {
+      setError("Pick a cost type");
+      return;
+    }
+    setAdding(true);
+    try {
+      const created = await InvoicesApi.addCostLine(invoiceId, {
+        cost_type:     draftType,
+        invoice_cost:  value,
+        approved_cost: value,
+        description:   draftDescription.trim() || null,
+      });
+      const next = [...lines, created];
+      setLines(next);
+      setDraftValue("");
+      setDraftDescription("");
+      if (typeof onTotalsChange === "function") {
+        onTotalsChange({
+          invoiceTotal:  sumInvoiceCosts(next),
+          approvedTotal: sumApprovedCosts(next),
+          lineCount:     next.length,
+        });
+      }
+    } catch (e) {
+      setError(e?.message || "Failed to add cost line");
+    } finally {
+      setAdding(false);
+    }
+  }
+
   async function commitApprovedCost(line, nextValue) {
     const next = Number(nextValue);
     if (!Number.isFinite(next) || next < 0) {
@@ -100,9 +151,21 @@ export default function InvoiceCostLines({
 
   // Legacy-invoice fallback: no rows in invoice_cost_lines, fall back
   // to the original scalar columns so the modal still shows something.
+  // QA 226: still render the Add Cost form when canEdit + invoiceId so
+  // a finance user can attach the first line on an empty invoice.
   if (!loading && !lines.length) {
     return (
-      <LegacyCostBlock agreed={legacyAgreed} amount={legacyAmount} />
+      <>
+        <LegacyCostBlock agreed={legacyAgreed} amount={legacyAmount} />
+        {canEdit && invoiceId && (
+          <AddCostForm
+            type={draftType} setType={setDraftType}
+            value={draftValue} setValue={setDraftValue}
+            description={draftDescription} setDescription={setDraftDescription}
+            onAdd={handleAddCost} busy={adding} error={error}
+          />
+        )}
+      </>
     );
   }
 
@@ -190,6 +253,86 @@ export default function InvoiceCostLines({
       {!canEdit && (
         <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 6 }}>
           Read-only — your role doesn't allow approving cost adjustments.
+        </div>
+      )}
+      {/* QA 226 (2026-05-12): Add Cost form — Cost Type + Value + Add
+          button. Hidden when read-only and when the invoice has not
+          been persisted (no id to POST to). */}
+      {canEdit && invoiceId && (
+        <AddCostForm
+          type={draftType} setType={setDraftType}
+          value={draftValue} setValue={setDraftValue}
+          description={draftDescription} setDescription={setDraftDescription}
+          onAdd={handleAddCost} busy={adding} error={error}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Add Cost form ─────────────────────────────────────────────────
+// QA 226: Cost Type dropdown + Value field + Add Cost button.
+function AddCostForm({
+  type, setType, value, setValue, description, setDescription,
+  onAdd, busy, error,
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 12, paddingTop: 12,
+        borderTop: "1px dashed var(--border)",
+        display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center",
+      }}
+    >
+      <div style={{ fontWeight: 700, fontSize: 12, minWidth: 78 }}>Add cost</div>
+      <select
+        value={type}
+        onChange={(e) => setType(e.target.value)}
+        style={{
+          padding: "4px 8px", border: "1px solid var(--border)",
+          borderRadius: 6, fontSize: 12, background: "#fff",
+        }}
+        aria-label="Cost type"
+      >
+        {Object.entries(COST_TYPE_LABELS).map(([k, label]) => (
+          <option key={k} value={k}>{label}</option>
+        ))}
+      </select>
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        placeholder="Value"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        style={{
+          width: 110, padding: "4px 8px", border: "1px solid var(--border)",
+          borderRadius: 6, fontSize: 12, textAlign: "right",
+        }}
+        aria-label="Cost value"
+      />
+      <input
+        type="text"
+        placeholder="Description (optional)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        style={{
+          flex: 1, minWidth: 160, padding: "4px 8px",
+          border: "1px solid var(--border)", borderRadius: 6, fontSize: 12,
+        }}
+        aria-label="Cost description"
+      />
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        onClick={onAdd}
+        disabled={busy || !value}
+      >
+        {busy ? "Adding\u2026" : "+ Add Cost"}
+      </button>
+      {error && (
+        <div style={{ flexBasis: "100%", color: "var(--red, #dc2626)", fontSize: 11 }}>
+          \u26a0 {error}
         </div>
       )}
     </div>

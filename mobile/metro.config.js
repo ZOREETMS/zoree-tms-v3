@@ -11,6 +11,14 @@ config.watchFolders = [
   ...new Set([...(config.watchFolders || []), sharedRoot]),
 ];
 
+// When files under `shared/` import `react`, `react-native`, etc., Metro must
+// look up to mobile/node_modules to find them — shared/ has no node_modules
+// of its own. Without this, bundle fails with "Unable to resolve module react"
+// from shared/src/hooks/*.
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+];
+
 // Never bundle the Express API (Node-only: fs, path, etc.). If this throws, something imported the backend.
 const origResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {

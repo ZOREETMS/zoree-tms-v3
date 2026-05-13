@@ -47,6 +47,13 @@ interface OrderCardProps {
   onAddToShipment?: (orderId: string) => void;
   onCrossDockPlan?: (orderId: string) => void;
   onCancelOrder?: (orderId: string) => void;
+  /**
+   * QA 234 (2026-05-12): Unplan action — surfaced only when the row's
+   * status indicates it has a shipment attached and the server permits
+   * unplanning. Lets the user move the order back to Unplanned from the
+   * single-row 3-dot menu, matching the web 3-dot parity.
+   */
+  onUnplan?: (orderId: string) => void;
 }
 
 const OrderCard: React.FC<OrderCardProps> = ({
@@ -60,6 +67,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
   onAddToShipment,
   onCrossDockPlan,
   onCancelOrder,
+  onUnplan,
 }) => {
   const navigation = useNavigation<any>();
   const id = (order.id ?? order.order_id ?? '').toString();
@@ -89,6 +97,15 @@ const OrderCard: React.FC<OrderCardProps> = ({
     const status = String(order?.status || '').toLowerCase();
     const isUnplanned = status === 'unplanned';
     const isCancellable = !['delivered', 'cancelled'].includes(status);
+    // QA 234 (2026-05-12): server permits unplanning for orders that
+    // have a shipment attached and are not yet in transit / delivered /
+    // cancelled. Mirrors the locked-status guard in OrdersScreen's bulk
+    // Remove Shipments flow so the single-row Unplan has the same
+    // semantics as the multi-select one.
+    const sid = (order as any)?.shipment_id || (order as any)?.shipmentId;
+    const isUnplannable =
+      Boolean(sid) &&
+      !['unplanned', 'tender accepted', 'in-transit', 'in transit', 'delivered', 'cancelled'].includes(status);
 
     type SheetItem = { label: string; run: () => void };
     const items: SheetItem[] = [];
@@ -103,6 +120,9 @@ const OrderCard: React.FC<OrderCardProps> = ({
     }
     if (onCrossDockPlan && isUnplanned) {
       items.push({ label: 'Cross-Dock Plan', run: () => onCrossDockPlan(id) });
+    }
+    if (onUnplan && isUnplannable) {
+      items.push({ label: 'Unplan', run: () => onUnplan(id) });
     }
     if (onCancelOrder && isCancellable) {
       items.push({ label: 'Cancel Order', run: () => onCancelOrder(id) });
@@ -146,7 +166,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
   // actions in that mode).
   const showMore =
     !selectionMode &&
-    Boolean(onEdit || onDuplicate || onAddToShipment || onCrossDockPlan || onCancelOrder);
+    Boolean(onEdit || onDuplicate || onAddToShipment || onCrossDockPlan || onCancelOrder || onUnplan);
 
   const readyDate = (order.readyDate || order.ready_date || order.ready)
     ? new Date(order.readyDate || order.ready_date || order.ready).toLocaleDateString()

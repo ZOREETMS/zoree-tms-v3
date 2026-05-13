@@ -181,6 +181,17 @@ export default function MultiStopRoutesScreen() {
                 label="Miles"
                 value={item.total_miles ? Number(item.total_miles).toLocaleString() : '—'}
               />
+              {/* QA 245 (2026-05-12): web Multi-Stop summary includes a
+                  Total Cost field. Mirroring it here so finance can see
+                  the rolled-up cost at a glance without opening the route. */}
+              <Meta
+                label="Total Cost"
+                value={
+                  item.total_cost != null
+                    ? `$${Number(item.total_cost).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                    : '—'
+                }
+              />
             </View>
           </Card>
         </TouchableOpacity>

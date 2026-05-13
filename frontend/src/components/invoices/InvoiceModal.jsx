@@ -62,6 +62,22 @@ export default function InvoiceModal({
     if (field === "date" || field === "paymentTerms") {
       next.due = computeDueDate(next.date || form.date, next.paymentTerms || form.paymentTerms);
     }
+    // QA 225 (2026-05-12): when the user picks a Primary Shipment,
+    // auto-populate Carrier and BOL ID(s) from the matched shipment so
+    // finance doesn't have to look them up. Only overwrites when the
+    // current value is empty.
+    if (field === "shipId" && value) {
+      const match = (shipments || []).find((s) => String(s.id) === String(value));
+      if (match) {
+        if (!next.carrier && match.carrier) next.carrier = match.carrier;
+        const currentBol = Array.isArray(next.bolIds)
+          ? next.bolIds.join(", ")
+          : (next.bolIds || "");
+        if (!currentBol.trim() && match.bol_number) {
+          next.bolIds = match.bol_number;
+        }
+      }
+    }
     setForm(next);
   }
 

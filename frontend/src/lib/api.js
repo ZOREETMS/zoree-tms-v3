@@ -507,6 +507,14 @@ export const InvoicesApi = {
       body: JSON.stringify(patch || {}),
     });
   },
+  // QA 226 (2026-05-12): append a cost line to an existing invoice.
+  // Backed by POST /api/invoices/:id/cost-lines.
+  addCostLine(invoiceId, line) {
+    return api(`/invoices/${encodeURIComponent(invoiceId)}/cost-lines`, {
+      method: "POST",
+      body: JSON.stringify(line || {}),
+    });
+  },
   // QA P215 (2026-05-11): one-shot create-from-shipment. Backed by
   // POST /api/invoices/from-shipment which delegates to
   // api/services/invoiceFromShipment (idempotent — returns

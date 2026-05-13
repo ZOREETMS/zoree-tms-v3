@@ -2,7 +2,11 @@ import { useState } from "react";
 import { DOC_TYPE_COLORS, DOC_STATUS_COLORS } from "../../types/documents";
 import { SelectionHeaderCheckbox, SelectionRowCheckbox } from "../ui/SelectionCheckbox";
 
-export default function DocumentTable({ documents, typeFilter, onTypeFilterChange, onView, onSend, sel }) {
+// QA 248/251/253 (2026-05-12): `canEdit` gates the Send button so
+// view-only roles (Planner / Finance / Viewer) cannot dispatch a BOL.
+// Defaults to true to preserve admin/editor behaviour when the prop is
+// not threaded through.
+export default function DocumentTable({ documents, typeFilter, onTypeFilterChange, onView, onSend, sel, canEdit = true }) {
   const [sortCol, setSortCol] = useState("generated");
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -125,7 +129,7 @@ export default function DocumentTable({ documents, typeFilter, onTypeFilterChang
                     <button className="btn btn-secondary btn-sm" onClick={() => onView(doc.id)}>
                       View
                     </button>
-                    {doc.status === "Pending" && (
+                    {doc.status === "Pending" && canEdit && (
                       <button className="btn btn-primary btn-sm" onClick={() => onSend(doc)}>
                         Send
                       </button>

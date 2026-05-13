@@ -61,11 +61,20 @@ export async function propagateTenderAcceptance({ shipment, response, orderIds }
       shipmentId:    shipment.id,
       carrier:       shipment.carrier || "",
       mode:          shipment.mode || "",
-      serviceLevel:  response.serviceLevel || "",
+      // Fall back to the shipment row when the response doesn't carry
+      // these fields — happens on the carrier-portal accept path, where
+      // the carrier UI only collects driver/PRO/pickup, leaving the
+      // planner-side serviceLevel/BOL undefined. Without these fallbacks
+      // omsSync.setIf (which skips empty strings) drops them, and the
+      // OMS warehouse modals render Service Level / BOL as "—" even
+      // though the TMS shipment row has them populated (set by
+      // bulkPlanExecution at shipment create time). Mirrors the
+      // pickupDate / deliveryDate fallback pattern just below.
+      serviceLevel:  response.serviceLevel || shipment.service_level || "",
       pickupDate:    response.carrierPickupDate || shipment.pickup_date || shipment.pickup || "",
       deliveryDate:  shipment.delivery_date || shipment.delivery || "",
       proNumber:     response.proNumber || "",
-      bolNumber:     response.bolNumber || "",
+      bolNumber:     response.bolNumber || shipment.bol_number || "",
       sealNumber:    response.sealNumber || "",
       dockNumber:    response.dockDoor || "",
       dockLoadStart: response.dockLoadStart || "",

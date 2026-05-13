@@ -240,6 +240,75 @@ async function updateLine({ invoiceId, lineId, patch, user }) {
   return updated;
 }
 
+// QA 226 (2026-05-12): Add a single cost line to an existing invoice.
+// Used by the Freight Invoice modal "Add Cost" UI so finance can tack
+// on an accessorial / fuel / discount after the invoice is created
+// without rebuilding all lines via replaceForInvoice (which would wipe
+// audit history). Writes a REQ-02 change_history row on the parent
+// invoice mirroring updateLine's diff format.
+async function addLine({ invoiceId, line, user, tenantId = null }) {
+  if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
+  if (!line || typeof line !== 'object') {
+    const e = new Error('line is required'); e.status = 400; throw e;
+  }
+  ensureCostType(line.cost_type);
+  const invoiceCost  = num(line.invoice_cost, 0);
+  const approvedCost = num(line.approved_cost, invoiceCost);
+  if (invoiceCost < 0) {
+    const e = new Error('invoice_cost must be >= 0'); e.status = 400; throw e;
+  }
+  if (approvedCost < 0) {
+    const e = new Error('approved_cost must be >= 0'); e.status = 400; throw e;
+  }
+
+  // Append after the highest existing line_order so the new row sorts
+  // last in the modal — matches what a finance user expects when they
+  // hit "Add Cost".
+  const existing = await listForInvoice(invoiceId);
+  const maxOrder = existing.reduce(
+    (m, l) => Math.max(m, Number(l.line_order) || 0),
+    0
+  );
+
+  const row = {
+    invoice_id:    invoiceId,
+    cost_type:     line.cost_type,
+    description:   line.description ?? null,
+    invoice_cost:  round2(invoiceCost),
+    approved_cost: round2(approvedCost),
+    line_order:    maxOrder + 10,
+    tenant_id:     tenantId || line.tenant_id || null,
+  };
+
+  const client = db.getClient();
+  const { data, error } = await client.from(TABLE).insert([row]).select();
+  if (error) throw new Error(`[DB] ${TABLE} insert failed: ${error.message}`);
+  const created = data?.[0] || null;
+  if (!created) {
+    const e = new Error('Cost line insert returned no row'); e.status = 500; throw e;
+  }
+
+  try {
+    // changeHistory has no recordCreate helper; emit an 'edit' row
+    // with after-only values so the History drawer renders
+    //   "cost_line.<type>.invoice_cost: — → $123.45"
+    await history.recordChange({
+      entityType: 'invoice',
+      entityId:   invoiceId,
+      action:     'edit',
+      field:      `cost_line.${created.cost_type}.invoice_cost`,
+      before:     null,
+      after:      round2(created.invoice_cost),
+      user,
+      metadata:   { lineId: created.id, costType: created.cost_type, via: 'cost-line-add' },
+    });
+  } catch (auditErr) {
+    console.error('[invoiceCostLines.addLine] history write failed:', auditErr.message);
+  }
+
+  return created;
+}
+
 module.exports = {
   VALID_COST_TYPES,
   COST_TYPE_LABELS,
@@ -249,6 +318,7 @@ module.exports = {
   replaceForInvoice,
   listForInvoice,
   updateLine,
+  addLine,
   // Exposed for unit tests
   _internals: { num, round2 },
 };

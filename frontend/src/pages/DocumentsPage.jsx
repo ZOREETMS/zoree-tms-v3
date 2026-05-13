@@ -7,9 +7,15 @@ import DocumentTable from "../components/documents/DocumentTable";
 import DocumentViewerModal from "../components/documents/DocumentViewerModal";
 import { useRowSelection } from "../hooks/useRowSelection";
 import SelectionBar from "../components/ui/SelectionBar";
+// QA 248/251/253 (2026-05-12): Planner / Finance / Viewer have
+// view-only access to Documents & BOL but the Send and Generate BOL
+// buttons were unconditional. Gate both behind useFeatureAccess so the
+// UI matches the server-side canWriteTable enforcement.
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 export default function DocumentsPage() {
   const { shipments = [], orders = [], carriers = [] } = useOutletContext();
+  const { canEdit: canEditDocuments } = useFeatureAccess("documents");
   const [searchParams, setSearchParams] = useSearchParams();
   const shipmentIdFilter = searchParams.get("shipmentId") || "";
   const { documents, typeFilter, setTypeFilter, loading, generateBOL, findDocById } = useDocuments(shipments, orders);
@@ -28,6 +34,10 @@ export default function DocumentsPage() {
   }
 
   async function handleGenerateBOL() {
+    if (!canEditDocuments) {
+      showToast("You have view-only access to Documents", "warning");
+      return;
+    }
     const result = await generateBOL(shipmentIdFilter || undefined);
     showToast(result.message, result.success ? "success" : "warning");
   }
@@ -38,6 +48,10 @@ export default function DocumentsPage() {
   }
 
   function handleSend(doc) {
+    if (!canEditDocuments) {
+      showToast("You have view-only access to Documents", "warning");
+      return;
+    }
     showToast(doc.id + " sent to carrier", "success");
   }
 
@@ -62,9 +76,11 @@ export default function DocumentsPage() {
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-primary btn-sm" onClick={handleGenerateBOL}>
-            + Generate BOL
-          </button>
+          {canEditDocuments && (
+            <button className="btn btn-primary btn-sm" onClick={handleGenerateBOL}>
+              + Generate BOL
+            </button>
+          )}
         </div>
       </div>
 
@@ -83,6 +99,7 @@ export default function DocumentsPage() {
           onView={handleView}
           onSend={handleSend}
           sel={sel}
+          canEdit={canEditDocuments}
         />
       </div>
 

@@ -195,6 +195,27 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
     }
   });
 
+  // QA 226 (2026-05-12): POST a new cost line to an existing invoice.
+  // Used by the Freight Invoice modal "Add Cost" button so finance can
+  // tack on an accessorial / discount after the invoice is created
+  // without rebuilding the whole line set (which would wipe audit
+  // history). Body: { cost_type, invoice_cost, approved_cost?, description? }.
+  router.post('/:id/cost-lines', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const created = await invoiceCostLines.addLine({
+        invoiceId: req.params.id,
+        line:      req.body || {},
+        user,
+      });
+      res.status(201).json(created);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   // REQ-192: DELETE /api/invoices/:id — remove an invoice. Replaces the
   // legacy generic /api/db/invoices/:id DELETE the UI used to hit; that
   // path bypassed the REQ-02 audit pipeline and left no record of who

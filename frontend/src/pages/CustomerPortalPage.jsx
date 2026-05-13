@@ -6,9 +6,14 @@ import ShipmentVisibilityTable from "../components/customer-portal/ShipmentVisib
 import InviteCustomerModal from "../components/customer-portal/InviteCustomerModal";
 import { useRowSelection } from "../hooks/useRowSelection";
 import SelectionBar from "../components/ui/SelectionBar";
+// QA 249/254 (2026-05-12): Planner / Viewer have view-only access to
+// Customer Portal but Share / Invite were unconditional. Gate via
+// useFeatureAccess.
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 export default function CustomerPortalPage() {
   const { shipments, orders } = useOutletContext();
+  const { canEdit: canEditPortal } = useFeatureAccess("customer_portal");
   const {
     stats,
     customerList,
@@ -70,12 +75,14 @@ export default function CustomerPortalPage() {
           >
             🔗 Copy Portal Link
           </button>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setInviteModalOpen(true)}
-          >
-            📧 Invite Customer
-          </button>
+          {canEditPortal && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setInviteModalOpen(true)}
+            >
+              📧 Invite Customer
+            </button>
+          )}
         </div>
       </div>
 
@@ -100,7 +107,8 @@ export default function CustomerPortalPage() {
           <PortalStats stats={stats} />
           <CustomerAccessList
             customers={customerList}
-            onShare={handleShareCustomer}
+            onShare={canEditPortal ? handleShareCustomer : null}
+            canEdit={canEditPortal}
           />
         </div>
 
@@ -108,8 +116,9 @@ export default function CustomerPortalPage() {
         <SelectionBar count={sel.size} entityLabel="Shipment" onClear={sel.clear} />
         <ShipmentVisibilityTable
           rows={visibilityRows}
-          onShare={handleShareTracking}
+          onShare={canEditPortal ? handleShareTracking : null}
           sel={sel}
+          canEdit={canEditPortal}
         />
       </div>
 

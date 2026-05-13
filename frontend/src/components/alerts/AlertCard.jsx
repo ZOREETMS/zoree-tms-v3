@@ -2,7 +2,9 @@ import { useNavigate } from "react-router-dom";
 import { SEVERITY_CONFIG, ALERT_STATUS } from "../../types/alerts";
 import { formatTimestamp } from "../../utils/formatters";
 
-export default function AlertCard({ alert, onResolve, onAcknowledge }) {
+// QA 252/255 (2026-05-12): `canEdit` defaults to true and hides the
+// action buttons (Tender All / Resolve / Acknowledge) when false.
+export default function AlertCard({ alert, onResolve, onAcknowledge, canEdit = true }) {
   const navigate = useNavigate();
   const config = SEVERITY_CONFIG[alert.severity];
   const isResolved = alert.status === ALERT_STATUS.RESOLVED;
@@ -42,12 +44,12 @@ export default function AlertCard({ alert, onResolve, onAcknowledge }) {
       </div>
 
       <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-        {!isResolved && !isAcknowledged && (
+        {canEdit && !isResolved && !isAcknowledged && (
           <button className="btn btn-ghost btn-sm" onClick={() => onAcknowledge(alert.id)}>
             Acknowledge
           </button>
         )}
-        {!isResolved && alert.actionLabel && (
+        {canEdit && !isResolved && alert.actionLabel && (
           <button
             className={`btn btn-sm ${alert.severity === "danger" ? "btn-danger" : alert.severity === "warning" ? "btn-primary" : "btn-secondary"}`}
             onClick={handleAction}
@@ -55,7 +57,7 @@ export default function AlertCard({ alert, onResolve, onAcknowledge }) {
             {alert.actionLabel}
           </button>
         )}
-        {!isResolved && !alert.actionLabel && (
+        {canEdit && !isResolved && !alert.actionLabel && (
           <button className="btn btn-secondary btn-sm" onClick={() => onResolve(alert.id)}>
             Resolve
           </button>

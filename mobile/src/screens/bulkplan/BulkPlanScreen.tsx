@@ -27,6 +27,10 @@ export default function BulkPlanScreen() {
   } = useBulkPlan();
 
   const [search, setSearch] = useState('');
+  // QA 244 (2026-05-12): web BulkPlan exposes a Customer dropdown so
+  // a planner can scope the unplanned list to one shipper at a time.
+  // Empty string == "All customers".
+  const [customerFilter, setCustomerFilter] = useState('');
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   // Bug #162 / #168: optional dock/loading + preferred-carrier defaults
   // applied to every plan produced by this run. Empty values are not
@@ -75,16 +79,37 @@ export default function BulkPlanScreen() {
     }
   }, [results, navigation, reset]);
 
+  // QA 244 (2026-05-12): unique customer list derived from the
+  // currently-loaded unplanned orders. Sorted alphabetically so the
+  // dropdown order stays stable as data refreshes.
+  const customerOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of unplannedOrders) {
+      const c = (o as any).customer || (o as any).customer_name;
+      if (c) set.add(String(c));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [unplannedOrders]);
+
   const filteredOrders = useMemo(() => {
-    if (!search.trim()) return unplannedOrders;
-    const q = search.toLowerCase();
-    return unplannedOrders.filter((o: any) =>
-      (o.id || '').toLowerCase().includes(q) ||
-      (o.customer || '').toLowerCase().includes(q) ||
-      (o.origin || '').toLowerCase().includes(q) ||
-      (o.destination || '').toLowerCase().includes(q),
-    );
-  }, [unplannedOrders, search]);
+    let list = unplannedOrders;
+    if (customerFilter) {
+      list = list.filter(
+        (o: any) =>
+          (o.customer || o.customer_name || '').toString() === customerFilter,
+      );
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((o: any) =>
+        (o.id || '').toLowerCase().includes(q) ||
+        (o.customer || '').toLowerCase().includes(q) ||
+        (o.origin || '').toLowerCase().includes(q) ||
+        (o.destination || '').toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [unplannedOrders, search, customerFilter]);
 
   const allSelected = filteredOrders.length > 0 && filteredOrders.every((o: any) => selectedIds.has(o.id));
 
@@ -145,6 +170,54 @@ export default function BulkPlanScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      {/* QA 244 (2026-05-12): Customer dropdown — scopes the unplanned
+          list to one customer. Implemented as a horizontal chip row to
+          stay consistent with the Shipments status filter on this app;
+          a native Picker would have shipped fewer lines but rendered
+          inconsistently across iOS / Android. */}
+      {customerOptions.length > 0 && (
+        <View style={styles.customerFilterRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setCustomerFilter('')}
+            style={[
+              styles.customerChip,
+              customerFilter === '' && styles.customerChipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.customerChipLabel,
+                customerFilter === '' && styles.customerChipLabelActive,
+              ]}
+            >
+              All Customers
+            </Text>
+          </TouchableOpacity>
+          {customerOptions.map((c) => (
+            <TouchableOpacity
+              key={c}
+              activeOpacity={0.7}
+              onPress={() => setCustomerFilter(c)}
+              style={[
+                styles.customerChip,
+                customerFilter === c && styles.customerChipActive,
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.customerChipLabel,
+                  customerFilter === c && styles.customerChipLabelActive,
+                ]}
+              >
+                {c}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {error ? (
         <View style={styles.errorBanner}>
@@ -320,6 +393,37 @@ const styles = StyleSheet.create({
     paddingVertical: 3, borderRadius: borderRadius.sm,
   },
   laneChipText: { fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: colors.purple },
+  // QA 244 (2026-05-12): Customer filter chips. Horizontal row of
+  // selectable chips, one per unique customer; the active chip uses
+  // the accent fill to mirror the status filter on ShipmentsScreen.
+  customerFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  customerChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+    maxWidth: 180,
+  },
+  customerChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  customerChipLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.text2,
+  },
+  customerChipLabelActive: {
+    color: colors.white,
+  },
   moreLanes: { fontSize: fontSize.xs, color: colors.text3, alignSelf: 'center' },
   searchRow: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg,

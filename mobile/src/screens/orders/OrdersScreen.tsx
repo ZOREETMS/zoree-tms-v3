@@ -28,6 +28,10 @@ import { unplanOrdersBulk } from '../../services/ordersService';
 // the same string written to orders.status by api/services/bulkPlanExecution,
 // so no other layer needs to change. Aligns with QA tickets P218–P223 audit
 // for mobile Orders parity.
+// QA 227 (2026-05-12): web Orders status filter includes 'In Transit'
+// (orders whose shipment is picked up and en route). Adding it here so
+// the mobile filter list matches the web pill set; the value is the
+// same string written to orders.status by the shipment status sync.
 const ORDER_STATUSES = [
   'All',
   'Unplanned',
@@ -35,6 +39,7 @@ const ORDER_STATUSES = [
   'Planning Failed',
   'Consolidated',
   'Tendered',
+  'In Transit',
   'Delivered',
   'Cancelled',
 ];
@@ -300,6 +305,86 @@ export default function OrdersScreen() {
     [navigation],
   );
 
+  // QA 228 (2026-05-12): Single-row Cancel Order from the 3-dot kebab.
+  // Sets the order's status to 'Cancelled' via the generic /api/db
+  // PATCH (which is REQ-02 audited). Mirrors the web kebab's Cancel
+  // Order item. Delete is intentionally not exposed on mobile per the
+  // 2026-05-11 triage decision (P223).
+  const handleRowCancel = useCallback(
+    (orderId: string) => {
+      Alert.alert(
+        'Cancel order?',
+        `${orderId} will be marked Cancelled. Any attached shipment will need to be reviewed.`,
+        [
+          { text: 'Keep', style: 'cancel' },
+          {
+            text: 'Cancel Order',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Use the shared DbApi wrapper that the rest of the
+                // ordersService.ts file uses for patches. The realtime
+                // refresh comes back via DataContext.
+                const { DbApi } = await import('../../shared/api');
+                await DbApi.update('orders', orderId, { status: 'Cancelled' });
+                Alert.alert('Done', `${orderId} cancelled.`);
+                await refreshData();
+              } catch (err: any) {
+                Alert.alert('Cancel failed', err?.message || String(err));
+              }
+            },
+          },
+        ],
+      );
+    },
+    [refreshData],
+  );
+
+  // QA 234 (2026-05-12): Single-row Unplan from the 3-dot kebab. Reuses
+  // the bulk service so server-side semantics (cascade-delete an empty
+  // shipment, refuse for in-transit/delivered/cancelled) stay in one
+  // place. Wrapped in a confirm so a stray tap can't unplan.
+  const handleRowUnplan = useCallback(
+    (orderId: string) => {
+      Alert.alert(
+        'Unplan order?',
+        `${orderId} will be moved back to Unplanned. If its shipment becomes empty it will be deleted.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Unplan',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const res = await unplanOrdersBulk(
+                  [orderId],
+                  data.orders,
+                  data.shipments || [],
+                );
+                const okCount = res.unplanned.length;
+                const delCount = res.deletedShipments.length;
+                const failCount = res.failed.length;
+                Alert.alert(
+                  'Done',
+                  okCount
+                    ? `Unplanned ${orderId}.` +
+                        (delCount ? ' Empty shipment deleted.' : '')
+                    : failCount
+                      ? `Could not unplan ${orderId}.`
+                      : 'No change.',
+                );
+                await refreshData();
+              } catch (err: any) {
+                Alert.alert('Unplan failed', err?.message || String(err));
+              }
+            },
+          },
+        ],
+      );
+    },
+    [data.orders, data.shipments, refreshData],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: any }) => {
       const id = String(item.id ?? item.order_id ?? '');
@@ -314,6 +399,8 @@ export default function OrdersScreen() {
           onDuplicate={handleRowDuplicate}
           onAddToShipment={handleRowAddToShipment}
           onCrossDockPlan={handleRowCrossDock}
+          onUnplan={handleRowUnplan}
+          onCancelOrder={handleRowCancel}
         />
       );
     },
@@ -326,6 +413,8 @@ export default function OrdersScreen() {
       handleRowDuplicate,
       handleRowAddToShipment,
       handleRowCrossDock,
+      handleRowUnplan,
+      handleRowCancel,
     ],
   );
 
