@@ -155,6 +155,42 @@ export async function withdrawTender(args: {
   }
 }
 
+// QA 240 (2026-05-12): "After tendering, the system doesn't show
+// Accept or Reject options". Web has simulate-accept/reject for QA
+// flows (a Tendered shipment can be flipped to Tender Accepted or
+// Tender Rejected without round-tripping through the carrier portal).
+// Mirror both on mobile. Both use the audited /api/db/shipments PATCH
+// so the REQ-02 status row lands in change_history and the connected
+// orders cascade via the existing event listeners.
+
+export async function acceptTender(args: {
+  shipment: any;
+}): Promise<ShipmentActionResult> {
+  const { shipment } = args;
+  const id = shipment?.id || shipment?.shipment_id;
+  if (!id) return { ok: false, message: 'Shipment is not loaded.' };
+  try {
+    await ShipmentsApi.update(id, { status: 'Tender Accepted' });
+    return { ok: true, message: `Tender accepted for ${id}.` };
+  } catch (err: any) {
+    return { ok: false, message: err?.message || 'Could not accept tender.' };
+  }
+}
+
+export async function rejectTender(args: {
+  shipment: any;
+}): Promise<ShipmentActionResult> {
+  const { shipment } = args;
+  const id = shipment?.id || shipment?.shipment_id;
+  if (!id) return { ok: false, message: 'Shipment is not loaded.' };
+  try {
+    await ShipmentsApi.update(id, { status: 'Tender Rejected' });
+    return { ok: true, message: `Tender rejected for ${id}.` };
+  } catch (err: any) {
+    return { ok: false, message: err?.message || 'Could not reject tender.' };
+  }
+}
+
 /* ── Change carrier (parity with web fetchChangeCarrierQuotes
    + confirmChangeCarrier + services/shipmentService.changeShipmentCarrier) */
 

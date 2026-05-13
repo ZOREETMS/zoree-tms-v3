@@ -27,6 +27,8 @@ import { useData } from '../../state/DataContext';
 import {
   tenderShipment,
   withdrawTender as withdrawTenderAction,
+  acceptTender as acceptTenderAction,
+  rejectTender as rejectTenderAction,
   fetchChangeCarrierQuotes,
   confirmChangeCarrier as confirmChangeCarrierAction,
   createInvoiceFromShipment,
@@ -208,6 +210,8 @@ export default function ShipmentDetailScreen() {
   const [busyAction, setBusyAction] = useState<
     | 'tender'
     | 'withdraw'
+    | 'accept'
+    | 'reject'
     | 'changeCarrier'
     | 'invoice'
     | 'dock'
@@ -319,6 +323,58 @@ export default function ShipmentDetailScreen() {
       ],
     );
   }, [shipment, data.shipments, refreshData]);
+
+  // QA 240 (2026-05-12): Accept / Reject the active tender. Both
+  // delegate to the service layer; the parent screen only flips the
+  // busy flag, surfaces the result, and triggers a refresh.
+  const handleAccept = useCallback(() => {
+    if (!shipment) return;
+    Alert.alert(
+      'Accept Tender',
+      `Accept the tender for ${shipment.id || shipment.shipment_id}? The shipment will move to "Tender Accepted".`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            setBusyAction('accept');
+            try {
+              const result = await acceptTenderAction({ shipment });
+              if (refreshData) await refreshData();
+              Alert.alert(result.ok ? 'Tender Accepted' : 'Accept Failed', result.message);
+            } finally {
+              setBusyAction(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [shipment, refreshData]);
+
+  const handleReject = useCallback(() => {
+    if (!shipment) return;
+    Alert.alert(
+      'Reject Tender',
+      `Reject the tender for ${shipment.id || shipment.shipment_id}? The shipment will move to "Tender Rejected" and the carrier will need to be re-tendered or changed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyAction('reject');
+            try {
+              const result = await rejectTenderAction({ shipment });
+              if (refreshData) await refreshData();
+              Alert.alert(result.ok ? 'Tender Rejected' : 'Reject Failed', result.message);
+            } finally {
+              setBusyAction(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [shipment, refreshData]);
 
   const handleOpenChangeCarrier = useCallback(async () => {
     if (!shipment) return;
@@ -726,6 +782,65 @@ export default function ShipmentDetailScreen() {
           )}
         </Card>
 
+        {/* QA 238 (2026-05-12): "Shipment Change History section is
+            missing on mobile". historyRows are already loaded above; we
+            just render them as a vertical log of field-level edits so
+            the planner can see who changed what when, mirroring web's
+            ShipmentHistoryDrawer. The Timeline section above shows
+            high-level phase transitions; this section shows raw audit
+            rows. */}
+        <Card style={styles.infoCard}>
+          <SectionHeader>Change History</SectionHeader>
+          {historyLoading ? (
+            <Text style={styles.placeholderText}>Loading…</Text>
+          ) : historyRows.length === 0 ? (
+            <Text style={styles.placeholderText}>No change history</Text>
+          ) : (
+            <View>
+              {historyRows.slice(0, 50).map((row: any, idx: number) => {
+                const fieldLabel = row.field || row.action || 'change';
+                const beforeText =
+                  row.old_value == null || row.old_value === ''
+                    ? '—'
+                    : String(row.old_value);
+                const afterText =
+                  row.new_value == null || row.new_value === ''
+                    ? '—'
+                    : String(row.new_value);
+                const whenText = row.created_at
+                  ? new Date(row.created_at).toLocaleString()
+                  : '';
+                return (
+                  <View
+                    key={row.id || `${row.created_at || idx}-${idx}`}
+                    style={{
+                      paddingVertical: 8,
+                      borderBottomWidth: idx === historyRows.length - 1 ? 0 : 1,
+                      borderBottomColor: colors.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>
+                      {fieldLabel}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.text2, marginTop: 2 }}>
+                      {beforeText} → {afterText}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: colors.text3, marginTop: 2 }}>
+                      {row.username || 'system'}
+                      {whenText ? `  ·  ${whenText}` : ''}
+                    </Text>
+                  </View>
+                );
+              })}
+              {historyRows.length > 50 ? (
+                <Text style={{ fontSize: 10, color: colors.text3, marginTop: 6 }}>
+                  Showing the 50 most recent of {historyRows.length} changes.
+                </Text>
+              ) : null}
+            </View>
+          )}
+        </Card>
+
         {/* Notes (optional) */}
         {vm.notes ? (
           <Card style={styles.infoCard}>
@@ -744,6 +859,8 @@ export default function ShipmentDetailScreen() {
           busyAction={busyAction}
           onTender={handleTender}
           onWithdraw={handleWithdraw}
+          onAccept={handleAccept}
+          onReject={handleReject}
           onChangeCarrier={handleOpenChangeCarrier}
           onDockSchedule={handleDockSchedule}
           onInvoice={handleInvoice}

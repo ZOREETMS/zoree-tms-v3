@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { TextInput } from 'react-native';
 import {
   FlatList,
   ScrollView,
@@ -81,7 +82,26 @@ export default function MessagingScreen() {
     kpis,
     tab,
     switchTab,
+    filters,
+    updateFilter,
   } = useMessaging(data.shipments);
+
+  // QA 247 (2026-05-12): web Messaging Hub exposes filters for Type
+  // and Status alongside the Direction tabs. Mirror the same filter
+  // set on mobile so the planner can scope the message list the same
+  // way they would on the web. The unique sets are derived from what's
+  // currently loaded so a tenant with no Tender messages doesn't see
+  // an empty chip.
+  const typeOptions = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const m of messages || []) if (m?.type) s.add(String(m.type));
+    return Array.from(s).sort();
+  }, [messages]);
+  const statusOptions = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const m of messages || []) if (m?.status) s.add(String(m.status));
+    return Array.from(s).sort();
+  }, [messages]);
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => (
@@ -213,6 +233,82 @@ export default function MessagingScreen() {
           ))}
         </View>
 
+        {/* QA 247 (2026-05-12): Search input + Type / Status chip
+            rows. Search is wired through updateFilter so the existing
+            shared/services/messagingService.filterMessages handles the
+            actual scoring. */}
+        <View style={styles.filterBlock}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search messages..."
+            placeholderTextColor={colors.text3}
+            value={filters.search}
+            onChangeText={(v: string) => updateFilter('search', v)}
+          />
+          {typeOptions.length > 0 ? (
+            <View style={styles.chipRowH}>
+              <TouchableOpacity
+                onPress={() => updateFilter('type', '')}
+                style={[
+                  styles.chipSm,
+                  !filters.type && styles.chipSmActive,
+                ]}
+              >
+                <Text style={[
+                  styles.chipSmLabel,
+                  !filters.type && styles.chipSmLabelActive,
+                ]}>All Types</Text>
+              </TouchableOpacity>
+              {typeOptions.map((t) => (
+                <TouchableOpacity
+                  key={`type-${t}`}
+                  onPress={() => updateFilter('type', t)}
+                  style={[
+                    styles.chipSm,
+                    filters.type === t && styles.chipSmActive,
+                  ]}
+                >
+                  <Text style={[
+                    styles.chipSmLabel,
+                    filters.type === t && styles.chipSmLabelActive,
+                  ]} numberOfLines={1}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          {statusOptions.length > 0 ? (
+            <View style={styles.chipRowH}>
+              <TouchableOpacity
+                onPress={() => updateFilter('status', '')}
+                style={[
+                  styles.chipSm,
+                  !filters.status && styles.chipSmActive,
+                ]}
+              >
+                <Text style={[
+                  styles.chipSmLabel,
+                  !filters.status && styles.chipSmLabelActive,
+                ]}>All Statuses</Text>
+              </TouchableOpacity>
+              {statusOptions.map((s) => (
+                <TouchableOpacity
+                  key={`status-${s}`}
+                  onPress={() => updateFilter('status', s)}
+                  style={[
+                    styles.chipSm,
+                    filters.status === s && styles.chipSmActive,
+                  ]}
+                >
+                  <Text style={[
+                    styles.chipSmLabel,
+                    filters.status === s && styles.chipSmLabelActive,
+                  ]} numberOfLines={1}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
+
         {/* Message List */}
         <FlatList
           data={messages}
@@ -237,6 +333,48 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  // QA 247 (2026-05-12): filter block hosts search + type/status chips.
+  filterBlock: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  searchInput: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.bg2,
+    fontSize: fontSize.sm,
+    color: colors.text,
+  },
+  chipRowH: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  chipSm: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+    maxWidth: 180,
+  },
+  chipSmActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  chipSmLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.text2,
+  },
+  chipSmLabelActive: {
+    color: colors.white,
   },
   container: {
     flex: 1,

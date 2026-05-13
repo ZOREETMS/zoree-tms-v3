@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -91,6 +91,9 @@ export default function OrderDetailScreen() {
 
   const [lines, setLines] = useState<any[]>([]);
   const [linesLoading, setLinesLoading] = useState(false);
+  // QA 241 (2026-05-12): monotonic counter so late responses can be
+  // discarded. Declared as useRef so increments don't trigger renders.
+  const lineFetchRef = useRef({ current: 0 });
   const [updating, setUpdating] = useState(false);
   // REQ-02 Phase 1 (mobile parity): change-history rows for this
   // order. `historyTick` is bumped after any local mutation so the
@@ -120,14 +123,31 @@ export default function OrderDetailScreen() {
   // wrote, so the user no longer has to pull-to-refresh.
   const syncTick = useOrderDetailLiveSync(orderId);
 
+  // QA 241 (2026-05-12): "Lane items sometimes empty after planning".
+  // The `alive` flag alone wasn't enough — when syncTick increments
+  // mid-fetch (e.g. a planning batch fires several postgres_changes
+  // updates), a slower earlier request could still resolve AFTER the
+  // newer one and overwrite the fresh rows with stale ones. Use a
+  // monotonically-increasing request id so we only accept the result
+  // of the most recently issued fetch.
   useEffect(() => {
     if (!orderId || orderId === 'new') return;
     let alive = true;
+    const myReq = ++lineFetchRef.current.current;
     setLinesLoading(true);
     OrdersApi.lines(orderId)
-      .then((res: any) => { if (alive) setLines(Array.isArray(res) ? res : []); })
-      .catch(() => { if (alive) setLines([]); })
-      .finally(() => { if (alive) setLinesLoading(false); });
+      .then((res: any) => {
+        if (!alive || lineFetchRef.current.current !== myReq) return;
+        setLines(Array.isArray(res) ? res : []);
+      })
+      .catch(() => {
+        if (!alive || lineFetchRef.current.current !== myReq) return;
+        setLines([]);
+      })
+      .finally(() => {
+        if (!alive || lineFetchRef.current.current !== myReq) return;
+        setLinesLoading(false);
+      });
     return () => { alive = false; };
     // syncTick re-runs this effect whenever the parent order's
     // updated_at changes server-side, so a web-side line edit appears

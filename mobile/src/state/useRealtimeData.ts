@@ -123,6 +123,35 @@ export function useRealtimeData({
       )
       .subscribe(onChannelStatus('shipments'));
 
+    // QA 236 (2026-05-12): "Updated lane items not reflected in mobile".
+    // Mirror the orders + shipments subscriptions for order_lines so a
+    // web-side line item edit (qty / weight / commodity) wakes the
+    // mobile UI without a manual pull-to-refresh.
+    const orderLinesChannel = client
+      .channel('rt:mobile-order-lines')
+      .on(
+        // @ts-expect-error see above
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_lines' },
+        () => fire(),
+      )
+      .subscribe(onChannelStatus('order_lines'));
+
+    // QA 237 (2026-05-12): "Updated location address not reflected in
+    // mobile". The locations master is loaded by DataContext.refreshData
+    // and consumed by the order / shipment detail screens; a web-side
+    // address edit needs to bubble back without forcing the user to
+    // pull-to-refresh.
+    const locationsChannel = client
+      .channel('rt:mobile-locations')
+      .on(
+        // @ts-expect-error see above
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'locations' },
+        () => fire(),
+      )
+      .subscribe(onChannelStatus('locations'));
+
     // App-foreground refresh: when the user returns from background
     // (phone asleep, app switched away) the socket may have been
     // suspended. Force a refresh so the screen they're on doesn't
@@ -136,6 +165,8 @@ export function useRealtimeData({
       appStateSub.remove();
       client.removeChannel(ordersChannel);
       client.removeChannel(shipmentsChannel);
+      client.removeChannel(orderLinesChannel);
+      client.removeChannel(locationsChannel);
     };
   }, [enabled, onChange, debounceMs]);
 }

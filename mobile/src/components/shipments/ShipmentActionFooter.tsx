@@ -45,6 +45,8 @@ export interface ShipmentActionFooterProps {
   busyAction?:
     | 'tender'
     | 'withdraw'
+    | 'accept'
+    | 'reject'
     | 'changeCarrier'
     | 'invoice'
     | 'dock'
@@ -54,6 +56,11 @@ export interface ShipmentActionFooterProps {
     | null;
   onTender: () => void;
   onWithdraw: () => void;
+  // QA 240 (2026-05-12): Accept/Reject for a Tendered shipment. Both
+  // are optional — the parent screen can omit them if it wants to keep
+  // accept/reject behind a separate confirm flow.
+  onAccept?: () => void;
+  onReject?: () => void;
   onChangeCarrier: () => void;
   onDockSchedule: () => void;
   onInvoice: () => void;
@@ -82,6 +89,8 @@ const ShipmentActionFooter: React.FC<ShipmentActionFooterProps> = ({
   busyAction = null,
   onTender,
   onWithdraw,
+  onAccept,
+  onReject,
   onChangeCarrier,
   onDockSchedule,
   onInvoice,
@@ -91,6 +100,10 @@ const ShipmentActionFooter: React.FC<ShipmentActionFooterProps> = ({
 }) => {
   const showTender = TENDER_STATUSES.has(status);
   const showWithdraw = status === 'Tendered';
+  // QA 240 (2026-05-12): Accept / Reject visible whenever the
+  // shipment is Tendered AND the parent provided a handler.
+  const showAccept = status === 'Tendered' && typeof onAccept === 'function';
+  const showReject = status === 'Tendered' && typeof onReject === 'function';
   const showChangeCarrier = CHANGE_CARRIER_STATUSES.has(status);
   const showSendToWms = TENDER_ACCEPTED_STATUSES.has(status);
 
@@ -148,6 +161,22 @@ const ShipmentActionFooter: React.FC<ShipmentActionFooterProps> = ({
           'Withdraw Tender',
           'arrow-undo-outline',
           onWithdraw,
+          'warning',
+        )}
+      {showAccept &&
+        renderButton(
+          'accept',
+          'Accept Tender',
+          'checkmark-circle-outline',
+          onAccept!,
+          'primary',
+        )}
+      {showReject &&
+        renderButton(
+          'reject',
+          'Reject Tender',
+          'close-circle-outline',
+          onReject!,
           'warning',
         )}
       {showChangeCarrier &&

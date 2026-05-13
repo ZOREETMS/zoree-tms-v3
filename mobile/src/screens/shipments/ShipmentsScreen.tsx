@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
+// (useMemo already imported above — kept on a separate line for diff stability)
 import {
   FlatList,
   RefreshControl,
@@ -39,7 +40,20 @@ export default function ShipmentsScreen() {
   const { data, loading, refreshData } = useData();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
+  // QA 230 (2026-05-12): web filter set includes Mode (TL/LTL/Air/etc).
+  // Empty string == all modes. Derived options come from what's loaded
+  // so a tenant without LTL doesn't see an empty pill.
+  const [modeFilter, setModeFilter] = useState<string>('');
   const [creating, setCreating] = useState(false);
+
+  const modeOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of data.shipments || []) {
+      const m = (s as any).mode;
+      if (m) set.add(String(m).trim());
+    }
+    return Array.from(set).sort();
+  }, [data.shipments]);
 
   const filtered = useMemo(() => {
     let list = data.shipments;
@@ -48,6 +62,13 @@ export default function ShipmentsScreen() {
     if (statusFilter !== 'All') {
       list = list.filter(
         (s: any) => (s.status || '').toLowerCase() === statusFilter.toLowerCase(),
+      );
+    }
+
+    // QA 230 (2026-05-12): Mode filter
+    if (modeFilter) {
+      list = list.filter(
+        (s: any) => String(s.mode || '').toLowerCase() === modeFilter.toLowerCase(),
       );
     }
 
@@ -77,7 +98,7 @@ export default function ShipmentsScreen() {
     }
 
     return list;
-  }, [data.shipments, search, statusFilter]);
+  }, [data.shipments, search, statusFilter, modeFilter]);
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => <ShipmentCard shipment={item} />,
@@ -135,6 +156,50 @@ export default function ShipmentsScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        {/* QA 230 (2026-05-12): Mode filter — TL / LTL / etc. Hidden
+            when the loaded set has no mode info. */}
+        {modeOptions.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+            style={styles.chipScroll}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setModeFilter('')}
+              style={[
+                styles.chip,
+                !modeFilter && styles.chipActive,
+              ]}>
+              <Text
+                style={[
+                  styles.chipLabel,
+                  !modeFilter && styles.chipLabelActive,
+                ]}>
+                All Modes
+              </Text>
+            </TouchableOpacity>
+            {modeOptions.map(m => (
+              <TouchableOpacity
+                key={`mode-${m}`}
+                activeOpacity={0.7}
+                onPress={() => setModeFilter(m)}
+                style={[
+                  styles.chip,
+                  modeFilter === m && styles.chipActive,
+                ]}>
+                <Text
+                  style={[
+                    styles.chipLabel,
+                    modeFilter === m && styles.chipLabelActive,
+                  ]}>
+                  {m}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : null}
 
         {/* List */}
         <FlatList
