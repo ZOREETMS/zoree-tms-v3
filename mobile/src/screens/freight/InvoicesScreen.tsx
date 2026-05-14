@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
   RefreshControl,
+  ScrollView,
   TouchableOpacity,
   Alert,
   StyleSheet,
@@ -26,6 +27,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import StatusFilter from '../../components/common/StatusFilter';
 import InvoiceFormModal from '../../components/invoices/InvoiceFormModal';
+import { exportRowsAsCsv } from '../../services/csvExport';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 const INVOICE_STATUSES = ['All', 'Pending', 'Approved', 'Disputed'];
@@ -260,12 +262,54 @@ export default function InvoicesScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header — QA #284 adds Import + Export buttons inline with
+            the title (mirroring the web Freight Invoices toolbar).
+            "Import" surfaces a web-only notice because invoice OCR /
+            CSV ingest still lives on the web; "Export" goes through
+            the shared csvExport service. The "+" FAB at bottom-right
+            handles New Invoice. */}
         <View style={styles.header}>
-          <Text style={styles.title}>Freight Invoices</Text>
-          <Text style={styles.count}>
-            {filtered.length} invoice{filtered.length !== 1 ? 's' : ''}
-          </Text>
+          <View>
+            <Text style={styles.title}>Freight Invoices</Text>
+            <Text style={styles.count}>
+              {filtered.length} invoice{filtered.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            onPress={() =>
+              Alert.alert(
+                'Import Invoices',
+                'Invoice OCR + CSV import is currently web-only. Use the Zoree web app to bulk-import; results will appear here on the next refresh.',
+              )
+            }
+            style={[styles.actionBtn, { marginRight: spacing.sm }]}
+            accessibilityRole="button">
+            <Ionicons name="cloud-upload-outline" size={16} color={colors.accent} />
+            <Text style={styles.actionText}>Import</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              exportRowsAsCsv(
+                filtered,
+                [
+                  { key: 'num',     header: 'Invoice #' },
+                  { key: 'carrier', header: 'Carrier' },
+                  { key: 'shipId',  header: 'Shipment' },
+                  { key: 'amount',  header: 'Amount' },
+                  { key: 'agreed',  header: 'Agreed' },
+                  { key: 'status',  header: 'Status' },
+                  { key: 'date',    header: 'Date' },
+                ],
+                { title: 'Freight Invoices', filename: 'invoices.csv' },
+              )
+            }
+            style={styles.actionBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Export invoices as CSV">
+            <Ionicons name="download-outline" size={16} color={colors.accent} />
+            <Text style={styles.actionText}>Export</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Stats */}
@@ -324,6 +368,53 @@ export default function InvoicesScreen() {
           active={activeStatus}
           onSelect={handleStatusSelect}
         />
+
+        {/* QA #284 — Carrier filter row. The hook already exposes
+            `carriers` (distinct carriers from the loaded invoices) and
+            `carrierFilter` / `setCarrierFilter`; we just render the
+            chips. Hidden when only one carrier is present (no point in
+            offering the filter for a tenant with a single source). */}
+        {carriers && carriers.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carrierRow}
+            style={styles.carrierScroll}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setCarrierFilter('')}
+              style={[
+                styles.carrierChip,
+                !carrierFilter && styles.carrierChipActive,
+              ]}>
+              <Text
+                style={[
+                  styles.carrierLabel,
+                  !carrierFilter && styles.carrierLabelActive,
+                ]}>
+                All Carriers
+              </Text>
+            </TouchableOpacity>
+            {carriers.map((c: string) => (
+              <TouchableOpacity
+                key={`car-${c}`}
+                activeOpacity={0.7}
+                onPress={() => setCarrierFilter(c)}
+                style={[
+                  styles.carrierChip,
+                  carrierFilter === c && styles.carrierChipActive,
+                ]}>
+                <Text
+                  style={[
+                    styles.carrierLabel,
+                    carrierFilter === c && styles.carrierLabelActive,
+                  ]}>
+                  {c}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : null}
 
         {/* Invoice List */}
         <FlatList
@@ -396,10 +487,52 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  actionText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
+  },
+  carrierScroll: { flexGrow: 0, marginBottom: spacing.sm },
+  carrierRow: {
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xl,
+    gap: spacing.sm,
+  },
+  carrierChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  carrierChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  carrierLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text2,
+  },
+  carrierLabelActive: { color: colors.white },
   title: {
     fontSize: fontSize['2xl'],
     fontWeight: fontWeight.bold,

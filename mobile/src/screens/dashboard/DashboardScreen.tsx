@@ -89,55 +89,61 @@ export default function DashboardScreen() {
           <Text style={styles.subtitle}>Overview of your operations</Text>
         </View>
 
-        {/* KPI Row */}
+        {/* KPI Row — QA #269 alignment with web Dashboard. The web
+            renders 4 stat cards in this exact order: Active Shipments,
+            On-Time Delivery, Freight Spend, Exceptions. Mobile
+            previously led with "Total Orders" which made the two
+            dashboards look unrelated. Same `computeDashboardStats`
+            algorithm; the labels + ordering are what the user
+            actually compares. */}
         <View style={styles.kpiRow}>
           <View style={styles.kpiHalf}>
             <KpiCard
-              label="Total Orders"
-              // True total from /api/orders/count — `data.orders` is
-              // bounded by the 500-row page DbApi.orders returns, so
-              // reading `.length` here would top out at 500 and never
-              // grow. Falls back to the loaded length for the brief
-              // pre-fetch window.
-              value={data.ordersTotal || data.orders.length}
-              icon="receipt-outline"
+              label="Active Shipments"
+              value={kpis.totalShipments}
+              subtitle={`${dashStats.inTransit} in transit`}
+              icon="cube-outline"
               color={colors.accent}
             />
           </View>
           <View style={styles.kpiHalf}>
             <KpiCard
-              label="Shipments"
-              value={kpis.totalShipments}
-              icon="cube-outline"
-              color={colors.cyan}
+              label="On-Time Delivery"
+              value={`${dashStats.onTimePct}%`}
+              subtitle={`${dashStats.delivered} delivered`}
+              icon="checkmark-circle-outline"
+              color={colors.green}
             />
           </View>
         </View>
         <View style={styles.kpiRow}>
           <View style={styles.kpiHalf}>
             <KpiCard
-              label="On-Time %"
-              // QA P217: use the shared dashboard stats so the value
-              // matches the web tile exactly. Web renders an integer
-              // ("87%"); we use the integer onTimePct field for parity.
-              value={`${dashStats.onTimePct}%`}
-              icon="checkmark-circle-outline"
-              color={colors.green}
+              label="Freight Spend"
+              value={formatCurrency(dashStats.totalCost)}
+              subtitle={`${kpis.totalShipments} shipments`}
+              icon="wallet-outline"
+              color={colors.yellow}
             />
           </View>
           <View style={styles.kpiHalf}>
             <KpiCard
-              label="Total Spend"
-              // QA P217: use the shared totalCost (parses total_cost
-              // the same way the web sum does, so the dollar tile
-              // matches) instead of the older computeKpis totalSpend
-              // alias.
-              value={formatCurrency(dashStats.totalCost)}
-              icon="wallet-outline"
-              color={colors.purple}
+              label="Exceptions"
+              value={dashStats.exceptions}
+              subtitle={`${dashStats.unplanned} orders unplanned`}
+              icon="alert-circle-outline"
+              color={colors.red}
+              trend={dashStats.exceptions > 0 ? 'up' : 'flat'}
             />
           </View>
         </View>
+
+        {/* Orders total is still surfaced — just demoted from a primary
+            KPI tile to a one-line indicator so the dashboard's main
+            cards mirror the web. */}
+        <Text style={styles.smallStat}>
+          Total orders in scope: {data.ordersTotal || data.orders.length}
+        </Text>
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -301,6 +307,12 @@ const styles = StyleSheet.create({
   },
   kpiHalf: {
     flex: 1,
+  },
+  smallStat: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    fontSize: fontSize.xs,
+    color: colors.text3,
   },
   sectionTitle: {
     fontSize: fontSize.lg,

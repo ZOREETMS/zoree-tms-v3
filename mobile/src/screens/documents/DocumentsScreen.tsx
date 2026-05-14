@@ -155,10 +155,11 @@ export default function DocumentsScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header — QA #289 renames the page title to "Documents & BOL"
+            to align with the drawer label and the web sidebar. */}
         <View style={styles.header}>
           <Ionicons name="folder-open-outline" size={24} color={colors.accent} />
-          <Text style={styles.title}>Documents</Text>
+          <Text style={styles.title}>Documents &amp; BOL</Text>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{filtered.length}</Text>
           </View>
@@ -288,6 +289,9 @@ const styles = StyleSheet.create({
   },
   kpiRow: {
     paddingHorizontal: spacing.lg,
+    // QA #289 — extra right padding so the last KPI card / chip
+    // isn't visually clipped at the edge of horizontal scrollers.
+    paddingRight: spacing.xl,
     gap: spacing.md,
   },
   generateButton: {
@@ -307,7 +311,11 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   chipScroll: { flexGrow: 0, marginBottom: spacing.sm },
-  chipRow: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  chipRow: {
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xl,
+    gap: spacing.sm,
+  },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,

@@ -21,6 +21,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import "../components/access-control/access-control.css";
 
 import { useAuth } from "../state/AuthContext";
@@ -306,22 +307,37 @@ export default function UserRolesPage() {
         </div>
       </div>
 
-      {/* QA bug #261: the previous version of this header rendered four
-          tabs — Users / Roles / Policies / API Access — with three of
-          them disabled and stamped "Coming soon". Beyond reading like a
-          half-shipped UI, the disabled stubs were confusing planners
-          who expected real navigation to live behind those labels. The
-          Users / Policies / API Access modules are tracked as separate
-          features and will be wired in when those pages exist. Until
-          then, render only the Roles tab so the surface area is honest
-          about what the page actually does. The single-tab header is
-          kept (not collapsed entirely) so the role count badge stays
-          discoverable and so the tab styling lines up with the rest of
-          the admin pages. */}
+      {/* QA bug #261: the four tabs (Users / Roles / Policies / API
+          Access) were previously rendered as disabled "Coming soon"
+          stubs. They're now real navigation:
+            • Users tab        → /user-management (existing page, full
+                                 create/edit/disable/delete CRUD over
+                                 the user_profiles + auth.users layer)
+            • Roles tab        → this page (Access Control Center —
+                                 manages the role × feature matrix)
+            • Policies tab     → /policies (read-only consolidated view
+                                 of the live role_feature_permissions
+                                 matrix; the existing permission rules
+                                 ARE the policy of the system today)
+            • API Access tab   → /api-access (programmatic-access keys;
+                                 bearer-token alternative to JWT)
+          Each tab is rendered as a <Link> so it picks up React Router
+          navigation without forcing a full page reload. The active
+          tab keeps the .active class for visual continuity with the
+          previous tab strip. */}
       <div className="acc-tabs">
+        <Link to="/user-management" className="acc-tab" style={{ textDecoration: "none" }}>
+          Users
+        </Link>
         <button type="button" className="acc-tab active">
           Roles <span className="count">{sortedRoleKeys.length}</span>
         </button>
+        <Link to="/policies" className="acc-tab" style={{ textDecoration: "none" }}>
+          Policies
+        </Link>
+        <Link to="/api-access" className="acc-tab" style={{ textDecoration: "none" }}>
+          API Access
+        </Link>
       </div>
 
       {/* Alerts */}

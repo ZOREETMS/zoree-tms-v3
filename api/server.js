@@ -14,6 +14,8 @@ const WebSocket = require('ws');
 const nodemailer = require('nodemailer');
 const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
+const { createApiKeysRouter } = require('./routes/apiKeys');
+const { createApiKeysService } = require('./services/apiKeys');
 const ingestRouter = require('./routes/ingest');
 const fusionIngestRouter = require('./routes/fusionIngest');
 const { buildMwQueueAdminRouter } = require('./routes/mwQueueAdmin');
@@ -219,8 +221,57 @@ async function _loadProfileCached(user) {
 }
 function _invalidateProfileCache(userId) { _profileCache.delete(userId); }
 
+// QA bug #261c: lazy singleton — created on first call so the
+// SUPABASE creds are guaranteed initialised by the time we touch the
+// service. The closure over dbSelect/dbUpsert/dbUpdate keeps the
+// service test-friendly while letting the auth fast-path use it
+// directly.
+let _apiKeysService = null;
+function getApiKeysService() {
+  if (!_apiKeysService) {
+    _apiKeysService = createApiKeysService({ dbSelect, dbUpsert, dbUpdate });
+  }
+  return _apiKeysService;
+}
+
 async function verifyToken(req, res) {
   const auth = req.headers.authorization;
+  // QA bug #261c: programmatic clients (EDI ingest, BI exporters,
+  // batch jobs) can authenticate with `Authorization: ApiKey <token>`
+  // as an alternative to a per-user JWT. The token is verified
+  // against the api_keys table (sha-256 hash lookup, 60s TTL cache);
+  // a matching row produces a synthetic user context with the key's
+  // bound role and tenant. Falls through to the Bearer JWT path when
+  // the header is missing or uses a different scheme.
+  if (auth && auth.startsWith('ApiKey ')) {
+    const rawApiKey = auth.slice(7).trim();
+    try {
+      const ctx = await getApiKeysService().verifyApiKey(rawApiKey);
+      if (!ctx) {
+        res.status(401).json({ error: 'Invalid or revoked API key' });
+        return null;
+      }
+      // Shape this context to match what downstream handlers expect
+      // from the JWT path: roles[], activeRole, tenantId on user.
+      // The synthetic user has no user_metadata or auth.users row of
+      // its own — we surface the issuer's id so audit trails still
+      // attribute writes correctly.
+      return {
+        id:           ctx.id,
+        email:        null,
+        roles:        [ctx.role],
+        activeRole:   ctx.role,
+        tenantId:     ctx.tenantId,
+        user_metadata: { role: ctx.role },
+        _apiKeyId:    ctx.apiKeyId,
+        _viaApiKey:   true,
+      };
+    } catch (e) {
+      console.warn('[verifyToken] ApiKey verification failed:', e?.message || e);
+      res.status(401).json({ error: 'API key verification failed' });
+      return null;
+    }
+  }
   if (!auth || !auth.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing Authorization header' });
     return null;
@@ -609,6 +660,17 @@ app.use('/api/roles', createRolesRouter({
   createRole: createRolePerm,
   deleteRole: deleteRolePerm,
   roleFeatures: ROLE_FEATURES,
+}));
+
+// QA bug #261c: admin-only CRUD for programmatic-access tokens.
+// See api/services/apiKeys.js for hash/verify logic and the verifyToken
+// extension above for how `Authorization: ApiKey <token>` resolves to
+// a synthetic user context.
+app.use('/api/api-keys', createApiKeysRouter({
+  verifyToken,
+  getTenantId,
+  getUserRole,
+  apiKeysService: getApiKeysService(),
 }));
 
 // ── REQ-08: PATCH /api/auth/active-role ──────────────────────────
@@ -1191,6 +1253,31 @@ app.post('/api/oms/push', async (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 
 // GET /api/db/:table?q=<supabase query string>
+// QA #311 — packaging_units read fallback. Migration 039 seeds the
+// table, but on tenants where 039 hasn't been applied yet the table
+// is empty and the Item Master picker / mobile Packaging tab / DB
+// Explorer all show "No Data". Returning a small canonical seed
+// (read-only — writes still go to the real table) lets the UI behave
+// correctly until the migration lands. The list mirrors migration
+// 039_seed_packaging_units.sql for compatibility.
+const PACKAGING_UNIT_READ_FALLBACK = [
+  { id: 'PALLET-48x40', description: 'GMA Standard Pallet 48x40', type: 'Pallet',  status: 'Active', len: 48, wid: 40, hgt: 6,  max_load: 4600 },
+  { id: 'PALLET-48x48', description: 'Square Pallet 48x48',         type: 'Pallet',  status: 'Active', len: 48, wid: 48, hgt: 6,  max_load: 4500 },
+  { id: 'PALLET-EURO',  description: 'EURO EPAL 1200x800',          type: 'Pallet',  status: 'Active', len: 47, wid: 31, hgt: 6,  max_load: 3300 },
+  { id: 'TOTE-LG',      description: 'Large Stackable Tote 27x16x12', type: 'Tote',  status: 'Active', len: 27, wid: 16, hgt: 12, max_load: 100  },
+  { id: 'TOTE-SM',      description: 'Small Tote 18x12x9',           type: 'Tote',  status: 'Active', len: 18, wid: 12, hgt: 9,  max_load: 50   },
+  { id: 'DRUM-55GAL',   description: '55-Gallon Steel Drum',         type: 'Drum',  status: 'Active', len: 24, wid: 24, hgt: 35, max_load: 500  },
+  { id: 'DRUM-30GAL',   description: '30-Gallon Plastic Drum',       type: 'Drum',  status: 'Active', len: 20, wid: 20, hgt: 30, max_load: 280  },
+  { id: 'CARTON-S',     description: 'Small Carton 12x9x6',          type: 'Carton',status: 'Active', len: 12, wid: 9,  hgt: 6,  max_load: 35   },
+  { id: 'CARTON-M',     description: 'Medium Carton 18x12x10',       type: 'Carton',status: 'Active', len: 18, wid: 12, hgt: 10, max_load: 65   },
+  { id: 'CARTON-L',     description: 'Large Carton 24x18x12',        type: 'Carton',status: 'Active', len: 24, wid: 18, hgt: 12, max_load: 95   },
+  { id: 'CARTON-XL',    description: 'XL Carton 30x24x18',           type: 'Carton',status: 'Active', len: 30, wid: 24, hgt: 18, max_load: 140  },
+  { id: 'CRATE-WOOD',   description: 'Wooden Export Crate 48x40x36', type: 'Crate', status: 'Active', len: 48, wid: 40, hgt: 36, max_load: 2200 },
+  { id: 'CRATE-PLASTIC',description: 'Reusable Plastic Crate 48x40x30', type: 'Crate', status: 'Active', len: 48, wid: 40, hgt: 30, max_load: 1600 },
+  { id: 'GAYLORD',      description: 'Triple-Wall Gaylord 48x40x36', type: 'Bin',   status: 'Active', len: 48, wid: 40, hgt: 36, max_load: 1800 },
+  { id: 'BAG-FIBC',     description: 'FIBC Super Sack 35x35x47',     type: 'Bag',   status: 'Active', len: 35, wid: 35, hgt: 47, max_load: 2200 },
+];
+
 app.get('/api/db/:table', async (req, res) => {
   const user = await verifyTokenSoft(req);
   if (!ALLOWED.includes(req.params.table))
@@ -1199,7 +1286,13 @@ app.get('/api/db/:table', async (req, res) => {
     const query = req.query.q || 'select=*&order=created_at.desc&limit=500';
     // Use service role to bypass RLS for all reads
     const rows  = await dbSelect(req.params.table, query, null);
-    res.json(Array.isArray(rows) ? rows : []);
+    const out = Array.isArray(rows) ? rows : [];
+    // QA #311 — read-side fallback only kicks in when the real table
+    // is empty AND the table is on the fallback list.
+    if (out.length === 0 && req.params.table === 'packaging_units') {
+      return res.json(PACKAGING_UNIT_READ_FALLBACK);
+    }
+    res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4251,6 +4344,48 @@ app.post('/api/notify', (req, res) => {
   const { event, data } = req.body || {};
   if (!event) return res.status(400).json({ error: 'event required' });
   wsBroadcast(event, data || {});
+  console.log(`[WS] Broadcast: ${event}`, data ? JSON.stringify(data).slice(0, 100) : '');
+  res.json({ ok: true, clients: wsClients.size });
+});
+
+// ── 404 catch-all (must be AFTER all route definitions) ──────────────────────
+app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
+app.use((err, req, res, next) => { console.error('[Error]', err.message); res.status(500).json({ error: err.message }); });
+
+// ══════════════════════════════════════════════════════════════════
+// Start Server
+// ══════════════════════════════════════════════════════════════════
+server.listen(PORT, () => {
+  console.log(`\n🚛 ZoreeTMS API — Tier 2 running on http://localhost:${PORT}`);
+  console.log(`   ✅ Supabase credentials: SERVER-SIDE ONLY`);
+  console.log(`   ✅ Browser never touches Supabase directly`);
+  console.log(`   ✅ 3-Tier Architecture active`);
+  console.log(`   ✅ WebSocket server active on ws://localhost:${PORT}`);
+  console.log(`   ℹ️  Tender email check: GET http://localhost:${PORT}/health → tenderEmail`);
+  verifySmtpOnStartup().catch(function(err) {
+    console.error('   📧 Tender email: verify error:', err && err.message ? err.message : err);
+  });
+
+  // REQ-31: backend MW queue worker. Defaults ON so OMS→TMS sync
+  // doesn't depend on a browser tab being open. Disable per-env with
+  // MW_QUEUE_AUTO_START=false (e.g. for tests or while debugging the
+  // browser MW). Interval is configurable via MW_QUEUE_INTERVAL_MS.
+  if (String(process.env.MW_QUEUE_AUTO_START || 'true').toLowerCase() !== 'false') {
+    const intervalMs = Number(process.env.MW_QUEUE_INTERVAL_MS) || undefined;
+    mwQueueWorker.start(intervalMs ? { intervalMs } : {});
+    console.log(`   ✅ MW queue worker started (mwQueueWorker)`);
+  } else {
+    console.log(`   ℹ️  MW queue worker NOT auto-started (MW_QUEUE_AUTO_START=false). Use POST /api/mw-queue/start.`);
+  }
+
+  // Fusion (TMS → OIC) outbound publisher. No-op unless OIC_PUBLISH_ENABLED=true.
+  // See api/services/fusionPublisher/index.js and docs/integrations/oic/flows/F3-tms-to-fusion-status.md.
+  fusionPublisher.start();
+  console.log('');
+});
+
+module.exports = app;
+, data || {});
   console.log(`[WS] Broadcast: ${event}`, data ? JSON.stringify(data).slice(0, 100) : '');
   res.json({ ok: true, clients: wsClients.size });
 });

@@ -36,6 +36,8 @@ import PlanningParametersPage from "./pages/PlanningParametersPage";
 import HomePage from "./pages/HomePage";
 import UserRolesPage from "./pages/UserRolesPage";
 import UserManagementPage from "./pages/UserManagementPage";
+import PoliciesPage from "./pages/PoliciesPage";
+import ApiAccessPage from "./pages/ApiAccessPage";
 import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
 import { fetchDurations as fetchDockLoadingDurations } from "./services/dockLoadingDurationsService";
@@ -54,6 +56,15 @@ function PrivateRoutes({ data }) {
         <Route path="settings" element={<RoleGuard><SettingsPage /></RoleGuard>} />
         <Route path="user-roles" element={<RoleGuard><UserRolesPage /></RoleGuard>} />
         <Route path="user-management" element={<RoleGuard><UserManagementPage /></RoleGuard>} />
+        {/* QA bug #261: Policies tab routes to a read-only
+            consolidated view of the role × module permissions matrix.
+            API Access is the admin surface for programmatic-access
+            keys (Authorization: ApiKey <token>). See
+            api/services/apiKeys.js and the 20260513_create_api_keys
+            migration. Both pages are gated by RoleGuard — non-admins
+            see the role-block fallback. */}
+        <Route path="policies"   element={<RoleGuard><PoliciesPage   /></RoleGuard>} />
+        <Route path="api-access" element={<RoleGuard><ApiAccessPage /></RoleGuard>} />
         {/* Placeholder pages */}
         <Route path="item-master" element={<RoleGuard><ItemMasterPage /></RoleGuard>} />
         <Route path="location-master" element={<RoleGuard><LocationMasterPage /></RoleGuard>} />
@@ -93,7 +104,10 @@ export default function App() {
   // still tops out at the 500-row page (see DbApi.orders), so the
   // table/list views stay paginated; only the displayed total is
   // promoted to the real number.
-  const [data, setData] = useState({ orders: [], ordersTotal: 0, shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [], warehouseDockConfigs: [] });
+  // QA #312 — documents is now plumbed through App state so the DB
+  // Explorer can `SELECT * FROM documents`. DbApi.documents() already
+  // exists; this is just the missing fan-out into refreshData() below.
+  const [data, setData] = useState({ orders: [], ordersTotal: 0, shipments: [], carriers: [], lanePreferences: [], items: [], locations: [], packagingUnits: [], rates: [], drivers: [], invoices: [], routeTemplates: [], equipmentTypes: [], planningParameters: [], warehouseDockConfigs: [], documents: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -142,13 +156,18 @@ export default function App() {
       DbApi.equipmentTypes().catch(() => []),
       DbApi.planningParameters().catch(() => []),
       DbApi.warehouseDockConfigs().catch(() => []),
+      // QA #312 — documents added to refreshData() so the DB Explorer
+      // (and any future Documents-aware screen) can see them. Failure
+      // is tolerated: returning [] keeps the rest of the page loading
+      // when /db/documents is unavailable.
+      DbApi.documents().catch(() => []),
       // True orders count — independent failure mode: a count outage
       // should never blank out the rest of the dashboard, so it
       // collapses to undefined and we fall back to the prior total
       // below (or 0 on the very first load).
       DbApi.ordersCount().catch(() => undefined),
     ])
-      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters, warehouseDockConfigs, ordersTotal]) => {
+      .then(([orders, shipments, carriers, lanePreferences, items, locations, packagingUnits, rates, drivers, invoices, routeTemplates, equipmentTypes, planningParameters, warehouseDockConfigs, documents, ordersTotal]) => {
         setData((prev) => ({
           orders: Array.isArray(orders) ? orders : [],
           shipments: Array.isArray(shipments) ? shipments : [],
@@ -164,6 +183,7 @@ export default function App() {
           equipmentTypes: Array.isArray(equipmentTypes) ? equipmentTypes : [],
           planningParameters: Array.isArray(planningParameters) ? planningParameters : [],
           warehouseDockConfigs: Array.isArray(warehouseDockConfigs) ? warehouseDockConfigs : [],
+          documents: Array.isArray(documents) ? documents : [],
           ordersTotal: ordersTotal ?? prev.ordersTotal ?? 0,
         }));
       })

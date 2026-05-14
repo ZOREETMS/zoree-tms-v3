@@ -28,6 +28,7 @@ import {
   DrawerNavGroup,
   DrawerNavItem,
 } from '../drawerNavConfig';
+import { filterDrawerGroups } from '../drawerNavFilter';
 
 /**
  * Resolve the currently focused drawer tab + nested screen from the
@@ -61,6 +62,17 @@ export default function DrawerSidebar(props: DrawerContentComponentProps) {
   const initials = (user?.email || '').slice(0, 2).toUpperCase();
   const { activeTab, activeScreen } = useActiveRoute(props);
 
+  // QA #303 — drawer items now filtered by the active role using the
+  // same matrix the web side uses (see config/roleMatrix.ts). Before
+  // this, every module rendered for every role. Re-derives whenever
+  // the active role changes so optimistic role switches (QA #302) take
+  // effect immediately.
+  const activeRole = user?.activeRole || user?.role || '';
+  const visibleGroups = useMemo(
+    () => filterDrawerGroups(DRAWER_GROUPS, activeRole),
+    [activeRole],
+  );
+
   // Single-open accordion: only one group expanded at a time. Matches
   // the screenshot where most groups are collapsed and one is open.
   const [expandedKey, setExpandedKey] = useState<string | null>(() =>
@@ -92,12 +104,12 @@ export default function DrawerSidebar(props: DrawerContentComponentProps) {
         <Text style={styles.logoSub}>TMS PLATFORM  v3.11</Text>
       </View>
 
-      {/* Collapsible group list */}
+      {/* Collapsible group list — filtered by active role (QA #303). */}
       <DrawerContentScrollView
         {...props}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {DRAWER_GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <DrawerGroup
             key={group.key}
             group={group}

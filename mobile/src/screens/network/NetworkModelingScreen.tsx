@@ -16,7 +16,7 @@
  * already 1:1 with what the web hook produces.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   FlatList,
   ScrollView,
@@ -28,6 +28,9 @@ import {
 import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
+import WhatIfBuilder, {
+  type WhatIfScenario,
+} from '../../components/network/WhatIfBuilder';
 import {
   SEED_LANES,
   computeNetworkKpis,
@@ -76,8 +79,41 @@ function opportunityTone(text: string): { color: string; bg: string } {
 }
 
 export default function NetworkModelingScreen() {
-  const lanes: LaneRow[] = SEED_LANES;
+  // QA #292 — What-If scenario builder. Modifiers reapply to a base
+  // copy of SEED_LANES so toggling "Run Analysis" with different
+  // values shows what the network looks like under each scenario.
+  // Saved scenarios live in component state for now (no server-side
+  // scenarios table on mobile yet).
+  const [modifiers, setModifiers] = useState<{ ratePct: number; volumePct: number }>({
+    ratePct: 0,
+    volumePct: 0,
+  });
+  const [scenarios, setScenarios] = useState<WhatIfScenario[]>([]);
+  const [builderOpen, setBuilderOpen] = useState(false);
+
+  const lanes: LaneRow[] = useMemo(() => {
+    const rateFactor = 1 + (modifiers.ratePct || 0) / 100;
+    const volFactor  = 1 + (modifiers.volumePct || 0) / 100;
+    if (rateFactor === 1 && volFactor === 1) return SEED_LANES;
+    return SEED_LANES.map((l) => ({
+      ...l,
+      avgCostMi: Math.max(0.01, l.avgCostMi * rateFactor),
+      loads:     Math.max(0, Math.round(l.loads * volFactor)),
+    }));
+  }, [modifiers]);
+
   const kpis = useMemo(() => computeNetworkKpis(lanes), [lanes]);
+
+  const handleRun = (s: { ratePct: number; volumePct: number }) => setModifiers(s);
+  const handleSave = (s: { ratePct: number; volumePct: number; label: string }) => {
+    setScenarios((prev) => [
+      ...prev,
+      { id: `s-${Date.now()}`, ...s },
+    ]);
+  };
+  const handleLoadScenario = (s: WhatIfScenario) => {
+    setModifiers({ ratePct: s.ratePct, volumePct: s.volumePct });
+  };
 
   const renderItem = ({ item }: { item: LaneRow }) => {
     const variance = item.avgCostMi - item.benchmark;
@@ -129,7 +165,8 @@ export default function NetworkModelingScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Network Modeling</Text>
         <Text style={styles.subtitle}>
-          Lane benchmarks + utilization. Scenario authoring lives on the web.
+          Lane benchmarks + utilization. Use the What-If panel below to
+          model rate / volume changes.
         </Text>
       </View>
 
@@ -171,6 +208,16 @@ export default function NetworkModelingScreen() {
             />
           </View>
         </View>
+
+        {/* QA #292 — What-If scenario builder. */}
+        <WhatIfBuilder
+          expanded={builderOpen}
+          onToggle={() => setBuilderOpen((v) => !v)}
+          onRun={handleRun}
+          onSave={handleSave}
+          scenarios={scenarios}
+          onLoadScenario={handleLoadScenario}
+        />
 
         <Text style={styles.sectionTitle}>Lanes</Text>
         {lanes.length === 0 ? (

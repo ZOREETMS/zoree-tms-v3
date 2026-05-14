@@ -28,8 +28,15 @@ export const DB_TABLES = [
   "invoices",
   "lane_preferences",
   "packaging_units",
-  "dock_appointments",       // bug #173 — dock scheduling
+  "dock_appointments",       // bug #173 — dock scheduling (derived; see dbExplorerCatalog)
   "warehouse_dock_config",   // bug #173 — dock master config
   "documents",               // bug #173 — BOL / POD storage
   "equipment_types",         // bug #173 — trailer + LTL ceilings
+  // QA #312 — the sidebar previously listed the four bug-#173 tables
+  // but the underlying catalog (dbExplorerService) didn't map them,
+  // so clicking the entries returned "Table not found". The catalog
+  // is now in services/dbExplorerCatalog.js. Surfacing two more
+  // already-loaded tables for completeness:
+  "planning_parameters",
+  "route_templates",
 ];

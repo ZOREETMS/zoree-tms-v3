@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
@@ -14,6 +15,8 @@ import SearchBar from '../../components/ui/SearchBar';
 import StatusFilter from '../../components/common/StatusFilter';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
+import LocationStatsGrid from '../../components/locations/LocationStatsGrid';
+import { exportRowsAsCsv } from '../../services/csvExport';
 import { LOCATION_TYPES } from '../../shared/constants/locationConstants';
 import {
   colors,
@@ -28,6 +31,10 @@ export default function LocationsScreen() {
   const navigation = useNavigation<any>();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
+  // QA #271 — web has an "All States" filter so users can narrow by
+  // state. Options are derived from the loaded set so we only show
+  // states the tenant actually has data for.
+  const [stateFilter, setStateFilter] = useState<string>('All');
 
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = { All: data.locations.length };
@@ -38,10 +45,27 @@ export default function LocationsScreen() {
     return counts;
   }, [data.locations]);
 
+  // QA #271 — state-filter options driven by the loaded data so we
+  // never advertise filter values that won't return anything.
+  const stateOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of data.locations || []) {
+      const s = String((l as any)?.state || '').trim();
+      if (s) set.add(s.toUpperCase());
+    }
+    return ['All', ...Array.from(set).sort()];
+  }, [data.locations]);
+
   const filtered = useMemo(() => {
     let locs = data.locations;
     if (typeFilter !== 'All') {
       locs = locs.filter((loc: any) => loc.type === typeFilter);
+    }
+    if (stateFilter !== 'All') {
+      locs = locs.filter(
+        (loc: any) =>
+          String((loc as any)?.state || '').toUpperCase() === stateFilter,
+      );
     }
     const q = search.toLowerCase().trim();
     if (!q) return locs;
@@ -57,7 +81,28 @@ export default function LocationsScreen() {
         customer.includes(q)
       );
     });
-  }, [data.locations, search, typeFilter]);
+  }, [data.locations, search, typeFilter, stateFilter]);
+
+  // QA #271 — Export current (filtered) list as CSV.
+  const onExport = useCallback(async () => {
+    await exportRowsAsCsv(
+      filtered,
+      [
+        { key: 'id',       header: 'Location ID' },
+        { key: 'name',     header: 'Name' },
+        { key: 'type',     header: 'Type' },
+        { key: 'address',  header: 'Address' },
+        { key: 'city',     header: 'City' },
+        { key: 'state',    header: 'State' },
+        { key: 'zip',      header: 'Zip' },
+        { key: 'customer', header: 'Customer', value: (r) => r.customer_name || r.customer },
+        { key: 'liftgate', header: 'Liftgate' },
+        { key: 'hazmat',   header: 'Hazmat' },
+        { key: 'appointment_required', header: 'Appt Required' },
+      ],
+      { title: 'Locations Export', filename: 'locations.csv' },
+    );
+  }, [filtered]);
 
   const handleRefresh = useCallback(() => {
     refreshData();
@@ -75,11 +120,26 @@ export default function LocationsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header — QA #271 page-content parity: title renamed to
+          "Location Master" to match the web sidebar label, inline
+          Export button mirrors the web page's toolbar. */}
       <View style={styles.header}>
-        <Text style={styles.title}>Locations</Text>
-        <Text style={styles.count}>{filtered.length} total</Text>
+        <View>
+          <Text style={styles.title}>Location Master</Text>
+          <Text style={styles.count}>{filtered.length} location{filtered.length !== 1 ? 's' : ''}</Text>
+        </View>
+        <TouchableOpacity
+          onPress={onExport}
+          style={styles.exportBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Export current locations as CSV">
+          <Ionicons name="download-outline" size={16} color={colors.accent} />
+          <Text style={styles.exportText}>Export</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* KPI strip — QA #271 page-content parity. */}
+      <LocationStatsGrid locations={data.locations} />
 
       {/* Search */}
       <View style={styles.searchWrapper}>
@@ -98,6 +158,36 @@ export default function LocationsScreen() {
         onSelect={setTypeFilter}
         counts={typeCounts}
       />
+
+      {/* QA #271 — State filter. Only renders when the loaded data has
+          at least one state value (besides the All entry) — no point
+          in offering the picker for a tenant with no state column. */}
+      {stateOptions.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.stateRow}
+          style={styles.stateScroll}>
+          {stateOptions.map((s) => {
+            const isActive = stateFilter === s;
+            return (
+              <TouchableOpacity
+                key={`state-${s}`}
+                activeOpacity={0.7}
+                onPress={() => setStateFilter(s)}
+                style={[styles.stateChip, isActive && styles.stateChipActive]}>
+                <Text
+                  style={[
+                    styles.stateLabel,
+                    isActive && styles.stateLabelActive,
+                  ]}>
+                  {s === 'All' ? 'All States' : s}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      ) : null}
 
       {/* List */}
       <FlatList
@@ -260,10 +350,52 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  exportText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
+  },
+  stateScroll: { flexGrow: 0, marginBottom: spacing.sm },
+  stateRow: {
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xl,
+    gap: spacing.sm,
+  },
+  stateChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  stateChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  stateLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text2,
+  },
+  stateLabelActive: {
+    color: colors.white,
   },
   title: {
     fontSize: fontSize['2xl'],

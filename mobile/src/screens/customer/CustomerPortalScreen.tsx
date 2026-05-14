@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import {
+  Alert,
   FlatList,
+  Share,
   ScrollView,
   StyleSheet,
   Text,
@@ -61,16 +63,49 @@ export default function CustomerPortalScreen() {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* Header — QA #290 adds Copy Portal Link button alongside
+            Invite Customer to match the web Customer Portal toolbar. */}
         <View style={styles.header}>
           <Text style={styles.title}>Customer Portal</Text>
-          <TouchableOpacity
-            style={styles.inviteButton}
-            activeOpacity={0.7}
-            onPress={() => setInviteModalOpen(true)}>
-            <Ionicons name="person-add-outline" size={16} color={colors.white} />
-            <Text style={styles.inviteButtonText}>Invite Customer</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.linkButton}
+              activeOpacity={0.7}
+              onPress={() => {
+                // QA #290 — Copy Portal Link uses the OS share sheet
+                // because RN doesn't have a clipboard API in the base
+                // package; sharing a URL covers the "send to customer"
+                // intent which is what the web button ultimately does.
+                const url =
+                  (typeof window !== 'undefined' &&
+                    (window as any).location?.origin) ||
+                  'https://zoree.tms/portal';
+                Share.share(
+                  {
+                    title: 'Customer Portal Link',
+                    message: `${url}/customer-portal`,
+                  },
+                  { dialogTitle: 'Share Portal Link' },
+                ).catch(() => {
+                  Alert.alert(
+                    'Portal Link',
+                    `${url}/customer-portal`,
+                  );
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Copy / share customer portal link">
+              <Ionicons name="link-outline" size={16} color={colors.accent} />
+              <Text style={styles.linkButtonText}>Copy Portal Link</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.inviteButton}
+              activeOpacity={0.7}
+              onPress={() => setInviteModalOpen(true)}>
+              <Ionicons name="person-add-outline" size={16} color={colors.white} />
+              <Text style={styles.inviteButtonText}>Invite Customer</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Portal Stats */}
@@ -250,6 +285,27 @@ const styles = StyleSheet.create({
     fontSize: fontSize['2xl'],
     fontWeight: fontWeight.bold,
     color: colors.text,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexShrink: 0,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  linkButtonText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
   },
   inviteButton: {
     flexDirection: 'row',

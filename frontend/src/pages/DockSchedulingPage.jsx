@@ -176,8 +176,18 @@ export default function DockSchedulingPage() {
           duration:   appt.duration,
           pickupDate: appt.date,
         });
-        await refreshData();
+        // QA #305 — close the modal immediately on a successful PATCH
+        // and let refreshData() run in the background. The previous
+        // implementation awaited a full orders+shipments refresh
+        // before clearing editAppt, which made Save Appointment appear
+        // to hang for the full round-trip on slow networks. The dock
+        // edit is already persisted at this point; the realtime
+        // postgres_changes channel will reconcile the grid even if the
+        // background refresh slips.
         setEditAppt(null);
+        refreshData().catch((err) =>
+          console.warn("[saveAppt] background refresh failed:", err)
+        );
       } catch (err) {
         alert(`Failed to update shipment dock: ${err.message}`);
       }

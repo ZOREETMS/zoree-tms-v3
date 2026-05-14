@@ -217,12 +217,20 @@ export default function CarrierPortalScreen() {
           ))}
         </ScrollView>
 
-        {/* Stats */}
+        {/* Stats — 2x2 grid on narrow phones (QA #280). */}
         <View style={styles.kpiRow}>
-          <KpiCard label="Total" value={String(stats.total)} icon="list-outline" color={colors.accent} />
-          <KpiCard label="Pending" value={String(stats.pending)} icon="time-outline" color={colors.yellow} />
-          <KpiCard label="Accepted" value={String(stats.accepted)} icon="checkmark-circle-outline" color={colors.green} />
-          <KpiCard label="Rejected" value={String(stats.rejected)} icon="close-circle-outline" color={colors.red} />
+          <View style={styles.kpiCell}>
+            <KpiCard label="Total" value={String(stats.total)} icon="list-outline" color={colors.accent} />
+          </View>
+          <View style={styles.kpiCell}>
+            <KpiCard label="Pending" value={String(stats.pending)} icon="time-outline" color={colors.yellow} />
+          </View>
+          <View style={styles.kpiCell}>
+            <KpiCard label="Accepted" value={String(stats.accepted)} icon="checkmark-circle-outline" color={colors.green} />
+          </View>
+          <View style={styles.kpiCell}>
+            <KpiCard label="Rejected" value={String(stats.rejected)} icon="close-circle-outline" color={colors.red} />
+          </View>
         </View>
 
         {/* Tender list */}
@@ -310,6 +318,9 @@ const styles = StyleSheet.create({
   carrierScroll: { flexGrow: 0, marginBottom: spacing.md },
   carrierRow: {
     paddingHorizontal: spacing.lg,
+    // QA #280 — extra right padding stops the last carrier chip from
+    // looking clipped on narrow phones.
+    paddingRight: spacing.xl,
     gap: spacing.sm,
   },
   carrierChip: {
@@ -329,9 +340,17 @@ const styles = StyleSheet.create({
   carrierChipTextActive: { color: colors.white },
   kpiRow: {
     flexDirection: 'row',
+    // QA #280 — let the 4 KPI cards wrap to 2x2 on narrow phones
+    // instead of cramming them into a single row where each cell is
+    // ~80px wide. Web has horizontal space to spare; mobile does not.
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  kpiCell: {
+    flexBasis: '47%',
+    flexGrow: 1,
   },
   listContent: {
     paddingHorizontal: spacing.lg,

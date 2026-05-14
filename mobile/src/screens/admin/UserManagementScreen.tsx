@@ -213,6 +213,24 @@ export default function UserManagementScreen() {
                   <Text style={styles.disabledText}>Disabled</Text>
                 </View>
               ) : null}
+              {/* QA #299 — explicit 3-dot action menu so Edit/Disable/
+                  Delete are discoverable without relying on long-press
+                  (mirrors the web Users page's action menu column). */}
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleLongPress(item);
+                }}
+                hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Actions for ${item.email}`}
+                style={styles.menuBtn}>
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={18}
+                  color={colors.text2}
+                />
+              </TouchableOpacity>
             </View>
             <View style={styles.chipRow}>
               {roles.length === 0 ? (
@@ -351,6 +369,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.text2,
     fontWeight: fontWeight.semibold,
+  },
+  menuBtn: {
+    marginLeft: spacing.sm,
+    padding: spacing.xs,
+    borderRadius: 8,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {

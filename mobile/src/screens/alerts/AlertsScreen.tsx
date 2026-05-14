@@ -1,8 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
@@ -36,9 +37,34 @@ export default function AlertsScreen() {
     stats,
     severityFilter,
     setSeverityFilter,
+    // QA #296 — hook already supported category + status filters, the
+    // mobile UI just never rendered them. Wire them up to chip rows so
+    // the user has the same drill-down the web has.
+    categoryFilter,
+    setCategoryFilter,
+    statusFilter,
+    setStatusFilter,
     resolveAlert,
     acknowledgeAlert,
   } = useAlerts();
+
+  // Derive category options from the data set so we never offer a
+  // filter value that has no alerts.
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alerts || []) {
+      const c = String((a as any)?.category || '').trim();
+      if (c) set.add(c);
+    }
+    return ['', ...Array.from(set).sort()];
+  }, [alerts]);
+
+  const STATUS_FILTERS = [
+    { key: '',                        label: 'Any Status' },
+    { key: ALERT_STATUS.OPEN,         label: 'Open' },
+    { key: ALERT_STATUS.ACKNOWLEDGED, label: 'Acknowledged' },
+    { key: ALERT_STATUS.RESOLVED,     label: 'Resolved' },
+  ];
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => {
@@ -170,6 +196,53 @@ export default function AlertsScreen() {
           })}
         </View>
 
+        {/* QA #296 — Category filter row (horizontally scrollable). */}
+        {categoryOptions.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRowScroll}
+            style={styles.filterScroll}>
+            {categoryOptions.map((c) => {
+              const isActive = c === categoryFilter;
+              const label = c === '' ? 'Any Category' : c;
+              return (
+                <TouchableOpacity
+                  key={`cat-${c || 'any'}`}
+                  style={[styles.chip, isActive && styles.chipActive]}
+                  onPress={() => setCategoryFilter(c)}
+                  activeOpacity={0.7}>
+                  <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : null}
+
+        {/* QA #296 — Status filter row. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRowScroll}
+          style={styles.filterScroll}>
+          {STATUS_FILTERS.map((f) => {
+            const isActive = f.key === statusFilter;
+            return (
+              <TouchableOpacity
+                key={`st-${f.key || 'any'}`}
+                style={[styles.chip, isActive && styles.chipActive]}
+                onPress={() => setStatusFilter(f.key)}
+                activeOpacity={0.7}>
+                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         {/* Alerts List */}
         <FlatList
           data={alerts}
@@ -223,6 +296,12 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
+  },
+  filterScroll: { flexGrow: 0, marginBottom: spacing.sm },
+  filterRowScroll: {
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xl,
+    gap: spacing.sm,
   },
   filterRow: {
     flexDirection: 'row',

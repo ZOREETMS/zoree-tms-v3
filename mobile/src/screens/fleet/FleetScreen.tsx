@@ -19,6 +19,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import DriverFormModal from '../../components/fleet/DriverFormModal';
 import VehicleFormModal from '../../components/fleet/VehicleFormModal';
+import MasterTabSwitch from '../../components/common/MasterTabSwitch';
 import { useData } from '../../state/DataContext';
 import { deleteDriver, deleteVehicle } from '../../services/fleetService';
 import {
@@ -344,36 +345,18 @@ export default function FleetScreen() {
           )}
         </ScrollView>
 
-        {/* Tab switcher */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'vehicles' && styles.tabActive]}
-            onPress={() => setActiveTab('vehicles')}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="bus-outline"
-              size={18}
-              color={activeTab === 'vehicles' ? colors.accent : colors.text2}
-            />
-            <Text style={[styles.tabLabel, activeTab === 'vehicles' && styles.tabLabelActive]}>
-              Vehicles ({vehicles.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'drivers' && styles.tabActive]}
-            onPress={() => setActiveTab('drivers')}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="people-outline"
-              size={18}
-              color={activeTab === 'drivers' ? colors.accent : colors.text2}
-            />
-            <Text style={[styles.tabLabel, activeTab === 'drivers' && styles.tabLabelActive]}>
-              Drivers ({drivers.length})
-            </Text>
-          </TouchableOpacity>
+        {/* Tab switcher — QA #282 swaps the custom two-button row for
+            the shared MasterTabSwitch (same component the Item Master
+            uses) so toggle styling is consistent across the app. */}
+        <View style={styles.tabContainerRow}>
+          <MasterTabSwitch
+            tabs={[
+              { key: 'vehicles', label: `Vehicles (${vehicles.length})` },
+              { key: 'drivers',  label: `Drivers (${drivers.length})` },
+            ]}
+            active={activeTab}
+            onSelect={(k) => setActiveTab(k as TabKey)}
+          />
         </View>
 
         {/* List */}
@@ -496,6 +479,13 @@ const styles = StyleSheet.create({
   kpiRow: {
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+  },
+  // QA #282 — old tabContainer styling is retained for layout context
+  // but the active toggle is now rendered via MasterTabSwitch (see
+  // tabContainerRow wrapper).
+  tabContainerRow: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   tabContainer: {
     flexDirection: 'row',

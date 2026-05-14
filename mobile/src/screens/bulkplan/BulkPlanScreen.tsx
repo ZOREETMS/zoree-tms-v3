@@ -159,16 +159,31 @@ export default function BulkPlanScreen() {
         <View style={styles.searchWrap}>
           <SearchBar value={search} onChangeText={setSearch} placeholder="Search orders..." />
         </View>
+        {/* QA #275 — explicit Select All + Clear buttons (was a single
+            icon-only toggle). Toggling Select All when everything is
+            already selected still clears (the hook's selectAll returns
+            an empty set in that case), so the Clear button is the
+            same handler with a clearer label. */}
         <TouchableOpacity
           style={[styles.selectAllBtn, allSelected && styles.selectAllActive]}
           onPress={() => selectAll(filteredOrders)}
-        >
+          accessibilityLabel={allSelected ? 'Clear selection' : 'Select all orders'}>
           <Ionicons
             name={allSelected ? 'checkbox' : 'square-outline'}
             size={20}
             color={allSelected ? colors.accent : colors.text3}
           />
         </TouchableOpacity>
+        {selectedIds && selectedIds.size > 0 ? (
+          <TouchableOpacity
+            style={styles.clearBtn}
+            onPress={() => selectAll([])}
+            accessibilityRole="button"
+            accessibilityLabel="Clear selection">
+            <Ionicons name="close-outline" size={14} color={colors.text2} />
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* QA 244 (2026-05-12): Customer dropdown — scopes the unplanned
@@ -436,6 +451,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   selectAllActive: { borderColor: colors.accent, backgroundColor: 'rgba(37,99,235,0.06)' },
+  clearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+    marginLeft: spacing.xs,
+  },
+  clearBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.text2,
+    fontWeight: fontWeight.medium,
+  },
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     marginHorizontal: spacing.lg, marginBottom: spacing.sm,

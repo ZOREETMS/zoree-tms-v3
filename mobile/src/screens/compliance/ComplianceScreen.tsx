@@ -14,6 +14,7 @@ import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import { exportRowsAsCsv } from '../../services/csvExport';
 import {
   colors,
   fontSize,
@@ -263,10 +264,63 @@ export default function ComplianceScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header — QA #283 parity adds an inline Export Report button. */}
         <View style={styles.header}>
           <Ionicons name="shield-checkmark-outline" size={24} color={colors.accent} />
           <Text style={styles.title}>Compliance</Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            onPress={() => {
+              // QA #283 — Export the active section's rows as CSV. The
+              // column shape changes per section so we branch and feed
+              // exportRowsAsCsv a section-appropriate spec.
+              if (activeSection === 'hos') {
+                exportRowsAsCsv(
+                  SEED_HOS,
+                  [
+                    { key: 'driver',     header: 'Driver' },
+                    { key: 'vehicle',    header: 'Vehicle' },
+                    { key: 'hoursToday', header: 'Hours Today' },
+                    { key: 'remaining',  header: 'Hours Remaining' },
+                    { key: 'status',     header: 'Status' },
+                    { key: 'violation',  header: 'Violation' },
+                  ],
+                  { title: 'HOS Compliance', filename: 'compliance_hos.csv' },
+                );
+              } else if (activeSection === 'weight') {
+                exportRowsAsCsv(
+                  SEED_WEIGHTS,
+                  [
+                    { key: 'ship',      header: 'Shipment' },
+                    { key: 'weight',    header: 'Weight (lbs)' },
+                    { key: 'limit',     header: 'Limit (lbs)' },
+                    { key: 'axleOk',    header: 'Axles OK' },
+                    { key: 'permitReq', header: 'Permit Required' },
+                    { key: 'status',    header: 'Status' },
+                  ],
+                  { title: 'Weight Compliance', filename: 'compliance_weight.csv' },
+                );
+              } else {
+                exportRowsAsCsv(
+                  SEED_HAZMAT,
+                  [
+                    { key: 'ship',      header: 'Shipment' },
+                    { key: 'class',     header: 'Hazmat Class' },
+                    { key: 'carrier',   header: 'Carrier' },
+                    { key: 'certified', header: 'Certified' },
+                    { key: 'placardOk', header: 'Placards OK' },
+                    { key: 'status',    header: 'Status' },
+                  ],
+                  { title: 'Hazmat Compliance', filename: 'compliance_hazmat.csv' },
+                );
+              }
+            }}
+            style={styles.exportBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Export compliance report as CSV">
+            <Ionicons name="download-outline" size={16} color={colors.accent} />
+            <Text style={styles.exportText}>Export Report</Text>
+          </TouchableOpacity>
         </View>
 
         {/* KPI cards */}
@@ -355,6 +409,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize['2xl'],
     fontWeight: fontWeight.bold,
     color: colors.text,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  exportText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
   },
   kpiScroll: {
     flexGrow: 0,

@@ -13,6 +13,7 @@ import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import TrackingMap from '../../components/tracking/TrackingMap';
 import { useData } from '../../state/DataContext';
 import {
   colors,
@@ -105,14 +106,11 @@ export default function LiveTrackingScreen() {
           </View>
         </View>
 
-        {/* Map placeholder */}
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={48} color={colors.text3} />
-          <Text style={styles.mapPlaceholderText}>Map View</Text>
-          <Text style={styles.mapPlaceholderSubtext}>
-            Requires react-native-maps native setup
-          </Text>
-        </View>
+        {/* QA #278 — real map (react-native-maps) replacing the
+            "Coming Soon" placeholder. TrackingMap defensively falls
+            back to a friendly empty state when no shipment has lat/lng
+            yet so the screen never renders a blank gray box. */}
+        <TrackingMap shipments={inTransitShipments} height={220} />
 
         {/* Active shipments list */}
         <Text style={styles.sectionTitle}>Active Shipments</Text>

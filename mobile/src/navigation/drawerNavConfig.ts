@@ -78,7 +78,8 @@ export const DRAWER_GROUPS: DrawerNavGroup[] = [
     tab: 'PlanningTab',
     children: [
       { label: 'Item Master', icon: '📋', tab: 'PlanningTab', screen: 'ItemMaster' },
-      { label: 'Location Material', icon: '📍', tab: 'PlanningTab', screen: 'LocationMaster' },
+      // QA #271 — module label corrected from "Location Material" to "Location Master".
+      { label: 'Location Master', icon: '📍', tab: 'PlanningTab', screen: 'LocationMaster' },
       // Equipment Master is registered under SystemTab's stack; surface
       // it under Planning to match the product taxonomy.
       { label: 'Equipment Master', icon: '🚚', tab: 'SystemTab', screen: 'EquipmentMaster' },
@@ -87,6 +88,10 @@ export const DRAWER_GROUPS: DrawerNavGroup[] = [
       { label: 'Route Optimization', icon: '🧭', tab: 'PlanningTab', screen: 'RouteOptimizer' },
       // Bulk Plan is its own drawer-level stack; surfaced under Planning.
       { label: 'Bulk Plan', icon: '⚡', tab: 'BulkPlanTab', screen: 'BulkPlan' },
+      // QA #277 — Planning Parameters lives in SystemTab's stack but the
+      // product taxonomy wants it visible under Planning. Cross-tab
+      // placement (same pattern as Equipment Master above).
+      { label: 'Planning Parameters', icon: '🛠️', tab: 'SystemTab', screen: 'PlanningParameters' },
     ],
   },
   {
@@ -131,7 +136,8 @@ export const DRAWER_GROUPS: DrawerNavGroup[] = [
     icon: '📄',
     tab: 'DocumentsTab',
     children: [
-      { label: 'Documents', icon: '📄', tab: 'DocumentsTab', screen: 'Documents' },
+      // QA #289 — module label corrected from "Documents" to "Documents & BOL".
+      { label: 'Documents & BOL', icon: '📄', tab: 'DocumentsTab', screen: 'Documents' },
       { label: 'Customer Portal', icon: '🌐', tab: 'DocumentsTab', screen: 'CustomerPortal' },
     ],
   },
@@ -150,24 +156,29 @@ export const DRAWER_GROUPS: DrawerNavGroup[] = [
     icon: '📈',
     tab: 'InsightsTab',
     children: [
-      { label: 'Analytics', icon: '📊', tab: 'InsightsTab', screen: 'Analytics' },
+      // QA #293 — Network Modeling first, then Analytics, to mirror web order.
       { label: 'Network Modeling', icon: '🕸️', tab: 'InsightsTab', screen: 'NetworkModeling' },
+      { label: 'Analytics', icon: '📊', tab: 'InsightsTab', screen: 'Analytics' },
       { label: 'Reports', icon: '📑', tab: 'InsightsTab', screen: 'Reports' },
       { label: 'Alerts', icon: '🔔', tab: 'InsightsTab', screen: 'Alerts' },
       { label: 'DB Explorer', icon: '🗄️', tab: 'InsightsTab', screen: 'DbExplorer' },
     ],
   },
   {
-    key: 'settings',
-    label: 'Settings',
+    // QA #298 — group renamed from "Settings" to "System" and trimmed to
+    // exactly three children (User Management, User Roles, Settings) to
+    // match the web information architecture. Profile remains a
+    // registered screen in SystemTab — reachable from header/account
+    // chip — but is no longer surfaced as a drawer row. Planning
+    // Parameters moved under the Planning group (QA #277).
+    key: 'system',
+    label: 'System',
     icon: '⚙️',
     tab: 'SystemTab',
     children: [
-      { label: 'Settings', icon: '⚙️', tab: 'SystemTab', screen: 'Settings' },
-      { label: 'Profile', icon: '👤', tab: 'SystemTab', screen: 'Profile' },
-      { label: 'Planning Parameters', icon: '🛠️', tab: 'SystemTab', screen: 'PlanningParameters' },
       { label: 'User Management', icon: '👥', tab: 'SystemTab', screen: 'UserManagement' },
       { label: 'User Roles', icon: '🛡️', tab: 'SystemTab', screen: 'UserRoles' },
+      { label: 'Settings', icon: '⚙️', tab: 'SystemTab', screen: 'Settings' },
     ],
   },
 ];

@@ -24,8 +24,20 @@ function otdLabel(otd?: number): string {
   return 'Poor';
 }
 
-function otdStatus(otd?: number): string {
-  if (otd == null) return 'Inactive';
+/**
+ * QA #279 — when otd_percentage is missing (most rows in the seed data
+ * + many real-world tenants until performance has been computed), the
+ * old `otdStatus()` returned 'Inactive', which made every carrier
+ * appear inactive in the list. Use the carrier's own `status` field
+ * when present, fall back to the OTD-derived label only when both are
+ * missing, and treat null OTD as Active rather than Inactive (an
+ * unrated carrier is not the same as a disabled one).
+ */
+function carrierBadgeStatus(carrier: any): string {
+  const explicit = carrier?.status || carrier?.active_status;
+  if (explicit) return String(explicit);
+  const otd = carrier?.otd_percentage ?? carrier?.otd_pct;
+  if (otd == null) return 'Active';
   if (otd >= 95) return 'Active';
   if (otd >= 85) return 'Planned';
   if (otd >= 70) return 'Warning';
@@ -62,7 +74,7 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier }) => {
             status={
               otdPct != null
                 ? `${otdLabel(otdPct)} ${Math.round(otdPct)}%`
-                : otdStatus(otdPct)
+                : carrierBadgeStatus(carrier)
             }
           />
         </View>

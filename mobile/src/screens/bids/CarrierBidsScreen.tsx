@@ -136,13 +136,31 @@ export default function CarrierBidsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header — QA #287 adds Create RFQ button to match web. */}
         <View style={styles.header}>
-          <Text style={styles.title}>Carrier Bids</Text>
-          <Text style={styles.subtitle}>RFQ management and bid analysis</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Carrier Bid Management</Text>
+            <Text style={styles.subtitle}>RFQ management and bid analysis</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() =>
+              Alert.alert(
+                'Create RFQ',
+                'Creating new RFQs is currently web-only. Use the Zoree web app to publish an RFQ; new bids will appear here on the next refresh.',
+              )
+            }
+            style={styles.createBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Create RFQ (web-only)">
+            <Ionicons name="add" size={16} color={colors.white} />
+            <Text style={styles.createText}>Create RFQ</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Stats */}
+        {/* Stats — QA #287 adds Savings card so the dashboard matches
+            the web header's 4-KPI strip. Savings is computed as the
+            sum of (incumbent rate − best bid) for open / awarded RFQs;
+            falls back to stats.savings if the hook already returns it. */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <KpiCard
@@ -166,6 +184,32 @@ export default function CarrierBidsScreen() {
               value={stats.awarded}
               icon="trophy-outline"
               color={colors.green}
+            />
+          </View>
+          <View style={styles.statItem}>
+            <KpiCard
+              label="Savings"
+              value={
+                typeof (stats as any).savings === 'number'
+                  ? `$${Number((stats as any).savings).toLocaleString()}`
+                  : `$${bids
+                      .reduce((sum: number, r: any) => {
+                        const inc = Number(
+                          String(r.incumbentRate || r.incumbent_rate || '')
+                            .replace(/[^0-9.]/g, '')
+                            || 0,
+                        );
+                        const best = Number(
+                          String(r.bestBid || r.best_bid || '')
+                            .replace(/[^0-9.]/g, '')
+                            || 0,
+                        );
+                        return sum + Math.max(0, inc - best) * (r.volume || 1);
+                      }, 0)
+                      .toLocaleString()}`
+              }
+              icon="trending-down-outline"
+              color={colors.purple}
             />
           </View>
         </View>
@@ -200,9 +244,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+  },
+  createText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
   },
   title: {
     fontSize: fontSize['2xl'],
@@ -217,13 +277,15 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   statItem: {
-    flex: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
   },
   listContent: {
     paddingTop: spacing.sm,

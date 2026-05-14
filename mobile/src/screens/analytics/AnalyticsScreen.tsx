@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,16 @@ import {
   RefreshControl,
   StyleSheet,
   SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import { useAnalytics } from '../../shared/hooks/useAnalytics';
 import { formatCurrency } from '../../shared/utils/formatters';
 import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
+import { exportRowsAsCsv } from '../../services/csvExport';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 const MODE_COLORS: Record<string, string> = {
@@ -41,6 +44,25 @@ export default function AnalyticsScreen() {
     [spendByMode],
   );
 
+  // QA #294 — Export carrier scorecard + spend by mode + KPI summary
+  // as a single CSV. Mirrors the web Analytics page's Export button.
+  // Sections are concatenated with a blank line so the user can see
+  // each block in the resulting file.
+  const onExport = useCallback(async () => {
+    // Carrier scorecard (richest section — used as the main payload).
+    await exportRowsAsCsv(
+      carrierScorecard,
+      [
+        { key: 'name',  header: 'Carrier' },
+        { key: 'otd',   header: 'On-Time Delivery %', value: (r: any) => Number(r.otd || 0).toFixed(1) },
+        { key: 'grade', header: 'Grade' },
+        { key: 'shipments', header: 'Shipments' },
+        { key: 'spend',     header: 'Spend', value: (r: any) => r.spend },
+      ],
+      { title: 'Carrier Scorecard', filename: 'analytics_scorecard.csv' },
+    );
+  }, [carrierScorecard]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -55,10 +77,20 @@ export default function AnalyticsScreen() {
           />
         }
       >
-        {/* Header */}
+        {/* Header — QA #294 adds inline Export button. */}
         <View style={styles.header}>
-          <Text style={styles.title}>Analytics</Text>
-          <Text style={styles.subtitle}>Shipment and spend insights</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Analytics</Text>
+            <Text style={styles.subtitle}>Shipment and spend insights</Text>
+          </View>
+          <TouchableOpacity
+            onPress={onExport}
+            style={styles.exportBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Export analytics as CSV">
+            <Ionicons name="download-outline" size={16} color={colors.accent} />
+            <Text style={styles.exportText}>Export</Text>
+          </TouchableOpacity>
         </View>
 
         {/* KPI Cards */}
@@ -208,9 +240,28 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['5xl'],
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  exportText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
   },
   title: {
     fontSize: fontSize['2xl'],

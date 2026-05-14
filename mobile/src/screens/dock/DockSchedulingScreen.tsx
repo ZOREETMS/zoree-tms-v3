@@ -113,12 +113,21 @@ export default function DockSchedulingScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* KPIs */}
+      {/* KPIs — QA #281 layout: wrap to 2x2 on narrow phones so the
+          cards don't get crushed into 80px slivers. */}
       <View style={styles.kpiRow}>
-        <KpiCard label="Total" value={String(stats.total)} icon="calendar-outline" color={colors.accent} />
-        <KpiCard label="Scheduled" value={String(stats.scheduled)} icon="time-outline" color={colors.cyan} />
-        <KpiCard label="In Progress" value={String(stats.inProgress)} icon="play-circle-outline" color={colors.yellow} />
-        <KpiCard label="Done" value={String(stats.completed)} icon="checkmark-circle-outline" color={colors.green} />
+        <View style={styles.kpiCell}>
+          <KpiCard label="Total" value={String(stats.total)} icon="calendar-outline" color={colors.accent} />
+        </View>
+        <View style={styles.kpiCell}>
+          <KpiCard label="Scheduled" value={String(stats.scheduled)} icon="time-outline" color={colors.cyan} />
+        </View>
+        <View style={styles.kpiCell}>
+          <KpiCard label="In Progress" value={String(stats.inProgress)} icon="play-circle-outline" color={colors.yellow} />
+        </View>
+        <View style={styles.kpiCell}>
+          <KpiCard label="Done" value={String(stats.completed)} icon="checkmark-circle-outline" color={colors.green} />
+        </View>
       </View>
 
       <ScrollView
@@ -304,9 +313,14 @@ const styles = StyleSheet.create({
   },
   kpiRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  kpiCell: {
+    flexBasis: '47%',
+    flexGrow: 1,
   },
   scroll: {
     paddingHorizontal: spacing.lg,

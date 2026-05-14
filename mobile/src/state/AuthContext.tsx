@@ -196,12 +196,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!assigned.includes(nextRole)) {
           throw new Error(`Role '${nextRole}' not assigned to this user`);
         }
-        const res = await AuthApi.setActiveRole(nextRole);
-        const next: User =
-          res?.user || { ...user, role: nextRole, activeRole: nextRole };
-        await storage.setItem('zoree_user', JSON.stringify(next));
-        setUser(next);
-        return next;
+        // QA #302 — role switching used to await a PATCH /auth/active-role
+        // round-trip before any UI update, which made the pill feel
+        // unresponsive on slow connections. We now flip the active
+        // role locally first (instant visual feedback), persist the
+        // optimistic user, then sync with the server. If the server
+        // rejects, we roll back to the pre-switch user so the UI never
+        // gets stuck in a state the server disagrees with.
+        const previous = user;
+        const optimistic: User = { ...user, role: nextRole, activeRole: nextRole };
+        setUser(optimistic);
+        await storage.setItem('zoree_user', JSON.stringify(optimistic));
+        try {
+          const res = await AuthApi.setActiveRole(nextRole);
+          // Server-confirmed shape (preferred). Fall back to the
+          // optimistic value when the API omits the refreshed user.
+          const confirmed: User = res?.user || optimistic;
+          await storage.setItem('zoree_user', JSON.stringify(confirmed));
+          setUser(confirmed);
+          return confirmed;
+        } catch (err) {
+          // Roll back — the server rejected the switch.
+          setUser(previous);
+          await storage.setItem('zoree_user', JSON.stringify(previous));
+          throw err;
+        }
       },
     }),
     [user, booting],

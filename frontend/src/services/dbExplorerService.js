@@ -2,7 +2,13 @@
  * Execute a SQL-like query against the loaded data tables.
  * In production, this would hit the Supabase REST API directly.
  * For now we query from the in-memory data passed from App.
+ *
+ * Table catalog lives in ./dbExplorerCatalog so this module stays
+ * focused on parsing/executing the query (Rule 6 — services-first,
+ * no mega-modules).
  */
+import { resolveTable, listTables } from "./dbExplorerCatalog";
+
 export function executeQuery(sql, data) {
   const start = performance.now();
   const trimmed = sql.trim().replace(/;$/, "");
@@ -15,22 +21,11 @@ export function executeQuery(sql, data) {
   }
 
   const tableName = match[1];
-  const tableMap = {
-    orders: data.orders || [],
-    shipments: data.shipments || [],
-    carriers: data.carriers || [],
-    rates: data.rates || [],
-    drivers: data.drivers || [],
-    locations: data.locations || [],
-    items: data.items || [],
-    invoices: data.invoices || [],
-    lane_preferences: data.lanePreferences || [],
-    packaging_units: data.packagingUnits || [],
-  };
-
-  const rows = tableMap[tableName];
-  if (!rows) {
-    throw new Error(`Table "${tableName}" not found. Available: ${Object.keys(tableMap).join(", ")}`);
+  const rows = resolveTable(tableName, data);
+  if (rows === null) {
+    throw new Error(
+      `Table "${tableName}" not found. Available: ${listTables().join(", ")}`
+    );
   }
 
   let result = [...rows];
@@ -56,7 +51,12 @@ export function executeQuery(sql, data) {
     });
   }
 
-  // Handle ORDER BY
+  // Handle ORDER BY (explicit). When omitted, QA #306 — DB Explorer's
+  // shipments view was returning rows in API load-order (created_at
+  // desc) while the TMS Shipments page sorts by id, so the two views
+  // never matched. Default to ascending id sort to align with the
+  // typical "1, 2, 3, 4…" expectation when the user just runs
+  // SELECT * FROM <table> without specifying an order.
   const orderMatch = lower.match(/order\s+by\s+(\w+)(?:\s+(asc|desc))?/);
   if (orderMatch) {
     const [, col, dir] = orderMatch;
@@ -65,6 +65,15 @@ export function executeQuery(sql, data) {
       const vb = b[col] ?? "";
       const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
       return dir === "desc" ? -cmp : cmp;
+    });
+  } else if (result.length > 0 && Object.prototype.hasOwnProperty.call(result[0], "id")) {
+    result.sort((a, b) => {
+      const va = a.id ?? "";
+      const vb = b.id ?? "";
+      // Numeric ids compare numerically; everything else falls back to
+      // locale-aware string compare (ids like "SHP-00012" sort correctly).
+      if (typeof va === "number" && typeof vb === "number") return va - vb;
+      return String(va).localeCompare(String(vb), undefined, { numeric: true });
     });
   }
 

@@ -18,6 +18,8 @@ import { deleteRate, duplicateRate } from '../../services/rateService';
 import Card from '../../components/ui/Card';
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
+import RateStatsGrid from '../../components/rates/RateStatsGrid';
+import { exportRowsAsCsv } from '../../services/csvExport';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 export default function RateManagementScreen() {
@@ -216,13 +218,60 @@ export default function RateManagementScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header — QA #285 parity adds an inline Export button.
+            Upload + Sync are still web-only ops (rate sheet ingest +
+            DAT/Truckstop sync), so we surface a small "via web" hint
+            via the Upload button rather than wiring a half-broken
+            picker. + New rate stays on the bottom-right FAB. */}
         <View style={styles.header}>
-          <Text style={styles.title}>Rate Management</Text>
-          <Text style={styles.count}>
-            {filteredRates.length} rate{filteredRates.length !== 1 ? 's' : ''}
-          </Text>
+          <View>
+            <Text style={styles.title}>Rate Management</Text>
+            <Text style={styles.count}>
+              {filteredRates.length} rate{filteredRates.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            onPress={() =>
+              Alert.alert(
+                'Upload Rates',
+                'Bulk rate sheet upload is currently web-only. Use the Zoree web app to upload a CSV; new rates will appear here on the next refresh.',
+              )
+            }
+            style={[styles.toolbarBtn, { marginRight: spacing.sm }]}
+            accessibilityRole="button">
+            <Ionicons name="cloud-upload-outline" size={16} color={colors.accent} />
+            <Text style={styles.toolbarText}>Upload</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              exportRowsAsCsv(
+                filteredRates,
+                [
+                  { key: 'rate_id', header: 'Rate ID', value: (r: any) => r.id || r.rate_id || r.lane },
+                  { key: 'lane',    header: 'Lane' },
+                  { key: 'origin',  header: 'Origin',  value: (r: any) => r.origin || r.origin_city },
+                  { key: 'destination', header: 'Destination', value: (r: any) => r.destination || r.destination_city },
+                  { key: 'carrier', header: 'Carrier', value: (r: any) => r.carrier || r.carrier_name },
+                  { key: 'mode',    header: 'Mode',    value: (r: any) => r.mode || r.transport_mode },
+                  { key: 'rate',    header: 'Rate',    value: (r: any) => r.rate || r.rate_per_mile },
+                  { key: 'fsc',     header: 'FSC %',   value: (r: any) => r.fsc || r.fuel_surcharge },
+                  { key: 'status',  header: 'Status' },
+                  { key: 'expiry',  header: 'Expiry',  value: (r: any) => r.exp || r.expiry_date },
+                ],
+                { title: 'Rates Export', filename: 'rates.csv' },
+              )
+            }
+            style={styles.toolbarBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Export rates as CSV">
+            <Ionicons name="download-outline" size={16} color={colors.accent} />
+            <Text style={styles.toolbarText}>Export</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* KPI strip — QA #285. */}
+        <RateStatsGrid rates={data.rates} />
 
         {/* Search */}
         <View style={styles.searchContainer}>
@@ -310,9 +359,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  toolbarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  toolbarText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
   },
   title: {
     fontSize: fontSize['2xl'],

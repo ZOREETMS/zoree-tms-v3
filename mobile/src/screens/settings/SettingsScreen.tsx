@@ -11,10 +11,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-// QA P208 remainder (2026-05-11): admin sub-pages (UserManagement /
-// UserRoles) are reachable from this screen via navigation buttons,
-// matching where they sit in the web's System sidebar section.
-import { useNavigation } from '@react-navigation/native';
+// useNavigation + the isAdmin gate were used by the old "Admin"
+// shortcut card removed under QA #301 — no remaining call sites in
+// this file.
 
 import Card from '../../components/ui/Card';
 import { useAuth } from '../../state/AuthContext';
@@ -31,16 +30,6 @@ import {
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
-  const navigation = useNavigation<any>();
-  // Admin gate: User Management + User Roles + Equipment Master +
-  // Planning Parameters are admin-only on the web side. We surface the
-  // links only when the signed-in user has 'admin' in their roles, to
-  // avoid teasing a button that 403s on tap. The backend still enforces
-  // permission server-side; this is a UX-level filter only.
-  const isAdmin =
-    (Array.isArray(user?.roles) && user!.roles!.includes('admin')) ||
-    user?.role === 'admin' ||
-    user?.activeRole === 'admin';
 
   // Notification preferences (local state placeholders)
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -123,64 +112,19 @@ export default function SettingsScreen() {
         </Card>
 
         {/*
-          QA P208 remainder (2026-05-11): Admin section. Mirrors the
-          web's System sidebar links — User Management, User Roles,
-          Equipment Master, Planning Parameters — so admins do not
-          have to open the web app to reach the underlying screens
-          we already register in SystemTabs. Hidden when the signed-in
-          user has no admin role; backend still gates the endpoints
-          server-side.
+          QA #301 (2026-05-14): the in-Settings "Admin" shortcut card
+          previously duplicated nav rows for User Management, User
+          Roles, Equipment Master, and Planning Parameters. After QA
+          #298 / #277 those are first-class entries in the drawer (the
+          System group exposes User Management + User Roles + Settings,
+          and Planning Parameters + Equipment Master live under the
+          Planning group). Keeping the duplicate card here made the
+          Settings page feel like a second nav surface — the QA spec
+          calls for a clean Settings page that matches the web's
+          (Account Info / API Config / Integrations). The drawer is
+          now the single source of truth for those jumps, so this
+          section is removed.
          */}
-        {isAdmin ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Admin</Text>
-            <Card>
-              <TouchableOpacity
-                style={styles.settingRow}
-                activeOpacity={0.6}
-                onPress={() => navigation.navigate('UserManagement')}>
-                <View style={styles.settingLabel}>
-                  <Ionicons name="people-outline" size={20} color={colors.text2} />
-                  <Text style={styles.settingText}>User Management</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.settingRow}
-                activeOpacity={0.6}
-                onPress={() => navigation.navigate('UserRoles')}>
-                <View style={styles.settingLabel}>
-                  <Ionicons name="shield-outline" size={20} color={colors.text2} />
-                  <Text style={styles.settingText}>User Roles</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.settingRow}
-                activeOpacity={0.6}
-                onPress={() => navigation.navigate('EquipmentMaster')}>
-                <View style={styles.settingLabel}>
-                  <Ionicons name="construct-outline" size={20} color={colors.text2} />
-                  <Text style={styles.settingText}>Equipment Master</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.settingRow}
-                activeOpacity={0.6}
-                onPress={() => navigation.navigate('PlanningParameters')}>
-                <View style={styles.settingLabel}>
-                  <Ionicons name="options-outline" size={20} color={colors.text2} />
-                  <Text style={styles.settingText}>Planning Parameters</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text3} />
-              </TouchableOpacity>
-            </Card>
-          </View>
-        ) : null}
 
         {/* Notification Preferences */}
         <View style={styles.section}>

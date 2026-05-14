@@ -67,17 +67,44 @@ export default function CarrierDetailScreen() {
   }, [carrier, refreshData, navigation]);
 
   const handleEdit = useCallback(() => {
-    // In a full implementation this would open an edit form.
-    // For now, we navigate with the carrier id to signal edit mode.
-    Alert.alert('Edit', 'Edit form not yet implemented.');
+    // QA #279 — carrier edit form is not yet ported to mobile; the
+    // backend supports the upsert but there's no RN form. Be honest
+    // about the gap so the admin knows to use web for the field-level
+    // edits (status / OTD source / equipment types).
+    Alert.alert(
+      'Edit Carrier',
+      'Carrier editing is currently web-only. Open the Zoree web app to edit carrier details; changes will appear here on the next refresh.',
+    );
   }, []);
 
   /* ---------- empty state ---------- */
   if (!carrier) {
+    // QA #279 — the FAB from CarriersScreen routes here with
+    // carrierId === '__new__'. Without a mobile-side create form we
+    // need to make the path honest: tell the user create is web-only
+    // rather than rendering "Carrier not found" which made the FAB
+    // look broken.
+    const isNew = carrierId === '__new__';
     return (
       <View style={styles.centered}>
-        <Ionicons name="business-outline" size={48} color={colors.text3} />
-        <Text style={styles.emptyText}>Carrier not found</Text>
+        <Ionicons
+          name={isNew ? 'add-circle-outline' : 'business-outline'}
+          size={48}
+          color={colors.text3}
+        />
+        <Text style={styles.emptyText}>
+          {isNew ? 'Add Carrier' : 'Carrier not found'}
+        </Text>
+        {isNew ? (
+          <Text
+            style={[
+              styles.emptyText,
+              { fontSize: 13, color: colors.text3, marginTop: 4 },
+            ]}>
+            Creating a new carrier is currently web-only. New rows will
+            sync to mobile on the next refresh.
+          </Text>
+        ) : null}
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.link}>Go back</Text>
         </TouchableOpacity>

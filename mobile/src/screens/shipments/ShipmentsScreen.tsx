@@ -16,6 +16,11 @@ import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import ShipmentCard from '../../components/shipments/ShipmentCard';
 import NewShipmentModal from '../../components/shipments/NewShipmentModal';
+import DateRangeChips, {
+  DateRangeKey,
+  dateRangeCutoff,
+} from '../../components/common/DateRangeChips';
+import { exportRowsAsCsv } from '../../services/csvExport';
 import { useData } from '../../state/DataContext';
 import {
   colors,
@@ -44,6 +49,10 @@ export default function ShipmentsScreen() {
   // Empty string == all modes. Derived options come from what's loaded
   // so a tenant without LTL doesn't see an empty pill.
   const [modeFilter, setModeFilter] = useState<string>('');
+  // QA #272 — date-range filter (preset chips, not a calendar picker).
+  // Web has Created From / Created To inputs; preset chips give
+  // equivalent coverage without bringing a date-picker dep into mobile.
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
   const [creating, setCreating] = useState(false);
 
   const modeOptions = useMemo(() => {
@@ -72,6 +81,20 @@ export default function ShipmentsScreen() {
       );
     }
 
+    // QA #272 — date-range filter against created_at (with sensible
+    // fallback fields). Unparseable / missing dates are filtered out
+    // when a non-"all" preset is selected so the UI doesn't pretend
+    // they're current.
+    const cutoff = dateRangeCutoff(dateRange);
+    if (cutoff !== null) {
+      list = list.filter((s: any) => {
+        const raw = s.created_at || s.createdAt || s.pickup_date || s.pickupDate;
+        if (!raw) return false;
+        const t = new Date(raw).getTime();
+        return Number.isFinite(t) && t >= cutoff;
+      });
+    }
+
     // Search filter
     const q = search.trim().toLowerCase();
     if (q) {
@@ -98,7 +121,28 @@ export default function ShipmentsScreen() {
     }
 
     return list;
-  }, [data.shipments, search, statusFilter, modeFilter]);
+  }, [data.shipments, search, statusFilter, modeFilter, dateRange]);
+
+  // QA #272 — Export current (filtered) list as CSV. Mirrors the web
+  // Shipments page's Export button. Goes through the shared csvExport
+  // service so the column conventions stay consistent across screens.
+  const onExport = useCallback(async () => {
+    await exportRowsAsCsv(
+      filtered,
+      [
+        { key: 'id',           header: 'Shipment ID' },
+        { key: 'status',       header: 'Status' },
+        { key: 'mode',         header: 'Mode' },
+        { key: 'carrier_name', header: 'Carrier', value: (r) => r.carrier_name || r.carrierName || r.carrier },
+        { key: 'origin',       header: 'Origin',  value: (r) => r.origin_city || r.origin },
+        { key: 'destination',  header: 'Destination', value: (r) => r.destination_city || r.destination },
+        { key: 'pickup_date',  header: 'Pickup Date', value: (r) => r.pickup_date || r.pickupDate },
+        { key: 'total_cost',   header: 'Total Cost' },
+        { key: 'created_at',   header: 'Created At', value: (r) => r.created_at || r.createdAt },
+      ],
+      { title: 'Shipments Export', filename: 'shipments.csv' },
+    );
+  }, [filtered]);
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => <ShipmentCard shipment={item} />,
@@ -120,6 +164,17 @@ export default function ShipmentsScreen() {
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{filtered.length}</Text>
           </View>
+          <View style={{ flex: 1 }} />
+          {/* QA #272 — inline Export button so the header matches the
+              web layout (FAB still handles "+ New Shipment"). */}
+          <TouchableOpacity
+            onPress={onExport}
+            style={styles.exportBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Export current shipments as CSV">
+            <Ionicons name="download-outline" size={16} color={colors.accent} />
+            <Text style={styles.exportText}>Export</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Search */}
@@ -156,6 +211,9 @@ export default function ShipmentsScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        {/* QA #272 — date-range presets. */}
+        <DateRangeChips active={dateRange} onSelect={setDateRange} />
 
         {/* QA 230 (2026-05-12): Mode filter — TL / LTL / etc. Hidden
             when the loaded set has no mode info. */}
@@ -294,7 +352,26 @@ const styles = StyleSheet.create({
   },
   chipRow: {
     paddingHorizontal: spacing.lg,
+    // QA #272 — extra right padding stops the last chip looking clipped
+    // on narrow phones (the symptom the report called "buttons are cut").
+    paddingRight: spacing.xl,
     gap: spacing.sm,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg2,
+  },
+  exportText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.accent,
   },
   chip: {
     paddingHorizontal: spacing.md,

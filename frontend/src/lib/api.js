@@ -131,6 +131,25 @@ export const UsersApi = {
   },
 };
 
+// QA bug #261c: programmatic-access API keys. Admin-only on every
+// endpoint. `create` returns the raw token exactly once in the
+// response — the UI must capture it on screen because the server
+// retains only a sha-256 hash.
+export const ApiKeysApi = {
+  list() {
+    return api("/api-keys");
+  },
+  create({ name, role }) {
+    return api("/api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name, role }),
+    });
+  },
+  revoke(id) {
+    return api(`/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};
+
 export const AuthApi = {
   login(email, password) {
     return api("/auth/login", {

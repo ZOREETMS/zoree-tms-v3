@@ -3016,9 +3016,13 @@ async function confirmPOD(){
     var mwRes = await ZoreeMiddleware.pushPODStatus(o.tmsShipId, o.deliveredAt);
     if(mwRes.error) console.warn('[confirmPOD] TMS status push failed:', mwRes.error.message);
     mwLog(mwRes.error ? '⚠ pushPODStatus failed for ' + o.tmsShipId : '→ pushPODStatus: ' + o.tmsShipId + ' → Delivered', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','delivered_at'], payload:{tmsShipmentId:o.tmsShipId, status:'Delivered', deliveredAt:o.deliveredAt, podRecv:o.podRecv, podCond:o.podCond}});
-    cl('m-pod');rd();ro();updateBadges();updatePipelineCounts();
-    toast('✅ Delivered & POD confirmed — '+o.id+' — Trigger: EDI 210 Invoice','tok');
-    cl('m-pod');rd();ro();updateBadges();updatePipelineCounts();
+    // QA #304 — the POD modal is launched from the Warehouse Ops kanban
+    // (stage-10 column rendered by rw()). After confirm, stage flips to
+    // 11 and the card should disappear from that column immediately —
+    // previously rw() was not in the refresh chain so the card lingered
+    // until the next manual refresh. Also dedupe the refresh + toast
+    // block (was accidentally emitted twice).
+    cl('m-pod');rw();rd();ro();updateBadges();updatePipelineCounts();
     toast('✅ Delivered & POD confirmed — '+o.id+' — Trigger: EDI 210 Invoice','tok');
   }catch(e){toast('❌ '+e.message,'ter');}
 }

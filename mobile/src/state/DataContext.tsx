@@ -107,6 +107,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError('');
     try {
+      // QA #311 / #308 / #310 — silent .catch(() => []) used to make a
+      // failing endpoint indistinguishable from an empty table. Log a
+      // warning per failure so the underlying issue (network, RLS,
+      // missing migration, schema drift) becomes discoverable from the
+      // device logs.
+      const swallow = (label: string) => (err: any) => {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[DataContext.refreshData] ${label} failed:`,
+          err?.message || err,
+        );
+        return [] as any[];
+      };
       const [
         orders,
         shipments,
@@ -140,19 +153,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         DbApi.orders(),
         DbApi.shipments(),
         DbApi.carriers(),
-        DbApi.customers().catch(() => []),
-        DbApi.lanePreferences().catch(() => []),
-        DbApi.items().catch(() => []),
-        DbApi.locations().catch(() => []),
-        DbApi.omsLocations().catch(() => []),
-        DbApi.packagingUnits().catch(() => []),
-        DbApi.rates().catch(() => []),
-        DbApi.drivers().catch(() => []),
-        DbApi.invoices().catch(() => []),
-        DbApi.routeTemplates().catch(() => []),
-        DbApi.equipmentTypes().catch(() => []),
-        DbApi.vehicles().catch(() => []),
-        DbApi.ordersCount().catch(() => undefined),
+        DbApi.customers().catch(swallow('customers')),
+        DbApi.lanePreferences().catch(swallow('lanePreferences')),
+        DbApi.items().catch(swallow('items')),
+        DbApi.locations().catch(swallow('locations')),
+        DbApi.omsLocations().catch(swallow('omsLocations')),
+        DbApi.packagingUnits().catch(swallow('packagingUnits')),
+        DbApi.rates().catch(swallow('rates')),
+        DbApi.drivers().catch(swallow('drivers')),
+        DbApi.invoices().catch(swallow('invoices')),
+        DbApi.routeTemplates().catch(swallow('routeTemplates')),
+        DbApi.equipmentTypes().catch(swallow('equipmentTypes')),
+        DbApi.vehicles().catch(swallow('vehicles')),
+        DbApi.ordersCount().catch((err: any) => {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[DataContext.refreshData] ordersCount failed:',
+            err?.message || err,
+          );
+          return undefined;
+        }),
       ]);
 
       // REQ-OFFLINE Phase 5: write-through orders + shipments to the
