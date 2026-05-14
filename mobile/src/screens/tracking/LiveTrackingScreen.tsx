@@ -26,23 +26,6 @@ import {
 export default function LiveTrackingScreen() {
   const { data, loading, refreshData } = useData();
 
-  // QA bug #258: the mobile and web Live Tracking dashboards used to
-  // report different "active shipments" counts because they each
-  // filtered the shipments list against a different status set:
-  // mobile used a lowercase compare against ['in transit', 'picked up']
-  // and web used a titlecase set ['In Transit', 'Exception', 'Tendered'].
-  // Neither was right by itself — "Tendered" describes a shipment
-  // that has been offered to a carrier but not yet accepted, so it
-  // isn't actually moving, and "Picked Up" describes a load that the
-  // carrier has taken but hasn't reported in-motion yet (still
-  // active by any reasonable definition of "live"). The canonical
-  // set is therefore:
-  //   • In Transit  — actively moving
-  //   • Picked Up   — carrier has the load, en route
-  //   • Exception   — delivery in trouble, still needs tracking
-  // This same Set is used by frontend/src/pages/LiveTrackingPage.jsx
-  // so the two dashboards always agree. Using an exact-match Set
-  // (no lowercasing) so the case-sensitivity drift can't return.
   const inTransitShipments = useMemo(() => {
     const active = new Set(['In Transit', 'Picked Up', 'Exception']);
     return data.shipments.filter((s: any) => active.has(s.status));
@@ -97,7 +80,6 @@ export default function LiveTrackingScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Ionicons name="navigate" size={24} color={colors.accent} />
           <Text style={styles.title}>Live Tracking</Text>
@@ -106,13 +88,9 @@ export default function LiveTrackingScreen() {
           </View>
         </View>
 
-        {/* QA #278 — real map (react-native-maps) replacing the
-            "Coming Soon" placeholder. TrackingMap defensively falls
-            back to a friendly empty state when no shipment has lat/lng
-            yet so the screen never renders a blank gray box. */}
+        {/* QA #278 — real map replacing the placeholder. */}
         <TrackingMap shipments={inTransitShipments} height={220} />
 
-        {/* Active shipments list */}
         <Text style={styles.sectionTitle}>Active Shipments</Text>
 
         <FlatList
@@ -145,13 +123,8 @@ export default function LiveTrackingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -177,29 +150,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: colors.accent,
   },
-  mapPlaceholder: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    height: 180,
-    backgroundColor: colors.bg3,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapPlaceholderText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text2,
-    marginTop: spacing.sm,
-  },
-  mapPlaceholderSubtext: {
-    fontSize: fontSize.sm,
-    color: colors.text3,
-    marginTop: spacing.xs,
-  },
   sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
@@ -213,9 +163,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['5xl'],
     flexGrow: 1,
   },
-  shipmentCard: {
-    marginBottom: spacing.md,
-  },
+  shipmentCard: { marginBottom: spacing.md },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -258,9 +206,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flex: 1,
   },
-  routeArrow: {
-    marginHorizontal: spacing.sm,
-  },
+  routeArrow: { marginHorizontal: spacing.sm },
   routeText: {
     fontSize: fontSize.sm,
     color: colors.text,
