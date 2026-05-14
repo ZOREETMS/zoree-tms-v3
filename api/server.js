@@ -1325,6 +1325,39 @@ app.patch('/api/db/:table/:id', async (req, res) => {
       } catch (auditErr) {
         console.error('[PATCH /api/db/shipments] audit failed:', auditErr.message);
       }
+
+      // QA bug #262: fan out a SHIPMENT_UPDATED event so connected web
+      // tabs (and the mobile useRealtimeData subscriber) refresh the
+      // moment a raw /api/db/shipments/:id PATCH lands. Without this,
+      // mobile-originated mutations (carrier portal Tender Accept /
+      // Tender Reject, status updates) wrote to the DB and recorded an
+      // audit row but never reached the WS bridge — so the web TMS
+      // detail modal's fast-path subscription (frontend/src/pages/
+      // ShipmentsPage.jsx:907-927 listening for `shipment.updated`)
+      // stayed stale until the next manual refresh.
+      //
+      // Mirrors the create-side broadcast at line ~2284 — same event
+      // name, same bus→wsBroadcast bridge at line ~4176, same client
+      // contract. Payload carries the fields the detail modal merges
+      // directly into its open snapshot so the status badge + rungs
+      // flip without an API round-trip. Best-effort: a broadcast
+      // failure must not roll back the PATCH (the audit row already
+      // landed, and useRealtimeShipments will catch up via Supabase
+      // postgres_changes within ~250ms regardless).
+      try {
+        bus.emit(EVENTS.SHIPMENT_UPDATED, {
+          id:            row.id,
+          action:        'update',
+          status:        row.status        ?? null,
+          shipped_at:    row.shipped_at    ?? null,
+          delivered_at:  row.delivered_at  ?? null,
+          pickup_date:   row.pickup_date   ?? null,
+          delivery_date: row.delivery_date ?? null,
+          via:           'db-patch',
+        });
+      } catch (broadcastErr) {
+        console.error('[PATCH /api/db/shipments] WS broadcast failed:', broadcastErr.message);
+      }
     }
 
     // REQ-02 Phase 4: master-data tables (non-shipment). Same contract

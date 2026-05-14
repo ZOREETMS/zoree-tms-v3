@@ -150,7 +150,19 @@ export default function DockSchedulingPage() {
   async function saveAppt() {
     if (!gate.canEdit) return;            // QA #147 defensive guard
     if (!editAppt) return;
-    const appt = { ...editAppt, date: dockDate, id: editAppt.id || "DA-" + Date.now() };
+    // QA bug #264: previously this line force-overwrote `date` with the
+    // page-level `dockDate`, silently discarding any date the user
+    // edited inside AppointmentEditModal. The PATCH then wrote the
+    // unchanged page date back to the shipment, refreshData() re-read
+    // the same value, and the modal's "Save Appointment" appeared to be
+    // a no-op. Honour the modal's own date — fall back to `dockDate`
+    // only when the modal didn't supply one (e.g. ad-hoc new
+    // appointment, which already inherits dockDate at openNewAppt time).
+    const appt = {
+      ...editAppt,
+      date: editAppt.date || dockDate,
+      id:   editAppt.id || "DA-" + Date.now(),
+    };
 
     // Shipment-tied appointment: persist dock fields back to the shipment
     // row so Shipment Details / OMS / exports see the new door. Local

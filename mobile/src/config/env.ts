@@ -18,7 +18,7 @@ const DEV_API_BASE = Platform.select({
   default: `http://${LOCAL_IP}:3001/api`,
 });
 
-const PROD_API_BASE = 'https://messaging-eternal-slope-indexed.trycloudflare.com/api';
+const PROD_API_BASE = 'https://fitted-boston-named-high.trycloudflare.com/api';
 
 export const API_BASE = __DEV__ ? DEV_API_BASE : PROD_API_BASE;
 

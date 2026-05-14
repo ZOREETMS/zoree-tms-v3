@@ -1380,8 +1380,15 @@ var ZoreeMiddleware = {
     try {
       var wt  = (omsLines||[]).reduce((s,l) => s + (l.qty * l.wt), 0);
       var pcs = (omsLines||[]).reduce((s,l) => s + l.qty, 0);
+      // QA bug #260: previously appended 'MODE_CONSTRAINT:<mode>' to the
+      // user-facing notes field as a poor-man's constraint channel. That
+      // leaked a technical token into the TMS Notes UI (e.g.
+      // "Hazmat | MODE_CONSTRAINT:TL"). The mode is already mirrored to
+      // the dedicated shipments.ship_mode / orders.ship_mode columns
+      // downstream (see omsSync.js + the shipMode field in the push
+      // payload below), so the constraint is preserved structurally
+      // without polluting human-readable notes.
       var notes = omsOrder.notes || null;
-      if (omsOrder.mode) notes = (notes ? notes + ' | ' : '') + 'MODE_CONSTRAINT:' + omsOrder.mode;
 
       // REQ-24: Ship-from / ship-to now come from four typed fields on
       // the OMS order. Prefer those; fall back to the legacy locs-table
@@ -2947,7 +2954,16 @@ async function confirmShip(){
     });
     if(mwRes.error) console.warn('[confirmShip] TMS status push failed:', mwRes.error.message);
     mwLog(mwRes.error ? '⚠ pushShipStatus failed for ' + o.tmsShipId : '→ pushShipStatus: ' + o.tmsShipId + ' → In Transit', !mwRes.error, {flow:'OMS → TMS', src:'OMS', dst:'TMS', recordId:o.tmsShipId, rowCount:1, fields:['status','shipped_at'], payload:{tmsShipmentId:o.tmsShipId, status:'In Transit', shippedAt:o.shippedAt, sealNumber:o.sealNum, orderIds:[o.id]}});
-    rd();ro();ri();updateBadges();updatePipelineCounts();
+    // QA bug #265: previously this re-render batch called rd() (delivery
+    // tracking), ro() (orders), and ri() (inventory) but NOT rw() (the
+    // warehouse kanban). Result: the order's in-memory stage was bumped
+    // to 10 and persisted to oms_orders via saveOrder() above, but the
+    // kanban's "Staged at Dock" tile (which filters orders.stage===9)
+    // was never repainted — so the just-shipped order continued to
+    // appear there until the user manually switched tabs or refreshed.
+    // Adding rw() to the render batch (matches the stage 8→9 handler at
+    // line ~2902 which already calls rw()) closes the gap.
+    rw();rd();ro();ri();updateBadges();updatePipelineCounts();
     if (mwRes.error && o.tmsShipId) {
       toast('⚠ Shipped in OMS, but TMS status push failed: ' + mwRes.error.message, 'ter');
     } else {
@@ -3007,14 +3023,26 @@ async function confirmPOD(){
   }catch(e){toast('❌ '+e.message,'ter');}
 }
 
-// ─── WAREHOUSE KANBAN (Stages 6–9) ───────────────
+// ─── WAREHOUSE KANBAN (Stages 6–10) ───────────────
+// QA bug #267: previously this kanban stopped at stage 9 (Staged at
+// Dock). Once an order was shipped (stage 10) it disappeared from the
+// warehouse view entirely and only surfaced in the separate Delivery
+// Tracking table (rd() at the function below). Warehouse users
+// reported losing visibility into the POD step — they wanted the
+// stage-10 row sitting next to Staged at Dock as a 5th tile so they
+// can click straight through to POD entry without leaving the
+// warehouse screen. No DB change needed: stage 10 already exists in
+// the data model (oms_orders.stage is a plain integer, no CHECK
+// constraint), and the POD modal (openPODModal) is already wired up
+// from the delivery-tracking table at line ~3043.
 function rw(){
   var q=(document.getElementById('sw').value||'').toLowerCase();
   var cols=[
-    {s:6,lbl:'📋 BOL Confirmed',col:'var(--teal)',   kc:'s6',btnLbl:'Start Pick →',fn:id=>`openPickModal('${id}')`},
-    {s:7,lbl:'🔎 Picking',          col:'var(--orange)', kc:'s7',btnLbl:'Mark Packed →',fn:id=>`openPackModal('${id}')`},
-    {s:8,lbl:'📦 Packed',            col:'var(--amber2)', kc:'s8',btnLbl:'Assign Dock →',fn:id=>`openDockModal('${id}')`},
-    {s:9,lbl:'🚪 Staged at Dock',    col:'var(--purple)', kc:'s9',btnLbl:'Load & Ship →',fn:id=>`openShipModal('${id}')`},
+    {s:6, lbl:'📋 BOL Confirmed',     col:'var(--teal)',   kc:'s6', btnLbl:'Start Pick →',  fn:id=>`openPickModal('${id}')`},
+    {s:7, lbl:'🔎 Picking',           col:'var(--orange)', kc:'s7', btnLbl:'Mark Packed →', fn:id=>`openPackModal('${id}')`},
+    {s:8, lbl:'📦 Packed',            col:'var(--amber2)', kc:'s8', btnLbl:'Assign Dock →', fn:id=>`openDockModal('${id}')`},
+    {s:9, lbl:'🚪 Staged at Dock',    col:'var(--purple)', kc:'s9', btnLbl:'Load & Ship →', fn:id=>`openShipModal('${id}')`},
+    {s:10,lbl:'🚛 Shipped / POD',     col:'var(--green)',  kc:'s10',btnLbl:'Record POD →',  fn:id=>`openPODModal('${id}')`},
   ];
   document.getElementById('kb').innerHTML=cols.map(col=>{
     var cards=orders.filter(o=>o.stage===col.s&&(!q||(o.id+custName(o.cust)+(o.dest||'')).toLowerCase().includes(q)));

@@ -156,7 +156,18 @@ export function assignDockToPlan(plan, { dockDoor, startTime, loadDuration, grou
         const m = occupiedMins % 60;
         return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
       })();
-      plan.dockIssue = `${door} on ${plan.pickupDate} at ${plan.origin} is booked through ${conflictUntil} — your ${start} window may overlap.`;
+      // QA bug #263: the previous "booked through X — your Y window may
+      // overlap" phrasing was reported as confusing because "may" reads
+      // like a soft maybe (planners told QA "if there *might* be an
+      // overlap, why is it blocking my plan?"). The check is actually a
+      // definite overlap — the requested start time falls strictly
+      // inside the occupied window — so the wording now says so
+      // plainly, and tells the planner what to do about it.
+      plan.dockIssue =
+        `${door} on ${plan.pickupDate} at ${plan.origin} is already booked ` +
+        `from 06:00 to ${conflictUntil}. Your ${start} start time falls ` +
+        `inside that window — choose a start time at or after ${conflictUntil}, ` +
+        `or pick a different door.`;
     }
   } else {
     // Auto-assign: find the door with the least occupied time

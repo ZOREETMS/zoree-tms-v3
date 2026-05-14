@@ -25,12 +25,26 @@ import {
 export default function LiveTrackingScreen() {
   const { data, loading, refreshData } = useData();
 
+  // QA bug #258: the mobile and web Live Tracking dashboards used to
+  // report different "active shipments" counts because they each
+  // filtered the shipments list against a different status set:
+  // mobile used a lowercase compare against ['in transit', 'picked up']
+  // and web used a titlecase set ['In Transit', 'Exception', 'Tendered'].
+  // Neither was right by itself — "Tendered" describes a shipment
+  // that has been offered to a carrier but not yet accepted, so it
+  // isn't actually moving, and "Picked Up" describes a load that the
+  // carrier has taken but hasn't reported in-motion yet (still
+  // active by any reasonable definition of "live"). The canonical
+  // set is therefore:
+  //   • In Transit  — actively moving
+  //   • Picked Up   — carrier has the load, en route
+  //   • Exception   — delivery in trouble, still needs tracking
+  // This same Set is used by frontend/src/pages/LiveTrackingPage.jsx
+  // so the two dashboards always agree. Using an exact-match Set
+  // (no lowercasing) so the case-sensitivity drift can't return.
   const inTransitShipments = useMemo(() => {
-    return data.shipments.filter(
-      (s: any) =>
-        (s.status || '').toLowerCase() === 'in transit' ||
-        (s.status || '').toLowerCase() === 'picked up',
-    );
+    const active = new Set(['In Transit', 'Picked Up', 'Exception']);
+    return data.shipments.filter((s: any) => active.has(s.status));
   }, [data.shipments]);
 
   if (loading && data.shipments.length === 0) {

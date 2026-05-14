@@ -9,6 +9,7 @@ import SearchBar from '../../components/ui/SearchBar';
 import StatusFilter from '../../components/common/StatusFilter';
 import EmptyState from '../../components/ui/EmptyState';
 import ItemCard from '../../components/items/ItemCard';
+import ItemStatsGrid from '../../components/items/ItemStatsGrid';
 import { ITEM_CLASSES } from '../../shared/constants/itemConstants';
 import { colors, fontSize, fontWeight, spacing } from '../../theme';
 
@@ -66,6 +67,13 @@ export default function ItemMasterScreen() {
           {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
         </Text>
       </View>
+
+      {/* QA bug #259: KPI dashboard parity with the web Item Master.
+          Computed from the full item set (data.items), not the
+          filtered list, so the totals stay stable as the user
+          narrows the search/class filter below. Mirrors web's 5-card
+          strip at frontend/src/pages/ItemMasterPage.jsx:527-533. */}
+      <ItemStatsGrid items={data.items} />
 
       <View style={styles.searchWrap}>
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search items..." />

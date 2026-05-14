@@ -306,19 +306,21 @@ export default function UserRolesPage() {
         </div>
       </div>
 
-      {/* Top tabs (Roles is the active tab; Users / Policies / API Access are placeholders) */}
+      {/* QA bug #261: the previous version of this header rendered four
+          tabs — Users / Roles / Policies / API Access — with three of
+          them disabled and stamped "Coming soon". Beyond reading like a
+          half-shipped UI, the disabled stubs were confusing planners
+          who expected real navigation to live behind those labels. The
+          Users / Policies / API Access modules are tracked as separate
+          features and will be wired in when those pages exist. Until
+          then, render only the Roles tab so the surface area is honest
+          about what the page actually does. The single-tab header is
+          kept (not collapsed entirely) so the role count badge stays
+          discoverable and so the tab styling lines up with the rest of
+          the admin pages. */}
       <div className="acc-tabs">
-        <button type="button" className="acc-tab" disabled title="Coming soon">
-          Users
-        </button>
         <button type="button" className="acc-tab active">
           Roles <span className="count">{sortedRoleKeys.length}</span>
-        </button>
-        <button type="button" className="acc-tab" disabled title="Coming soon">
-          Policies
-        </button>
-        <button type="button" className="acc-tab" disabled title="Coming soon">
-          API Access
         </button>
       </div>
 

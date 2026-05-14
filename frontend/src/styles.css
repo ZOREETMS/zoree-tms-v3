@@ -224,6 +224,43 @@ input[type="password"]{text-transform:none !important;}
 input::placeholder,textarea::placeholder{text-transform:none;}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,0.08);}
 
+/* QA bug #261: AddRoleModal (and any future form built on the same
+   pattern) wraps each field in a <label class="form-field"> with a
+   span.form-label, an input/textarea/select, and an optional
+   span.form-help. The .form-field and .form-help classes had no CSS
+   definitions, so the global `label` selector above (uppercase, 12px
+   bold, 0.04em tracking) bled onto the outer label and the field
+   collapsed into an inline row instead of stacking. Defining
+   .form-field as a column flex container restores the intended layout
+   (label-on-top, input full-width, help text underneath), and the
+   reset on font/text-transform/letter-spacing keeps the global `label`
+   typography from corrupting the input area inside. */
+.form-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+  /* reset the global label typography for the container itself —
+     inner .form-label keeps its uppercase label styling */
+  font-size:13px;
+  font-weight:500;
+  letter-spacing:0;
+  text-transform:none;
+  color:var(--text);
+}
+.form-field > input,
+.form-field > select,
+.form-field > textarea{width:100%;max-width:100%;}
+.form-help{
+  font-size:11px;
+  font-weight:500;
+  color:var(--text3);
+  text-transform:none;
+  letter-spacing:0;
+  line-height:1.4;
+  margin-top:2px;
+}
+
 /* ── INFO GRID ──────────────────────────────────────────────── */
 .info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;}
 .info-box{padding:10px 14px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);}

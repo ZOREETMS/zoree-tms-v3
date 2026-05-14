@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import useInvoices from '../../shared/hooks/useInvoices';
+import { ensureUiInvoice } from '../../shared/services/invoiceService';
 import { formatCurrency } from '../../shared/utils/formatters';
 import {
   approveInvoice,
@@ -31,6 +32,21 @@ const INVOICE_STATUSES = ['All', 'Pending', 'Approved', 'Disputed'];
 
 export default function InvoicesScreen() {
   const { data, loading, refreshData } = useData();
+  // QA bug #257: DataContext exposes invoices in their raw DB shape
+  // (snake_case: invoice_number, invoiced_amount, agreed_cost,
+  // shipment_id, …) because most other mobile screens read those
+  // fields directly. The shared useInvoices hook — which is identical
+  // to the web hook — reads camelCase keys (num, amount, agreed,
+  // shipId, …), so passing raw rows here zeroed out every dollar in
+  // the dashboard stats grid and broke search/filter on invoice number.
+  // Normalize at the consumer edge using ensureUiInvoice (a wrapper
+  // around mapDbInvoice that is idempotent for already-mapped rows),
+  // matching what the web does in
+  // frontend/src/pages/FreightInvoicesPage.jsx:122 at load time.
+  const uiInvoices = useMemo(
+    () => (data.invoices || []).map(ensureUiInvoice).filter(Boolean),
+    [data.invoices],
+  );
   const {
     filtered,
     stats,
@@ -41,7 +57,7 @@ export default function InvoicesScreen() {
     setStatusFilter,
     carrierFilter,
     setCarrierFilter,
-  } = useInvoices(data.invoices);
+  } = useInvoices(uiInvoices);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);

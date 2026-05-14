@@ -319,9 +319,20 @@ export default function LiveTrackingPage() {
 
   const allShipments = data?.shipments || [];
 
-  // Active shipments for tracking (In Transit, Exception, Tendered)
+  // QA bug #258: the canonical "active shipments" set is
+  //   • In Transit  — actively moving
+  //   • Picked Up   — carrier has the load, en route
+  //   • Exception   — delivery in trouble, still needs tracking
+  // "Tendered" used to be in this list but a tendered shipment is
+  // still awaiting carrier acceptance — it isn't on the road yet, so
+  // showing it on a live-tracking surface is misleading. The mobile
+  // LiveTrackingScreen carries the same Set so the two dashboards
+  // always agree. Exact-match (no lowercasing) so a future status
+  // value like "in transit" (lowercase) won't silently slip in and
+  // start producing inflated counts.
   const trackingShipments = useMemo(() => {
-    return allShipments.filter((s) => ["In Transit", "Exception", "Tendered"].includes(s.status));
+    const active = new Set(["In Transit", "Picked Up", "Exception"]);
+    return allShipments.filter((s) => active.has(s.status));
   }, [allShipments]);
 
   const handleMapSelect = useCallback((s) => {
