@@ -47,7 +47,21 @@ export default function DashboardPage() {
         {/* ── Stat Cards ── */}
         <div className="stat-grid">
           <div className="stat-card blue">
-            <div className="stat-label">Active Shipments</div>
+            {/* QA follow-up: the label here used to read "Active
+                Shipments", but the value below is the unfiltered total
+                of every row in the shipments table — including
+                Delivered and Cancelled. HomePage.jsx applies a real
+                active-only filter (status !== "Delivered" &&
+                status !== "Cancelled"), so the two pages disagreed by
+                exactly the Delivered+Cancelled count (e.g. 500 here
+                vs 417 there). Renaming to "Total Shipments" makes the
+                card honest about what it counts; the in-transit
+                number beneath it carries the "of which actually
+                moving" context that the old label was implying. The
+                in-transit count comes from computeDashboardStats —
+                same helper Home reads, so the sub-stat stays in
+                lockstep across pages. */}
+            <div className="stat-label">Total Shipments</div>
             <div className="stat-value">{shipments.length}</div>
             <div className="stat-delta"><span className="up">↑ {stats.inTransit}</span> in transit</div>
           </div>

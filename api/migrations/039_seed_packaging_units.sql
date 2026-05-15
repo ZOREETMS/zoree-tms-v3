@@ -39,6 +39,37 @@
 --   the same code wins. Dimensions/weights are industry-standard
 --   defaults; tenants who want tighter values just run an UPDATE.
 
+
+-- ── Bootstrap: ensure the table exists ─────────────────────────────
+-- The packaging_units table was never created by a versioned migration
+-- in this repo — early tenants got it via ad-hoc SQL Editor commands,
+-- so on fresh databases this seed used to fail with
+--   ERROR 42P01: relation "packaging_units" does not exist
+-- The CREATE TABLE IF NOT EXISTS below is idempotent on tenants that
+-- already have it (zero schema impact) and unblocks the INSERT below
+-- on tenants that do not. Audit columns (created_at / updated_at)
+-- match the project DB rules.
+CREATE TABLE IF NOT EXISTS packaging_units (
+  id           text PRIMARY KEY,
+  description  text,
+  type         text,
+  material     text,
+  len          numeric,
+  wid          numeric,
+  hgt          numeric,
+  tare         numeric,
+  max_load     numeric,
+  stack        integer,
+  returnable   boolean DEFAULT false,
+  nested       boolean DEFAULT false,
+  hazmat       boolean DEFAULT false,
+  cost         numeric,
+  supplier     text,
+  status       text DEFAULT 'Active',
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+
 INSERT INTO packaging_units (
   id, description, type, material,
   len, wid, hgt, tare, max_load, stack,
