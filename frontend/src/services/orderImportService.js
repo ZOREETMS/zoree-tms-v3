@@ -168,10 +168,34 @@ export async function parseOrderFile(file) {
 // Linkage column: "Order Row #" matches the 1-based data-row index in
 // the Orders sheet (1 = first non-header row). Auxiliary aliases
 // accommodate spreadsheets exported from various tools.
+//
+// QA #339 — testers reported "Line item data is not captured and error
+// is shown during import" after adding "Line Item Number/ID" columns
+// to the Line Items sheet. Root cause: the alias lists for lineNum
+// and itemId did not include the natural "Line Item …" prefix that
+// users reach for when laying out the sheet from scratch (the
+// pre-existing aliases assumed people would type the bare "Line" /
+// "Item ID" labels from the documented template). When the header
+// didn't match, mapLineItemHeaders silently dropped the column,
+// every Line Items row ended up with `orderRow: null`, and the
+// analyzer counted them all as "unattached" — which OrderImportModal
+// surfaces as a warning banner that the tester read as the import
+// error. The expanded aliases below cover the common QA phrasings
+// without losing any of the previously-accepted variants.
 const LINE_ITEM_HEADER_ALIASES = {
   orderRow:    ["order row", "order row #", "order row number", "order #", "order number", "order index"],
-  lineNum:     ["line", "line #", "line num", "line number"],
-  itemId:      ["item id", "item", "sku", "item code", "itemid", "item_id"],
+  lineNum:     [
+    "line", "line #", "line num", "line number",
+    // QA #339 — "Line Item Number" family.
+    "line item", "line item #", "line item num", "line item number",
+  ],
+  itemId:      [
+    "item id", "item", "sku", "item code", "itemid", "item_id",
+    // QA #339 — "Line Item Number/ID" and related natural phrasings.
+    "item number", "item #", "item num",
+    "line item id", "line item code",
+    "line item number/id", "item number/id",
+  ],
   description: ["description", "item description", "product", "freight"],
   qtyOrdered:  ["qty", "quantity", "qty ordered", "pieces", "units"],
   unitWeight:  ["unit weight", "unit wt", "weight per unit", "wt per unit"],

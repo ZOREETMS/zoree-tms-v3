@@ -26,7 +26,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../../state/DataContext';
 import SearchBar from '../../components/ui/SearchBar';
-import StatusFilter from '../../components/common/StatusFilter';
+import FilterDropdown from '../../components/common/FilterDropdown';
 import EmptyState from '../../components/ui/EmptyState';
 import ItemCard from '../../components/items/ItemCard';
 import ItemStatsGrid from '../../components/items/ItemStatsGrid';
@@ -173,7 +173,28 @@ export default function ItemMasterScreen() {
           <View style={styles.searchWrap}>
             <SearchBar value={search} onChangeText={setSearch} placeholder="Search items..." />
           </View>
-          <StatusFilter label="Filter by Class" statuses={FILTER_STATUSES} active={classFilter} onSelect={setClassFilter} counts={classCounts} />
+          {/* QA #317 — class filter was a horizontal pill row; on small
+              phones the active option often scrolled offscreen. Swapped
+              for a dropdown that surfaces the selection inline and
+              keeps the count badge users relied on. */}
+          <FilterDropdown
+            label="Filter by Class"
+            value={classFilter}
+            onChange={setClassFilter}
+            options={FILTER_STATUSES}
+            counts={classCounts}
+            modalTitle="Filter Items by Class"
+          />
+          {/* QA #318 — "Product Catalog" section title sits directly
+              above the items data so the list reads as the catalog
+              users came to see. A future Table/Card view toggle (Phase
+              4 module rewrite) belongs at the right end of this row. */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Product Catalog</Text>
+            <Text style={styles.sectionMeta}>
+              {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
           <FlatList
             data={filteredItems}
             renderItem={({ item }) => <ItemCard item={item} onPress={handleItemPress} />}
@@ -192,7 +213,16 @@ export default function ItemMasterScreen() {
           <View style={styles.searchWrap}>
             <SearchBar value={pkgSearch} onChangeText={setPkgSearch} placeholder="Search packaging..." />
           </View>
-          <StatusFilter label="Filter by Type" statuses={PACKAGING_TYPES as unknown as string[]} active={pkgType} onSelect={setPkgType} counts={pkgTypeCounts} />
+          {/* QA #319 (Phase 4 partial) — same dropdown swap so Items
+              and Packaging Units share the filter UI pattern. */}
+          <FilterDropdown
+            label="Filter by Type"
+            value={pkgType}
+            onChange={setPkgType}
+            options={PACKAGING_TYPES as unknown as string[]}
+            counts={pkgTypeCounts}
+            modalTitle="Filter Packaging by Type"
+          />
           <FlatList
             data={filteredPackaging}
             renderItem={({ item }) => <PackagingUnitCard unit={item} />}
@@ -240,6 +270,29 @@ const styles = StyleSheet.create({
   },
   count: { fontSize: fontSize.sm, color: colors.text2 },
   searchWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  // QA #318 — section header that sits between the class filter and
+  // the items list, mirroring the web "Product Catalog" subheader.
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    letterSpacing: 0.2,
+  },
+  sectionMeta: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.text3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   listContent: { paddingTop: spacing.sm, paddingBottom: spacing['5xl'] },
   emptyContainer: { flexGrow: 1 },
   fab: {

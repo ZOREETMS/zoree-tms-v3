@@ -46,22 +46,32 @@ export default function AnalyticsScreen() {
 
   // QA #294 — Export carrier scorecard + spend by mode + KPI summary
   // as a single CSV. Mirrors the web Analytics page's Export button.
-  // Sections are concatenated with a blank line so the user can see
-  // each block in the resulting file.
+  //
+  // QA #329 follow-up — `Claims` was missing from the scorecard row
+  // even though computeCarrierScorecard already populates it
+  // (mobile/src/shared/services/analyticsService.js:104). Added below
+  // so the exported CSV matches the web column set users compare
+  // against. Cost per Shipment is now prepended as a single-cell KPI
+  // line so testers reading the file see the same headline number the
+  // dashboard displays — the per-carrier table follows.
   const onExport = useCallback(async () => {
-    // Carrier scorecard (richest section — used as the main payload).
     await exportRowsAsCsv(
       carrierScorecard,
       [
         { key: 'name',  header: 'Carrier' },
         { key: 'otd',   header: 'On-Time Delivery %', value: (r: any) => Number(r.otd || 0).toFixed(1) },
+        // QA #329 — restore the Claims column.
+        { key: 'claims', header: 'Claims %',          value: (r: any) => Number(r.claims || 0).toFixed(2) },
         { key: 'grade', header: 'Grade' },
         { key: 'shipments', header: 'Shipments' },
         { key: 'spend',     header: 'Spend', value: (r: any) => r.spend },
       ],
-      { title: 'Carrier Scorecard', filename: 'analytics_scorecard.csv' },
+      {
+        title: `Carrier Scorecard — Cost/Shipment ${formatCurrency(kpis.costPerShipment)}`,
+        filename: 'analytics_scorecard.csv',
+      },
     );
-  }, [carrierScorecard]);
+  }, [carrierScorecard, kpis.costPerShipment]);
 
   return (
     <SafeAreaView style={styles.safe}>

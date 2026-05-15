@@ -7,7 +7,7 @@
  * focused on parsing/executing the query (Rule 6 — services-first,
  * no mega-modules).
  */
-import { resolveTable, listTables } from "./dbExplorerCatalog";
+import { resolveTable, listTables, getDefaultOrderFor } from "./dbExplorerCatalog";
 
 export function executeQuery(sql, data) {
   const start = performance.now();
@@ -57,6 +57,12 @@ export function executeQuery(sql, data) {
   // never matched. Default to ascending id sort to align with the
   // typical "1, 2, 3, 4…" expectation when the user just runs
   // SELECT * FROM <table> without specifying an order.
+  //
+  // QA #313 — that generic id fallback diverges from any TMS page that
+  // orders by something other than id (the Planning Parameters page
+  // requests ?order=category.asc). Check the catalog for a per-table
+  // override first, and only fall through to the id sort when no
+  // override is registered.
   const orderMatch = lower.match(/order\s+by\s+(\w+)(?:\s+(asc|desc))?/);
   if (orderMatch) {
     const [, col, dir] = orderMatch;
@@ -66,15 +72,28 @@ export function executeQuery(sql, data) {
       const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
       return dir === "desc" ? -cmp : cmp;
     });
-  } else if (result.length > 0 && Object.prototype.hasOwnProperty.call(result[0], "id")) {
-    result.sort((a, b) => {
-      const va = a.id ?? "";
-      const vb = b.id ?? "";
-      // Numeric ids compare numerically; everything else falls back to
-      // locale-aware string compare (ids like "SHP-00012" sort correctly).
-      if (typeof va === "number" && typeof vb === "number") return va - vb;
-      return String(va).localeCompare(String(vb), undefined, { numeric: true });
-    });
+  } else {
+    const catalogOrder = getDefaultOrderFor(tableName);
+    if (catalogOrder && result.length > 0) {
+      const { col, dir } = catalogOrder;
+      result.sort((a, b) => {
+        const va = a[col] ?? "";
+        const vb = b[col] ?? "";
+        const cmp = typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : String(va).localeCompare(String(vb), undefined, { numeric: true });
+        return dir === "desc" ? -cmp : cmp;
+      });
+    } else if (result.length > 0 && Object.prototype.hasOwnProperty.call(result[0], "id")) {
+      result.sort((a, b) => {
+        const va = a.id ?? "";
+        const vb = b.id ?? "";
+        // Numeric ids compare numerically; everything else falls back to
+        // locale-aware string compare (ids like "SHP-00012" sort correctly).
+        if (typeof va === "number" && typeof vb === "number") return va - vb;
+        return String(va).localeCompare(String(vb), undefined, { numeric: true });
+      });
+    }
   }
 
   // Handle LIMIT

@@ -51,10 +51,18 @@ function useActiveRoute(props: DrawerContentComponentProps) {
   }, [state]);
 }
 
-function pickInitialExpandedKey(activeTab: string | undefined): string | null {
-  if (!activeTab) return DRAWER_GROUPS[0]?.key ?? null;
-  const match = DRAWER_GROUPS.find((g) => g.tab === activeTab);
-  return match?.key ?? DRAWER_GROUPS[0]?.key ?? null;
+function pickInitialExpandedKey(
+  groups: DrawerNavGroup[],
+  activeTab: string | undefined,
+): string | null {
+  // QA #331/#332/#338 — pass the role-filtered groups so a non-admin on
+  // the Settings screen (activeTab === 'SystemTab') doesn't end up with
+  // expandedKey = 'system' (a group that's been hidden for their role)
+  // and a drawer rendered with nothing expanded.
+  if (!groups.length) return null;
+  if (!activeTab) return groups[0].key;
+  const match = groups.find((g) => g.tab === activeTab);
+  return match?.key ?? groups[0].key;
 }
 
 export default function DrawerSidebar(props: DrawerContentComponentProps) {
@@ -76,7 +84,7 @@ export default function DrawerSidebar(props: DrawerContentComponentProps) {
   // Single-open accordion: only one group expanded at a time. Matches
   // the screenshot where most groups are collapsed and one is open.
   const [expandedKey, setExpandedKey] = useState<string | null>(() =>
-    pickInitialExpandedKey(activeTab),
+    pickInitialExpandedKey(visibleGroups, activeTab),
   );
 
   const handleToggle = (group: DrawerNavGroup) => {

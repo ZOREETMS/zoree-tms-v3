@@ -275,6 +275,17 @@ export async function clearOrderLines(orderId) {
  * Copy an existing order with a new ID and "Unplanned" status.
  * Also duplicates the source order's line items so the new order
  * has the same freight composition as the original.
+ *
+ * QA #314 — the source-truth for the order column set is
+ * api/services/orderMutations.js#apiOrderToDbPatch (the canonical PATCH
+ * builder used by the Edit modal). Whenever a column is added there,
+ * mirror it here or Copy will silently drop it from the new row. Two
+ * columns had already drifted by 2026-05: `service_level` (migration
+ * 013) and `ref_num` (migration 034) — both shipped in the Edit modal
+ * and audited via ORDER_HISTORY_FIELDS, but never propagated by Copy,
+ * so the copied order rendered blank for both. Bringing them back here
+ * fixes the user-visible "lane items / details not copied" complaint.
+ *
  * @param {object} source - The order to copy
  * @returns {Promise<object>} The newly created order
  */
@@ -298,7 +309,15 @@ export async function copyOrder(source) {
     status: "Unplanned",
     shipment_id: null,
     ship_mode: source.ship_mode || null,
+    // QA #314 — REQ-10 service level. apiOrderToDbPatch accepts both
+    // serviceLevel and service_level; the source row from DbApi.list
+    // uses snake_case so check that first.
+    service_level: source.service_level || source.serviceLevel || null,
     incoterms: source.incoterms || null,
+    // QA #314 — Reference # added in migration 034 (TMS bug #2). Already
+    // audited in ORDER_HISTORY_FIELDS and rendered in the Edit modal;
+    // Copy was the last writer that hadn't caught up.
+    ref_num: source.ref_num || source.refNum || null,
     preferred_carrier: source.preferred_carrier || null,
     excluded_carrier: source.excluded_carrier || null,
     no_consolidate: source.no_consolidate || false,
@@ -318,19 +337,52 @@ export async function copyOrder(source) {
  * Backend POST /api/orders/:id/lines regenerates line ids from the
  * target order id and recalculates weight/pieces/line_count on the
  * target — so we strip identity fields before posting.
+ *
+ * QA #314 — earlier revisions silently returned on an empty source
+ * fetch (so a transient /api/orders/:id/lines failure produced an
+ * empty copy with no user-visible error and no log trail). The fetch
+ * now propagates errors and logs a warning when the source order
+ * legitimately has zero lines, so the "sometimes lane items are not
+ * copied" failure mode is debuggable next time it lands. Falsy-OR
+ * defaults were also swapped to `??` for `qty_ordered` / `unit_weight`
+ * / `total_weight` so an explicit 0 (free sample, zero-weight sticker)
+ * survives the copy instead of being re-defaulted to 0 (same value,
+ * but `??` reflects the intent: only substitute when the source value
+ * is absent).
+ *
  * @param {string} sourceId
  * @param {string} targetId
  */
 async function copyOrderLines(sourceId, targetId) {
-  const sourceLines = await OrdersApi.lines(sourceId);
-  if (!Array.isArray(sourceLines) || sourceLines.length === 0) return;
+  if (!sourceId) {
+    // Defensive: copyOrder always supplies a sourceId, but log loudly if
+    // a caller ever bypasses that contract. A blank sourceId would hit
+    // /api/orders/undefined/lines and silently return [].
+    console.warn('[copyOrderLines] called without sourceId; nothing to copy.');
+    return;
+  }
+  let sourceLines;
+  try {
+    sourceLines = await OrdersApi.lines(sourceId);
+  } catch (err) {
+    // Re-throw so the caller (copyOrder) surfaces the failure to the
+    // user instead of presenting an empty copied order as a success.
+    throw new Error(`Failed to load source lines for ${sourceId}: ${err.message || err}`);
+  }
+  if (!Array.isArray(sourceLines) || sourceLines.length === 0) {
+    // Not an error — orders can legitimately have zero line items — but
+    // emit a debug log so QA can tell "no lines on source" apart from
+    // "lines silently dropped".
+    console.info(`[copyOrderLines] source order ${sourceId} has no line items; skipping line copy.`);
+    return;
+  }
   const payload = sourceLines.map((l, i) => ({
-    line_num: l.line_num || (i + 1),
+    line_num: l.line_num ?? (i + 1),
     item_id: l.item_id || null,
-    description: l.description || "",
-    qty_ordered: l.qty_ordered || 0,
-    unit_weight: l.unit_weight || 0,
-    total_weight: l.total_weight || 0,
+    description: l.description ?? "",
+    qty_ordered: l.qty_ordered ?? 0,
+    unit_weight: l.unit_weight ?? 0,
+    total_weight: l.total_weight ?? 0,
   }));
   await OrdersApi.saveLines(targetId, payload);
 }

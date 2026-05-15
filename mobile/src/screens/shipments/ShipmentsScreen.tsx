@@ -3,7 +3,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,6 +19,7 @@ import DateRangeChips, {
   DateRangeKey,
   dateRangeCutoff,
 } from '../../components/common/DateRangeChips';
+import FilterDropdown from '../../components/common/FilterDropdown';
 import { exportRowsAsCsv } from '../../services/csvExport';
 import { useData } from '../../state/DataContext';
 import {
@@ -41,6 +41,8 @@ const STATUS_FILTERS = [
 
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
+type ViewMode = 'list' | 'map';
+
 export default function ShipmentsScreen() {
   const { data, loading, refreshData } = useData();
   const [search, setSearch] = useState('');
@@ -53,6 +55,13 @@ export default function ShipmentsScreen() {
   // Web has Created From / Created To inputs; preset chips give
   // equivalent coverage without bringing a date-picker dep into mobile.
   const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  // QA #320 — list / map toggle. The Map view is a follow-up (Phase 4
+  // module rewrite — needs an in-screen mini-map similar to the
+  // tracking screen). For now the toggle is wired and rendered so the
+  // header parity gap with web is closed; selecting "Map" surfaces a
+  // placeholder empty state pointing users to the dedicated Live
+  // Tracking screen, which already has the map implementation.
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [creating, setCreating] = useState(false);
 
   const modeOptions = useMemo(() => {
@@ -165,6 +174,31 @@ export default function ShipmentsScreen() {
             <Text style={styles.countText}>{filtered.length}</Text>
           </View>
           <View style={{ flex: 1 }} />
+          {/* QA #320 — List / Map toggle. Two-segment switch styled to
+              match the existing exportBtn so the header reads as a
+              compact toolbar instead of a row of disparate buttons. */}
+          <View style={styles.viewSwitch} accessibilityRole="tablist">
+            <TouchableOpacity
+              accessibilityRole="tab"
+              accessibilityLabel="List view"
+              accessibilityState={{ selected: viewMode === 'list' }}
+              activeOpacity={0.8}
+              onPress={() => setViewMode('list')}
+              style={[styles.viewSwitchBtn, viewMode === 'list' && styles.viewSwitchBtnActive]}>
+              <Ionicons name="list-outline" size={14} color={viewMode === 'list' ? colors.white : colors.text2} />
+              <Text style={[styles.viewSwitchText, viewMode === 'list' && styles.viewSwitchTextActive]}>List</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="tab"
+              accessibilityLabel="Map view"
+              accessibilityState={{ selected: viewMode === 'map' }}
+              activeOpacity={0.8}
+              onPress={() => setViewMode('map')}
+              style={[styles.viewSwitchBtn, viewMode === 'map' && styles.viewSwitchBtnActive]}>
+              <Ionicons name="map-outline" size={14} color={viewMode === 'map' ? colors.white : colors.text2} />
+              <Text style={[styles.viewSwitchText, viewMode === 'map' && styles.viewSwitchTextActive]}>Map</Text>
+            </TouchableOpacity>
+          </View>
           {/* QA #272 — inline Export button so the header matches the
               web layout (FAB still handles "+ New Shipment"). */}
           <TouchableOpacity
@@ -186,106 +220,73 @@ export default function ShipmentsScreen() {
           />
         </View>
 
-        {/* Status filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          style={styles.chipScroll}>
-          {STATUS_FILTERS.map(s => (
-            <TouchableOpacity
-              key={s}
-              activeOpacity={0.7}
-              onPress={() => setStatusFilter(s)}
-              style={[
-                styles.chip,
-                statusFilter === s && styles.chipActive,
-              ]}>
-              <Text
-                style={[
-                  styles.chipLabel,
-                  statusFilter === s && styles.chipLabelActive,
-                ]}>
-                {s}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* QA #320 — status filter is now a dropdown; tappable trigger
+            keeps the selection visible at all times even on narrow
+            phones where the chip row scrolled the active option off
+            screen. */}
+        <FilterDropdown
+          label="Status"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as StatusFilter)}
+          options={STATUS_FILTERS as unknown as string[]}
+          modalTitle="Filter Shipments by Status"
+        />
 
         {/* QA #272 — date-range presets. */}
         <DateRangeChips active={dateRange} onSelect={setDateRange} />
 
-        {/* QA 230 (2026-05-12): Mode filter — TL / LTL / etc. Hidden
-            when the loaded set has no mode info. */}
+        {/* QA #320 — Mode filter as a dropdown too (was a chip row).
+            Still hidden when the loaded set has no mode info. */}
         {modeOptions.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-            style={styles.chipScroll}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setModeFilter('')}
-              style={[
-                styles.chip,
-                !modeFilter && styles.chipActive,
-              ]}>
-              <Text
-                style={[
-                  styles.chipLabel,
-                  !modeFilter && styles.chipLabelActive,
-                ]}>
-                All Modes
-              </Text>
-            </TouchableOpacity>
-            {modeOptions.map(m => (
-              <TouchableOpacity
-                key={`mode-${m}`}
-                activeOpacity={0.7}
-                onPress={() => setModeFilter(m)}
-                style={[
-                  styles.chip,
-                  modeFilter === m && styles.chipActive,
-                ]}>
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    modeFilter === m && styles.chipLabelActive,
-                  ]}>
-                  {m}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <FilterDropdown
+            label="Mode"
+            value={modeFilter || 'All Modes'}
+            onChange={(v) => setModeFilter(v === 'All Modes' ? '' : v)}
+            options={['All Modes', ...modeOptions]}
+            modalTitle="Filter Shipments by Mode"
+          />
         ) : null}
 
-        {/* List */}
-        <FlatList
-          data={filtered}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={loading}
-              onRefresh={refreshData}
-              tintColor={colors.accent}
-              colors={[colors.accent]}
-            />
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon="cube-outline"
-              title="No shipments found"
-              subtitle={
-                search || statusFilter !== 'All'
-                  ? 'Try adjusting your search or filters.'
-                  : 'Shipments will appear here once created.'
-              }
-            />
-          }
-        />
+        {viewMode === 'list' ? (
+          /* List */
+          <FlatList
+            data={filtered}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={refreshData}
+                tintColor={colors.accent}
+                colors={[colors.accent]}
+              />
+            }
+            ListEmptyComponent={
+              <EmptyState
+                icon="cube-outline"
+                title="No shipments found"
+                subtitle={
+                  search || statusFilter !== 'All'
+                    ? 'Try adjusting your search or filters.'
+                    : 'Shipments will appear here once created.'
+                }
+              />
+            }
+          />
+        ) : (
+          /* QA #320 — Map view placeholder. The full mini-map render
+              against the filtered shipment set is the Phase 4 module
+              rewrite for this screen; for now we surface the existing
+              Live Tracking screen as the map-mode answer so users who
+              tap Map don't hit a blank. */
+          <EmptyState
+            icon="map-outline"
+            title="Map view coming soon"
+            subtitle="In the meantime, Live Tracking (Execution → Live Tracking) shows every active shipment on the map."
+          />
+        )}
 
         {/* New-shipment FAB — mirrors OrdersScreen / RateManagementScreen. */}
         <TouchableOpacity
@@ -367,11 +368,40 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.bg2,
+    marginLeft: spacing.sm,
   },
   exportText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.accent,
+  },
+  // QA #320 — List/Map view-mode toggle styles.
+  viewSwitch: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.bg2,
+  },
+  viewSwitchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  viewSwitchBtnActive: {
+    backgroundColor: colors.accent,
+  },
+  viewSwitchText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text2,
+  },
+  viewSwitchTextActive: {
+    color: colors.white,
+    fontWeight: fontWeight.semibold,
   },
   chip: {
     paddingHorizontal: spacing.md,

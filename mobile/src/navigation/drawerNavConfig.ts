@@ -17,6 +17,7 @@
  * (PlanningTabs / BulkPlanTabs / SystemTabs / etc.).
  */
 import type { DrawerParamList } from './types';
+import type { CanonicalRole } from '../config/roleMatrix';
 
 export type DrawerTabKey = keyof DrawerParamList;
 
@@ -50,6 +51,15 @@ export interface DrawerNavGroup {
    * across the drawer (every section is a collapsible group).
    */
   children: DrawerNavItem[];
+  /**
+   * QA #331/#332/#338 — optional whitelist of canonical roles allowed to
+   * see this entire group. Used to hide admin-only groups like System
+   * even when individual children (e.g. Settings) would otherwise be
+   * visible to every role via the common nav whitelist. Omitted on most
+   * groups, which means "every role that has at least one child visible
+   * can see the group".
+   */
+  restrictedToRoles?: CanonicalRole[];
 }
 
 /**
@@ -165,19 +175,42 @@ export const DRAWER_GROUPS: DrawerNavGroup[] = [
     ],
   },
   {
-    // QA #298 — group renamed from "Settings" to "System" and trimmed to
-    // exactly three children (User Management, User Roles, Settings) to
-    // match the web information architecture. Profile remains a
+    // QA #298 — group renamed from "Settings" to "System" and originally
+    // trimmed to three children (User Management, User Roles, Settings)
+    // to match the web information architecture. Profile remains a
     // registered screen in SystemTab — reachable from header/account
     // chip — but is no longer surfaced as a drawer row. Planning
     // Parameters moved under the Planning group (QA #277).
+    //
+    // QA #331/#332/#338 — System is now admin-only. Settings was lifted
+    // out into its own group below so non-admin roles (planner, finance,
+    // viewer) keep drawer access to Settings while losing the System
+    // header. Web hides the analogous System section for non-admins via
+    // the DB-driven role_feature_permissions matrix; mobile does it
+    // structurally via restrictedToRoles, since the drawer doesn't pull
+    // that matrix today.
     key: 'system',
     label: 'System',
     icon: '⚙️',
     tab: 'SystemTab',
+    restrictedToRoles: ['admin'],
     children: [
       { label: 'User Management', icon: '👥', tab: 'SystemTab', screen: 'UserManagement' },
       { label: 'User Roles', icon: '🛡️', tab: 'SystemTab', screen: 'UserRoles' },
+    ],
+  },
+  {
+    // QA #331/#332/#338 — Settings split out of the System group so
+    // every role (admin/planner/finance/viewer) can still reach it from
+    // the drawer once System becomes admin-only. Same single-child
+    // pattern as the Multi-Stop Routes group above. The Settings screen
+    // itself still lives in SystemTab's stack — only its surface in the
+    // drawer moved.
+    key: 'settings',
+    label: 'Settings',
+    icon: '⚙️',
+    tab: 'SystemTab',
+    children: [
       { label: 'Settings', icon: '⚙️', tab: 'SystemTab', screen: 'Settings' },
     ],
   },

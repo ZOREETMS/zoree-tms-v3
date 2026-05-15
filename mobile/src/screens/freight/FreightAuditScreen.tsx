@@ -17,6 +17,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import Card from '../../components/ui/Card';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import FilterDropdown from '../../components/common/FilterDropdown';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
 const AUDIT_FILTERS = [
@@ -206,6 +207,16 @@ export default function FreightAuditScreen() {
                         // bumping setRecords with a clone is enough to
                         // trigger a re-derive in the consumer.
                         setRecords((prev: any[]) => [...prev]);
+                        // QA #326 — surface the result so the planner
+                        // sees the action completed. Without this the
+                        // tap looked like a no-op even though the KPI
+                        // tiles updated. Numbers are read off `kpis`
+                        // post-re-derive so the message reflects what
+                        // the user is now looking at.
+                        Alert.alert(
+                          'Auto-Audit Complete',
+                          `Reviewed ${kpis.total} invoice${kpis.total === 1 ? '' : 's'}: ${kpis.matched} matched, ${kpis.discrepancies} flagged for review.`,
+                        );
                       },
                     },
                   ],
@@ -294,24 +305,23 @@ export default function FreightAuditScreen() {
           </View>
         </View>
 
-        {/* Filter Chips */}
-        <View style={styles.filterRow}>
-          {AUDIT_FILTERS.map((f) => {
-            const isActive = f.key === filter;
-            return (
-              <TouchableOpacity
-                key={f.key || 'all'}
-                style={[styles.chip, isActive && styles.chipActive]}
-                onPress={() => setFilter(f.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* QA #326 — chip filter row swapped for a dropdown so the
+            active option stays visible on narrow phones (the chip set
+            of five wrapped to two rows and the active state was easy
+            to miss). Counts come from kpis where each filter has a
+            natural match. */}
+        <FilterDropdown
+          label="Audit Filter"
+          value={filter}
+          onChange={setFilter}
+          options={AUDIT_FILTERS.map((f) => ({ value: f.key, label: f.label }))}
+          counts={{
+            '': kpis.total,
+            [AUDIT_STATUS.MATCHED]: kpis.matched,
+            [AUDIT_STATUS.DISCREPANCY]: kpis.discrepancies,
+          }}
+          modalTitle="Filter Audit Records"
+        />
 
         {/* Audit Records List */}
         <FlatList

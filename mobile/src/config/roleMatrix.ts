@@ -13,9 +13,15 @@
  *   planner — planning + execution + docs + a read slice of finance and
  *             insights.
  *   finance — invoices, rates, lane prefs, bids, audit, docs, analytics.
- *   viewer  — read-only common surfaces (Home, Dashboard, Analytics,
- *             Reports, Alerts) plus the planning + finance read-only
- *             screens; no system/admin access.
+ *   viewer  — read-only across every functional module (planning,
+ *             execution, finance, docs, integration, insights) plus the
+ *             common surfaces. No System/admin access. QA #333–#338
+ *             expanded viewer from a narrow read-only slice to "every
+ *             module a non-admin can see on web", since web has no
+ *             viewer entry of its own and falls through to admin minus
+ *             whatever the role_feature_permissions matrix hides — the
+ *             closest equivalent on mobile is "all functional modules,
+ *             no System".
  *
  * Labels match drawerNavConfig.ts. The two cosmetic differences with
  * web (Route Optimization vs Route Optimizer; Planning Parameters vs
@@ -101,15 +107,19 @@ export const ROLE_NAV: Record<CanonicalRole, string[]> = {
     'Alerts',
   ],
   viewer: [
+    // QA #333–#337 — viewer now sees every functional module so the
+    // mobile drawer matches what a non-admin sees on web after the
+    // role_feature_permissions matrix is applied. The System group
+    // (User Roles, User Management) is gated separately at the drawer
+    // group level (restrictedToRoles in drawerNavConfig.ts) so we don't
+    // need to repeat that exclusion here.
     ...COMMON,
-    'Shipments',
-    'Orders',
-    'Live Tracking',
-    'Documents & BOL',
-    'Customer Portal',
-    'Analytics',
-    'Reports',
-    'Alerts',
+    ...PLANNING,
+    ...EXECUTION,
+    ...FINANCE,
+    ...DOCS,
+    ...INTEGRATION,
+    ...INSIGHTS,
   ],
 };
 

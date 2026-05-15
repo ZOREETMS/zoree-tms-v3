@@ -255,6 +255,27 @@ export default function OrderImportModal({ open, onClose, onComplete }) {
           </div>
         )}
 
+        {/* QA #339 — surface unmapped Line Items columns the same way
+            unmappedHeaders is surfaced for the Orders sheet. Previously
+            unknown line-item headers (e.g. "Line Item Number/ID") were
+            dropped silently; the only visible signal was the downstream
+            "unattached line items" warning, which testers misread as a
+            generic import error. Aliases for the common phrasings were
+            widened in orderImportService.LINE_ITEM_HEADER_ALIASES, and
+            this banner closes the feedback loop for any phrasing still
+            outside the alias list. */}
+        {Array.isArray(analysis.unmappedLineItemHeaders) && analysis.unmappedLineItemHeaders.length > 0 && (
+          <div style={{
+            background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)",
+            borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#92400e",
+          }}>
+            <strong>Ignored Line Items columns:</strong>{" "}
+            {analysis.unmappedLineItemHeaders.join(", ")}
+            {" "}— rename to one of the recognised aliases (e.g. "Line #",
+            "Item ID", "Description", "Qty", "Unit Weight", "Total Weight").
+          </div>
+        )}
+
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", marginBottom: 6, letterSpacing: 0.5 }}>
           PREVIEW (FIRST {Math.min(PREVIEW_ROWS, sampleRows.length)} ROWS)
         </div>

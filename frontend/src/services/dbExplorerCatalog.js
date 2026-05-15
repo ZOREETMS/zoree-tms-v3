@@ -163,6 +163,39 @@ export function resolveTable(name, data) {
 }
 
 /**
+ * QA #313 — when the user runs `SELECT * FROM <table>` without an
+ * explicit ORDER BY, DB Explorer falls back to sorting by `id` ASC (see
+ * QA #306 in dbExplorerService). That keeps DB Explorer aligned with
+ * pages that sort by id, but it diverges from pages that sort by some
+ * other column. The Planning Parameters page, for example, asks the
+ * server for `?order=category.asc` (planningParametersService) so users
+ * who opened DB Explorer saw the same rows in a different order.
+ *
+ * The fix lives in the catalog because the catalog is already the
+ * single source of truth for table behaviour; the executor stays
+ * generic. Add a row here when a TMS page orders by something other
+ * than id and a non-trivial number of users compare the two surfaces.
+ *
+ * Shape: tableName -> { col, dir }. `dir` is optional (defaults to
+ * 'asc'). Use the snake_case column name as it appears in the resolved
+ * row objects.
+ */
+export const TABLE_DEFAULT_ORDER = {
+  // Mirrors planningParametersService.js → /db/planning_parameters?...&order=category.asc.
+  planning_parameters: { col: 'category', dir: 'asc' },
+};
+
+/**
+ * Lookup helper for the executor. Returns the { col, dir } pair for a
+ * table, or null when there is no override (executor then uses its
+ * existing id-based fallback).
+ */
+export function getDefaultOrderFor(name) {
+  if (!name) return null;
+  return TABLE_DEFAULT_ORDER[name.toLowerCase()] || null;
+}
+
+/**
  * List of available table names, sorted alphabetically — used by the
  * "Table not found" error message and (eventually) the sidebar.
  */
