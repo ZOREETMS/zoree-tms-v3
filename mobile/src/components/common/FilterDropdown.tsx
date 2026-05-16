@@ -127,18 +127,30 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
     letterSpacing: 0.3,
+    // QA bug (2026-05-16): on Android the default `includeFontPadding`
+    // (true) adds extra space inside the Text box, which combined with
+    // tight paddingVertical on the filter rows clipped descenders /
+    // pushed glyphs off-baseline so the label looked "distorted".
+    // Disabling it gives the same predictable height as iOS.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    // QA bug (2026-05-16): bump from spacing.sm (8) to spacing.md (12)
+    // so the 14pt label has enough vertical headroom on Android even
+    // before `includeFontPadding: false` kicks in. The previous
+    // 8px-top/8px-bottom + minHeight:40 left the glyphs visibly cropped
+    // top/bottom on some Android skins.
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.bg2,
-    minHeight: 40,
+    minHeight: 44,
   },
   triggerDisabled: { opacity: 0.5 },
   triggerLabel: {
@@ -146,6 +158,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: fontWeight.medium,
     color: colors.text,
+    // QA bug (2026-05-16): same Android font-padding fix as `label`
+    // above — keeps the selected value cleanly centred inside the pill
+    // and stops descenders (g, y, p) from being clipped at the bottom
+    // of the trigger on Android.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    lineHeight: fontSize.md * 1.3,
   },
   badge: {
     minWidth: 22,
@@ -160,5 +179,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: fontWeight.bold,
     color: colors.text2,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 });

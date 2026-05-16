@@ -81,7 +81,12 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    // QA bug (2026-05-16): bumped from spacing.xs (4) to spacing.sm (8).
+    // 4px top/bottom + 12pt text was too tight on Android — combined
+    // with Text's default includeFontPadding it visibly clipped the
+    // chip label so the text read as "distorted". 8px is the same
+    // visual weight the FilterDropdown trigger uses.
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.border,
@@ -95,6 +100,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.text2,
+    // QA bug (2026-05-16): disable Android's default font padding so
+    // the chip label sits cleanly inside the pill instead of getting
+    // top/bottom-clipped by the extra padding Android Text adds.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    lineHeight: fontSize.sm * 1.3,
   },
   labelActive: {
     color: colors.white,

@@ -8,8 +8,19 @@ import { configureSupabase } from './supabaseClient';
  * and platform-appropriate base URL.
  * Must be called after storage.init() during app boot.
  *
- * Reads the API base from storage (set via Settings screen) first,
- * falling back to the compiled-in default in env.ts.
+ * Priority order:
+ *   - DEV builds (`__DEV__ === true`) ALWAYS use the compiled-in env.ts
+ *     value and overwrite any persisted override. Developers iterating
+ *     on the laptop's LAN IP (e.g. when they move desks or change
+ *     Wi-Fi) want env.ts to be the single source of truth; a stored
+ *     override from a previous run silently shadowing env.ts is the
+ *     cause of "cannot reach server" errors that look like a network
+ *     problem but are really a stale cached endpoint (2026-05-16
+ *     debug session).
+ *   - PROD builds read the stored override first (set via Settings /
+ *     Login → Advanced) so a deployed app can be repointed at a new
+ *     tunnel URL without a rebuild, falling back to the compiled-in
+ *     default.
  *
  * QA bug #60: also configures the Supabase client used for Realtime
  * subscriptions (see useRealtimeData). Falls back to compiled-in
@@ -17,8 +28,21 @@ import { configureSupabase } from './supabaseClient';
  * screen exposes them.
  */
 export function initializeApi(): void {
-  const stored = storage.getItem('zoree_api_base');
-  const apiBase = stored && stored.trim() ? stored : API_BASE;
+  let apiBase: string;
+  if (__DEV__) {
+    // Force env.ts in dev. Wipe any stored override so the Settings /
+    // Login Advanced field re-populates from env.ts the next time it
+    // mounts (otherwise the UI keeps showing the stale URL).
+    apiBase = API_BASE;
+    const stored = storage.getItem('zoree_api_base');
+    if (stored && stored !== API_BASE) {
+      // Fire-and-forget; AsyncStorage write doesn't need to block boot.
+      storage.removeItem('zoree_api_base').catch(() => {});
+    }
+  } else {
+    const stored = storage.getItem('zoree_api_base');
+    apiBase = stored && stored.trim() ? stored : API_BASE;
+  }
   configureApi({
     storage,
     apiBase,

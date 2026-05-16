@@ -283,7 +283,13 @@ describe('saveTenderResponse', () => {
     );
   });
 
-  it('on accept: cascades linked orders to "Tender Accepted" with dock + dates', async () => {
+  // Post-tender date freeze (feedback memory: orders.ready_date /
+  // due_date / pickup / delivery are user intent and must not be
+  // overwritten by tender-accept downstream effects). The cascade now
+  // mirrors only `status` and the dock-scheduling fields onto the
+  // linked orders - pickup / ready / pickup_date / delivery_date stay
+  // on the shipment row only.
+  it('on accept: cascades linked orders to "Tender Accepted" with dock fields only (dates frozen)', async () => {
     (DbApi.patch as jest.Mock).mockResolvedValue({ ok: true });
     (OmsApi.push as jest.Mock).mockResolvedValue({ ok: true });
     await saveTenderResponse(
@@ -297,10 +303,6 @@ describe('saveTenderResponse', () => {
     );
     expect(DbApi.patch).toHaveBeenCalledWith('orders', 'ORD-1', expect.objectContaining({
       status: 'Tender Accepted',
-      pickup: '2026-04-30',
-      ready: '2026-04-30',
-      pickup_date: '2026-04-30',
-      delivery_date: '2026-05-02',
       dock_door: 'Door 1',
       loading_start: '2026-04-30 06:00',
       loading_end: '2026-04-30 08:00',
@@ -308,6 +310,16 @@ describe('saveTenderResponse', () => {
     expect(DbApi.patch).toHaveBeenCalledWith('orders', 'ORD-2', expect.objectContaining({
       status: 'Tender Accepted',
     }));
+    // Regression guard: no date fields on either cascaded order.
+    const orderPatches = (DbApi.patch as jest.Mock).mock.calls
+      .filter((c) => c[0] === 'orders')
+      .map((c) => c[2]);
+    for (const p of orderPatches) {
+      expect(p).not.toHaveProperty('pickup');
+      expect(p).not.toHaveProperty('ready');
+      expect(p).not.toHaveProperty('pickup_date');
+      expect(p).not.toHaveProperty('delivery_date');
+    }
   });
 
   it('on accept: pushes the same fields to OMS via OmsApi.push', async () => {

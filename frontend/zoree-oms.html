@@ -2160,10 +2160,16 @@ function _omsOrderMatches(o, f){
   if(f.createdFrom && (o.createdAt||'').slice(0,10)<f.createdFrom) return false;
   if(f.createdTo   && (o.createdAt||'').slice(0,10)>f.createdTo)   return false;
   if(f.q){
-    var hay = [o.id, o.po, o.cust, custName(o.cust), o.dest,
-               o.tmsShipId, o.bol, o.pro, o.stage]
-      .map(function(x){ return (x==null?'':String(x)); }).join(' ').toLowerCase();
-    if(!hay.includes(f.q)) return false;
+    // Split on commas / whitespace so pasted lists like
+    // "ORD-238209, ORD-249183" match any of the tokens (OR semantics).
+    // Single-token queries still behave as a plain substring search.
+    var tokens = f.q.split(/[,\s]+/).filter(Boolean);
+    if(tokens.length){
+      var hay = [o.id, o.po, o.cust, custName(o.cust), o.dest,
+                 o.tmsShipId, o.bol, o.pro, o.stage]
+        .map(function(x){ return (x==null?'':String(x)); }).join(' ').toLowerCase();
+      if(!tokens.some(function(t){ return hay.includes(t); })) return false;
+    }
   }
   return true;
 }
@@ -2491,8 +2497,8 @@ function rnLines(ls){
     return`<tr>
       <td><select class="fi" onchange="onIS(this,${i})" style="min-width:140px"><option value="">Select…</option>${opts.replace(`value="${l.itemId}"`,`value="${l.itemId}" selected`)}</select></td>
       <td><input class="fi" id="ld${i}" value="${l.desc||''}" readonly style="color:var(--text2)"></td>
-      <td><input class="fi" id="lq${i}" type="number" min="1" value="${l.qty||1}" oninput="cL()" style="width:65px"></td>
-      <td><input class="fi" id="lw${i}" type="number" value="${l.wt||0}" oninput="cL()" style="width:65px"></td>
+      <td><input class="fi" id="lq${i}" type="number" inputmode="numeric" min="1" value="${l.qty||1}" oninput="cL()" onwheel="this.blur()" onkeydown="if(event.key==='ArrowUp'||event.key==='ArrowDown')event.preventDefault();" style="width:65px"></td>
+      <td><input class="fi" id="lw${i}" type="number" inputmode="decimal" value="${l.wt||0}" oninput="cL()" onwheel="this.blur()" onkeydown="if(event.key==='ArrowUp'||event.key==='ArrowDown')event.preventDefault();" style="width:65px"></td>
       <td class="mono" id="lt${i}" style="color:var(--text2)">${((l.qty||0)*(l.wt||0)).toLocaleString()}</td>
       <td id="lav${i}">${avHtml}</td>
       <td><button onclick="rmLn(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 5px">✕</button></td>

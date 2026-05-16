@@ -31,6 +31,8 @@ import type {
   SendShipmentTenderResult,
 } from './shipmentTenderService';
 import type { ShipmentDetailViewModel } from './shipmentDetailService';
+import { confirmOrdersForShipment } from './shipmentOrderService';
+import { propagateTenderAcceptance } from './tenderAcceptanceNotifier';
 
 /* ── Shared result shape ──────────────────────────────────────────── */
 
@@ -155,26 +157,108 @@ export async function withdrawTender(args: {
   }
 }
 
-// QA 240 (2026-05-12): "After tendering, the system doesn't show
-// Accept or Reject options". Web has simulate-accept/reject for QA
-// flows (a Tendered shipment can be flipped to Tender Accepted or
-// Tender Rejected without round-tripping through the carrier portal).
-// Mirror both on mobile. Both use the audited /api/db/shipments PATCH
-// so the REQ-02 status row lands in change_history and the connected
-// orders cascade via the existing event listeners.
-
+// In-TMS tender accept (parity with the web ShipmentsPage
+// `confirmAcceptTender` flow). Three sequential side-effects:
+//
+//   1. PATCH shipment status -> "Tender Accepted" (audited route, fires
+//      SHIPMENT_UPDATED for connected tabs).
+//   2. Cascade linked orders -> "Tender Accepted" via
+//      shipmentOrderService.confirmOrdersForShipment.
+//   3. Mirror the accept into oms_orders + broadcast `tender_accepted`
+//      on the WS bridge via tenderAcceptanceNotifier.propagateTenderAcceptance.
+//
+// Why it isn't a single PATCH any more: the original QA-240 simulate
+// shortcut only did step (1). With nothing pushing to oms_orders, OMS
+// stayed on the pre-plan stage label ("Awaiting TMS Plan") even after
+// the planner accepted on mobile - the OMS warehouse modals never saw
+// the plan because syncTenderAcceptToOms (the omsSync.js stage->6 hop)
+// only fires off /api/oms/push.
+//
+// Best-effort downstream: the cascade and OMS push are wrapped so a
+// failure there does not roll back the already-committed shipment
+// status flip. The returned message surfaces partial failures so the
+// planner knows to retry or check OMS manually.
 export async function acceptTender(args: {
   shipment: any;
+  /** Full shipment list - needed for MBOL->CBOL fan-out in the order cascade. */
+  shipments?: any[];
+  /** Full order list - filtered to those linked to the accepted shipment. */
+  orders?: any[];
+  /** Optional carrier-supplied accept response. Defaults to the planner's
+   *  values already on the shipment row so the OMS payload is never empty. */
+  response?: {
+    proNumber?: string;
+    carrierPickupDate?: string;
+    serviceLevel?: string;
+    bolNumber?: string;
+    sealNumber?: string;
+    dockDoor?: string;
+    dockLoadStart?: string;
+    dockLoadEnd?: string;
+    notes?: string;
+  };
 }): Promise<ShipmentActionResult> {
-  const { shipment } = args;
+  const { shipment, shipments = [], orders = [], response = {} } = args;
   const id = shipment?.id || shipment?.shipment_id;
   if (!id) return { ok: false, message: 'Shipment is not loaded.' };
+
+  // 1. Audited status flip (only blocking step - if this fails the
+  //    user sees a clean error and nothing else runs).
   try {
     await ShipmentsApi.update(id, { status: 'Tender Accepted' });
-    return { ok: true, message: `Tender accepted for ${id}.` };
   } catch (err: any) {
-    return { ok: false, message: err?.message || 'Could not accept tender.' };
+    return {
+      ok: false,
+      message: err?.message || 'Could not accept tender.',
+    };
   }
+
+  // 2. Order cascade - status only (post-tender date freeze rule).
+  let linkedOrders: any[] = [];
+  let cascadeError: string | null = null;
+  try {
+    linkedOrders = await confirmOrdersForShipment(shipment, shipments, orders);
+  } catch (err: any) {
+    cascadeError = err?.message || String(err);
+    // eslint-disable-next-line no-console
+    console.warn('[acceptTender] order cascade failed:', cascadeError);
+  }
+
+  // 3. OMS mirror + WS broadcast. Pull dock fields from the shipment
+  //    row when the caller didn't pass an explicit response - that is
+  //    the common in-TMS case (planner accepting their own plan, no
+  //    carrier-supplied overrides).
+  const orderIds = linkedOrders.map((o: any) => String(o.id)).filter(Boolean);
+  const propagation = await propagateTenderAcceptance({
+    shipment,
+    response: {
+      proNumber:         response.proNumber,
+      carrierPickupDate: response.carrierPickupDate,
+      serviceLevel:      response.serviceLevel,
+      bolNumber:         response.bolNumber,
+      sealNumber:        response.sealNumber,
+      dockDoor:          response.dockDoor       || shipment.dock_door,
+      dockLoadStart:     response.dockLoadStart  || shipment.loading_start,
+      dockLoadEnd:       response.dockLoadEnd    || shipment.loading_end,
+      notes:             response.notes,
+    },
+    orderIds,
+  });
+
+  // Build a single user-facing message that calls out partial failures
+  // honestly - same pattern as tenderShipment above.
+  const issues: string[] = [];
+  if (cascadeError) issues.push('order status cascade failed');
+  if (propagation.omsError) issues.push(`OMS push failed: ${propagation.omsError}`);
+  if (propagation.notifyError) issues.push(`notify failed: ${propagation.notifyError}`);
+
+  if (issues.length === 0) {
+    return { ok: true, message: `Tender accepted for ${id}.` };
+  }
+  return {
+    ok: true,
+    message: `Tender accepted for ${id}, but ${issues.join('; ')}.`,
+  };
 }
 
 export async function rejectTender(args: {

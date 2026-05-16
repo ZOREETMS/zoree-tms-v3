@@ -31,6 +31,7 @@ const {
   cleanupOrphanShipmentAfterUnassign,
   syncLinkedShipmentForOrderStatus,
 } = require('./services/orderMutations');
+const { applyPostTenderDateGuard } = require('./services/orderPatchGuards');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
 const history = require('./services/changeHistory');
 // TMS bug #1: persistent Clear History per (order|shipment) entity.
@@ -1803,6 +1804,12 @@ app.patch('/api/orders/:id', async (req, res) => {
     if (!Object.keys(patch).length) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
+    // Order date fields (ready / due) are frozen once the carrier
+    // accepts a tender. Delegate to the guard service — see
+    // api/services/orderPatchGuards.js for the full rule + reasoning.
+    const guard = applyPostTenderDateGuard(patch, { id: req.params.id, status: before?.status });
+    if (guard.reject) return res.status(guard.statusCode).json(guard.body);
+    if (guard.strippedFields.length) res.setHeader('X-Order-Dates-Frozen', guard.strippedFields.join(','));
     // Defense-in-depth: reject status='Planned' transitions that don't
     // also assign a shipment_id. The bulk-plan execute path (which is
     // the only legitimate way an order should reach 'Planned') always
@@ -4392,45 +4399,4 @@ server.listen(PORT, () => {
 });
 
 module.exports = app;
-, data || {});
-  console.log(`[WS] Broadcast: ${event}`, data ? JSON.stringify(data).slice(0, 100) : '');
-  res.json({ ok: true, clients: wsClients.size });
-});
 
-// ── 404 catch-all (must be AFTER all route definitions) ──────────────────────
-app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
-app.use((err, req, res, next) => { console.error('[Error]', err.message); res.status(500).json({ error: err.message }); });
-
-// ══════════════════════════════════════════════════════════════════
-// Start Server
-// ══════════════════════════════════════════════════════════════════
-server.listen(PORT, () => {
-  console.log(`\n🚛 ZoreeTMS API — Tier 2 running on http://localhost:${PORT}`);
-  console.log(`   ✅ Supabase credentials: SERVER-SIDE ONLY`);
-  console.log(`   ✅ Browser never touches Supabase directly`);
-  console.log(`   ✅ 3-Tier Architecture active`);
-  console.log(`   ✅ WebSocket server active on ws://localhost:${PORT}`);
-  console.log(`   ℹ️  Tender email check: GET http://localhost:${PORT}/health → tenderEmail`);
-  verifySmtpOnStartup().catch(function(err) {
-    console.error('   📧 Tender email: verify error:', err && err.message ? err.message : err);
-  });
-
-  // REQ-31: backend MW queue worker. Defaults ON so OMS→TMS sync
-  // doesn't depend on a browser tab being open. Disable per-env with
-  // MW_QUEUE_AUTO_START=false (e.g. for tests or while debugging the
-  // browser MW). Interval is configurable via MW_QUEUE_INTERVAL_MS.
-  if (String(process.env.MW_QUEUE_AUTO_START || 'true').toLowerCase() !== 'false') {
-    const intervalMs = Number(process.env.MW_QUEUE_INTERVAL_MS) || undefined;
-    mwQueueWorker.start(intervalMs ? { intervalMs } : {});
-    console.log(`   ✅ MW queue worker started (mwQueueWorker)`);
-  } else {
-    console.log(`   ℹ️  MW queue worker NOT auto-started (MW_QUEUE_AUTO_START=false). Use POST /api/mw-queue/start.`);
-  }
-
-  // Fusion (TMS → OIC) outbound publisher. No-op unless OIC_PUBLISH_ENABLED=true.
-  // See api/services/fusionPublisher/index.js and docs/integrations/oic/flows/F3-tms-to-fusion-status.md.
-  fusionPublisher.start();
-  console.log('');
-});
-
-module.exports = app;

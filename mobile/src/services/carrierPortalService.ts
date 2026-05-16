@@ -309,13 +309,11 @@ export async function saveTenderResponse(
     const orders = extra.orders.filter((o: any) => o && o.id);
     await Promise.allSettled(
       orders.map((o: any) => {
+        // Order ready/due/pickup/delivery dates are frozen post-tender per
+        // api/constants/orderStatus.js (POST_TENDER_ACCEPT_STATUSES). Only
+        // dock-scheduling fields are mirrored here — parity with
+        // bulkPlanExecution's syncDockToOms hop.
         const p: Record<string, any> = { status: 'Tender Accepted' };
-        if (accepted.pickupDate) {
-          p.pickup = accepted.pickupDate;
-          p.ready = accepted.pickupDate;
-          p.pickup_date = accepted.pickupDate;
-        }
-        if (accepted.deliveryDate)  p.delivery_date = accepted.deliveryDate;
         if (accepted.dockDoor)      p.dock_door     = accepted.dockDoor;
         if (accepted.dockLoadStart) p.loading_start = accepted.dockLoadStart;
         if (accepted.dockLoadEnd)   p.loading_end   = accepted.dockLoadEnd;

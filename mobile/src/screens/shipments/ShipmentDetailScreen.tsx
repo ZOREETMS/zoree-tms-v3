@@ -58,13 +58,20 @@ import {
   buildShipmentDetailViewModel,
   derivePhaseTimestamps,
   formatTimelineTs,
-  loadShipmentHistory,
+  loadShipmentHistoryBundle,
   loadShipmentLines,
   type ShipmentDetailViewModel,
   type ShipmentHistoryRow,
   type ShipmentLineRow,
   type TimelinePhase,
 } from '../../services/shipmentDetailService';
+// QA (2026-05-16): the shipment Change History card now reuses the shared
+// HistoryList renderer (already in use on the mobile OrderDetail screen) so
+// timestamps, user attribution, and field-change descriptions render
+// correctly. Previously the card read raw column names off the camelCase
+// shape and rendered everything as "—".
+import HistoryList from '../../components/history/HistoryList';
+import type { OrderHistoryEntry } from '../../services/orderHistoryService';
 import {
   colors,
   fontSize,
@@ -201,6 +208,7 @@ export default function ShipmentDetailScreen() {
   const [lines, setLines] = useState<ShipmentLineRow[]>([]);
   const [linesLoading, setLinesLoading] = useState(true);
   const [historyRows, setHistoryRows] = useState<ShipmentHistoryRow[]>([]);
+  const [historyEntries, setHistoryEntries] = useState<OrderHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
   // Tracks which footer button (if any) currently owns the spinner.
@@ -261,9 +269,21 @@ export default function ShipmentDetailScreen() {
     if (!id) return;
     let cancelled = false;
     setHistoryLoading(true);
-    loadShipmentHistory(String(id))
-      .then((rows) => { if (!cancelled) { setHistoryRows(rows); setHistoryLoading(false); } })
-      .catch(() => { if (!cancelled) { setHistoryRows([]); setHistoryLoading(false); } });
+    // One API call → both the timeline-derivation shape AND the bucketed
+    // entries shape the HistoryList renderer consumes.
+    loadShipmentHistoryBundle(String(id))
+      .then((bundle) => {
+        if (cancelled) return;
+        setHistoryRows(bundle.rows);
+        setHistoryEntries(bundle.entries);
+        setHistoryLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHistoryRows([]);
+        setHistoryEntries([]);
+        setHistoryLoading(false);
+      });
     return () => { cancelled = true; };
   }, [shipment]);
 
@@ -339,7 +359,17 @@ export default function ShipmentDetailScreen() {
           onPress: async () => {
             setBusyAction('accept');
             try {
-              const result = await acceptTenderAction({ shipment });
+              // Pass shipments + orders so the in-TMS accept can run the
+              // MBOL->CBOL order cascade and the OMS oms_orders mirror
+              // (oms_orders stage -> 6) without a refetch. Required to
+              // flip the OMS warehouse modals off "Awaiting TMS Plan"
+              // - see shipmentActionsService.acceptTender for the full
+              // three-step rationale.
+              const result = await acceptTenderAction({
+                shipment,
+                shipments: data.shipments || [],
+                orders:    data.orders    || [],
+              });
               if (refreshData) await refreshData();
               Alert.alert(result.ok ? 'Tender Accepted' : 'Accept Failed', result.message);
             } finally {
@@ -349,7 +379,7 @@ export default function ShipmentDetailScreen() {
         },
       ],
     );
-  }, [shipment, refreshData]);
+  }, [shipment, data.shipments, data.orders, refreshData]);
 
   const handleReject = useCallback(() => {
     if (!shipment) return;
@@ -721,6 +751,62 @@ export default function ShipmentDetailScreen() {
           </FieldGrid>
         </Card>
 
+        {/* Linked Orders / Releases.
+            Web parity (frontend/src/pages/ShipmentsPage.jsx — the
+            "Consolidated Orders (N)" / "Associated Order" block):
+            shipments roll up one or more order releases, and the
+            planner needs to see which orders are on a shipment and
+            drill into them. `vm.linkedOrders` is already populated by
+            buildShipmentDetailViewModel → findLinkedOrders (prefers
+            shipment.order_ids, falls back to o.shipment_id === ship.id),
+            so this card is purely render — CLAUDE_RULES §1/§3/§4
+            (services-first; dumb renderer). Tap navigates to the
+            OrderDetail screen registered on PlanningTabs. */}
+        {vm.linkedOrders && vm.linkedOrders.length > 0 ? (
+          <Card style={styles.infoCard}>
+            <SectionHeader>
+              {vm.linkedOrders.length > 1
+                ? `Consolidated Orders (${vm.linkedOrders.length})`
+                : 'Associated Order'}
+            </SectionHeader>
+            {vm.linkedOrders.map((o: any, idx: number) => {
+              const orderId = String(o.id || o.order_id || '');
+              const originCity = String(o.origin || '').split(',')[0];
+              const destCity = String(o.dest || o.destination || '').split(',')[0];
+              const wt = Number(o.weight || 0);
+              const isLast = idx === vm.linkedOrders.length - 1;
+              return (
+                <TouchableOpacity
+                  key={orderId || `linked-${idx}`}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    navigation.navigate('OrderDetail', { orderId })
+                  }
+                  style={[
+                    styles.linkedOrderRow,
+                    isLast ? styles.linkedOrderRowLast : null,
+                  ]}>
+                  <View style={styles.linkedOrderTop}>
+                    <Text style={styles.linkedOrderId} numberOfLines={1}>
+                      {orderId || '—'}
+                    </Text>
+                    <Text style={styles.linkedOrderWeight}>
+                      {wt.toLocaleString()} lbs
+                    </Text>
+                  </View>
+                  <Text style={styles.linkedOrderMeta} numberOfLines={1}>
+                    {dashIfEmpty(o.customer)}
+                    {o.commodity ? ` · ${o.commodity}` : ''}
+                  </Text>
+                  <Text style={styles.linkedOrderRoute} numberOfLines={1}>
+                    {originCity || '—'} → {destCity || '—'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </Card>
+        ) : null}
+
         {/* Line Items */}
         <Card style={styles.infoCard}>
           <SectionHeader>Line Items</SectionHeader>
@@ -782,63 +868,29 @@ export default function ShipmentDetailScreen() {
           )}
         </Card>
 
-        {/* QA 238 (2026-05-12): "Shipment Change History section is
-            missing on mobile". historyRows are already loaded above; we
-            just render them as a vertical log of field-level edits so
-            the planner can see who changed what when, mirroring web's
-            ShipmentHistoryDrawer. The Timeline section above shows
-            high-level phase transitions; this section shows raw audit
-            rows. */}
+        {/* QA 238 (2026-05-12): "Shipment Change History section is missing
+            on mobile". The Timeline section above shows high-level phase
+            transitions; this section shows the per-field audit trail.
+            QA (2026-05-16): switched from a hand-rolled renderer that read
+            raw column names off the camelCase shape (so old/new values and
+            timestamps came back undefined → rendered as "—" / blank) to
+            the shared HistoryList component. HistoryList consumes the
+            bucketed OrderHistoryEntry[] (same shape the OrderDetail
+            History tab uses) so an edit of N fields in the same second
+            collapses to one "N fields changed" entry with proper
+            FIELD_LABELS — matching web. */}
         <Card style={styles.infoCard}>
           <SectionHeader>Change History</SectionHeader>
-          {historyLoading ? (
-            <Text style={styles.placeholderText}>Loading…</Text>
-          ) : historyRows.length === 0 ? (
-            <Text style={styles.placeholderText}>No change history</Text>
-          ) : (
-            <View>
-              {historyRows.slice(0, 50).map((row: any, idx: number) => {
-                const fieldLabel = row.field || row.action || 'change';
-                const beforeText =
-                  row.old_value == null || row.old_value === ''
-                    ? '—'
-                    : String(row.old_value);
-                const afterText =
-                  row.new_value == null || row.new_value === ''
-                    ? '—'
-                    : String(row.new_value);
-                const whenText = row.created_at
-                  ? new Date(row.created_at).toLocaleString()
-                  : '';
-                return (
-                  <View
-                    key={row.id || `${row.created_at || idx}-${idx}`}
-                    style={{
-                      paddingVertical: 8,
-                      borderBottomWidth: idx === historyRows.length - 1 ? 0 : 1,
-                      borderBottomColor: colors.border,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>
-                      {fieldLabel}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: colors.text2, marginTop: 2 }}>
-                      {beforeText} → {afterText}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: colors.text3, marginTop: 2 }}>
-                      {row.username || 'system'}
-                      {whenText ? `  ·  ${whenText}` : ''}
-                    </Text>
-                  </View>
-                );
-              })}
-              {historyRows.length > 50 ? (
-                <Text style={{ fontSize: 10, color: colors.text3, marginTop: 6 }}>
-                  Showing the 50 most recent of {historyRows.length} changes.
-                </Text>
-              ) : null}
-            </View>
-          )}
+          <HistoryList
+            entries={historyEntries.slice(0, 50)}
+            loading={historyLoading}
+            emptyLabel="No change history"
+          />
+          {!historyLoading && historyEntries.length > 50 ? (
+            <Text style={{ fontSize: 10, color: colors.text3, marginTop: 6 }}>
+              Showing the 50 most recent of {historyEntries.length} changes.
+            </Text>
+          ) : null}
         </Card>
 
         {/* Notes (optional) */}
@@ -1031,6 +1083,48 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.text2,
     lineHeight: 20,
+  },
+  // Linked Orders / Releases card — rows mirror the web's per-order
+  // strip (id · customer · commodity · origin → dest · weight). The
+  // whole row is the tap target so reaching the order detail doesn't
+  // require pinpointing the id. The trailing-row variant drops its
+  // border so the card doesn't end on a double rule.
+  linkedOrderRow: {
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  linkedOrderRowLast: {
+    borderBottomWidth: 0,
+  },
+  linkedOrderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  linkedOrderId: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.accent,
+    fontFamily: 'monospace' as any,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  linkedOrderWeight: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.text2,
+    fontFamily: 'monospace' as any,
+  },
+  linkedOrderMeta: {
+    fontSize: fontSize.xs,
+    color: colors.text2,
+    marginBottom: 2,
+  },
+  linkedOrderRoute: {
+    fontSize: fontSize.xs,
+    color: colors.text3,
   },
   // Mobile parity (2026-05-11): tenderButton / tenderButtonText were
   // removed alongside the single "Send Tender Email" CTA. The new

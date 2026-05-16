@@ -216,6 +216,27 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   // after a new event is recorded — otherwise the timeline rungs keep
   // rendering against a stale snapshot until the user closes and
   // reopens the modal.
+  //
+  // Bug (2026-05-16): the original dep array was `[ds.id]` only, which
+  // meant that when a mobile-originated mutation landed in the open
+  // modal (carrier-portal Tender Accept / Reject, "Tender to Carrier"
+  // status flip, dock-time edit on the driver app, …), the parent's
+  // WS handler merged the fresh status / dates into `ds` but
+  // reloadHistory's identity stayed the same — so the useEffect below
+  // never re-fired and the History tab kept showing pre-mobile-action
+  // rows even though the status badge flipped. The audit row HAD
+  // landed in change_history (recordRawPatchAudit writes the status
+  // change on every /api/db/shipments PATCH, and shipService.updateShipment
+  // does the same on /api/shipments/:id); the UI just never re-fetched.
+  //
+  // Keying on the audit-relevant DB columns means any field the audit
+  // pipeline currently writes (status, dock_door, dock_time,
+  // loading_start, loading_end) — plus the date fields the
+  // SHIPMENT_UPDATED WS payload carries (pickup_date, delivery_date,
+  // shipped_at, delivered_at) — re-derives reloadHistory and re-fires
+  // the fetch. Self-edits in the modal also flow through this path so
+  // the Add-Event handler's explicit reloadHistory() call is now
+  // belt-and-suspenders rather than the only refresh trigger.
   const reloadHistory = useCallback(() => {
     let cancelled = false;
     setHistoryLoading(true);
@@ -223,7 +244,23 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
       .then((rows) => { if (!cancelled) { setHistoryRows(rows || []); setHistoryLoading(false); } })
       .catch(() => { if (!cancelled) { setHistoryRows([]); setHistoryLoading(false); } });
     return () => { cancelled = true; };
-  }, [ds.id]);
+  }, [
+    ds.id,
+    // Status + audited dock fields — what recordRawPatchAudit /
+    // shipService.updateShipment actually persist to change_history.
+    ds.status,
+    ds.dock_door,
+    ds.dock_time,
+    ds.loading_start,
+    ds.loading_end,
+    // Date fields carried in the SHIPMENT_UPDATED WS payload — keep
+    // history aligned with the timeline rungs that derive their
+    // timestamps from these.
+    ds.pickup_date,
+    ds.delivery_date,
+    ds.shipped_at,
+    ds.delivered_at,
+  ]);
 
   useEffect(() => reloadHistory(), [reloadHistory]);
 

@@ -114,13 +114,11 @@ async function patchTableWithFallback(table, id, payload) {
   return DbApi.patch(table, id, patch);
 }
 
-async function patchOrderConfirmed(orderId, pickupVal) {
-  const p = { status: "Confirmed" };
-  if (pickupVal) {
-    p.pickup = pickupVal;
-    p.ready = pickupVal;
-  }
-  return patchTableWithFallback("orders", orderId, p);
+// Status-only flip — order ready/due dates are frozen post-tender per
+// api/constants/orderStatus.js (POST_TENDER_ACCEPT_STATUSES includes
+// "Confirmed"). See api/services/orderPatchGuards.js for the API-side guard.
+async function patchOrderConfirmed(orderId) {
+  return patchTableWithFallback("orders", orderId, { status: "Confirmed" });
 }
 
 /**
@@ -154,11 +152,11 @@ export async function saveTenderResponse(shipment, responseData, extra = {}) {
   await patchTableWithFallback("shipments", shipment.id, patch);
 
   if (normalized.action === "accept" && Array.isArray(extra.orders) && extra.orders.length) {
-    const pickupVal =
-      normalized.carrierPickupDate || shipment.pickup_date || shipment.pickup || "";
+    // pickupVal is intentionally NOT forwarded — order ready/due dates are
+    // frozen at tender acceptance (see patchOrderConfirmed above).
     const list = extra.orders.filter((o) => o && o.id);
     await Promise.allSettled(
-      list.map((o) => patchOrderConfirmed(o.id, pickupVal))
+      list.map((o) => patchOrderConfirmed(o.id))
     );
   }
 

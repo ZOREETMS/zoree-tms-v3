@@ -29,6 +29,17 @@
 
 import { OrdersApi, ShipmentsApi } from '../lib/api';
 import { deriveShipmentEquipment } from './shipmentService';
+// QA (2026-05-16): the Change History card on mobile previously used the
+// lightweight ShipmentHistoryRow shape and read raw column names (`old_value`,
+// `created_at`, `username`) that the camelCase shape never exposes — so
+// timestamps and field-change descriptions rendered as blanks / dashes.
+// Reuse the order-side shape function (which mirrors the web's
+// frontend/src/services/historyService.js bucketing + FIELD_LABELS) so the
+// shipment Change History card matches both web and the mobile order screen.
+import {
+  shapeOrderHistoryRows,
+  type OrderHistoryEntry,
+} from './orderHistoryService';
 
 /* ── Number helpers ─────────────────────────────────────────────── */
 
@@ -225,6 +236,40 @@ export async function loadShipmentHistory(shipmentId: string): Promise<ShipmentH
     // shipment-row dates if it's missing.
     console.warn('[shipmentDetailService] history load failed:', (e as any)?.message);
     return [];
+  }
+}
+
+/**
+ * Loads the shipment's change_history once and returns both the camelCase
+ * rows the timeline derivation needs AND the bucketed OrderHistoryEntry[]
+ * the shared HistoryList component renders. Sharing a single API call keeps
+ * the Detail screen mount cheap.
+ *
+ * Soft-fails to `{ rows: [], entries: [] }` on any error so a missing
+ * audit trail never blocks the rest of the screen.
+ */
+export interface ShipmentHistoryBundle {
+  rows: ShipmentHistoryRow[];
+  entries: OrderHistoryEntry[];
+}
+
+export async function loadShipmentHistoryBundle(
+  shipmentId: string,
+): Promise<ShipmentHistoryBundle> {
+  if (!shipmentId) return { rows: [], entries: [] };
+  try {
+    const res: any = await ShipmentsApi.history(shipmentId, 200);
+    const raw = Array.isArray(res?.rows) ? res.rows : [];
+    return {
+      rows:    shapeShipmentHistoryRows(raw),
+      entries: shapeOrderHistoryRows(raw),
+    };
+  } catch (e) {
+    console.warn(
+      '[shipmentDetailService] history bundle load failed:',
+      (e as any)?.message,
+    );
+    return { rows: [], entries: [] };
   }
 }
 

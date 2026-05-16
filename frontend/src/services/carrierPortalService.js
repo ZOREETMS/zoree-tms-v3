@@ -179,17 +179,11 @@ async function patchTableWithFallback(table, id, payload) {
 }
 
 // Mirrors the in-TMS "Accept" flow (shipmentOrderService.confirmOrdersForShipment):
-// when a carrier accepts a tender, the linked orders move to "Tender Accepted"
-// — the value whitelisted by migration 014_orders_status_add_tender_accepted.
-// Keeps order status in sync with the shipment's effective "Confirmed" state
-// so the Orders list does not show a stale "Tendered" badge.
-async function patchOrderTenderAccepted(orderId, pickupVal) {
-  const p = { status: "Tender Accepted" };
-  if (pickupVal) {
-    p.pickup = pickupVal;
-    p.ready = pickupVal;
-  }
-  return patchTableWithFallback("orders", orderId, p);
+// only the status flip — order ready/due dates are frozen post-tender per
+// api/constants/orderStatus.js (POST_TENDER_ACCEPT_STATUSES). See also the
+// API-side guard at api/services/orderPatchGuards.js.
+async function patchOrderTenderAccepted(orderId) {
+  return patchTableWithFallback("orders", orderId, { status: "Tender Accepted" });
 }
 
 /**
@@ -230,11 +224,11 @@ export async function saveTenderResponse(shipment, responseData, extra = {}) {
   await ShipmentsApi.update(shipment.id, patch);
 
   if (normalized.action === "accept" && Array.isArray(extra.orders) && extra.orders.length) {
-    const pickupVal =
-      normalized.carrierPickupDate || shipment.pickup_date || shipment.pickup || "";
+    // pickupVal is intentionally NOT forwarded — order ready/due dates are
+    // frozen at tender acceptance (see patchOrderTenderAccepted above).
     const list = extra.orders.filter((o) => o && o.id);
     await Promise.allSettled(
-      list.map((o) => patchOrderTenderAccepted(o.id, pickupVal))
+      list.map((o) => patchOrderTenderAccepted(o.id))
     );
   }
 

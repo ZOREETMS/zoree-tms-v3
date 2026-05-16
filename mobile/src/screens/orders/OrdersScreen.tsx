@@ -513,12 +513,19 @@ export default function OrdersScreen() {
       />
 
       {/* FAB — hidden during selection mode so it doesn't fight with
-          the SelectionBar for the same screen corner. */}
+          the SelectionBar for the same screen corner.
+          Bugfix (2026-05-16): the FAB previously navigated to
+          OrderDetail with orderId='new', which is a read-only detail
+          view that does `data.orders.find(... === 'new')`, fails, and
+          renders the "Order not found" early-return. New orders go
+          through OrderForm (same screen as the row Edit action — see
+          handleRowEdit above) which treats a missing orderId as the
+          create case and seeds from EMPTY_ORDER. */}
       {!selectionMode && (
         <TouchableOpacity
           style={styles.fab}
           activeOpacity={0.8}
-          onPress={() => navigation.navigate('OrderDetail', { orderId: 'new' })}
+          onPress={() => navigation.navigate('OrderForm')}
         >
           <Ionicons name="add" size={28} color={colors.white} />
         </TouchableOpacity>

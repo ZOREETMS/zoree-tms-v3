@@ -10,15 +10,21 @@ import { Platform } from 'react-native';
  * Find it by running: ipconfig (Windows) or ifconfig (Mac/Linux)
  * Your iPhone must be on the same Wi-Fi network as your computer.
  */
-const LOCAL_IP = '100.110.157.135';
+const LOCAL_IP = '192.168.1.203';
 
+// QA bug (2026-05-16): Android branch was hardcoded to 10.0.2.2, which
+// is the Android *emulator's* alias for host localhost. On a physical
+// device running through Expo Go that address doesn't route anywhere,
+// so the app reported "cannot reach server". All platforms now point at
+// the laptop's LAN IPv4 so Expo Go on a real phone (same Wi-Fi) reaches
+// the dev API.
 const DEV_API_BASE = Platform.select({
-  android: `http://10.0.2.2:3001/api`,
+  android: `http://${LOCAL_IP}:3001/api`,
   ios: `http://${LOCAL_IP}:3001/api`,
   default: `http://${LOCAL_IP}:3001/api`,
 });
 
-const PROD_API_BASE = 'https://fitted-boston-named-high.trycloudflare.com/api';
+const PROD_API_BASE = 'https://chair-sought-integrating-roommates.trycloudflare.com/api';
 
 export const API_BASE = __DEV__ ? DEV_API_BASE : PROD_API_BASE;
 
