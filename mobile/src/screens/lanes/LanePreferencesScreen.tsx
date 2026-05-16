@@ -156,17 +156,41 @@ export default function LanePreferencesScreen() {
     [refreshData],
   );
 
+  // QA #324 — Disable / Enable round-trips through DbApi.patch. Adding
+  // migration 044 introduced a `disabled` boolean column on
+  // lane_preferences so this row action is reversible (Delete remains
+  // available for permanent removal). The patch is audited via
+  // genericTableAudit on the backend so the change_history entry
+  // captures the toggle.
+  const onToggleDisabled = useCallback(
+    async (pref: any) => {
+      if (!pref?.id) return;
+      const next = !pref.disabled;
+      try {
+        await DbApi.patch('lane_preferences', pref.id, { disabled: next });
+        await refreshData();
+      } catch (err: any) {
+        Alert.alert(
+          next ? 'Disable failed' : 'Enable failed',
+          err?.message || String(err),
+        );
+      }
+    },
+    [refreshData],
+  );
+
   const onRowLongPress = useCallback(
     (pref: any) => {
-      // QA #324 — Edit / Disable / Delete row actions. The lane_preferences
-      // table has no `disabled` column today; on web "Disable" is realised
-      // as a row removal. Until a column is added we map Disable → Delete
-      // with an explicit confirmation so the action is distinct from a
-      // hard delete only in intent. Once the column lands here we'll patch
-      // { disabled: true } instead.
+      // QA #324 — Edit / Disable (or Enable, when already disabled) /
+      // Delete row actions. Disable patches { disabled: true } via
+      // migration 044's new column so the planner can pause a lane
+      // preference without losing it; Delete remains the permanent
+      // removal path.
+      const isDisabled = Boolean(pref?.disabled);
       type Item = { label: string; run: () => void; destructive?: boolean };
       const items: Item[] = [
         { label: 'Edit', run: () => openEdit(pref) },
+        { label: isDisabled ? 'Enable' : 'Disable', run: () => onToggleDisabled(pref) },
         { label: 'Delete', destructive: true, run: () => onDelete(pref) },
       ];
       if (Platform.OS === 'ios') {
@@ -196,7 +220,7 @@ export default function LanePreferencesScreen() {
         );
       }
     },
-    [openEdit, onDelete],
+    [openEdit, onDelete, onToggleDisabled],
   );
 
   return (

@@ -29,6 +29,7 @@ import SearchBar from '../../components/ui/SearchBar';
 import FilterDropdown from '../../components/common/FilterDropdown';
 import EmptyState from '../../components/ui/EmptyState';
 import ItemCard from '../../components/items/ItemCard';
+import ItemTableRow from '../../components/items/ItemTableRow';
 import ItemStatsGrid from '../../components/items/ItemStatsGrid';
 import PackagingUnitCard from '../../components/items/PackagingUnitCard';
 import PackagingStatsGrid from '../../components/items/PackagingStatsGrid';
@@ -44,10 +45,18 @@ const PACKAGING_TYPES = [
 ] as const;
 
 type TabKey = 'items' | 'pkg';
+type ViewMode = 'card' | 'table';
 
 const TABS = [
   { key: 'items', label: 'Items' },
   { key: 'pkg',   label: 'Packaging Units' },
+];
+
+// QA #318 — Table / Card view toggle for the Product Catalog list.
+// Web has the same toggle on ItemMasterPage (the `view` state).
+const VIEW_TABS = [
+  { key: 'card',  label: 'Card' },
+  { key: 'table', label: 'Table' },
 ];
 
 export default function ItemMasterScreen() {
@@ -59,6 +68,8 @@ export default function ItemMasterScreen() {
   const [classFilter, setClassFilter] = useState('All');
   const [pkgSearch, setPkgSearch] = useState('');
   const [pkgType, setPkgType] = useState<string>('All');
+  // QA #318 — Card / Table view mode for the Product Catalog list.
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
 
   const classCounts = useMemo(() => {
     const counts: Record<string, number> = { All: data.items.length };
@@ -185,19 +196,31 @@ export default function ItemMasterScreen() {
             counts={classCounts}
             modalTitle="Filter Items by Class"
           />
-          {/* QA #318 — "Product Catalog" section title sits directly
-              above the items data so the list reads as the catalog
-              users came to see. A future Table/Card view toggle (Phase
-              4 module rewrite) belongs at the right end of this row. */}
+          {/* QA #318 — "Product Catalog" section title with a Card /
+              Table view toggle on the right. Card mirrors the existing
+              ItemCard render; Table swaps to the dense ItemTableRow. */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Product Catalog</Text>
-            <Text style={styles.sectionMeta}>
-              {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
-            </Text>
+            <View style={styles.sectionHeaderRight}>
+              <Text style={styles.sectionMeta}>
+                {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
+              </Text>
+              <View style={styles.viewToggleWrap}>
+                <MasterTabSwitch
+                  tabs={VIEW_TABS}
+                  active={viewMode}
+                  onSelect={(k) => setViewMode(k as ViewMode)}
+                />
+              </View>
+            </View>
           </View>
           <FlatList
             data={filteredItems}
-            renderItem={({ item }) => <ItemCard item={item} onPress={handleItemPress} />}
+            renderItem={({ item }) =>
+              viewMode === 'table'
+                ? <ItemTableRow item={item} onPress={handleItemPress} />
+                : <ItemCard item={item} onPress={handleItemPress} />
+            }
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={filteredItems.length === 0 ? styles.emptyContainer : styles.listContent}
             refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshData} tintColor={colors.accent} colors={[colors.accent]} />}
@@ -292,6 +315,17 @@ const styles = StyleSheet.create({
     color: colors.text3,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  // QA #318 — wrapper around the small Card/Table MasterTabSwitch so
+  // it sits flush against the right end of the section header without
+  // breaking the existing layout.
+  viewToggleWrap: {
+    transform: [{ scale: 0.85 }],
   },
   listContent: { paddingTop: spacing.sm, paddingBottom: spacing['5xl'] },
   emptyContainer: { flexGrow: 1 },

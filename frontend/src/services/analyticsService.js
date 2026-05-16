@@ -1,10 +1,48 @@
 import { TRANSPORT_MODES, getCarrierGrade } from "../types/analytics";
 
+/**
+ * QA #329 — analytics KPIs are advertised on web as "Total Shipments
+ * (30d)" / "Cost per Shipment" (see AnalyticsStats.jsx:12), but the
+ * underlying computeKpis used to reduce over the entire shipments
+ * array regardless of date. Mobile inherited the same reducer and
+ * showed a different headline number because the labels there said
+ * "Total Shipments" with no time qualifier — testers read the gap as
+ * "mobile is wrong" when in fact both surfaces were summarising every
+ * shipment ever loaded.
+ *
+ * Honest fix: respect the documented window. ANALYTICS_WINDOW_DAYS is
+ * exported so callers (and the synced mobile copy) read from one
+ * source. A shipment is in-window if its created_at / pickup_date /
+ * updated_at fall within the last N days; rows with no usable
+ * timestamp are dropped so a future migration with non-date created_at
+ * doesn't silently zero the KPIs.
+ */
+export const ANALYTICS_WINDOW_DAYS = 30;
+
+function shipmentDateMs(s) {
+  const raw =
+    s?.created_at || s?.createdAt ||
+    s?.pickup_date || s?.pickupDate ||
+    s?.updated_at || s?.updatedAt;
+  if (!raw) return null;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function filterToWindow(shipments, days = ANALYTICS_WINDOW_DAYS) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return (shipments || []).filter((s) => {
+    const t = shipmentDateMs(s);
+    return t !== null && t >= cutoff;
+  });
+}
+
 export function computeKpis(shipments) {
-  const total = shipments.length;
-  const delivered = shipments.filter((s) => s.status === "Delivered").length;
+  const windowed = filterToWindow(shipments);
+  const total = windowed.length;
+  const delivered = windowed.filter((s) => s.status === "Delivered").length;
   const onTimePct = total > 0 ? ((delivered / total) * 100).toFixed(1) : "0.0";
-  const totalSpend = shipments.reduce(
+  const totalSpend = windowed.reduce(
     (sum, s) => sum + (parseFloat(s.total_cost) || 0),
     0
   );
@@ -15,6 +53,7 @@ export function computeKpis(shipments) {
     onTimePct,
     totalSpend,
     costPerShipment,
+    windowDays: ANALYTICS_WINDOW_DAYS,
   };
 }
 

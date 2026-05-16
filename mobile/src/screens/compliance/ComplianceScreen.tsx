@@ -15,6 +15,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import { exportRowsAsCsv } from '../../services/csvExport';
+import { useData } from '../../state/DataContext';
 import {
   colors,
   fontSize,
@@ -65,7 +66,43 @@ const COMPLIANCE_STATUS_MAP: Record<string, string> = {
 };
 
 export default function ComplianceScreen() {
+  const { data } = useData();
   const [activeSection, setActiveSection] = useState<SectionKey>('hos');
+
+  // QA #323 — Carrier Certification Status. Derives a compact status
+  // per carrier from whatever certification-adjacent fields the row
+  // carries. The exact column names vary across tenants so we read
+  // through a permissive set of aliases; missing data renders as
+  // "Not on file" rather than a hard failure.
+  const carrierCerts = useMemo(() => {
+    const carriers = Array.isArray(data.carriers) ? data.carriers : [];
+    return carriers.slice(0, 6).map((c: any) => {
+      const hazmat = c.hazmat_certified ?? c.hazmatCertified ?? c.is_hazmat_certified;
+      const insurance = c.insurance_active ?? c.insuranceActive ?? c.insurance_status;
+      const authority = c.mc_authority ?? c.mcAuthority ?? c.operating_authority;
+      const insExp = c.insurance_expires ?? c.insuranceExpires ?? c.insurance_expiry;
+      // Translate the per-carrier signals into a single overall status.
+      let status: 'Compliant' | 'Warning' | 'Expired' | 'Unknown' = 'Unknown';
+      const isExpired = (() => {
+        if (!insExp) return false;
+        const t = new Date(insExp).getTime();
+        return Number.isFinite(t) && t < Date.now();
+      })();
+      if (isExpired) status = 'Expired';
+      else if (insurance === false || insurance === 'inactive') status = 'Warning';
+      else if (insurance === true || insurance === 'active') status = 'Compliant';
+      return {
+        id: c.id || c.scac || c.name,
+        name: c.name || c.scac || 'Unknown carrier',
+        hazmat: hazmat === true || hazmat === 'yes' || hazmat === 'true',
+        authority: authority || null,
+        insurance: insurance == null ? null : Boolean(insurance === true || insurance === 'active'),
+        insExp: insExp || null,
+        status,
+      };
+    });
+  }, [data.carriers]);
+  const carrierCertsTotal = Array.isArray(data.carriers) ? data.carriers.length : 0;
 
   const stats = useMemo(() => {
     const hosWarnings = SEED_HOS.filter((h) => h.status === 'Warning').length;
@@ -356,6 +393,47 @@ export default function ComplianceScreen() {
           />
         </ScrollView>
 
+        {/* QA #323 — Carrier Certification Status. Shows up to 6
+            carriers with their hazmat / insurance / authority status
+            at a glance, plus a "View all" affordance pointing at the
+            Carriers screen for the full roster. Mirrors the web
+            Compliance "Carrier Certification Status" panel. */}
+        {carrierCertsTotal > 0 ? (
+          <Card style={styles.certCard}>
+            <View style={styles.certHeader}>
+              <View style={styles.certTitleRow}>
+                <Ionicons name="ribbon-outline" size={16} color={colors.accent} />
+                <Text style={styles.certTitle}>Carrier Certification Status</Text>
+              </View>
+              <Text style={styles.certMeta}>{carrierCertsTotal} carrier{carrierCertsTotal === 1 ? '' : 's'}</Text>
+            </View>
+            {carrierCerts.length === 0 ? (
+              <Text style={styles.certEmpty}>No carriers on file.</Text>
+            ) : (
+              carrierCerts.map((c: any) => (
+                <View key={`cert-${c.id}`} style={styles.certRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.certName} numberOfLines={1}>{c.name}</Text>
+                    <Text style={styles.certSub} numberOfLines={1}>
+                      {[
+                        c.hazmat ? 'Hazmat ✓' : 'Hazmat —',
+                        c.insurance === true ? 'Insurance ✓' : c.insurance === false ? 'Insurance ✗' : 'Insurance —',
+                        c.authority ? `Authority ${c.authority}` : 'Authority —',
+                      ].join('  ·  ')}
+                    </Text>
+                  </View>
+                  <StatusBadge status={
+                    c.status === 'Compliant' ? 'Active'
+                    : c.status === 'Warning' ? 'Warning'
+                    : c.status === 'Expired' ? 'Error'
+                    : 'Inactive'
+                  } />
+                </View>
+              ))
+            )}
+          </Card>
+        ) : null}
+
         {/* Section tabs */}
         <View style={styles.tabContainer}>
           {SECTIONS.map((section) => (
@@ -433,6 +511,55 @@ const styles = StyleSheet.create({
   kpiRow: {
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+  },
+  // QA #323 — Carrier Certification Status card.
+  certCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  certHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  certTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  certTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  certMeta: {
+    fontSize: fontSize.xs,
+    color: colors.text3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  certRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  certName: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  certSub: {
+    fontSize: fontSize.xs,
+    color: colors.text2,
+    marginTop: 2,
+  },
+  certEmpty: {
+    fontSize: fontSize.sm,
+    color: colors.text3,
+    fontStyle: 'italic',
   },
   tabContainer: {
     flexDirection: 'row',

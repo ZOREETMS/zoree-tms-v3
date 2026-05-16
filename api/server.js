@@ -3384,12 +3384,19 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         useLanePreferences = !!ppData[0].enabled;
       }
       if (useLanePreferences) {
-        const lpRes = await fetch(`${SUPABASE_URL}/rest/v1/lane_preferences?status=eq.Active&select=*`, {
-          headers: sbHeaders(null),
-        });
+        // QA #324 — migration 044 added `disabled BOOLEAN` so a planner
+        // can pause a lane preference reversibly. Filter at the source
+        // so paused rows never enter the preferred/excluded sets below,
+        // and we don't log them as "active rules loaded". `disabled=is.false`
+        // matches both the default-false rows that pre-date the migration
+        // and any row explicitly toggled back to enabled.
+        const lpRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/lane_preferences?status=eq.Active&disabled=is.false&select=*`,
+          { headers: sbHeaders(null) },
+        );
         const lpData = await lpRes.json();
         if (Array.isArray(lpData)) lanePrefs = lpData;
-        console.log(`[BulkPlan/rate] Lane preferences enabled — ${lanePrefs.length} active rules loaded`);
+        console.log(`[BulkPlan/rate] Lane preferences enabled — ${lanePrefs.length} active rules loaded (paused rows excluded)`);
       } else {
         console.log('[BulkPlan/rate] Lane preferences disabled — skipping');
       }

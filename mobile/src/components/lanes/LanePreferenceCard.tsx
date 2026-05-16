@@ -37,6 +37,10 @@ const LanePreferenceCard: React.FC<Props> = ({ pref, onLongPress, onPress }) => 
   const preferred: string[] = Array.isArray(pref?.preferred) ? pref.preferred : [];
   const excluded: string[]  = Array.isArray(pref?.excluded)  ? pref.excluded  : [];
   const prio = PRIORITY_STYLES[priority] || PRIORITY_STYLES.Medium;
+  // QA #324 — paused rows render dimmed so users can scan past them;
+  // the long-press sheet still surfaces Edit / Enable / Delete on the
+  // same row so a paused pref is easy to re-activate.
+  const isPaused = Boolean(pref?.disabled);
 
   // QA #324 — wrap in TouchableOpacity so the screen can attach tap +
   // long-press handlers for Edit / Delete actions without rewriting
@@ -51,7 +55,7 @@ const LanePreferenceCard: React.FC<Props> = ({ pref, onLongPress, onPress }) => 
       onLongPress={onLongPress}
       delayLongPress={350}
     >
-    <Card style={styles.card}>
+    <Card style={[styles.card, isPaused && styles.cardPaused]}>
       <View style={styles.topRow}>
         <View style={{ flex: 1, marginRight: spacing.sm }}>
           <Text style={styles.lane} numberOfLines={1}>
@@ -70,6 +74,11 @@ const LanePreferenceCard: React.FC<Props> = ({ pref, onLongPress, onPress }) => 
               <Text style={styles.customer} numberOfLines={1}>
                 {customer}
               </Text>
+            ) : null}
+            {isPaused ? (
+              <View style={styles.pausedChip}>
+                <Text style={styles.pausedText}>Paused</Text>
+              </View>
             ) : null}
           </View>
         </View>
@@ -113,6 +122,24 @@ const LanePreferenceCard: React.FC<Props> = ({ pref, onLongPress, onPress }) => 
 
 const styles = StyleSheet.create({
   card: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
+  // QA #324 — disabled / paused lane preference styling. Card dims so
+  // the row reads as "still here but inactive"; small chip near the
+  // mode badge labels it explicitly.
+  cardPaused: { opacity: 0.6 },
+  pausedChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.bg3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pausedText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text2,
+    letterSpacing: 0.3,
+  },
   topRow: { flexDirection: 'row', alignItems: 'flex-start' },
   lane: {
     fontSize: fontSize.md,

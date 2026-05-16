@@ -15,6 +15,7 @@ import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
 import ShipmentCard from '../../components/shipments/ShipmentCard';
 import NewShipmentModal from '../../components/shipments/NewShipmentModal';
+import TrackingMap from '../../components/tracking/TrackingMap';
 import DateRangeChips, {
   DateRangeKey,
   dateRangeCutoff,
@@ -276,16 +277,15 @@ export default function ShipmentsScreen() {
             }
           />
         ) : (
-          /* QA #320 — Map view placeholder. The full mini-map render
-              against the filtered shipment set is the Phase 4 module
-              rewrite for this screen; for now we surface the existing
-              Live Tracking screen as the map-mode answer so users who
-              tap Map don't hit a blank. */
-          <EmptyState
-            icon="map-outline"
-            title="Map view coming soon"
-            subtitle="In the meantime, Live Tracking (Execution → Live Tracking) shows every active shipment on the map."
-          />
+          /* QA #320 — Map view. Reuses the existing TrackingMap
+              component (already wired to react-native-maps and the
+              shipment coord schema) so the Shipments Map mode renders
+              a marker per shipment with origin / current coords. The
+              filtered set is passed through so the Map view honours
+              the same Status / Mode / Date filters the List view does. */
+          <View style={{ flex: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
+            <TrackingMap shipments={filtered} />
+          </View>
         )}
 
         {/* New-shipment FAB — mirrors OrdersScreen / RateManagementScreen. */}

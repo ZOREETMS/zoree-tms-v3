@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ const AUDIT_FILTERS = [
 
 export default function FreightAuditScreen() {
   const {
+    records,
     filtered,
     filter,
     setFilter,
@@ -39,6 +40,27 @@ export default function FreightAuditScreen() {
     releaseHold,
     setRecords,
   } = useFreightAudit(SEED_AUDIT_DATA);
+
+  // QA #326 — Pending Review section. Lists invoices that need a
+  // reviewer's attention: flagged discrepancies AND any invoice still
+  // pending payment. Top 3 surface inline with a "View all" affordance
+  // that drops the filter onto the main list.
+  const pendingReview = useMemo(() => {
+    return (records || [])
+      .filter(
+        (r: any) =>
+          r.auditStatus === AUDIT_STATUS.DISCREPANCY ||
+          r.payStatus === PAY_STATUS.PENDING ||
+          r.payStatus === PAY_STATUS.ON_HOLD,
+      )
+      .slice(0, 3);
+  }, [records]);
+  const pendingReviewTotal = (records || []).filter(
+    (r: any) =>
+      r.auditStatus === AUDIT_STATUS.DISCREPANCY ||
+      r.payStatus === PAY_STATUS.PENDING ||
+      r.payStatus === PAY_STATUS.ON_HOLD,
+  ).length;
 
   const handleApprove = useCallback(
     (inv: string) => {
@@ -305,6 +327,43 @@ export default function FreightAuditScreen() {
           </View>
         </View>
 
+        {/* QA #326 — Pending Review dashboard card. Highlights the
+            invoices that need an audit reviewer to act (flagged
+            discrepancies, pending or on-hold payments). Mirrors the
+            web Freight Audit "Pending Review" panel. Tap "View all"
+            to drop the audit-state filter onto the main list. */}
+        {pendingReviewTotal > 0 ? (
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingHeader}>
+              <View style={styles.pendingTitleRow}>
+                <Ionicons name="hourglass-outline" size={16} color={colors.yellow} />
+                <Text style={styles.pendingTitle}>Pending Review</Text>
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>{pendingReviewTotal}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setFilter(AUDIT_STATUS.DISCREPANCY)}
+                accessibilityRole="button"
+                accessibilityLabel="View all pending review records"
+              >
+                <Text style={styles.pendingLink}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            {pendingReview.map((r: any) => (
+              <View key={`pending-${r.inv}`} style={styles.pendingRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pendingInv} numberOfLines={1}>{r.inv}</Text>
+                  <Text style={styles.pendingMeta} numberOfLines={1}>
+                    {r.carrier} · {r.issue || (r.auditStatus === AUDIT_STATUS.DISCREPANCY ? 'Flagged for review' : 'Awaiting approval')}
+                  </Text>
+                </View>
+                <StatusBadge status={r.auditStatus} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* QA #326 — chip filter row swapped for a dropdown so the
             active option stays visible on narrow phones (the chip set
             of five wrapped to two rows and the active state was easy
@@ -414,6 +473,68 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     gap: spacing.sm,
     flexWrap: 'wrap',
+  },
+  // QA #326 — Pending Review card.
+  pendingCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(245,158,11,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.3)',
+    gap: spacing.sm,
+  },
+  pendingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pendingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  pendingTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  pendingBadge: {
+    marginLeft: spacing.xs,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.yellow,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+  },
+  pendingLink: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.accent,
+  },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  pendingInv: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  pendingMeta: {
+    fontSize: fontSize.xs,
+    color: colors.text2,
+    marginTop: 2,
   },
   chip: {
     paddingHorizontal: spacing.md,

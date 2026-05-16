@@ -107,7 +107,7 @@ export default function AnalyticsScreen() {
         <View style={styles.kpiRow}>
           <View style={styles.kpiHalf}>
             <KpiCard
-              label="Total Shipments"
+              label="Total Shipments (30d)"
               value={kpis.totalShipments}
               icon="cube-outline"
               color={colors.accent}

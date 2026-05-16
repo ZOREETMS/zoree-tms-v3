@@ -1,10 +1,39 @@
 import { TRANSPORT_MODES, getCarrierGrade } from "../types/analytics";
 
+/**
+ * QA #329 — synced copy of frontend/src/services/analyticsService.js.
+ * Both surfaces now respect a documented ANALYTICS_WINDOW_DAYS window
+ * (30 days by default) so the headline "Total Shipments (30d)" /
+ * "Cost per Shipment" labels are honest and mobile + web compute the
+ * same number off the same input set. See the web file for the full
+ * rationale.
+ */
+export const ANALYTICS_WINDOW_DAYS = 30;
+
+function shipmentDateMs(s) {
+  const raw =
+    s?.created_at || s?.createdAt ||
+    s?.pickup_date || s?.pickupDate ||
+    s?.updated_at || s?.updatedAt;
+  if (!raw) return null;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function filterToWindow(shipments, days = ANALYTICS_WINDOW_DAYS) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return (shipments || []).filter((s) => {
+    const t = shipmentDateMs(s);
+    return t !== null && t >= cutoff;
+  });
+}
+
 export function computeKpis(shipments) {
-  const total = shipments.length;
-  const delivered = shipments.filter((s) => s.status === "Delivered").length;
+  const windowed = filterToWindow(shipments);
+  const total = windowed.length;
+  const delivered = windowed.filter((s) => s.status === "Delivered").length;
   const onTimePct = total > 0 ? ((delivered / total) * 100).toFixed(1) : "0.0";
-  const totalSpend = shipments.reduce(
+  const totalSpend = windowed.reduce(
     (sum, s) => sum + (parseFloat(s.total_cost) || 0),
     0
   );
@@ -15,6 +44,7 @@ export function computeKpis(shipments) {
     onTimePct,
     totalSpend,
     costPerShipment,
+    windowDays: ANALYTICS_WINDOW_DAYS,
   };
 }
 
