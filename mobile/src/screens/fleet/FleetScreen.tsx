@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import Card from '../../components/ui/Card';
@@ -58,6 +59,7 @@ const SEED_DRIVERS = [
 type TabKey = 'vehicles' | 'drivers';
 
 export default function FleetScreen() {
+  const navigation = useNavigation<any>();
   const { data, loading, refreshData } = useData();
   const [activeTab, setActiveTab] = useState<TabKey>('vehicles');
   const [editingDriver, setEditingDriver] = useState<any | null>(null);
@@ -195,33 +197,64 @@ export default function FleetScreen() {
           </View>
         </View>
 
+        {/* QA #322 — Edit, Assign, Track row actions per the web Fleet
+            Management table. Assign reuses VehicleFormModal (which has
+            a driver picker); Track jumps to Live Tracking with the
+            vehicle's current driver / unit as a hint so the planner
+            can see where the truck is right now. Delete stays under
+            the action overflow for safety — the QA scoped the bug to
+            the three positive actions. */}
+        <View style={styles.driverActions}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnEdit, rowBusy && styles.actionBtnBusy]}
+            onPress={() => setEditingVehicle(item)}
+            disabled={rowBusy || !vehiclesBackedByApi}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={16} color={vehiclesBackedByApi ? colors.accent : colors.text3} />
+            <Text style={[styles.actionBtnText, { color: vehiclesBackedByApi ? colors.accent : colors.text3 }]}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnEdit, rowBusy && styles.actionBtnBusy]}
+            onPress={() => setEditingVehicle(item)}
+            disabled={rowBusy || !vehiclesBackedByApi}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-add-outline" size={16} color={vehiclesBackedByApi ? colors.accent : colors.text3} />
+            <Text style={[styles.actionBtnText, { color: vehiclesBackedByApi ? colors.accent : colors.text3 }]}>Assign</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnTrack]}
+            onPress={() => {
+              try {
+                navigation.navigate('ExecutionTab', {
+                  screen: 'LiveTracking',
+                  initial: false,
+                  params: { unit: item.unit },
+                });
+              } catch {
+                Alert.alert('Track Vehicle', `Open Live Tracking and search for ${item.unit}.`);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="locate-outline" size={16} color={colors.white} />
+            <Text style={[styles.actionBtnText, { color: colors.white }]}>Track</Text>
+          </TouchableOpacity>
+        </View>
         {vehiclesBackedByApi ? (
-          <View style={styles.driverActions}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnEdit, rowBusy && styles.actionBtnBusy]}
-              onPress={() => setEditingVehicle(item)}
-              disabled={rowBusy}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="create-outline" size={16} color={colors.accent} />
-              <Text style={[styles.actionBtnText, { color: colors.accent }]}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnDelete, rowBusy && styles.actionBtnBusy]}
-              onPress={() => handleDeleteVehicle(item)}
-              disabled={rowBusy}
-              activeOpacity={0.7}
-            >
-              {rowBusy ? (
-                <ActivityIndicator size="small" color={colors.red} />
-              ) : (
-                <>
-                  <Ionicons name="trash-outline" size={16} color={colors.red} />
-                  <Text style={[styles.actionBtnText, { color: colors.red }]}>Delete</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.deleteLink}
+            onPress={() => handleDeleteVehicle(item)}
+            disabled={rowBusy}
+            activeOpacity={0.7}
+          >
+            {rowBusy ? (
+              <ActivityIndicator size="small" color={colors.red} />
+            ) : (
+              <Text style={[styles.actionBtnText, { color: colors.red }]}>Delete</Text>
+            )}
+          </TouchableOpacity>
         ) : null}
       </Card>
     );
@@ -315,10 +348,41 @@ export default function FleetScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header — QA #322 mirrors the web Fleet Management header:
+            page title, description, and an inline action bar with the
+            two primary admin entry points (Add Vehicle, Assign Driver).
+            The FAB remains as a context-aware shortcut on the active
+            tab. */}
         <View style={styles.header}>
           <Ionicons name="car-sport-outline" size={24} color={colors.accent} />
-          <Text style={styles.title}>Fleet</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Fleet Management</Text>
+            <Text style={styles.subtitle}>
+              Vehicles, drivers and assignments across the fleet
+            </Text>
+          </View>
+        </View>
+        <View style={styles.actionsBar}>
+          <TouchableOpacity
+            style={[styles.actionPrimary, styles.actionPrimaryGhost]}
+            onPress={() => setCreatingVehicle(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Add a new vehicle"
+          >
+            <Ionicons name="bus-outline" size={16} color={colors.accent} />
+            <Text style={[styles.actionPrimaryText, { color: colors.accent }]}>Add Vehicle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionPrimary}
+            onPress={() => setCreatingDriver(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Assign or create a driver"
+          >
+            <Ionicons name="person-add-outline" size={16} color={colors.white} />
+            <Text style={[styles.actionPrimaryText, { color: colors.white }]}>Assign Driver</Text>
+          </TouchableOpacity>
         </View>
 
         {/* KPI cards */}
@@ -471,6 +535,44 @@ const styles = StyleSheet.create({
     fontSize: fontSize['2xl'],
     fontWeight: fontWeight.bold,
     color: colors.text,
+  },
+  subtitle: {
+    fontSize: fontSize.xs,
+    color: colors.text3,
+    marginTop: 2,
+  },
+  actionsBar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  actionPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.accent,
+  },
+  actionPrimaryGhost: {
+    backgroundColor: colors.bg2,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  actionPrimaryText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+  },
+  actionBtnTrack: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  deleteLink: {
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+    marginTop: spacing.xs,
   },
   kpiScroll: {
     flexGrow: 0,

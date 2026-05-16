@@ -23,8 +23,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useData } from '../../state/DataContext';
 import HomeKpiRow from '../../components/home/HomeKpiRow';
@@ -65,6 +67,89 @@ export default function HomeScreen() {
     [search],
   );
 
+  // QA #315 — Zoree AI Insights, derived inline from the loaded data
+  // rather than calling out to a dedicated InsightsCard. Each row is
+  // a one-line nudge with a count + a tap target that drills into the
+  // relevant screen, mirroring the spirit of the web InsightsCard.
+  const insights = useMemo(() => {
+    const orders = Array.isArray(data.orders) ? data.orders : [];
+    const shipments = Array.isArray(data.shipments) ? data.shipments : [];
+    const unplanned = orders.filter((o: any) => (o.status || '').toLowerCase() === 'unplanned').length;
+    const delayed = shipments.filter((s: any) => {
+      const status = String(s.status || '').toLowerCase();
+      // Delayed = anything still moving past its due date.
+      const due = s.due_date || s.dueDate || s.eta;
+      if (!due) return false;
+      const t = new Date(due).getTime();
+      return Number.isFinite(t) && t < Date.now() && status !== 'delivered' && status !== 'cancelled';
+    }).length;
+    const tendered = shipments.filter((s: any) => (s.status || '').toLowerCase() === 'tendered').length;
+    const out: { icon: keyof typeof Ionicons.glyphMap; tone: string; text: string; tab?: string; screen?: string }[] = [];
+    if (unplanned > 0) {
+      out.push({
+        icon: 'flash-outline',
+        tone: colors.accent,
+        text: `${unplanned} unplanned order${unplanned === 1 ? '' : 's'} ready to plan`,
+        tab: 'PlanningTab',
+        screen: 'Orders',
+      });
+    }
+    if (tendered > 0) {
+      out.push({
+        icon: 'send-outline',
+        tone: colors.cyan,
+        text: `${tendered} shipment${tendered === 1 ? '' : 's'} awaiting carrier confirmation`,
+        tab: 'PlanningTab',
+        screen: 'Shipments',
+      });
+    }
+    if (delayed > 0) {
+      out.push({
+        icon: 'alert-circle-outline',
+        tone: colors.red,
+        text: `${delayed} shipment${delayed === 1 ? '' : 's'} past their due date`,
+        tab: 'ExecutionTab',
+        screen: 'LiveTracking',
+      });
+    }
+    if (out.length === 0) {
+      out.push({ icon: 'sparkles-outline', tone: colors.green, text: 'All clear — no urgent items right now.' });
+    }
+    return out;
+  }, [data.orders, data.shipments]);
+
+  // QA #315 — Recent Activity: most recent shipment + order events.
+  // Falls back to created_at and ID-based sorting when timestamps are
+  // missing on legacy seed rows.
+  const recentActivity = useMemo(() => {
+    const ts = (r: any) =>
+      new Date(r.updated_at || r.updatedAt || r.created_at || r.createdAt || 0).getTime() || 0;
+    const items: { id: string; label: string; sub: string; icon: keyof typeof Ionicons.glyphMap; t: number; tab: string; screen: string }[] = [];
+    (data.shipments || []).slice(0, 50).forEach((s: any) => {
+      items.push({
+        id: `ship-${s.id}`,
+        label: `Shipment ${s.id}`,
+        sub: `${s.status || 'Planned'} · ${s.carrier_name || s.carrier || 'no carrier'}`,
+        icon: 'cube-outline',
+        t: ts(s),
+        tab: 'PlanningTab',
+        screen: 'Shipments',
+      });
+    });
+    (data.orders || []).slice(0, 50).forEach((o: any) => {
+      items.push({
+        id: `ord-${o.id}`,
+        label: `Order ${o.id}`,
+        sub: `${o.status || 'Unplanned'} · ${o.customer || 'no customer'}`,
+        icon: 'receipt-outline',
+        t: ts(o),
+        tab: 'PlanningTab',
+        screen: 'Orders',
+      });
+    });
+    return items.sort((a, b) => b.t - a.t).slice(0, 6);
+  }, [data.shipments, data.orders]);
+
   const onSelectModule = (item: HomeModuleItem) => {
     // Mirror the drawer's nested navigation pattern. initial:false
     // ensures we land on the requested screen, not the stack's
@@ -82,12 +167,32 @@ export default function HomeScreen() {
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={refreshData} />
       }>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Home</Text>
-        <Text style={styles.subtitle}>
-          Zoree Transportation Management System
-        </Text>
+      {/* Header — QA #315 adds the "+ Create Shipment" primary action
+          so the mobile home screen mirrors the web HomePage header
+          (frontend/src/pages/HomePage.jsx:131-135). */}
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Home</Text>
+          <Text style={styles.subtitle}>
+            Zoree Transportation Management System
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.createShipmentBtn}
+          activeOpacity={0.85}
+          onPress={() =>
+            navigation.navigate('PlanningTab' as never, {
+              screen: 'Shipments',
+              initial: false,
+              params: { openCreate: true },
+            } as never)
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Create shipment"
+        >
+          <Ionicons name="add" size={18} color={colors.white} />
+          <Text style={styles.createShipmentText}>Create Shipment</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search */}
@@ -103,6 +208,63 @@ export default function HomeScreen() {
 
       {/* KPIs */}
       <HomeKpiRow shipments={data.shipments} orders={data.orders} />
+
+      {/* QA #315 — Zoree AI Insights. Inline derivation keeps the home
+          screen free of an InsightsCard component dependency; each row
+          drills into the screen relevant to that nudge. */}
+      <View style={styles.cardBlock}>
+        <View style={styles.cardHeader}>
+          <Ionicons name="sparkles" size={16} color={colors.accent} />
+          <Text style={styles.cardTitle}>Zoree AI Insights</Text>
+        </View>
+        {insights.map((ins, idx) => (
+          <TouchableOpacity
+            key={`ins-${idx}`}
+            style={styles.insightRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (ins.tab && ins.screen) {
+                navigation.navigate(ins.tab as never, { screen: ins.screen, initial: false } as never);
+              }
+            }}
+            disabled={!ins.tab}
+          >
+            <Ionicons name={ins.icon} size={18} color={ins.tone} />
+            <Text style={styles.insightText}>{ins.text}</Text>
+            {ins.tab ? <Ionicons name="chevron-forward" size={14} color={colors.text3} /> : null}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* QA #315 — Recent Activity card. Pulls the most recent
+          shipments + orders, sorted by updated/created timestamps. */}
+      <View style={styles.cardBlock}>
+        <View style={styles.cardHeader}>
+          <Ionicons name="time-outline" size={16} color={colors.accent} />
+          <Text style={styles.cardTitle}>Recent Activity</Text>
+        </View>
+        {recentActivity.length === 0 ? (
+          <Text style={styles.activityEmpty}>No recent activity yet.</Text>
+        ) : (
+          recentActivity.map((row) => (
+            <TouchableOpacity
+              key={row.id}
+              style={styles.activityRow}
+              activeOpacity={0.7}
+              onPress={() =>
+                navigation.navigate(row.tab as never, { screen: row.screen, initial: false } as never)
+              }
+            >
+              <Ionicons name={row.icon} size={18} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activityLabel} numberOfLines={1}>{row.label}</Text>
+                <Text style={styles.activitySub} numberOfLines={1}>{row.sub}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={colors.text3} />
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
 
       {/* Modules */}
       <View style={styles.modulesSection}>
@@ -155,6 +317,78 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.xs,
+  },
+  // QA #315 — header row + Create Shipment button + insight/activity cards.
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  createShipmentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.accent,
+  },
+  createShipmentText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+  },
+  cardBlock: {
+    backgroundColor: colors.bg2,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  cardTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  insightText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.text,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  activityLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  activitySub: {
+    fontSize: fontSize.xs,
+    color: colors.text3,
+    marginTop: 2,
+  },
+  activityEmpty: {
+    fontSize: fontSize.sm,
+    color: colors.text3,
+    fontStyle: 'italic',
   },
   title: {
     fontSize: fontSize['2xl'],

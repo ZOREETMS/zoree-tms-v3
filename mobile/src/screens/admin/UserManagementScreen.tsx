@@ -16,7 +16,7 @@
  * a UI surface for an admin's own decisions — not an auto-pilot.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -96,6 +96,15 @@ export default function UserManagementScreen() {
       setLoading(false);
     }
   }, []);
+
+  // QA #330 — match web ordering. UserManagementPage.jsx:161-164 sorts
+  // by `email` (locale compare) so the two surfaces present the same
+  // row order. Without this, server insertion order made the mobile
+  // list look randomised relative to the web table.
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => (a.email || '').localeCompare(b.email || '')),
+    [users],
+  );
 
   useEffect(() => {
     refresh();
@@ -269,7 +278,7 @@ export default function UserManagementScreen() {
       ) : null}
 
       <FlatList
-        data={users}
+        data={sortedUsers}
         keyExtractor={(u) => String(u.id)}
         renderItem={renderItem}
         contentContainerStyle={

@@ -3,6 +3,7 @@ import {
   FlatList,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,6 +18,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import DocumentViewerModal from '../../components/documents/DocumentViewerModal';
 import GenerateDocumentModal from '../../components/documents/GenerateDocumentModal';
+import FilterDropdown from '../../components/common/FilterDropdown';
 import {
   computeDocStats,
   fetchDocuments,
@@ -99,16 +101,33 @@ export default function DocumentsScreen() {
 
   const docsBackedByApi = docs !== SEED_DOCUMENTS;
 
+  // QA #327 — Send action surfaces the document metadata through the
+  // OS share sheet so users can email/forward a BOL ref to a carrier
+  // or customer without leaving the screen. Full PDF attachment lives
+  // in DocumentViewerModal; this fast-path covers the common "send the
+  // BOL number to the driver" use case.
+  const onSend = useCallback((doc: any) => {
+    const body = [
+      `Document: ${doc.id}`,
+      `Type: ${doc.type}`,
+      `Shipment: ${doc.ship}`,
+      `Carrier: ${doc.carrier}`,
+      `Status: ${doc.status}`,
+      `Date: ${doc.generated}`,
+    ].join('\n');
+    Share.share({ title: doc.id, message: body, subject: doc.id });
+  }, []);
+
   const renderDocument = useCallback(
     ({ item }: { item: any }) => (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => docsBackedByApi && setViewing(item)}
-        // Only seeded rows can't be opened — they don't have backing
-        // DB data so status updates / deletes would fail.
-        disabled={!docsBackedByApi}
-      >
-        <Card style={styles.docCard}>
+      <Card style={styles.docCard}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => docsBackedByApi && setViewing(item)}
+          // Only seeded rows can't be opened — they don't have backing
+          // DB data so status updates / deletes would fail.
+          disabled={!docsBackedByApi}
+        >
           <View style={styles.docHeader}>
             <View style={styles.docTitleRow}>
               <Ionicons
@@ -140,26 +159,50 @@ export default function DocumentsScreen() {
               <Text style={styles.docValue}>{item.generated}</Text>
             </View>
           </View>
-          {docsBackedByApi ? (
-            <View style={styles.docCta}>
-              <Text style={styles.docCtaText}>Tap to view & edit</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.text3} />
-            </View>
-          ) : null}
-        </Card>
-      </TouchableOpacity>
+        </TouchableOpacity>
+        {/* QA #327 — explicit View + Send actions (web parity). View
+            opens the existing DocumentViewerModal where users can edit
+            status / metadata; Send opens the OS share sheet so they
+            can forward the document reference to a carrier or driver. */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnView]}
+            activeOpacity={0.7}
+            onPress={() => docsBackedByApi && setViewing(item)}
+            disabled={!docsBackedByApi}
+          >
+            <Ionicons name="eye-outline" size={14} color={docsBackedByApi ? colors.accent : colors.text3} />
+            <Text style={[styles.actionBtnText, { color: docsBackedByApi ? colors.accent : colors.text3 }]}>View</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnSend]}
+            activeOpacity={0.7}
+            onPress={() => onSend(item)}
+          >
+            <Ionicons name="paper-plane-outline" size={14} color={colors.white} />
+            <Text style={[styles.actionBtnText, { color: colors.white }]}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
     ),
-    [docsBackedByApi],
+    [docsBackedByApi, onSend],
   );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         {/* Header — QA #289 renames the page title to "Documents & BOL"
-            to align with the drawer label and the web sidebar. */}
+            to align with the drawer label and the web sidebar.
+            QA #327 adds the descriptive subtitle so the page reads the
+            same as the web page banner. */}
         <View style={styles.header}>
           <Ionicons name="folder-open-outline" size={24} color={colors.accent} />
-          <Text style={styles.title}>Documents &amp; BOL</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Documents &amp; BOL</Text>
+            <Text style={styles.subtitle}>
+              BOLs, PODs, invoices and hazmat filings for every shipment
+            </Text>
+          </View>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{filtered.length}</Text>
           </View>
@@ -188,26 +231,16 @@ export default function DocumentsScreen() {
           <Text style={styles.generateButtonText}>Generate Document</Text>
         </TouchableOpacity>
 
-        {/* Type filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          style={styles.chipScroll}
-        >
-          {TYPE_FILTERS.map((t) => (
-            <TouchableOpacity
-              key={t}
-              activeOpacity={0.7}
-              onPress={() => setTypeFilter(t)}
-              style={[styles.chip, typeFilter === t && styles.chipActive]}
-            >
-              <Text style={[styles.chipLabel, typeFilter === t && styles.chipLabelActive]}>
-                {t}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* QA #327 — type filter is now a dropdown so the active option
+            stays visible on narrow phones instead of scrolling out of
+            the chip row. */}
+        <FilterDropdown
+          label="Filter by Type"
+          value={typeFilter}
+          onChange={(v) => setTypeFilter(v as TypeFilter)}
+          options={TYPE_FILTERS as unknown as string[]}
+          modalTitle="Filter Documents by Type"
+        />
 
         {/* Document list */}
         <FlatList
@@ -270,7 +303,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize['2xl'],
     fontWeight: fontWeight.bold,
     color: colors.text,
-    flex: 1,
+  },
+  subtitle: {
+    fontSize: fontSize.xs,
+    color: colors.text3,
+    marginTop: 2,
   },
   countBadge: {
     backgroundColor: colors.accentGlow,
@@ -390,5 +427,36 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.text3,
     fontWeight: fontWeight.medium,
+  },
+  // QA #327 — per-row action buttons (View + Send only).
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+  },
+  actionBtnView: {
+    borderColor: colors.accent,
+    backgroundColor: 'transparent',
+  },
+  actionBtnSend: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  actionBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 });

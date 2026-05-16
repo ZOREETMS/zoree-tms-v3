@@ -55,6 +55,12 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier }) => {
   const equipmentTypes: string[] = carrier.equipment_types ?? [];
   const contactName = carrier.contact_name ?? carrier.contact ?? '';
   const phone = carrier.phone ?? carrier.contact_phone ?? '';
+  // QA #321 — surface SCAC + mode + email so the mobile list matches
+  // the web CarriersPage column set (frontend/src/pages/CarriersPage.jsx
+  // lines 128-136) at a glance.
+  const scac: string = carrier.scac ?? '';
+  const mode: string = carrier.mode ?? '';
+  const email: string = carrier.email ?? carrier.contact_email ?? '';
 
   return (
     <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
@@ -65,9 +71,17 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier }) => {
             <Text style={styles.name} numberOfLines={1}>
               {carrier.name}
             </Text>
-            {carrier.mc_number ? (
-              <Text style={styles.mc}>MC# {carrier.mc_number}</Text>
-            ) : null}
+            <View style={styles.subRow}>
+              {scac ? (
+                <View style={styles.scacBadge}>
+                  <Text style={styles.scacText}>{scac}</Text>
+                </View>
+              ) : null}
+              {mode ? <Text style={styles.modeText}>{mode}</Text> : null}
+              {carrier.mc_number ? (
+                <Text style={styles.mc}>MC# {carrier.mc_number}</Text>
+              ) : null}
+            </View>
           </View>
 
           <StatusBadge
@@ -80,7 +94,7 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier }) => {
         </View>
 
         {/* Row 2 — contact info */}
-        {(contactName || phone) ? (
+        {(contactName || phone || email) ? (
           <View style={styles.contactRow}>
             <Ionicons
               name="person-outline"
@@ -89,7 +103,7 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier }) => {
               style={styles.contactIcon}
             />
             <Text style={styles.contactText} numberOfLines={1}>
-              {[contactName, phone].filter(Boolean).join('  \u00B7  ')}
+              {[contactName, phone, email].filter(Boolean).join('  \u00B7  ')}
             </Text>
           </View>
         ) : null}
@@ -137,7 +151,35 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.regular,
     color: colors.text2,
-    marginTop: 2,
+  },
+  // QA #321 — SCAC + mode + MC# now share a row under the carrier
+  // name, so the table-style web header is readable on mobile.
+  subRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  scacBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.accentGlow,
+  },
+  scacText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.accent,
+    letterSpacing: 0.5,
+    fontFamily: 'monospace',
+  },
+  modeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   contactRow: {
     flexDirection: 'row',

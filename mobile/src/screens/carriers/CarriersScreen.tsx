@@ -28,11 +28,26 @@ export default function CarriersScreen() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return data.carriers;
+    // QA #321 — search now spans the same columns surfaced on the
+    // CarrierCard (name, SCAC, mode, MC#, contact, phone, email) so the
+    // search behaves like the web Carriers table.
     return data.carriers.filter((c: any) => {
       const name = (c.name ?? '').toLowerCase();
+      const scac = String(c.scac ?? '').toLowerCase();
+      const mode = String(c.mode ?? '').toLowerCase();
       const mc = String(c.mc_number ?? '').toLowerCase();
       const contact = (c.contact_name ?? c.contact ?? '').toLowerCase();
-      return name.includes(q) || mc.includes(q) || contact.includes(q);
+      const phone = String(c.phone ?? c.contact_phone ?? '').toLowerCase();
+      const email = String(c.email ?? c.contact_email ?? '').toLowerCase();
+      return (
+        name.includes(q) ||
+        scac.includes(q) ||
+        mode.includes(q) ||
+        mc.includes(q) ||
+        contact.includes(q) ||
+        phone.includes(q) ||
+        email.includes(q)
+      );
     });
   }, [data.carriers, search]);
 
@@ -63,7 +78,7 @@ export default function CarriersScreen() {
         <SearchBar
           value={search}
           onChangeText={setSearch}
-          placeholder="Search by name, MC#, or contact..."
+          placeholder="Search by name, SCAC, mode, MC#, contact, phone, or email..."
         />
       </View>
 

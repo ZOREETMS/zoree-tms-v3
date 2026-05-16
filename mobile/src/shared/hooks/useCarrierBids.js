@@ -10,7 +10,13 @@ export function useCarrierBids(initialData = []) {
     const activeRfqs = bids.filter((b) => b.status === BID_STATUSES.OPEN).length;
     const totalBids = bids.reduce((sum, b) => sum + (b.bids || 0), 0);
     const awarded = bids.filter((b) => b.status === BID_STATUSES.AWARDED).length;
-    return { activeRfqs, totalBids, awarded, avgSavings: "8.4%" };
+    // QA #325 — dashboard should mirror the web 4-status breakdown
+    // (Open / Awarded / Closed). Closed = explicit closed status OR
+    // cancelled — both indicate the RFQ is no longer accepting bids.
+    const closed = bids.filter(
+      (b) => b.status === BID_STATUSES.CLOSED || b.status === BID_STATUSES.CANCELLED,
+    ).length;
+    return { activeRfqs, totalBids, awarded, closed, avgSavings: "8.4%" };
   }, [bids]);
 
   function awardBid(rfqId, carrier) {

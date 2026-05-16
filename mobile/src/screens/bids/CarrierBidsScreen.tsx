@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
+  Modal,
+  TextInput,
   TouchableOpacity,
   Alert,
   StyleSheet,
@@ -25,8 +27,38 @@ const STATUS_BADGE_MAP: Record<string, string> = {
   [BID_STATUSES.CANCELLED]: 'Cancelled',
 };
 
+type RfqDraft = { lane: string; volume: string; deadline: string };
+
 export default function CarrierBidsScreen() {
-  const { bids, stats, awardBid } = useCarrierBids(SEED_BIDS);
+  const { bids, stats, awardBid, addRfq } = useCarrierBids(SEED_BIDS);
+  // QA #325 — Create RFQ modal state. Kept narrow: lane / volume /
+  // deadline cover the columns the bid list renders. Carrier
+  // invitations are still web-managed.
+  const [draft, setDraft] = useState<RfqDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const openCreate = useCallback(
+    () => setDraft({ lane: '', volume: '', deadline: '' }),
+    [],
+  );
+
+  const onSaveRfq = useCallback(() => {
+    if (!draft) return;
+    const lane = draft.lane.trim();
+    const volume = Number(draft.volume) || 0;
+    if (!lane) {
+      Alert.alert('Lane is required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = addRfq({ lane, volume, deadline: draft.deadline.trim() || null });
+      setDraft(null);
+      Alert.alert('RFQ Created', `${created.id} is now open for bids.`);
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, addRfq]);
 
   const handleAward = useCallback(
     (rfq: any) => {
@@ -143,39 +175,26 @@ export default function CarrierBidsScreen() {
             <Text style={styles.subtitle}>RFQ management and bid analysis</Text>
           </View>
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                'Create RFQ',
-                'Creating new RFQs is currently web-only. Use the Zoree web app to publish an RFQ; new bids will appear here on the next refresh.',
-              )
-            }
+            onPress={openCreate}
             style={styles.createBtn}
             accessibilityRole="button"
-            accessibilityLabel="Create RFQ (web-only)">
+            accessibilityLabel="Create RFQ">
             <Ionicons name="add" size={16} color={colors.white} />
             <Text style={styles.createText}>Create RFQ</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Stats — QA #287 adds Savings card so the dashboard matches
-            the web header's 4-KPI strip. Savings is computed as the
-            sum of (incumbent rate − best bid) for open / awarded RFQs;
-            falls back to stats.savings if the hook already returns it. */}
+        {/* Stats — QA #325 surfaces the Open / Awarded / Closed status
+            triad the web dashboard shows, alongside Total Bids. The
+            Savings tile is kept in a second pass below the primary
+            row so the four-status breakdown stays visually paramount. */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <KpiCard
-              label="Active RFQs"
+              label="Open"
               value={stats.activeRfqs}
               icon="document-text-outline"
               color={colors.accent}
-            />
-          </View>
-          <View style={styles.statItem}>
-            <KpiCard
-              label="Total Bids"
-              value={stats.totalBids}
-              icon="people-outline"
-              color={colors.cyan}
             />
           </View>
           <View style={styles.statItem}>
@@ -184,6 +203,22 @@ export default function CarrierBidsScreen() {
               value={stats.awarded}
               icon="trophy-outline"
               color={colors.green}
+            />
+          </View>
+          <View style={styles.statItem}>
+            <KpiCard
+              label="Closed"
+              value={(stats as any).closed ?? 0}
+              icon="lock-closed-outline"
+              color={colors.text3}
+            />
+          </View>
+          <View style={styles.statItem}>
+            <KpiCard
+              label="Total Bids"
+              value={stats.totalBids}
+              icon="people-outline"
+              color={colors.cyan}
             />
           </View>
           <View style={styles.statItem}>
@@ -230,6 +265,77 @@ export default function CarrierBidsScreen() {
             />
           }
         />
+
+        {/* QA #325 — Create RFQ modal. Posts via the hook's addRfq so
+            the new RFQ shows up at the top of the list with an Open
+            status. Carrier invitations stay web-managed; this captures
+            the lane + volume + deadline a planner would enter on the
+            web Create RFQ flow's first step. */}
+        <Modal
+          visible={draft !== null}
+          animationType="slide"
+          transparent
+          onRequestClose={() => !saving && setDraft(null)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>New RFQ</Text>
+                <TouchableOpacity
+                  onPress={() => !saving && setDraft(null)}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close" size={22} color={colors.text2} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.fieldLabel}>Lane</Text>
+              <TextInput
+                style={styles.input}
+                value={draft?.lane || ''}
+                onChangeText={(v) => setDraft((d) => (d ? { ...d, lane: v } : d))}
+                placeholder="e.g. Chicago, IL → Dallas, TX"
+                placeholderTextColor={colors.text3}
+              />
+              <Text style={styles.fieldLabel}>Volume (loads)</Text>
+              <TextInput
+                style={styles.input}
+                value={draft?.volume || ''}
+                onChangeText={(v) =>
+                  setDraft((d) => (d ? { ...d, volume: v.replace(/[^0-9]/g, '') } : d))
+                }
+                placeholder="e.g. 50"
+                placeholderTextColor={colors.text3}
+                keyboardType="number-pad"
+              />
+              <Text style={styles.fieldLabel}>Deadline (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                value={draft?.deadline || ''}
+                onChangeText={(v) => setDraft((d) => (d ? { ...d, deadline: v } : d))}
+                placeholder="Optional"
+                placeholderTextColor={colors.text3}
+              />
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnGhost]}
+                  onPress={() => !saving && setDraft(null)}
+                  disabled={saving}
+                >
+                  <Text style={styles.btnGhostText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary, saving && { opacity: 0.6 }]}
+                  onPress={onSaveRfq}
+                  disabled={saving}
+                >
+                  <Text style={styles.btnPrimaryText}>
+                    {saving ? 'Creating…' : 'Create RFQ'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -378,4 +484,61 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: colors.white,
   },
+  // QA #325 — Create RFQ modal styles.
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+    padding: spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  fieldLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text2,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.md,
+    color: colors.text,
+    backgroundColor: colors.bg2,
+    minHeight: 44,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  btn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnGhost: { backgroundColor: colors.bg2, borderWidth: 1, borderColor: colors.border },
+  btnGhostText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text2 },
+  btnPrimary: { backgroundColor: colors.accent },
+  btnPrimaryText: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.white },
 });

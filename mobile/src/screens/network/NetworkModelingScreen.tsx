@@ -18,12 +18,15 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import Card from '../../components/ui/Card';
 import KpiCard from '../../components/ui/KpiCard';
@@ -89,7 +92,11 @@ export default function NetworkModelingScreen() {
     volumePct: 0,
   });
   const [scenarios, setScenarios] = useState<WhatIfScenario[]>([]);
-  const [builderOpen, setBuilderOpen] = useState(false);
+  // QA #328 — Scenario Builder now opens by default. Earlier revisions
+  // collapsed it until the user tapped the header chevron, which is
+  // why the Run Analysis / Save Scenario buttons read as "missing" in
+  // QA reports — they were one tap away and easy to miss.
+  const [builderOpen, setBuilderOpen] = useState(true);
 
   const lanes: LaneRow[] = useMemo(() => {
     const rateFactor = 1 + (modifiers.ratePct || 0) / 100;
@@ -163,11 +170,59 @@ export default function NetworkModelingScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Network Modeling</Text>
-        <Text style={styles.subtitle}>
-          Lane benchmarks + utilization. Use the What-If panel below to
-          model rate / volume changes.
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Network Modeling</Text>
+          <Text style={styles.subtitle}>
+            Lane benchmarks + utilization. Tweak rate / volume in the
+            Scenario Builder below.
+          </Text>
+        </View>
+      </View>
+      {/* QA #328 — header-level Run Analysis + Save Scenario buttons
+          so the two primary scenario actions are always visible at the
+          top of the screen, mirroring the web page header. Both call
+          straight into the WhatIfBuilder handlers using the currently
+          applied modifiers; the builder card below still lets the user
+          adjust the rate / volume inputs in-place. */}
+      <View style={styles.headerActions}>
+        <TouchableOpacity
+          style={[styles.headerActionBtn, styles.headerActionGhost]}
+          activeOpacity={0.7}
+          onPress={() => {
+            Alert.prompt
+              ? Alert.prompt(
+                  'Save Scenario',
+                  'Name this scenario so you can return to it from the list.',
+                  (name?: string) => {
+                    const label = (name || '').trim();
+                    if (!label) return;
+                    handleSave({ ratePct: modifiers.ratePct, volumePct: modifiers.volumePct, label });
+                    Alert.alert('Scenario saved', label);
+                  },
+                )
+              : (() => {
+                  const label = `Scenario ${scenarios.length + 1}`;
+                  handleSave({ ratePct: modifiers.ratePct, volumePct: modifiers.volumePct, label });
+                  Alert.alert('Scenario saved', label);
+                })();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Save current scenario">
+          <Ionicons name="bookmark-outline" size={16} color={colors.accent} />
+          <Text style={[styles.headerActionText, { color: colors.accent }]}>Save Scenario</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.headerActionBtn, styles.headerActionPrimary]}
+          activeOpacity={0.7}
+          onPress={() => {
+            handleRun({ ratePct: modifiers.ratePct, volumePct: modifiers.volumePct });
+            setBuilderOpen(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Run analysis on the current scenario">
+          <Ionicons name="play-outline" size={16} color={colors.white} />
+          <Text style={[styles.headerActionText, { color: colors.white }]}>Run Analysis</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -244,9 +299,38 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scroll: { paddingBottom: spacing['3xl'] },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  // QA #328 — header-level Save / Run buttons.
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  headerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  headerActionGhost: {
+    backgroundColor: colors.bg2,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  headerActionPrimary: {
+    backgroundColor: colors.accent,
+  },
+  headerActionText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
   title: {
     fontSize: fontSize['2xl'],

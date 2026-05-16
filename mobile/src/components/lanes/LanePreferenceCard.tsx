@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Card from '../ui/Card';
 import { colors, fontSize, fontWeight, spacing, borderRadius } from '../../theme';
 
@@ -21,9 +21,13 @@ const PRIORITY_STYLES: Record<string, { bg: string; color: string }> = {
 
 interface Props {
   pref: any;
+  /** QA #324 — long-press surfaces the Edit / Delete action sheet. */
+  onLongPress?: () => void;
+  /** QA #324 — tap to edit. Optional; when omitted the card is read-only. */
+  onPress?: () => void;
 }
 
-const LanePreferenceCard: React.FC<Props> = ({ pref }) => {
+const LanePreferenceCard: React.FC<Props> = ({ pref, onLongPress, onPress }) => {
   const origin = pref?.origin || '—';
   const dest = pref?.dest || pref?.destination || '—';
   const mode = pref?.mode || '—';
@@ -34,7 +38,19 @@ const LanePreferenceCard: React.FC<Props> = ({ pref }) => {
   const excluded: string[]  = Array.isArray(pref?.excluded)  ? pref.excluded  : [];
   const prio = PRIORITY_STYLES[priority] || PRIORITY_STYLES.Medium;
 
+  // QA #324 — wrap in TouchableOpacity so the screen can attach tap +
+  // long-press handlers for Edit / Delete actions without rewriting
+  // the card body. When neither handler is supplied the touchable is
+  // effectively a no-op pass-through (matches the previous read-only
+  // behaviour).
+  const Wrapper: any = onPress || onLongPress ? TouchableOpacity : View;
   return (
+    <Wrapper
+      activeOpacity={0.85}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+    >
     <Card style={styles.card}>
       <View style={styles.topRow}>
         <View style={{ flex: 1, marginRight: spacing.sm }}>
@@ -91,6 +107,7 @@ const LanePreferenceCard: React.FC<Props> = ({ pref }) => {
         </Text>
       ) : null}
     </Card>
+    </Wrapper>
   );
 };
 
