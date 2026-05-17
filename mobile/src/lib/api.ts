@@ -73,6 +73,9 @@ export {
   MileageApi,
   NotifyApi,
   BulkPlanApi,
+  // Route Optimizer (parity with web RouteOptimizerPage):
+  // POST /api/ltl/quote — CzarLite-backed LTL quotes.
+  LtlApi,
   // QA P208 (2026-05-11): admin user-management surface for the
   // mobile UserManagement / UserRoles screens.
   UsersApi,

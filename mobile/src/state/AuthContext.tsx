@@ -132,7 +132,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Mobile-bug 59: register the 401 -> refresh hook BEFORE any
         // API call so a stale token at boot (e.g. user opened the app
         // after an hour) recovers transparently.
-        configureAuthHooks({ onUnauthorized: performTokenRefresh });
+        //
+        // Session-expiry fix (2026-05-16): also register
+        // `onSessionExpired` — when a save hits 401 AND the refresh
+        // attempt fails, the shared api() wrapper calls this hook so
+        // we silently clear the dead session and let RootNavigator
+        // route to LoginScreen (instead of leaving the user staring at
+        // an "Invalid token" alert on a form they can't save). We
+        // leave a one-shot "zoree_session_expired" flag in storage so
+        // LoginScreen can surface a small "Your session expired"
+        // notice on first paint after the redirect.
+        configureAuthHooks({
+          onUnauthorized: performTokenRefresh,
+          onSessionExpired: async () => {
+            try {
+              await storage.setItem('zoree_session_expired', '1');
+            } catch {
+              // Storage write is best-effort — even without the flag
+              // the auto-logout still works; the user just won't see
+              // the notice on Login.
+            }
+            await storage.removeItem('zoree_token');
+            await storage.removeItem('zoree_refresh_token');
+            await storage.removeItem('zoree_user');
+            setUser(null);
+          },
+        });
 
         const t = storage.getItem('zoree_token');
         if (!t) {

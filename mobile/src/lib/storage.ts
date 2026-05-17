@@ -13,7 +13,18 @@ class StorageAdapter {
 
   async init(): Promise<void> {
     if (this.initialized) return;
-    const keys = ['zoree_token', 'zoree_user', 'zoree_api_base'];
+    // `zoree_session_expired` is a one-shot flag the AuthContext writes
+    // when a 401 forces an auto-logout, so LoginScreen can render a
+    // friendly notice on the next paint (mobile session-expiry fix,
+    // 2026-05-16). Hydrating it here means the LoginScreen's first
+    // render already sees the value without needing an async read.
+    const keys = [
+      'zoree_token',
+      'zoree_refresh_token',
+      'zoree_user',
+      'zoree_api_base',
+      'zoree_session_expired',
+    ];
     const pairs = await AsyncStorage.multiGet(keys);
     pairs.forEach(([key, value]) => {
       this.cache[key] = value;

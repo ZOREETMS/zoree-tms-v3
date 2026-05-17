@@ -38,10 +38,31 @@ function token() {
  * When api() sees a 401 and a refresher is registered, it tries to
  * refresh once and retries the request. Without a refresher, behaviour
  * is unchanged (throws as before).
+ *
+ * Session-expiry fix (mobile, 2026-05-16): when the refresh attempt
+ * fails (no refresh token, refresh token expired, or retry still 401)
+ * the caller used to surface a raw "Invalid token" alert and the user
+ * was stuck — no way to recover except force-quitting the app. We now
+ * expose a second hook, `onSessionExpired`, that AuthContext wires to
+ * its logout routine; when api() can prove the session is dead it
+ * calls the hook (which clears storage + flips the RootNavigator to
+ * LoginScreen) and throws a friendly "Session expired" error instead
+ * of the cryptic 401 body. Callers can detect it via the
+ * `SESSION_EXPIRED_MESSAGE` constant if they want bespoke UX.
  */
 let _onUnauthorized = null;
-export function configureAuthHooks({ onUnauthorized }) {
-  _onUnauthorized = typeof onUnauthorized === "function" ? onUnauthorized : null;
+let _onSessionExpired = null;
+export const SESSION_EXPIRED_MESSAGE =
+  "Your session has expired. Please sign in again.";
+export function configureAuthHooks({ onUnauthorized, onSessionExpired }) {
+  if (onUnauthorized !== undefined) {
+    _onUnauthorized =
+      typeof onUnauthorized === "function" ? onUnauthorized : null;
+  }
+  if (onSessionExpired !== undefined) {
+    _onSessionExpired =
+      typeof onSessionExpired === "function" ? onSessionExpired : null;
+  }
 }
 
 /**
@@ -155,6 +176,22 @@ async function api(path, options = {}) {
     } catch {
       // Treat refresh errors as a refresh-miss; original 401 surfaces below.
     }
+  }
+
+  // Session-expiry fallthrough: if after the refresh attempt the call
+  // is *still* 401, the refresh token is dead too — bounce the user
+  // back to login instead of letting "Invalid token" surface as the
+  // alert body on the save screen (the original mobile bug).
+  if (res.status === 401) {
+    if (_onSessionExpired) {
+      try {
+        await _onSessionExpired();
+      } catch {
+        // Best-effort — never let the cleanup itself mask the original
+        // failure or crash the call chain.
+      }
+    }
+    throw new Error(SESSION_EXPIRED_MESSAGE);
   }
 
   const text = await res.text();

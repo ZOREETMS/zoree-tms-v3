@@ -119,54 +119,65 @@ export async function propagateTenderAcceptance(args: {
   //    mirrors the web file exactly: response.* wins, then shipment.*,
   //    then empty. omsSync.setIf on the server skips empty strings so
   //    a blank value won't blow away an OMS-side default.
-  try {
-    result.omsResult = await OmsApi.push({
-      shipmentId:    shipment.id,
-      carrier:       shipment.carrier || '',
-      mode:          shipment.mode || '',
-      serviceLevel:  response.serviceLevel  || shipment.service_level || '',
-      pickupDate:    response.carrierPickupDate
-                       || shipment.pickup_date
-                       || shipment.pickup
-                       || '',
-      deliveryDate:  shipment.delivery_date || shipment.delivery || '',
-      proNumber:     response.proNumber  || '',
-      bolNumber:     response.bolNumber  || shipment.bol_number  || '',
-      sealNumber:    response.sealNumber || shipment.seal_number || '',
-      dockNumber:    response.dockDoor   || '',
-      dockLoadStart: response.dockLoadStart || '',
-      dockLoadEnd:   response.dockLoadEnd   || '',
-      origin:        shipment.origin || '',
-      destination:   shipment.dest   || '',
-      weight:        shipment.weight || 0,
-      pieces:        shipment.pieces || 0,
-      commodity:     shipment.commodity || '',
-      cost:          shipment.cost || 0,
-      orderIds:      safeOrderIds,
-      notes:         response.notes || '',
-    });
-  } catch (err: any) {
-    result.omsError = err?.message || String(err);
-    // eslint-disable-next-line no-console
-    console.warn('[tender-accept] OMS push failed:', result.omsError);
-  }
+  const omsTask = (async () => {
+    try {
+      result.omsResult = await OmsApi.push({
+        shipmentId:    shipment.id,
+        carrier:       shipment.carrier || '',
+        mode:          shipment.mode || '',
+        serviceLevel:  response.serviceLevel  || shipment.service_level || '',
+        pickupDate:    response.carrierPickupDate
+                         || shipment.pickup_date
+                         || shipment.pickup
+                         || '',
+        deliveryDate:  shipment.delivery_date || shipment.delivery || '',
+        proNumber:     response.proNumber  || '',
+        bolNumber:     response.bolNumber  || shipment.bol_number  || '',
+        sealNumber:    response.sealNumber || shipment.seal_number || '',
+        dockNumber:    response.dockDoor   || '',
+        dockLoadStart: response.dockLoadStart || '',
+        dockLoadEnd:   response.dockLoadEnd   || '',
+        origin:        shipment.origin || '',
+        destination:   shipment.dest   || '',
+        weight:        shipment.weight || 0,
+        pieces:        shipment.pieces || 0,
+        commodity:     shipment.commodity || '',
+        cost:          shipment.cost || 0,
+        orderIds:      safeOrderIds,
+        notes:         response.notes || '',
+      });
+    } catch (err: any) {
+      result.omsError = err?.message || String(err);
+      // eslint-disable-next-line no-console
+      console.warn('[tender-accept] OMS push failed:', result.omsError);
+    }
+  })();
 
   // 2. WebSocket broadcast — picked up by App-level wsClient (TMS web
   //    tabs and the mobile useExpressEvents listener) and by OmsLive
   //    in zoree-oms.html → triggers loadFromDB() + re-render.
-  try {
-    await NotifyApi.broadcast('tender_accepted', {
-      shipmentId: shipment.id,
-      proNumber:  response.proNumber || '',
-      orderIds:   safeOrderIds,
-      via:        'mobile-tms-accept',
-    });
-    result.notified = true;
-  } catch (err: any) {
-    result.notifyError = err?.message || String(err);
-    // eslint-disable-next-line no-console
-    console.warn('[tender-accept] WS notify failed:', result.notifyError);
-  }
+  const notifyTask = (async () => {
+    try {
+      await NotifyApi.broadcast('tender_accepted', {
+        shipmentId: shipment.id,
+        proNumber:  response.proNumber || '',
+        orderIds:   safeOrderIds,
+        via:        'mobile-tms-accept',
+      });
+      result.notified = true;
+    } catch (err: any) {
+      result.notifyError = err?.message || String(err);
+      // eslint-disable-next-line no-console
+      console.warn('[tender-accept] WS notify failed:', result.notifyError);
+    }
+  })();
+
+  // Run both in parallel — they're independent and both already swallow
+  // their own failures into `result`, so neither can short-circuit the
+  // other. Kept structurally identical to the web file (see
+  // frontend/src/services/tenderAcceptanceNotifier.js) per the
+  // intentional web/mobile parallel contract.
+  await Promise.all([omsTask, notifyTask]);
 
   return result;
 }

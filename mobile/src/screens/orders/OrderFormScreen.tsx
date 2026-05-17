@@ -378,16 +378,23 @@ export default function OrderFormScreen() {
         navigation.replace('OrderDetail', { orderId: saved?.id || form.id });
       }
     } catch (e: any) {
-      // Distinguish a fetch-level network error (RN raises a generic
-      // "Network request failed" with no status) from a server-side
-      // 4xx / 5xx so the user actually knows whether to check their
-      // connection or fix their input. Without this, QA bug #90 / #91
-      // bottom out at the same opaque alert and the user can't tell
-      // which it is.
+      // Distinguish three classes of failure so the alert actually
+      // helps the user:
+      //   1. Session expired — AuthContext has already cleared the
+      //      session and RootNavigator is mid-flip to LoginScreen.
+      //      The very next paint is the Login screen with its own
+      //      "Your session expired" notice, so popping an Alert here
+      //      would just stack a second message on top. Swallow.
+      //   2. Network — RN's opaque "Network request failed" / the
+      //      friendlier rewrite from shared api() (#90). User needs
+      //      to check Wi-Fi / API base URL.
+      //   3. Server-side 4xx/5xx — surface the message as-is so the
+      //      user knows what to fix.
       const raw = String(e?.message || 'Unknown error');
-      // Catch both the raw fetch errors RN can surface and the
-      // friendlier rewrite produced by the shared api() wrapper
-      // (#90: "Cannot reach server. Check your connection ...").
+      if (/session has expired|session expired/i.test(raw)) {
+        // RootNavigator will route to LoginScreen on the next render.
+        return;
+      }
       const isNetwork = /Network request failed|Failed to fetch|TypeError: Network|Cannot reach server/i.test(raw);
       const title = isNetwork ? 'Cannot reach server' : 'Could not save order';
       const body = isNetwork

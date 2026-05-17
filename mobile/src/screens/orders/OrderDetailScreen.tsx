@@ -62,6 +62,16 @@ import {
 // and left the per-line table + change-history list stale until the
 // user pull-to-refreshed the screen.
 import { useOrderDetailLiveSync } from '../../hooks/useOrderDetailLiveSync';
+// 2026-05-16: order header now goes through a fresh /api/orders/:id/full
+// fetch on mount + every live-sync tick. Closes the bug where dates
+// edited on web stayed stale on the mobile detail screen when Supabase
+// Realtime was suspended or never connected (no anon key in build) —
+// the History tab loaded fresh on open, but the header read from
+// DataContext.data.orders which only refreshes via realtime / app
+// foreground. Migration 045 (orders/shipments BEFORE UPDATE trigger)
+// ensures syncTick now increments correctly on every server write, so
+// realtime-driven re-fetches and this fallback both stay current.
+import { useFreshOrderHeader } from '../../hooks/useFreshOrderHeader';
 // REQ-OFFLINE Phase 5 (2026-05-10): route order status changes
 // through the offline-aware façade. When the device is online this
 // is a thin pass-through to OrdersApi.update (so the server-side
@@ -111,7 +121,11 @@ export default function OrderDetailScreen() {
   const [pickerQuotes, setPickerQuotes] = useState<SingleOrderCarrierQuote[] | null>(null);
   const [pickerBusy, setPickerBusy] = useState(false);
 
-  const order = useMemo(
+  // Cached row from DataContext — fast, but may be stale if Realtime
+  // didn't fire (no anon key in this build, socket suspended, etc.).
+  // We keep it as the fallback render source so the screen never
+  // blanks while a fresh fetch is in flight.
+  const cachedOrder = useMemo(
     () => data.orders.find((o) => (o.id ?? o.order_id)?.toString() === orderId),
     [data.orders, orderId],
   );
@@ -122,6 +136,15 @@ export default function OrderDetailScreen() {
   // below keeps lines + history aligned with whatever the web just
   // wrote, so the user no longer has to pull-to-refresh.
   const syncTick = useOrderDetailLiveSync(orderId);
+
+  // 2026-05-16 bug fix: pull the canonical order row from the server on
+  // mount and every syncTick increment. `order` prefers the fresh row;
+  // falls back to `cachedOrder` while the fetch races. This is what
+  // closes the "dates edited on web don't show in app" symptom —
+  // History was already fetched fresh per-open, but the header had no
+  // equivalent path and silently kept rendering whatever data.orders
+  // happened to contain. See hooks/useFreshOrderHeader for rationale.
+  const { order } = useFreshOrderHeader(orderId, cachedOrder, syncTick);
 
   // QA 241 (2026-05-12): "Lane items sometimes empty after planning".
   // The `alive` flag alone wasn't enough — when syncTick increments

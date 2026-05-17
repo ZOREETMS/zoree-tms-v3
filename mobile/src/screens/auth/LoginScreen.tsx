@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -31,6 +31,20 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Mobile session-expiry fix (2026-05-16): AuthContext writes a
+  // one-shot 'zoree_session_expired' flag when api() forces a logout
+  // after a 401 the refresh hook couldn't recover. Pick it up on first
+  // paint, surface a friendly notice, then consume the flag so it
+  // doesn't show up after a normal sign-out -> sign-in cycle.
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(
+    () => storage.getItem('zoree_session_expired') === '1',
+  );
+  useEffect(() => {
+    if (sessionExpiredNotice) {
+      storage.removeItem('zoree_session_expired').catch(() => {});
+    }
+  }, [sessionExpiredNotice]);
+
   // Advanced: API endpoint override (for tunnel URL changes)
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [apiEndpoint, setApiEndpoint] = useState(
@@ -61,6 +75,10 @@ export default function LoginScreen() {
     }
 
     setError('');
+    // Clear the session-expired notice the moment the user starts a
+    // fresh sign-in attempt — leaving it up while we're already on the
+    // way to a new session would be confusing.
+    setSessionExpiredNotice(false);
     setLoading(true);
 
     try {
@@ -100,6 +118,18 @@ export default function LoginScreen() {
             <Text style={styles.cardDescription}>
               Enter your credentials to access the platform
             </Text>
+
+            {/* Session-expired notice — shown once after an auto-logout
+                triggered by a 401 on a save (mobile session-expiry
+                fix, 2026-05-16). Uses a calmer info color than the
+                red error banner because nothing is wrong per se. */}
+            {sessionExpiredNotice && error === '' && (
+              <View style={styles.noticeBanner}>
+                <Text style={styles.noticeText}>
+                  Your session expired. Please sign in again to continue.
+                </Text>
+              </View>
+            )}
 
             {/* Error banner */}
             {error !== '' && (
@@ -295,6 +325,20 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#FCA5A5',
+    fontSize: fontSize.sm,
+  },
+
+  /* Session-expired notice (info, not error) */
+  noticeBanner: {
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.3)',
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  noticeText: {
+    color: '#93C5FD',
     fontSize: fontSize.sm,
   },
 

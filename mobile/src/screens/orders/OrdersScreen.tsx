@@ -296,6 +296,22 @@ export default function OrdersScreen() {
       }),
     [navigation],
   );
+  // QA 240 (2026-05-16): Single-row Plan Order from the 3-dot kebab.
+  // Web parity — frontend/src/components/orders/OrderRowActions.jsx
+  // exposes "Plan" as a primary button for plannable rows (Unplanned
+  // or Planning Failed). Mobile has no per-row primary button, so the
+  // kebab is the entry point. We hand off to BulkPlan with a single-id
+  // selection so the rate / consolidate / execute pipeline (useBulkPlan)
+  // stays the single owner of planning semantics — same approach
+  // handlePlanSelected uses for multi-select.
+  const handleRowPlan = useCallback(
+    (orderId: string) =>
+      navigation.navigate('BulkPlanTab', {
+        screen: 'BulkPlan',
+        params: { initialSelectedIds: [orderId] },
+      }),
+    [navigation],
+  );
   const handleRowCrossDock = useCallback(
     (orderId: string) =>
       navigation.navigate('MultiStopTab', {
@@ -397,6 +413,7 @@ export default function OrdersScreen() {
           onLongPressSelect={enterSelectionWith}
           onEdit={handleRowEdit}
           onDuplicate={handleRowDuplicate}
+          onPlan={handleRowPlan}
           onAddToShipment={handleRowAddToShipment}
           onCrossDockPlan={handleRowCrossDock}
           onUnplan={handleRowUnplan}
@@ -411,6 +428,7 @@ export default function OrdersScreen() {
       enterSelectionWith,
       handleRowEdit,
       handleRowDuplicate,
+      handleRowPlan,
       handleRowAddToShipment,
       handleRowCrossDock,
       handleRowUnplan,

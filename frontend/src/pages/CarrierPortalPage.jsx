@@ -25,7 +25,12 @@ const TABS = [
 ];
 
 export default function CarrierPortalPage() {
-  const { shipments, orders, carriers, refreshData } = useOutletContext();
+  // refreshShipmentsAndOrders is the targeted (orders + shipments + count)
+  // refresh — much faster than refreshData(), which fans out across 16
+  // tables. Tender accept only mutates shipments + orders, so the full
+  // refresh was just making the Confirm Acceptance button feel slow.
+  // See App.jsx:135-140 for the rationale behind the targeted helper.
+  const { shipments, orders, carriers, refreshShipmentsAndOrders } = useOutletContext();
   // QA #147: Execution module 'view' must collapse Accept / Reject /
   // Change actions on the carrier portal — those mutate shipment state.
   const gate = useEditGate("carrier_portal");
@@ -242,7 +247,7 @@ export default function CarrierPortalPage() {
       });
     }
 
-    await refreshData();
+    await refreshShipmentsAndOrders();
     closeRespond();
 
     if (responseData.action === "accept") {

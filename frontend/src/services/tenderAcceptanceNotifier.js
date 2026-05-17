@@ -56,58 +56,68 @@ export async function propagateTenderAcceptance({ shipment, response, orderIds }
   const safeOrderIds = Array.isArray(orderIds) ? orderIds.filter(Boolean).map(String) : [];
 
   // 1. OMS mirror — oms_orders upsert (REQ-24).
-  try {
-    result.omsResult = await OmsApi.push({
-      shipmentId:    shipment.id,
-      carrier:       shipment.carrier || "",
-      mode:          shipment.mode || "",
-      // Fall back to the shipment row when the response doesn't carry
-      // these fields — happens on the carrier-portal accept path, where
-      // the carrier UI only collects driver/PRO/pickup, leaving the
-      // planner-side serviceLevel/BOL undefined. Without these fallbacks
-      // omsSync.setIf (which skips empty strings) drops them, and the
-      // OMS warehouse modals render Service Level / BOL as "—" even
-      // though the TMS shipment row has them populated (set by
-      // bulkPlanExecution at shipment create time). Mirrors the
-      // pickupDate / deliveryDate fallback pattern just below.
-      serviceLevel:  response.serviceLevel || shipment.service_level || "",
-      pickupDate:    response.carrierPickupDate || shipment.pickup_date || shipment.pickup || "",
-      deliveryDate:  shipment.delivery_date || shipment.delivery || "",
-      proNumber:     response.proNumber || "",
-      bolNumber:     response.bolNumber || shipment.bol_number || "",
-      sealNumber:    response.sealNumber || "",
-      dockNumber:    response.dockDoor || "",
-      dockLoadStart: response.dockLoadStart || "",
-      dockLoadEnd:   response.dockLoadEnd || "",
-      origin:        shipment.origin || "",
-      destination:   shipment.dest || "",
-      weight:        shipment.weight || 0,
-      pieces:        shipment.pieces || 0,
-      commodity:     shipment.commodity || "",
-      cost:          shipment.cost || 0,
-      orderIds:      safeOrderIds,
-      notes:         response.notes || "",
-    });
-  } catch (err) {
-    result.omsError = err?.message || String(err);
-    // eslint-disable-next-line no-console
-    console.warn("[tender-accept] OMS push failed:", result.omsError);
-  }
+  const omsTask = (async () => {
+    try {
+      result.omsResult = await OmsApi.push({
+        shipmentId:    shipment.id,
+        carrier:       shipment.carrier || "",
+        mode:          shipment.mode || "",
+        // Fall back to the shipment row when the response doesn't carry
+        // these fields — happens on the carrier-portal accept path, where
+        // the carrier UI only collects driver/PRO/pickup, leaving the
+        // planner-side serviceLevel/BOL undefined. Without these fallbacks
+        // omsSync.setIf (which skips empty strings) drops them, and the
+        // OMS warehouse modals render Service Level / BOL as "—" even
+        // though the TMS shipment row has them populated (set by
+        // bulkPlanExecution at shipment create time). Mirrors the
+        // pickupDate / deliveryDate fallback pattern just below.
+        serviceLevel:  response.serviceLevel || shipment.service_level || "",
+        pickupDate:    response.carrierPickupDate || shipment.pickup_date || shipment.pickup || "",
+        deliveryDate:  shipment.delivery_date || shipment.delivery || "",
+        proNumber:     response.proNumber || "",
+        bolNumber:     response.bolNumber || shipment.bol_number || "",
+        sealNumber:    response.sealNumber || "",
+        dockNumber:    response.dockDoor || "",
+        dockLoadStart: response.dockLoadStart || "",
+        dockLoadEnd:   response.dockLoadEnd || "",
+        origin:        shipment.origin || "",
+        destination:   shipment.dest || "",
+        weight:        shipment.weight || 0,
+        pieces:        shipment.pieces || 0,
+        commodity:     shipment.commodity || "",
+        cost:          shipment.cost || 0,
+        orderIds:      safeOrderIds,
+        notes:         response.notes || "",
+      });
+    } catch (err) {
+      result.omsError = err?.message || String(err);
+      // eslint-disable-next-line no-console
+      console.warn("[tender-accept] OMS push failed:", result.omsError);
+    }
+  })();
 
   // 2. WebSocket broadcast — picked up by App-level wsClient (TMS tabs)
   //    and by OmsLive in zoree-oms.html → triggers loadFromDB() + re-render.
-  try {
-    await NotifyApi.broadcast("tender_accepted", {
-      shipmentId: shipment.id,
-      proNumber:  response.proNumber || "",
-      orderIds:   safeOrderIds,
-    });
-    result.notified = true;
-  } catch (err) {
-    result.notifyError = err?.message || String(err);
-    // eslint-disable-next-line no-console
-    console.warn("[tender-accept] WS notify failed:", result.notifyError);
-  }
+  const notifyTask = (async () => {
+    try {
+      await NotifyApi.broadcast("tender_accepted", {
+        shipmentId: shipment.id,
+        proNumber:  response.proNumber || "",
+        orderIds:   safeOrderIds,
+      });
+      result.notified = true;
+    } catch (err) {
+      result.notifyError = err?.message || String(err);
+      // eslint-disable-next-line no-console
+      console.warn("[tender-accept] WS notify failed:", result.notifyError);
+    }
+  })();
+
+  // Run both in parallel — they're independent and both already swallow
+  // their own failures into `result`, so neither can short-circuit the
+  // other. This roughly halves the wall-clock of the propagation step
+  // versus the old await-then-await sequence.
+  await Promise.all([omsTask, notifyTask]);
 
   return result;
 }

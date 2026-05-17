@@ -54,6 +54,15 @@ interface OrderCardProps {
    * single-row 3-dot menu, matching the web 3-dot parity.
    */
   onUnplan?: (orderId: string) => void;
+  /**
+   * QA 240 (2026-05-16): single-row Plan Order from the 3-dot kebab.
+   * The web exposes "Plan" as a primary button next to the kebab for
+   * plannable rows (status Unplanned or Planning Failed) — mobile has
+   * no per-row primary button, so we surface it inside the kebab to
+   * keep parity. Mirrors frontend/src/components/orders/OrderRowActions.jsx
+   * `isPlannable` gate via the same status check.
+   */
+  onPlan?: (orderId: string) => void;
 }
 
 const OrderCard: React.FC<OrderCardProps> = ({
@@ -68,6 +77,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
   onCrossDockPlan,
   onCancelOrder,
   onUnplan,
+  onPlan,
 }) => {
   const navigation = useNavigation<any>();
   const id = (order.id ?? order.order_id ?? '').toString();
@@ -96,6 +106,10 @@ const OrderCard: React.FC<OrderCardProps> = ({
   const handleMorePress = () => {
     const status = String(order?.status || '').toLowerCase();
     const isUnplanned = status === 'unplanned';
+    // QA 240 (2026-05-16): Plan Order parity gate. Matches the web's
+    // isPlannable (ordersService.isPlannable) — Unplanned or Planning
+    // Failed. Keep this list in sync with that function.
+    const isPlannable = status === 'unplanned' || status === 'planning failed';
     const isCancellable = !['delivered', 'cancelled'].includes(status);
     // QA 234 (2026-05-12): server permits unplanning for orders that
     // have a shipment attached and are not yet in transit / delivered /
@@ -115,6 +129,12 @@ const OrderCard: React.FC<OrderCardProps> = ({
     });
     if (onEdit) items.push({ label: 'Edit', run: () => onEdit(id) });
     if (onDuplicate) items.push({ label: 'Duplicate', run: () => onDuplicate(id) });
+    // QA 240: Plan Order — listed first among the planning actions so
+    // it's the most discoverable for plannable rows, matching the web
+    // primary-button placement.
+    if (onPlan && isPlannable) {
+      items.push({ label: 'Plan Order', run: () => onPlan(id) });
+    }
     if (onAddToShipment && isUnplanned) {
       items.push({ label: 'Add to Shipment', run: () => onAddToShipment(id) });
     }
@@ -166,7 +186,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
   // actions in that mode).
   const showMore =
     !selectionMode &&
-    Boolean(onEdit || onDuplicate || onAddToShipment || onCrossDockPlan || onCancelOrder || onUnplan);
+    Boolean(onEdit || onDuplicate || onAddToShipment || onCrossDockPlan || onCancelOrder || onUnplan || onPlan);
 
   const readyDate = (order.readyDate || order.ready_date || order.ready)
     ? new Date(order.readyDate || order.ready_date || order.ready).toLocaleDateString()

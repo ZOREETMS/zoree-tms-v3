@@ -1418,7 +1418,12 @@ export default function ShipmentsPage() {
         }
       }
       setAcceptModal(null);
-      await refreshData();
+      // Tender accept only mutates shipments + orders — use the
+      // targeted refresh helper rather than the 16-table refreshData()
+      // so the Confirm Acceptance modal closes immediately. refreshTender
+      // already falls back to refreshData if the helper isn't provided
+      // (see line ~899).
+      await refreshTender();
     } catch (err) {
       toast(`Failed: ${err.message}`, "error");
     } finally {

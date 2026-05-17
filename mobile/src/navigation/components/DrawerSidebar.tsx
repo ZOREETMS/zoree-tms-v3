@@ -14,11 +14,13 @@
  * sub-screen they're on without an extra tap.
  */
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import {
   DrawerContentScrollView,
   DrawerContentComponentProps,
 } from '@react-navigation/drawer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../state/AuthContext';
 import { colors, fontSize, fontWeight, spacing } from '../../theme';
 import RoleSwitcher from '../../components/admin/RoleSwitcher';
@@ -67,8 +69,23 @@ function pickInitialExpandedKey(
 
 export default function DrawerSidebar(props: DrawerContentComponentProps) {
   const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
   const initials = (user?.email || '').slice(0, 2).toUpperCase();
   const { activeTab, activeScreen } = useActiveRoute(props);
+
+  // Mobile sign-out fix (2026-05-16): user reported the Sign Out button
+  // was effectively unreachable — pinned at the very bottom of the
+  // drawer and clipped behind the Android nav bar / iPhone home
+  // indicator. We now route the press through a confirmation Alert
+  // (parity with SettingsScreen.handleSignOut, which is the canonical
+  // copy) so an accidental tap can't drop the session, and pad the
+  // footer by the bottom safe-area inset (see styles.footer below).
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
+    ]);
+  };
 
   // QA #303 — drawer items now filtered by the active role using the
   // same matrix the web side uses (see config/roleMatrix.ts). Before
@@ -133,8 +150,11 @@ export default function DrawerSidebar(props: DrawerContentComponentProps) {
       {/* Active-role chip group (REQ-08 / QA P209) */}
       <RoleSwitcher />
 
-      {/* User footer */}
-      <View style={styles.footer}>
+      {/* User footer — paddingBottom is dynamic so the Sign Out button
+          clears the home indicator / Android nav bar (mobile sign-out
+          fix, 2026-05-16). Without this the button rendered behind the
+          gesture bar on iPhone X+ and was effectively un-tappable. */}
+      <View style={[styles.footer, { paddingBottom: spacing.lg + insets.bottom }]}>
         <View style={styles.userChip}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
@@ -150,7 +170,17 @@ export default function DrawerSidebar(props: DrawerContentComponentProps) {
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+        {/* Destructive red Sign Out — the previous muted-grey "Sign
+            Out" pill blended into the dark sidebar and users couldn't
+            spot it. Icon + bold red label mirror the SettingsScreen
+            sign-out treatment so the two surfaces feel consistent. */}
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={handleSignOut}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out">
+          <Ionicons name="log-out-outline" size={20} color="#FCA5A5" />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
@@ -225,16 +255,22 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
   },
   logoutBtn: {
-    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(220,38,38,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.35)',
   },
   logoutText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
+    color: '#FCA5A5',
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

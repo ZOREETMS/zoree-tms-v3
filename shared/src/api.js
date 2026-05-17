@@ -238,6 +238,41 @@ export const MileageApi = {
       body: JSON.stringify({ pairs }),
     });
   },
+  // ZIP-based haversine estimate (api/server.js → /api/mileage/estimate).
+  // Used by Route Optimizer to derive lane distance from ZIPs.
+  estimate(originZip, destZip) {
+    return api(
+      `/mileage/estimate?originZip=${encodeURIComponent(originZip)}&destZip=${encodeURIComponent(destZip)}`
+    );
+  },
+  // City-based haversine via geocode fallback (api/server.js → /api/mileage/city).
+  // Used by Route Optimizer when ZIPs aren't provided.
+  city(origin, dest) {
+    return api(
+      `/mileage/city?origin=${encodeURIComponent(origin)}&dest=${encodeURIComponent(dest)}`
+    );
+  },
+};
+
+// LTL quoting (api/server.js → /api/ltl/quote). Returns CzarLite-based
+// quotes plus any carrier-specific adders. Shape:
+//   { quotes: [{ carrier, czarBase, czarBaseGross, fscCharge, totalCharge,
+//                transitDays, billedWeight, class, serviceLevel,
+//                discountPct, discountAmt, _ccLive, _ccFailed, ... }] }
+export const LtlApi = {
+  quote({ originZip, destZip, weight, freightClass = 70, originCity = "", destCity = "" }) {
+    return api("/ltl/quote", {
+      method: "POST",
+      body: JSON.stringify({
+        originZip,
+        destZip,
+        weight,
+        freightClass,
+        originCity,
+        destCity,
+      }),
+    });
+  },
 };
 
 export const BulkPlanApi = {

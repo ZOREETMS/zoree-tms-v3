@@ -413,55 +413,133 @@ async function copyShipmentAction(p, { shipments }) {
 }
 
 /* ── Action: UPDATE_ORDER (QA P212, 2026-05-11) ───────────────────
- * Lets the assistant patch order metadata that isn't status — most
- * commonly PO number and ready / due dates. Routes through the
- * audited PATCH /api/orders/:id (OrdersApi.update) so REQ-02
- * change-history rows are produced just like a UI edit.
+ * Lets the assistant patch order metadata that isn't status — PO
+ * number, ready / due dates, customer, notes, AND the freight
+ * details the planner cares about: piece count, weight, commodity,
+ * ship-mode / service-level, preferred/excluded carrier, ref num,
+ * ship-from/-to names, origin/dest zips. Routes through the audited
+ * PATCH /api/orders/:id (OrdersApi.update) so REQ-02 change-history
+ * rows are produced just like a UI edit, and the order/shipment
+ * cascades inside orderService.updateOrder still run.
+ *
+ * Bug #340 (2026-05-16): the previous whitelist was metadata-only,
+ * so when the user said "update ORD-509509 to 100 pieces" the model
+ * fell through to UPDATE_ORDER_STATUS, hit its "only status changes
+ * here" guard, and refused the edit — even though every field below
+ * is editable in OrdersPage.openEdit. The backend mapper
+ * (services/orders.js#orderToDb) already accepts these keys; we were
+ * just blocking them client-side. Widening the whitelist closes that
+ * gap. Status changes still route through UPDATE_ORDER_STATUS so the
+ * cancel/unplan/cascade rules apply — `status` is intentionally NOT
+ * in the list below.
  *
  * Accepts:
- *   { orderId, poNumber?, readyDate?, dueDate?,
- *     pickupDate?, deliveryDate?, customer?, notes? }
+ *   { orderId,
+ *     poNumber?, readyDate?, dueDate?, pickupDate?, deliveryDate?,
+ *     customer?, notes?,
+ *     pieces?, weight?, commodity?,
+ *     shipMode?, serviceLevel?,
+ *     preferredCarrier?, excludedCarrier?,
+ *     refNum?,
+ *     shipFromName?, shipToName?,
+ *     originZip?, destZip? }
  *
- * Status changes intentionally route through UPDATE_ORDER_STATUS so
- * the existing cancel/unplan/cascade rules apply — this action
- * deliberately refuses to set `status`.
+ * Numeric coercion notes:
+ *   - `pieces` must end up as a non-negative integer. We accept
+ *     "100", "1,000", and 100; we reject negatives outright so the
+ *     model can't silently zero out a column with bad input.
+ *   - `weight` is parsed the same way (allows decimal lbs), with the
+ *     same negative-rejection rule.
+ *
+ * Dates immutability: this action does NOT special-case ready / due
+ * dates — if the user explicitly says "change the ready date to X",
+ * they intend the change. The memory-noted rule ("dates immutable
+ * after tender accept") covers PROGRAMMATIC stomping during
+ * tender-accept cascades, not user-driven edits.
  */
+const UPDATE_ORDER_FIELD_KEYS = Object.freeze([
+  "poNumber",
+  "readyDate",
+  "dueDate",
+  "pickupDate",
+  "deliveryDate",
+  "customer",
+  "notes",
+  // Freight details — the gap that was closing this action off for
+  // the most common chat edit ("update pieces / weight").
+  "pieces",
+  "weight",
+  "commodity",
+  "shipMode",
+  "serviceLevel",
+  "preferredCarrier",
+  "excludedCarrier",
+  "refNum",
+  "shipFromName",
+  "shipToName",
+  "originZip",
+  "destZip",
+]);
+
+// Map UPDATE_ORDER param keys back to the snake_case columns / camel
+// aliases the order row carries when the page builds it. Used only
+// for rendering the before-value in the success diff — the actual
+// PATCH body uses the camelCase keys above and lets
+// services/orders.js#orderToDb pick the right column.
+const UPDATE_ORDER_PREV_KEY = Object.freeze({
+  poNumber:         "po_number",
+  readyDate:        "ready_date",
+  dueDate:          "due_date",
+  pickupDate:       "pickup_date",
+  deliveryDate:     "delivery_date",
+  shipMode:         "ship_mode",
+  serviceLevel:     "service_level",
+  preferredCarrier: "preferred_carrier",
+  excludedCarrier:  "excluded_carrier",
+  refNum:           "ref_num",
+  shipFromName:     "ship_from_name",
+  shipToName:       "ship_to_name",
+  originZip:        "origin_zip",
+  destZip:          "dest_zip",
+});
+
+function coerceNonNegativeNumber(raw, fieldLabel, { integer }) {
+  // Tolerate "1,000" style input — common when a user pastes from
+  // the page header. Strip commas and whitespace before parsing.
+  const cleaned = String(raw).replace(/,/g, "").trim();
+  const n = integer ? parseInt(cleaned, 10) : Number(cleaned);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`Invalid ${fieldLabel}: "${raw}". Must be a non-negative number.`);
+  }
+  return n;
+}
+
 async function updateOrderAction(p, { orders }) {
   const ord = findOrder(orders, p.orderId);
-  // Whitelist the fields the AI is allowed to set here — keeps this
-  // action narrow and prevents the model from drifting outside the
-  // intended metadata-edit scope.
-  const allowed = [
-    "poNumber",
-    "readyDate",
-    "dueDate",
-    "pickupDate",
-    "deliveryDate",
-    "customer",
-    "notes",
-  ];
+
   const patch = {};
-  for (const k of allowed) {
-    if (p[k] !== undefined && p[k] !== null && p[k] !== "") patch[k] = p[k];
+  for (const k of UPDATE_ORDER_FIELD_KEYS) {
+    const v = p[k];
+    if (v === undefined || v === null || v === "") continue;
+    if (k === "pieces") {
+      patch[k] = coerceNonNegativeNumber(v, "pieces", { integer: true });
+    } else if (k === "weight") {
+      patch[k] = coerceNonNegativeNumber(v, "weight", { integer: false });
+    } else {
+      patch[k] = v;
+    }
   }
   if (Object.keys(patch).length === 0) {
     throw new Error(
-      "No editable fields supplied. Pass at least one of: " + allowed.join(", "),
+      "No editable fields supplied. Pass at least one of: " + UPDATE_ORDER_FIELD_KEYS.join(", "),
     );
   }
   // Snapshot before/after so the success message tells the user what
   // actually changed, not just "Order X updated".
-  const before = allowed
-    .filter((k) => patch[k] !== undefined)
-    .map((k) => {
-      const prevKey = k === "poNumber" ? "po_number"
-        : k === "readyDate" ? "ready_date"
-        : k === "dueDate" ? "due_date"
-        : k === "pickupDate" ? "pickup_date"
-        : k === "deliveryDate" ? "delivery_date"
-        : k;
-      return [k, ord[prevKey] ?? ord[k] ?? "—"];
-    });
+  const before = Object.keys(patch).map((k) => {
+    const prevKey = UPDATE_ORDER_PREV_KEY[k] || k;
+    return [k, ord[prevKey] ?? ord[k] ?? "—"];
+  });
   await OrdersApi.update(p.orderId, patch);
   const diff = Object.keys(patch)
     .map((k) => {
