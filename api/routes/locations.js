@@ -17,6 +17,9 @@
 
 const router = require('express').Router();
 const { getClient, dbUpsert } = require('../services/supabase');
+// Messaging Hub (migration 042) — record a manual location create as an
+// inbound LOCATION_SYNC message. Best-effort; never fails the create.
+const hubEntitySync = require('../services/messagingHub/entitySync');
 
 // ── Column lists differ by source because each master table carries
 // a different "enabled" flag:
@@ -111,6 +114,26 @@ router.post('/', async (req, res, next) => {
     };
 
     const row = await dbUpsert('oms_locations', payload, 'id', req.tenant);
+
+    // Messaging Hub hook (migration 042): the row was written to
+    // oms_locations and the DB trigger fans it out to public.locations —
+    // i.e. a location entering the TMS picture. Record it as an inbound
+    // LOCATION_SYNC message. Best-effort; a hub failure must not break
+    // the create the user just performed.
+    try {
+      await hubEntitySync.recordEntitySync({
+        table:  'oms_locations',
+        row,
+        action: 'create',
+        user: {
+          email:    (req.user && req.user.email) || null,
+          tenantId: req.tenant && req.tenant.tenantId,
+        },
+      });
+    } catch (hubErr) {
+      console.error('[locations:create] hub entity-sync write failed:', hubErr.message);
+    }
+
     res.status(201).json({ location: rowToView(row, 'oms') });
   } catch (err) { next(err); }
 });

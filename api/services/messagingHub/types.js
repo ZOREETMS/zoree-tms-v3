@@ -43,6 +43,11 @@ const MESSAGE_TYPE = Object.freeze({
   SHIP_CONFIRMATION: 'SHIP_CONFIRMATION',
   DELIVERED:         'DELIVERED',
 
+  // Entity-master sync + operational carrier events (migration 042)
+  ITEM_SYNC:          'ITEM_SYNC',      // OMS/ERP → TMS item (SKU) master sync
+  LOCATION_SYNC:      'LOCATION_SYNC',  // OMS/ERP → TMS location master sync
+  CARRIER_EVENT:      'CARRIER_EVENT',  // Carrier → TMS operational milestone
+
   // Supplementary (UI compose / legacy)
   TENDER_OFFER:       'TENDER_OFFER',
   SHIPMENT_CREATE:    'SHIPMENT_CREATE',

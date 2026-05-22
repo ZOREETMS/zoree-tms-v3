@@ -5,6 +5,10 @@ export const MESSAGE_TYPES = {
   SHIPMENT_DETAILS: "Shipment Details",
   SHIP_CONFIRMATION: "Ship Confirmation",
   DELIVERED: "Delivered",
+  // Entity-master sync + operational carrier events (migration 042)
+  ITEM_SYNC: "Item Sync",
+  LOCATION_SYNC: "Location Sync",
+  CARRIER_EVENT: "Carrier Event",
   // Existing types — kept for forward-compatibility (db rules §Migration 2)
   TENDER_OFFER: "Tender Offer",
   TENDER_RESPONSE: "Tender Response",
@@ -34,6 +38,9 @@ export const MESSAGE_TYPE_LABELS = {
   SHIPMENT_DETAILS: "🧾 Shipment Details",
   SHIP_CONFIRMATION: "✅ Ship Confirmation",
   DELIVERED: "🏁 Delivered",
+  ITEM_SYNC: "📦 Item Sync",
+  LOCATION_SYNC: "📍 Location Sync",
+  CARRIER_EVENT: "🚚 Carrier Event",
   TENDER_OFFER: "📤 Tender Offer",
   TENDER_RESPONSE: "📥 Tender Response",
   SHIPMENT_CREATE: "📦 Shipment Create",

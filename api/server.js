@@ -74,6 +74,7 @@ const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
 const locationsRouter = require('./routes/locations');  // REQ-29 / REQ-30
 const messagingHubRouter = require('./routes/messagingHub'); // Messaging Hub (plan: docs/messaging-hub/plan.md)
+const hubEntitySync      = require('./services/messagingHub/entitySync'); // entity-master → hub message (migration 042)
 const tenderingRouter    = require('./routes/tendering');    // Carrier-edge tendering (hooks 2 + 3)
 
 // Fields on orders we record diffs for (label used in change_history.field).
@@ -1318,6 +1319,21 @@ app.post('/api/db/:table', async (req, res) => {
     // genericTableAudit allow-list (oms_*, mw_*, system_config, …).
     // Failures are logged but never break the user-visible insert.
     await genericTableAudit.recordCreate({ table: req.params.table, row, user });
+    // Messaging Hub (migration 042): surface item/location master creates
+    // as inbound hub messages. No-op for untracked tables; best-effort —
+    // a hub-logging failure must never break the user-visible insert.
+    if (hubEntitySync.isTracked(req.params.table)) {
+      try {
+        await hubEntitySync.recordEntitySync({
+          table:  req.params.table,
+          row,
+          action: 'create',
+          user:   { email: (user && user.email) || null, tenantId: getTenantId(user) },
+        });
+      } catch (hubErr) {
+        console.error('[db:create] hub entity-sync write failed:', hubErr.message);
+      }
+    }
     res.status(201).json(row || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

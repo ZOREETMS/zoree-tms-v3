@@ -24,6 +24,18 @@
 const db = require('./supabase');
 const history = require('./changeHistory');
 const { bus, EVENTS } = require('./eventBus');
+// Messaging Hub (migration 042) — surface carrier operational milestones
+// (Picked Up / In Transit / Arrived / Exception / …) as inbound
+// CARRIER_EVENT messages. Best-effort; never fails the status write.
+const hubWriter = require('./messagingHub/writer');
+const { MESSAGE_TYPE, SYSTEM_PARTY } = require('./messagingHub/types');
+
+// Event types that represent a carrier-reported operational milestone
+// worth logging to the hub. 'Note' is a free-text annotation, not a
+// carrier event, so it's excluded.
+const HUB_CARRIER_EVENT_TYPES = new Set([
+  'Picked Up', 'In Transit', 'Departed', 'Arrived', 'Delivered', 'Exception', 'Delay',
+]);
 
 const EVENT_MAP = {
   'Picked Up':  { shipStatus: 'In Transit', orderStatus: 'In Transit', dateField: 'pickup_date',  tsField: 'shipped_at'   },
@@ -241,6 +253,34 @@ async function applyShipmentEvent({ shipmentId, type, note, date, user }) {
       });
     } catch (auditErr) {
       console.error('[shipmentEvents] timeline history failed:', auditErr.message);
+    }
+  }
+
+  // ── Messaging Hub hook (migration 042): record the carrier milestone
+  // as an inbound CARRIER → TMS message. Distinct from the TMS → OMS
+  // DELIVERED notification emitted by omsSync — this captures the carrier
+  // *reporting* the event. Best-effort; never affects the status write.
+  if (HUB_CARRIER_EVENT_TYPES.has(type)) {
+    try {
+      await hubWriter.recordInbound({
+        messageType: MESSAGE_TYPE.CARRIER_EVENT,
+        source:      SYSTEM_PARTY.CARRIER,
+        target:      SYSTEM_PARTY.TMS,
+        payload: {
+          shipmentId:     id,
+          eventType:      type,
+          eventDate,
+          note:           note || null,
+          shipmentStatus: shipPatch.status || ship.status || null,
+          ordersUpdated:  transitioned,
+        },
+        shipmentId:  id,
+        externalRef: type,
+        actor:       (user && (user.email || user.name)) || 'carrier-event',
+        tenantId:    user && user.tenantId,
+      });
+    } catch (hubErr) {
+      console.error('[shipmentEvents] hub carrier-event write failed:', hubErr.message);
     }
   }
 
