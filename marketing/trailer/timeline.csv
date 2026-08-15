@@ -1,0 +1,24 @@
+Start,End,Duration,Scene,Source,Clip,Text Overlay,Narration,Audio
+0:00.0,0:05.0,5.0,1,AI H01,Port sunrise aerial push,,Every day the world moves,Pad + piano note
+0:05.0,0:09.0,4.0,1,AI H02,Highway telephoto flow,,Millions of shipments. Thousands of decisions.,Pulse enters
+0:09.0,0:12.0,3.0,1,AI H03,Warehouse aerial orbit,,And behind every one — a team holding it all together.,Build
+0:12.0,0:16.0,4.0,2,AI H04,Dispatcher office dolly-in,,Spreadsheets. Phone calls. Systems that don't talk.,String ostinato
+0:16.0,0:19.0,3.0,2,AI H05,Loading dock manifests,,,Tension tightens
+0:19.0,0:22.0,3.0,2,GFX,Word cards DELAYS / BLIND SPOTS / COST,DELAYS→BLIND SPOTS→COST,Freight doesn't wait.,Drop to silence
+0:22.0,0:26.0,4.0,3,GFX,ZOREE logo resolve,ZOREE,This is Zoree.,Single downbeat
+0:26.0,0:30.0,4.0,3,UI clip u0,Orders workspace device-frame push,,A transportation management system built for the way logistics actually works.,Pulse begins
+0:30.0,0:35.0,5.0,4,UI demo U1,Rate modal crop-zoom + spotlight,PLAN,Plan hundreds of orders in seconds—,Momentum
+0:35.0,0:38.0,3.0,4,UI demo U2,Bulk Plan Results hit,,—with live rates from carriers you already trust.,Momentum
+0:38.0,0:42.0,4.0,4,AI H06,DC interior steadicam glide,,,Momentum
+0:42.0,0:45.0,3.0,5,UI demo U4,Tender Sent card scale-up,EXECUTE,Tender with one click.,Lift + chime
+0:45.0,0:48.0,3.0,5,UI demo U5,Tender email crop pan,,Carriers accept in real time.,Momentum
+0:48.0,0:51.0,3.0,5,UI demo U6,Carrier accept jump-cuts,,,Momentum
+0:51.0,0:53.0,2.0,5,UI demo U7,Dock Gantt lateral pan,,Docks schedule themselves.,Momentum
+0:53.0,0:56.0,3.0,5,AI H07,Truck leaving gate speed-ramp,,,Whip transition
+0:56.0,1:01.0,5.0,6,UI still 14-4k (or fresh rec),Live Tracking map Ken Burns zoom,TRACK,See every shipment. Everywhere. As it happens.,Chords widen
+1:01.0,1:06.0,5.0,6,AI H08,Drone rise over highway,,,Open sky
+1:06.0,1:10.0,4.0,7,UI still 20-4k (or fresh rec),Analytics animated crops,OPTIMIZE,,Peak builds
+1:10.0,1:16.0,6.0,7,UI demo U8,ZoreeAI plans + tenders order,AI ASSISTANT,And when you need answers — just ask. Zoree AI plans prices and tenders. In plain language.,Peak
+1:16.0,1:18.0,2.0,7,AI H09,Control room push,,From first order to final delivery.,Peak sustains
+1:18.0,1:22.0,4.0,8,AI H10,Truck into sunrise pull-back,,One platform. Total control.,Resolve
+1:22.0,1:25.0,3.0,8,GFX,Logo + CTA,ZOREE — Moving the future forward. Watch the full demo → zoree.io,Zoree. Moving the future forward.,Final note

@@ -536,7 +536,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             {(() => {
               const cost = deriveShipmentCostBreakdown(ds);
               const disc = summarizeDiscount(rateRow, cost.base);
-              const fscPct = rateRow?.fsc || "";
+              // Migration 045: show the percent that was ACTUALLY charged
+              // (fuel ÷ base from the persisted breakdown). With EIA-indexed
+              // FSC the applied % can differ from the rate row's static fsc
+              // string, which is only a fallback when no breakdown exists.
+              const derivedFscPct = cost.base > 0 && cost.fuel > 0
+                ? `${(Math.round((cost.fuel / cost.base) * 1000) / 10).toFixed(1)}%`
+                : "";
+              const fscPct = derivedFscPct || rateRow?.fsc || "";
               return (
                 <>
                   <InfoBox icon="📊" label={cost.baseIsDerived ? "Base / Linehaul (derived)" : "Base / Linehaul"} value={formatUSD(cost.base)} />

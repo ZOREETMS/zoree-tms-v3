@@ -76,8 +76,14 @@ test('buildInvoicePatch maps camelCase keys to DB columns', () => {
   assert.equal(out.status,          'Pending');
   assert.equal(out.payment_terms,   'NET30');
   assert.equal(out.notes,           'Test invoice');
-  // No camelCase keys leaked into the DB patch.
-  for (const k of Object.keys(EDIT_FIELD_MAP)) {
+  // No camelCase keys leaked into the DB patch. Identity mappings
+  // (carrier, status, notes — single-word keys where camelCase === DB
+  // column) are legitimately present, so only check keys that actually
+  // differ from their column name. (Previously this looped over ALL
+  // map keys, which contradicted the `out.carrier === 'XPO'` assertion
+  // above and failed the moment `carrier` was added to the map.)
+  for (const [k, col] of Object.entries(EDIT_FIELD_MAP)) {
+    if (k === col) continue;
     assert.equal(out[k], undefined, `Leaked camelCase key: ${k}`);
   }
 });

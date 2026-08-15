@@ -1,0 +1,57 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "7f3b9c41-2a8d-4e56-9f10-c8d2a51e6b47",
+  "packageName": "io.zoree.tms",
+  "developer": {
+    "name": "Zoree",
+    "websiteUrl": "https://zoree.io",
+    "privacyUrl": "https://zoree.io/privacy",
+    "termsOfUseUrl": "https://zoree.io/terms"
+  },
+  "name": {
+    "short": "Zoree TMS",
+    "full": "Zoree Transportation Management System"
+  },
+  "description": {
+    "short": "Plan, tender, and track shipments from Teams",
+    "full": "Zoree TMS in Microsoft Teams: browse unplanned orders, plan them onto shipments, tender to carriers, and record tender accept/reject — plus live tender notification cards in your ops channel and the full TMS as a tab."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#1B6EC2",
+  "bots": [
+    {
+      "botId": "3541ffab-222e-4932-b896-74a368c62d04",
+      "scopes": ["personal", "team"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal", "team"],
+          "commands": [
+            { "title": "today", "description": "Everything at a glance" },
+            { "title": "orders", "description": "Unplanned orders ready to plan" },
+            { "title": "shipments", "description": "Recent shipments and tender status" },
+            { "title": "order", "description": "order <orderId> — full order detail" },
+            { "title": "shipment", "description": "shipment <shipmentId> — full shipment detail" },
+            { "title": "rate", "description": "rate <orderId> — carrier quotes before planning" },
+            { "title": "plan", "description": "plan <orderId> [carrier] — create a shipment" },
+            { "title": "tender", "description": "tender <shipmentId> — mark Tendered" },
+            { "title": "accept", "description": "accept <shipmentId> — record carrier acceptance" },
+            { "title": "reject", "description": "reject <shipmentId> — record carrier rejection" },
+            { "title": "withdraw", "description": "withdraw <shipmentId> — back to Planned" },
+            { "title": "intransit", "description": "intransit <shipmentId> — mark picked up" },
+            { "title": "delivered", "description": "delivered <shipmentId> — record delivery" },
+            { "title": "help", "description": "Show all commands" }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

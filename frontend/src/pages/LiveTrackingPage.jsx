@@ -54,6 +54,24 @@ function mkMarkerSvg(color, label) {
   return `<svg width="36" height="44" viewBox="0 0 36 44" xmlns="http://www.w3.org/2000/svg"><path d="M18 0C8.059 0 0 8.059 0 18c0 13.5 18 26 18 26S36 31.5 36 18C36 8.059 27.941 0 18 0z" fill="${color}"/><circle cx="18" cy="18" r="10" fill="white" opacity="0.95"/><text x="18" y="23" text-anchor="middle" font-size="11" font-weight="700" font-family="monospace" fill="${color}">${label}</text></svg>`;
 }
 
+/* ── Route progress & geometry helpers ── */
+// Deterministic per-shipment progress (0.25–0.80) derived from the shipment id,
+// so the map truck, the card progress bar, and the "% complete" label all agree.
+function shipmentProgress(s) {
+  const id = String(s.id || s.shipment_id || "");
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return 0.25 + (h % 56) / 100;
+}
+
+// Point at parameter p (0..1) along the quadratic Bézier route curve.
+function bezierPoint(p, oC, dC, midLat, midLng) {
+  return {
+    lat: (1 - p) * (1 - p) * oC.lat + 2 * (1 - p) * p * midLat + p * p * dC.lat,
+    lng: (1 - p) * (1 - p) * oC.lng + 2 * (1 - p) * p * midLng + p * p * dC.lng,
+  };
+}
+
 /* ── Haversine distance ── */
 function haversine(a, b) {
   const R = 3959;
@@ -115,6 +133,8 @@ function HereMapView({ shipments, onSelectShipment }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const platformRef = useRef(null);
+  const trucksRef = useRef([]);
+  const rafRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [noApiKey, setNoApiKey] = useState(false);
 
@@ -150,6 +170,7 @@ function HereMapView({ shipments, onSelectShipment }) {
     if (!map || !mapReady || !shipments.length) return;
 
     map.removeObjects(map.getObjects());
+    trucksRef.current = [];
     const bounds = [];
 
     shipments.forEach((s, i) => {
@@ -183,13 +204,16 @@ function HereMapView({ shipments, onSelectShipment }) {
       }
       map.addObject(new window.H.map.Polyline(ls, { style: { lineWidth: 2.5, strokeColor: color, lineDash: [8, 4] } }));
 
-      // Truck position for in-transit / exception
+      // Truck marker for in-transit / exception — animated along the route
       if (s.status === "In Transit" || s.status === "Exception") {
-        const p = 0.55;
-        const tLat = (1 - p) * (1 - p) * oC.lat + 2 * (1 - p) * p * midLat + p * p * dC.lat;
-        const tLng = (1 - p) * (1 - p) * oC.lng + 2 * (1 - p) * p * midLng + p * p * dC.lng;
+        const p0 = shipmentProgress(s);
         const tSvg = `<svg width="26" height="26" xmlns="http://www.w3.org/2000/svg"><circle cx="13" cy="13" r="12" fill="${color}" stroke="white" stroke-width="2"/><text x="13" y="18" text-anchor="middle" font-size="13">🚛</text></svg>`;
-        map.addObject(new window.H.map.Marker({ lat: tLat, lng: tLng }, { icon: new window.H.map.Icon("data:image/svg+xml;charset=utf-8," + encodeURIComponent(tSvg), { size: { w: 26, h: 26 } }) }));
+        const truck = new window.H.map.Marker(bezierPoint(p0, oC, dC, midLat, midLng), {
+          icon: new window.H.map.Icon("data:image/svg+xml;charset=utf-8," + encodeURIComponent(tSvg), { size: { w: 26, h: 26 } }),
+        });
+        map.addObject(truck);
+        // Per-truck speed varies slightly (full route in roughly 2–4 minutes)
+        trucksRef.current.push({ marker: truck, oC, dC, midLat, midLng, p: p0, speed: 0.005 + (p0 % 0.07) * 0.05 });
       }
 
       // Click handler
@@ -211,6 +235,24 @@ function HereMapView({ shipments, onSelectShipment }) {
         }, true);
       } catch (e) { /* ignore */ }
     }
+
+    // Animate trucks along their routes (single rAF loop for all markers)
+    let last = performance.now();
+    const tick = (now) => {
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      trucksRef.current.forEach((t) => {
+        t.p += t.speed * dt;
+        if (t.p >= 0.98) t.p = 0.02; // loop back for continuous live-view motion
+        t.marker.setGeometry(bezierPoint(t.p, t.oC, t.dC, t.midLat, t.midLng));
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [shipments, mapReady, onSelectShipment]);
 
   if (noApiKey) {
@@ -262,7 +304,7 @@ function RouteInfoBar({ shipment }) {
 
 /* ── Shipment Card ── */
 function ShipmentCard({ s, isSelected, onClick }) {
-  const pct = s.status === "Exception" ? 55 : 65;
+  const pct = Math.round(shipmentProgress(s) * 100);
   const color = statusColor(s.status);
 
   return (

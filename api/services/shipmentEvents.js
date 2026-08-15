@@ -49,8 +49,19 @@ const EVENT_MAP = {
 };
 
 const SHIPMENT_STATUS_TO_ORDER_STATUS = {
-  'In Transit': 'In Transit',
-  'Delivered':  'Delivered',
+  // Tender lifecycle added 2026-08-11: before this, a bot/API accept set
+  // shipments.status='Tender Accepted' but left orders untouched, while
+  // the web accept path set orders and left the shipment 'Tendered' —
+  // two mutually inconsistent representations of the same event. Every
+  // status-PATCH path (updateShipment, recordRawPatchAudit) consults
+  // this map, so mapping the two tender states here converges them all.
+  // Order-side date freezing still applies: 'Tender Accepted' is in
+  // POST_TENDER_ACCEPT_STATUSES, and this sync writes ONLY the status
+  // column — ready/due dates are user intent and are never touched.
+  'Tendered':        'Tendered',
+  'Tender Accepted': 'Tender Accepted',
+  'In Transit':      'In Transit',
+  'Delivered':       'Delivered',
 };
 
 const ORDER_TERMINAL_STATUSES = new Set(['Delivered', 'Cancelled']);

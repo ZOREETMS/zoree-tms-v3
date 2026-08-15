@@ -15572,7 +15572,7 @@ async function sendPrompt(text) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1000,
         system: (function(){ try { return buildTMSContext(); } catch(e) { return 'You are ZoreeAI, a TMS assistant for Zoree. Answer questions about transportation and logistics.'; } })(),
         messages: _chatHistory.slice(-14)

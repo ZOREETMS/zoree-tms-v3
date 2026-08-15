@@ -1,0 +1,18 @@
+Shot,Scene,Duration,Camera Movement,Lighting,Lens,Reason,Est Credits,Priority
+H01,1,5s,Slow aerial push forward,Golden sunrise haze backlight,24mm wide aerial,Opening hero — scale of global trade,~45,Preview batch
+H02,1,4s,Long-lens lateral track,Dawn blue-gold mix,135mm telephoto compression,Highway flow = constant motion of freight,~45,High
+H03,1,4s,Aerial orbit,First light raking across dock doors,35mm aerial,Warehouse establishes the operational world,~45,High
+H04,2,4s,Slow dolly-in,Practical monitor glow + cool pre-dawn window,50mm f1.8 shallow DOF,Human tension — the dispatcher holding it together,~45,Preview batch
+H05,2,3s,Handheld drift,Overcast flat industrial,35mm,Paper manifests = fragmented legacy process,~45,Medium
+H06,4,4s,Steadicam glide down forklift lane,High-bay LED with warm skylight shafts,28mm low angle,Physical echo of digital planning,~45,High
+H07,5,4s,Low tracking shot then hold,Strong golden backlight sun flare,40mm,Truck leaving gate = execution made real,~45,Preview batch
+H08,6,5s,Drone tracking alongside then rising crane-up,Golden hour side light,32mm aerial,Visibility metaphor — rising to see everything,~45,High
+H09,7,3s,Slow push toward display wall,Cool screen glow with warm rim accents,35mm,Command and calm — enterprise control room,~45,Medium
+H10,8,5s,Wide aerial pull-back,Sunrise center-frame horizon glow,24mm aerial,Closing emotional beat into logo,~45,High
+H11,1-alt,4s,Crane-up past container stacks,Sunrise gold on corrugated steel,28mm,Alternate opener / cutaway — port texture,~45,Reserve
+H12,2-alt,3s,Slow push across meeting table,Soft morning boardroom window light,50mm,Executive stakes shot — optional for audience resonance,~45,Reserve
+
+TOTALS,,,,,,~12 shots,~540 credits (single pass),
+NOTES,,,,,,Preview strategy: generate H01 H04 H07 ONLY first (~135 credits). Review rank approve then batch the rest.,,
+NOTES2,,,,,,Credits assume ~45/5s clip on Higgsfield cinematic model — verify current pricing in-app before generating.,,
+NOTES3,,,,,,All UI moments use REAL screen recordings — no AI-generated interfaces anywhere.,,

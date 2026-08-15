@@ -39,6 +39,9 @@ const navStructure = [
   { section: "Finance", items: [
     { to: "/freight-invoices", label: "Freight Invoices", icon: "💰", badgeVal: "5", badgeColor: "yellow", featureKey: "invoices" },
     { to: "/rate-management", label: "Rate Management", icon: "📋", featureKey: "rate_management" },
+    // Migration 045: EIA-indexed FSC schedules. Shares rate_management's
+    // feature permission — it is rate configuration, same audience.
+    { to: "/fuel-surcharge", label: "Fuel Surcharge", icon: "⛽", featureKey: "rate_management" },
     { to: "/lane-preferences", label: "Lane Preferences", icon: "⭐", featureKey: "lane_preferences" },
     { to: "/carrier-bids", label: "Carrier Bids", icon: "🎯", featureKey: "carrier_bids" },
     { to: "/freight-audit", label: "Freight Audit", icon: "🔍", badgeVal: "3", badgeColor: "red", featureKey: "freight_audit" },

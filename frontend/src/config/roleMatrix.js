@@ -36,7 +36,7 @@ const EXECUTION = [
 ];
 
 const FINANCE = [
-  "Freight Invoices", "Rate Management", "Lane Preferences",
+  "Freight Invoices", "Rate Management", "Fuel Surcharge", "Lane Preferences",
   "Carrier Bids", "Freight Audit",
 ];
 
@@ -60,6 +60,7 @@ export const ROLE_NAV = {
     ...COMMON,
     ...PLANNING, ...EXECUTION, ...DOCS,
     "Rate Management",          // crosses into Finance (per requirement)
+    "Fuel Surcharge",           // rides with Rate Management (migration 045)
     "Lane Preferences",
     "Analytics", "Reports",     // read-only insights
     "Messaging Hub",
@@ -97,6 +98,7 @@ const LABEL_TO_PATH = {
   "Compliance": "/compliance",
   "Freight Invoices": "/freight-invoices",
   "Rate Management": "/rate-management",
+  "Fuel Surcharge": "/fuel-surcharge",
   "Lane Preferences": "/lane-preferences",
   "Carrier Bids": "/carrier-bids",
   "Freight Audit": "/freight-audit",

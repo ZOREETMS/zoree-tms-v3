@@ -17,7 +17,7 @@ import { buildSystemPrompt } from "./zoreeAIContext";
 import { isLikelyOnTopic, TMS_REFUSAL_MESSAGE } from "./zoreeAIScope";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6"; // dateless pinned ID (4.6+ generation); claude-sonnet-4-20250514 retired 2026-06-15
 const MAX_TOKENS = 2048;
 const RECENT_TURNS = 14;
 

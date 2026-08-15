@@ -4,6 +4,7 @@
 // Supabase credentials stay server-side — never reach the browser.
 // ═══════════════════════════════════════════════════════════════════
 // (touch 2026-04-19 to nudge nodemon after DEFECT-001 fix in api/routes/invoices.js)
+// (touch 2026-08-03 to nudge nodemon so it reloads .env with the TEAMS_BOT_* vars)
 
 require('dotenv').config();
 const http    = require('http');
@@ -33,6 +34,7 @@ const {
 } = require('./services/orderMutations');
 const { applyPostTenderDateGuard } = require('./services/orderPatchGuards');
 const { createLaneQuoteCache } = require('./services/laneQuoteCache');
+const { estimateTransitDays } = require('./services/transitEstimate');
 const history = require('./services/changeHistory');
 // TMS bug #1: persistent Clear History per (order|shipment) entity.
 const historyClears = require('./services/changeHistoryClears');
@@ -76,6 +78,16 @@ const locationsRouter = require('./routes/locations');  // REQ-29 / REQ-30
 const messagingHubRouter = require('./routes/messagingHub'); // Messaging Hub (plan: docs/messaging-hub/plan.md)
 const hubEntitySync      = require('./services/messagingHub/entitySync'); // entity-master → hub message (migration 042)
 const tenderingRouter    = require('./routes/tendering');    // Carrier-edge tendering (hooks 2 + 3)
+// Microsoft Teams integration. teamsNotify posts Adaptive Cards to a
+// channel webhook on tender events (no-op unless TEAMS_WEBHOOK_URL is
+// set). teamsBotRouter is the Azure Bot messaging endpoint that lets
+// planners run orders/plan/tender/accept from a Teams chat. Setup:
+// docs/TEAMS_SETUP.md.
+const teamsNotify   = require('./services/teamsNotify');
+const teamsBotRouter = require('./routes/teamsBot');
+const fscRouter          = require('./routes/fsc');          // Migration 045: EIA fuel surcharge
+const { getCurrentDieselPrice } = require('./services/eiaFuelService');
+const { getSchedulesByCarrier, lookupFscPct } = require('./services/fscSchedule');
 
 // Fields on orders we record diffs for (label used in change_history.field).
 //
@@ -124,7 +136,18 @@ const ANON_KEY = process.env.SUPABASE_ANON_KEY
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ANON_KEY;
 
 // ── Middleware ──────────────────────────────────────────────────────
-app.use(helmet({ contentSecurityPolicy: false }));
+// frameguard off + explicit frame-ancestors so the TMS can render
+// inside a Microsoft Teams tab (Teams loads tabs in an iframe; the
+// default X-Frame-Options: SAMEORIGIN would blank the tab). Everything
+// else helmet does stays on. See docs/TEAMS_SETUP.md §Tab.
+app.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
+app.use((_req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com https://*.office.com https://*.microsoft365.com https://*.skype.com",
+  );
+  next();
+});
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
@@ -336,6 +359,9 @@ const ALLOWED = [
   'oms_inventory','oms_inv_transactions','oms_dock_schedule','oms_stage_log',
   // Middleware
   'mw_requests','mw_event_log',
+  // Migration 045: EIA fuel surcharge (read via DB Explorer; writes go
+  // through /api/fsc which owns validation + the replace-schedule rule)
+  'carrier_fsc_schedules','eia_fuel_prices',
   // Marketing
   'trial_signups',
 ];
@@ -401,6 +427,7 @@ app.get('/health', (req, res) => res.json({
     verifyError: smtpVerifyState.ok === false ? smtpVerifyState.error : undefined,
     verifyCheckedAt: smtpVerifyState.checkedAt,
   },
+  teams: teamsNotify.getTeamsNotifyHealth(),
 }));
 
 // ── POST /api/trial-signup (public — no auth) ────────────────────────
@@ -739,6 +766,19 @@ app.use('/api/mw-queue', buildMwQueueAdminRouter({ verifyToken, getUserRole }));
 // REQ-29 / REQ-30 — location master search + create
 app.use('/api/locations', locationsRouter);
 
+// Migration 045 — EIA fuel surcharge: schedule CRUD + EIA diesel index
+//   GET/PUT/DELETE /api/fsc/schedule/:carrierId
+//   GET  /api/fsc/eia/current   POST /api/fsc/eia/manual
+//   GET  /api/fsc/preview/:carrierId
+// FSC mutations (schedule upload/delete, EIA price set/refresh) change
+// quote outputs without touching the rates table, so ratesVersion in the
+// lane-cache key never moves — drop the cache explicitly or a re-plan
+// within the TTL keeps pricing off the old schedule.
+app.use('/api/fsc', (req, _res, next) => {
+  if (req.method !== 'GET' || req.query.refresh === '1') laneQuoteCache.clear();
+  next();
+}, fscRouter);
+
 // Messaging Hub (read API for the Hub UI + compose target)
 //   GET  /api/messaging-hub/messages           — list with filters
 //   GET  /api/messaging-hub/messages/:id       — detail
@@ -753,6 +793,11 @@ app.use('/api/messaging-hub', messagingHubRouter);
 // The carrier-response endpoint is also surfaced on the /api/ingest
 // path so external partners can use the existing /api/ingest auth.
 app.use('/api/tendering',                         tenderingRouter);
+
+// Microsoft Teams bot messaging endpoint (Azure Bot → here).
+//   POST /api/teams/messages — inbound activities (JWT-validated)
+//   GET  /api/teams/status   — wiring diagnostics
+app.use('/api/teams',                             teamsBotRouter);
 app.post('/api/ingest/carrier-tender-response',
   tenderingRouter.requireIngestKey,
   tenderingRouter.carrierTenderResponseHandler);
@@ -1126,6 +1171,11 @@ app.post('/api/tender/email', async (req, res) => {
       } catch (auditErr) {
         console.error('[tender/email] history write failed:', auditErr.message);
       }
+      // Teams channel card (fire-and-forget; no-op unless configured)
+      teamsNotify.notifyTenderSent({
+        shipmentId, carrier: carrierName || null, to: actualTo,
+        origin, dest, refNum: refNum || null,
+      });
     } catch (e) {
       console.error('[tender/email] SEND FAILED:', e.message);
       if (shipmentId) {
@@ -2289,6 +2339,19 @@ app.patch('/api/shipments/:id/status', async (req, res) => {
       req.tenant || null,
       { user: u, via: 'shipment-status-patch' },
     );
+    // Teams cards for tender outcomes. teamsNotify dedupes against the
+    // client's follow-up POST /api/notify broadcast (30 s TTL), so the
+    // accept path never double-posts.
+    if (status === 'Tender Accepted') {
+      teamsNotify.notifyTenderAccepted({
+        shipmentId: req.params.id, carrier: shipment && shipment.carrier,
+        mode: shipment && shipment.mode,
+      });
+    } else if (status === 'Tender Rejected') {
+      teamsNotify.notifyTenderRejected({
+        shipmentId: req.params.id, carrier: shipment && shipment.carrier,
+      });
+    }
     res.json(shipment);
   } catch (e) {
     const code = e.status || 500;
@@ -2885,7 +2948,7 @@ app.post('/api/ltl/quote', async (req, res) => {
   // Step 1: Get all czarlite_enabled carriers from carriers table
   let czCarriers = [];
   try {
-    const cr = await fetch(`${SUPABASE_URL}/rest/v1/carriers?czarlite_enabled=eq.true&status=eq.Active&select=id,name,scac,mode,carrierconnect_enabled`, {
+    const cr = await fetch(`${SUPABASE_URL}/rest/v1/carriers?czarlite_enabled=eq.true&status=eq.Active&select=id,name,scac,mode,carrierconnect_enabled,eia_fsc_enabled`, {
       headers: sbHeaders(null)
     });
     if (cr.ok) czCarriers = await cr.json();
@@ -2894,6 +2957,25 @@ app.post('/api/ltl/quote', async (req, res) => {
   console.log('[LTL/quote] REQUEST → weight:'+wt+'lbs freightClass:'+fc+' origin:'+originZip+'→'+destZip);
   console.log('[LTL/quote] czarlite_enabled carriers from DB:', czCarriers.map(c=>c.scac||c.name));
   if (!czCarriers.length) return res.status(200).json({ originZip, destZip, weight: wt, freightClass: fc, czarliteBase: null, quotes: [] });
+
+  // Migration 045: EIA-indexed FSC. Resolve once per quote request —
+  // the current EIA diesel price plus the bracket schedules of every
+  // opted-in carrier. Failure is non-fatal: quotes fall back to the
+  // static rates.fsc percentage below.
+  let eiaPrice = null;
+  let eiaSchedules = {};
+  const eiaCarrierIds = czCarriers.filter(c => c.eia_fsc_enabled).map(c => c.id);
+  if (eiaCarrierIds.length) {
+    try {
+      const [priceRow, schedules] = await Promise.all([
+        getCurrentDieselPrice(),
+        getSchedulesByCarrier(eiaCarrierIds),
+      ]);
+      eiaPrice = priceRow ? parseFloat(priceRow.price_usd_per_gallon) : null;
+      eiaSchedules = schedules;
+      console.log(`[LTL/quote] EIA FSC: ${eiaCarrierIds.length} carrier(s) opted in, diesel=$${eiaPrice}/gal (week of ${priceRow?.price_date})`);
+    } catch (e) { console.warn('[LTL/quote] EIA FSC load failed — using static rate fsc:', e.message); }
+  }
 
   // Step 2: Get CzarLite base rate for this lane
   let czarBase = null;
@@ -3044,13 +3126,21 @@ app.post('/api/ltl/quote', async (req, res) => {
     const discountAmt  = Math.round(baseTotal * discountPct / 100) + discountFlat;
     const discountedBase = Math.max(0, baseTotal - discountAmt);
 
-    const fscPct    = r && r.fsc ? parseFloat((r.fsc || '0%').replace('%','')) / 100 : 0;
-    const fscCharge = r && r.fsc
+    // Migration 045: when the carrier opted into EIA FSC and a bracket
+    // matches the current diesel price, that percentage replaces the
+    // static rate fsc (and the CzarLite surcharge fallback).
+    const eiaPct = (carrier.eia_fsc_enabled && eiaPrice != null)
+      ? lookupFscPct(eiaSchedules[carrier.id], eiaPrice)
+      : null;
+
+    const staticFscPct = r && r.fsc ? parseFloat((r.fsc || '0%').replace('%','')) / 100 : 0;
+    const fscPct    = eiaPct != null ? eiaPct / 100 : staticFscPct;
+    const fscCharge = (eiaPct != null || (r && r.fsc))
       ? Math.round(discountedBase * fscPct)
       : Math.round(czarBase.surchargeAmount || 0);
     const total = Math.round(discountedBase + fscCharge);
 
-    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge} total=$${total} rateMatch=${r?r.lane:'NONE'} reason=${matchReason}`);
+    console.log(`[LTL/quote] ${carrier.name}: base=$${baseTotal} disc=${discountPct}% amt=$${discountAmt} discBase=$${discountedBase} fsc=$${fscCharge}${eiaPct != null ? ` (EIA ${eiaPct}% @ $${eiaPrice}/gal)` : ''} total=$${total} rateMatch=${r?r.lane:'NONE'} reason=${matchReason}`);
     return {
       rateId:       r ? (r.lane || r.id) : null,
       carrier:      carrier.name,
@@ -3071,7 +3161,8 @@ app.post('/api/ltl/quote', async (req, res) => {
       czarLinehaul: Math.round(czarBase.lineHaulGrossCharge),
       czarFuel:     Math.round(czarBase.surchargeAmount),
       billedWeight: czarBase.billedWeight,
-      fscPct:       r ? (r.fsc || '0%') : '0%',
+      fscPct:       eiaPct != null ? `${eiaPct}%` : (r ? (r.fsc || '0%') : '0%'),
+      fscSource:    eiaPct != null ? 'eia' : 'rate',
       fscCharge,
       totalCharge:  total,
       origin:       originCity || originZip,
@@ -3428,18 +3519,41 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
     // Load carriers table once for carrierconnect_enabled flag
     let carrierFlags = {};
     try {
-      const cfRes = await fetch(`${SUPABASE_URL}/rest/v1/carriers?select=name,scac,czarlite_enabled,carrierconnect_enabled,pcmiler_enabled&limit=200`, {
-        headers: { 'apikey': SERVICE_KEY },
+      // Bug fix (found during migration 045 verification): this fetch sent
+      // only the apikey header, so PostgREST ran it as anon and RLS returned
+      // ZERO rows — carrierFlags was silently empty and every ccxl/pcmiler/
+      // eia flag read as false. sbHeaders(null) adds the service-role
+      // Authorization header like every other server-side query here.
+      const cfRes = await fetch(`${SUPABASE_URL}/rest/v1/carriers?select=id,name,scac,czarlite_enabled,carrierconnect_enabled,pcmiler_enabled,eia_fsc_enabled&limit=200`, {
+        headers: sbHeaders(null),
       });
       const cfData = await cfRes.json();
       if (Array.isArray(cfData)) {
         cfData.forEach(c => {
           const key = (c.name || '').toUpperCase();
-          carrierFlags[key] = { czarlite: c.czarlite_enabled, ccxl: c.carrierconnect_enabled, pcmiler: c.pcmiler_enabled, scac: c.scac };
+          carrierFlags[key] = { id: c.id, czarlite: c.czarlite_enabled, ccxl: c.carrierconnect_enabled, pcmiler: c.pcmiler_enabled, eiaFsc: c.eia_fsc_enabled, scac: c.scac };
           if (c.scac) carrierFlags[c.scac.toUpperCase()] = carrierFlags[key];
         });
       }
     } catch(e) { console.warn('[BulkPlan] carrier flags load error:', e.message); }
+
+    // Migration 045: EIA-indexed FSC context for the TL branch below.
+    // (The LTL branch resolves its own inside /api/ltl/quote.) One price
+    // + schedule load per request; failure degrades to static rates.fsc.
+    let eiaPrice = null;
+    let eiaSchedules = {};
+    try {
+      const eiaIds = [...new Set(Object.values(carrierFlags).filter(f => f.eiaFsc && f.id).map(f => f.id))];
+      if (eiaIds.length) {
+        const [priceRow, schedules] = await Promise.all([
+          getCurrentDieselPrice(),
+          getSchedulesByCarrier(eiaIds),
+        ]);
+        eiaPrice = priceRow ? parseFloat(priceRow.price_usd_per_gallon) : null;
+        eiaSchedules = schedules;
+        console.log(`[BulkPlan/rate] EIA FSC: ${eiaIds.length} carrier(s) opted in, diesel=$${eiaPrice}/gal (week of ${priceRow?.price_date})`);
+      }
+    } catch (e) { console.warn('[BulkPlan/rate] EIA FSC load failed — using static rate fsc:', e.message); }
 
     // Resolve the LTL ceiling once per request from equipment_types.LTL.max_weight.
     // No hardcoded fallback — a missing/inactive LTL row is a misconfiguration
@@ -3644,11 +3758,17 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 // Parse rate string like "$2.15" → 2.15
                 const rpm = parseFloat((rate.rate || '').replace(/[^0-9.]/g, '')) || 0;
                 if (!rpm) return;
-                // Parse FSC string like "22.5%" → 22.5
-                const fscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
-                // Miles: PC*MILER if carrier has pcmiler_enabled, else rate.miles, else haversine.
                 const carrierKey = (rate.carrier || '').toUpperCase();
                 const cFlags = carrierFlags[carrierKey] || {};
+                // Parse FSC string like "22.5%" → 22.5. Migration 045:
+                // an opted-in carrier with a bracket matching the current
+                // EIA diesel price uses that percentage instead.
+                const staticFscPct = parseFloat((rate.fsc || '').replace(/[^0-9.]/g, '')) || 0;
+                const eiaPct = (cFlags.eiaFsc && eiaPrice != null)
+                  ? lookupFscPct(eiaSchedules[cFlags.id], eiaPrice)
+                  : null;
+                const fscPct = eiaPct != null ? eiaPct : staticFscPct;
+                // Miles: PC*MILER if carrier has pcmiler_enabled, else rate.miles, else haversine.
                 const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || haversineMiles || 500);
                 const baseCost = Math.round(rpm * miles);
                 const fscCharge = Math.round(baseCost * (fscPct / 100));
@@ -3662,6 +3782,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                   discountPct: 0,
                   fscCharge,
                   fscPct,
+                  fscSource: eiaPct != null ? 'eia' : 'rate',
                   transitDays: rate.transit_days || null,
                   deliveryDate: '',
                   recommended: false,
@@ -3700,6 +3821,23 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
         }
         if (!q.miles) q.miles = (flags.pcmiler && pcmilerMiles) ? pcmilerMiles : (lane.miles || haversineMiles || null);
         if (!q.pcmilerMiles && flags.pcmiler && pcmilerMiles) q.pcmilerMiles = pcmilerMiles;
+        // Transit fallback chain, final link (2026-08-09): CCXL live →
+        // rates.transit_days → distance-based estimate. CC-enabled LTL
+        // carriers whose SCAC the (trial) SMC3 account can't license
+        // came back transitDays=null with no fallback, so ODFL/FedEx
+        // quotes had no service days and no delivery window anywhere
+        // (web showed "?d", Teams hid the carrier entirely). Estimate
+        // from lane miles and FLAG IT so every surface can render "≈2d"
+        // instead of passing a model number off as carrier-confirmed.
+        // Runs before the infeasible check below on purpose: a quote
+        // with an estimated window is plannable, not infeasible.
+        if (!q.transitDays && q.miles) {
+          const est = estimateTransitDays({ miles: q.miles, mode: q.mode });
+          if (est) {
+            q.transitDays = est;
+            q.transitEstimated = true;
+          }
+        }
         // Infeasible: only for TL carriers where CCXL is enabled but no transit data returned
         // LTL carriers are never infeasible just because transit data is missing (CzarLite doesn't always return transit)
         q.infeasible = !!(q.mode === 'TL' && flags.ccxl && !q.transitDays);
@@ -4373,6 +4511,18 @@ bus.on(EVENTS.ORDER_DELETED, (payload) => {
 app.post('/api/notify', (req, res) => {
   const { event, data } = req.body || {};
   if (!event) return res.status(400).json({ error: 'event required' });
+  // Teams mirror of the tender-accept broadcast (web + mobile both
+  // funnel through here via propagateTenderAcceptance). Deduped inside
+  // teamsNotify against the status-PATCH hook.
+  if (event === 'tender_accepted') {
+    teamsNotify.notifyTenderAccepted({
+      shipmentId: (data && (data.shipmentId || data.id)) || null,
+      carrier: data && data.carrier,
+      mode: data && data.mode,
+      pickupDate: data && data.pickupDate,
+      deliveryDate: data && data.deliveryDate,
+    });
+  }
   wsBroadcast(event, data || {});
   console.log(`[WS] Broadcast: ${event}`, data ? JSON.stringify(data).slice(0, 100) : '');
   res.json({ ok: true, clients: wsClients.size });
@@ -4411,6 +4561,10 @@ server.listen(PORT, () => {
   // Fusion (TMS → OIC) outbound publisher. No-op unless OIC_PUBLISH_ENABLED=true.
   // See api/services/fusionPublisher/index.js and docs/integrations/oic/flows/F3-tms-to-fusion-status.md.
   fusionPublisher.start();
+
+  // Microsoft Teams notifications. No-op unless TEAMS_WEBHOOK_URL is set.
+  // See api/services/teamsNotify.js and docs/TEAMS_SETUP.md.
+  teamsNotify.start({ bus, EVENTS });
   console.log('');
 });
 

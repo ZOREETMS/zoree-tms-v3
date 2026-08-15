@@ -98,6 +98,10 @@ function buildCarrierPayload(editCarrier) {
     [czKey]: !!source.czarlite_enabled,
     [ccKey]: !!source.carrierconnect_enabled,
     [pcKey]: !!source.pcmiler_enabled,
+    // Migration 045: EIA-indexed fuel surcharge opt-in. When TRUE the
+    // rating engine overrides the static rates.fsc % with a lookup from
+    // the carrier's uploaded FSC schedule (Fuel Surcharge page).
+    eia_fsc_enabled: !!source.eia_fsc_enabled,
     // REQ-06: invoice tolerance inputs were already on the form but were
     // never being persisted. Keep blanks as NULL so the system default
     // (5% / $100) kicks in via api/services/invoiceAudit.js.

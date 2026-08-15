@@ -48,6 +48,7 @@ export default function CarriersPage() {
       on_time_pct: 95, claim_ratio: 0.5, cost_per_mile: 0,
       contact: "", phone: "", email: "",
       czarlite_enabled: false, carrierconnect_enabled: false, pcmiler_enabled: false,
+      eia_fsc_enabled: false,
     });
   }
 
@@ -114,13 +115,14 @@ export default function CarriersPage() {
             <th style={{ textAlign: "center" }}>CzarLite</th>
             <th style={{ textAlign: "center" }}>CC XL</th>
             <th style={{ textAlign: "center" }}>PC*MILER</th>
+            <th style={{ textAlign: "center" }}>EIA FSC</th>
             <th>Contact</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={12} className="empty-state">No carriers found</td></tr>
+            <tr><td colSpan={13} className="empty-state">No carriers found</td></tr>
           ) : rows.map((c) => (
             <tr key={c.id}>
               <td style={{ textAlign: "center" }}><SelectionRowCheckbox sel={sel} rowKey={c.id} /></td>
@@ -133,6 +135,7 @@ export default function CarriersPage() {
               <td style={{ textAlign: "center" }}>{c.czarlite_enabled ? "✅" : "☐"}</td>
               <td style={{ textAlign: "center" }}>{c.carrierconnect_enabled ? "✅" : "☐"}</td>
               <td style={{ textAlign: "center" }}>{c.pcmiler_enabled ? "✅" : "☐"}</td>
+              <td style={{ textAlign: "center" }}>{c.eia_fsc_enabled ? "✅" : "☐"}</td>
               <td className="text-xs text-muted">{c.contact || c.email || "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>
                 <button className="btn btn-sm" onClick={() => openEdit(c)}>✏️ Edit</button>{" "}
@@ -236,6 +239,22 @@ export default function CarriersPage() {
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: editCarrier.pcmiler_enabled ? "#a855f7" : "var(--text)" }}>🗺️ PC*MILER ENABLED</div>
                     <div style={{ fontSize: 10, color: "var(--text3)" }}>Use PC*MILER distance API for mileage during rating</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Migration 045: EIA-indexed fuel surcharge opt-in */}
+              <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 700, fontSize: 11, color: "var(--text3)", letterSpacing: 1 }}>FUEL SURCHARGE</div>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-2" style={{
+                  padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+                  background: editCarrier.eia_fsc_enabled ? "rgba(245,158,11,0.08)" : "var(--bg2)",
+                  border: `1px solid ${editCarrier.eia_fsc_enabled ? "rgba(245,158,11,0.3)" : "var(--border)"}`,
+                }}>
+                  <input type="checkbox" checked={!!editCarrier.eia_fsc_enabled} onChange={(e) => editField("eia_fsc_enabled", e.target.checked)} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: editCarrier.eia_fsc_enabled ? "#d97706" : "var(--text)" }}>⛽ EIA FUEL SURCHARGE</div>
+                    <div style={{ fontSize: 10, color: "var(--text3)" }}>Calculate FSC from the EIA diesel index using this carrier's uploaded schedule (Fuel Surcharge page) instead of the static rate FSC %</div>
                   </div>
                 </label>
               </div>

@@ -272,6 +272,35 @@ export const DbApi = {
   },
 };
 
+// Migration 045: EIA fuel surcharge — per-carrier bracket schedules +
+// the cached EIA U.S. On-Highway Diesel index. Backend: api/routes/fsc.js.
+export const FscApi = {
+  eiaCurrent(refresh = false) {
+    return api(`/fsc/eia/current${refresh ? "?refresh=1" : ""}`);
+  },
+  eiaManual({ price, priceDate }) {
+    return api("/fsc/eia/manual", {
+      method: "POST",
+      body: JSON.stringify({ price, priceDate }),
+    });
+  },
+  getSchedule(carrierId) {
+    return api(`/fsc/schedule/${encodeURIComponent(carrierId)}`);
+  },
+  saveSchedule(carrierId, brackets) {
+    return api(`/fsc/schedule/${encodeURIComponent(carrierId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ brackets }),
+    });
+  },
+  deleteSchedule(carrierId) {
+    return api(`/fsc/schedule/${encodeURIComponent(carrierId)}`, { method: "DELETE" });
+  },
+  preview(carrierId, linehaul) {
+    return api(`/fsc/preview/${encodeURIComponent(carrierId)}?linehaul=${encodeURIComponent(linehaul || 0)}`);
+  },
+};
+
 export const OrdersApi = {
   list() {
     return api("/orders");

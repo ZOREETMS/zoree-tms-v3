@@ -1,0 +1,15 @@
+{
+  "name": "zoree-hyperframes-reels",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.7.71 preview",
+    "check": "npx --yes hyperframes@0.7.71 check",
+    "render:r1": "npx --yes hyperframes@0.7.71 render -c reels/reel1_cheapest_carrier.html -o renders/reel1_cheapest_carrier.mp4",
+    "render:r2": "npx --yes hyperframes@0.7.71 render -c reels/reel2_spreadsheets.html -o renders/reel2_spreadsheets.mp4",
+    "render:r3": "npx --yes hyperframes@0.7.71 render -c reels/reel3_zoree_ai.html -o renders/reel3_zoree_ai.mp4",
+    "render:r4": "npx --yes hyperframes@0.7.71 render -c reels/reel4_carrier_portal.html -o renders/reel4_carrier_portal.mp4",
+    "render:r5": "npx --yes hyperframes@0.7.71 render -c reels/reel5_results.html -o renders/reel5_results.mp4",
+    "render:all": "npm run render:r1 && npm run render:r2 && npm run render:r3 && npm run render:r4 && npm run render:r5"
+  }
+}

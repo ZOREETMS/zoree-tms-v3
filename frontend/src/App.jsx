@@ -13,6 +13,7 @@ import LanePreferencesPage from "./pages/LanePreferencesPage";
 import ItemMasterPage from "./pages/ItemMasterPage";
 import LocationMasterPage from "./pages/LocationMasterPage";
 import RateManagementPage from "./pages/RateManagementPage";
+import FuelSurchargePage from "./pages/FuelSurchargePage";
 import RouteOptimizerPage from "./pages/RouteOptimizerPage";
 import LiveTrackingPage from "./pages/LiveTrackingPage";
 import DockSchedulingPage from "./pages/DockSchedulingPage";
@@ -76,6 +77,8 @@ function PrivateRoutes({ data }) {
         <Route path="compliance" element={<RoleGuard><CompliancePage /></RoleGuard>} />
         <Route path="freight-invoices" element={<RoleGuard><FreightInvoicesPage /></RoleGuard>} />
         <Route path="rate-management" element={<RoleGuard><RateManagementPage /></RoleGuard>} />
+        {/* Migration 045: per-carrier EIA-indexed fuel surcharge schedules */}
+        <Route path="fuel-surcharge" element={<RoleGuard><FuelSurchargePage /></RoleGuard>} />
         <Route path="lane-preferences" element={<RoleGuard><LanePreferencesPage /></RoleGuard>} />
         <Route path="carrier-bids" element={<RoleGuard><CarrierBidsPage /></RoleGuard>} />
         <Route path="freight-audit" element={<RoleGuard><FreightAuditPage /></RoleGuard>} />
