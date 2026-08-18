@@ -1,0 +1,42 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+54a11fef69702d8ed45b0b02,Eli Lilly and Company,lilly.com,https://lilly.com,325412,,65179000000,,,,United States,,6
+6048540916abe500012201fe,Merck,merck.com,https://merck.com,325412,,64926000000,,,,United States,,6
+54a11e6069702d94a4944501,Pfizer,pfizer.com,https://pfizer.com,325412,,62579000000,,,,United States,Pfizer Pharmaceutical India Pvt. Ltd.,6
+5fc7b2ff4045230110edd2a1,AbbVie,abbvie.com,https://abbvie.com,325412,,61160000000,,,,United States,,6
+54a1b144746869401234aa08,Bristol Myers Squibb,bms.com,https://bms.com,325412,,48195000000,,,,United States,,6
+54a122ad69702d9a8b3d6003,Amgen,amgen.com,https://amgen.com,325414,,36741000000,,,,United States,,6
+54a11fc869702d9a8bc91702,Gilead Sciences,gilead.com,https://gilead.com,325412,,29442000000,,,,United States,,6
+5b86f758f874f739743b9a01,Genentech,gene.com,https://gene.com,541714,,26400000000,,,,United States,Roche,6
+5f499ee464093f000119f13e,FUJIFILM Biotechnologies,fujifilm.com,https://fujifilm.com,42312,,22334384000,,,,United States,Fujifilm Group,6
+54a1273f69702d9b8bbb6900,Regeneron,regeneron.com,https://regeneron.com,541714,,14342900000,,,,United States,,6
+5e58ce77a7e97a0001f5d8a8,Viatris,viatris.com,https://viatris.com,325412,,14299900000,,,,United States,,6
+5ed5dc3a4d4c6d000168fe11,Daiichi Sankyo US,daiichisankyo.us,https://daiichisankyo.us,325412,,13387234000,,,,United States,Suntory Holdings Limited,6
+54a11f1d69702d7fe6b7cd01,Vertex Pharmaceuticals,vrtx.com,https://vrtx.com,541714,,12074600000,,,,United States,,6
+5ed1e718156bb30001dbfc54,Biogen,biogen.com,https://biogen.com,325414,,9810600000,,,,United States,,6
+62585690f484000112c81cab,Zoetis,zoetis.com,https://zoetis.com,325412,,9467000000,,,,United States,,6
+55ea5acbf3e5bb44a9001fcb,Organon,organon.com,https://organon.com,325412,,6216000000,,,,United States,SUN PHARMA,6
+5569a8da7369642529357300,"Alexion Pharmaceuticals, Inc.",alexion.com,https://alexion.com,325414,,6069900000,,,,United States,AstraZeneca,6
+54a11eb369702d94a4b56201,STERIS,steris.com,https://steris.com,339112,,5935900000,,,,United States,,6
+55921f8e7369642393132500,Eisai US,eisai.com,https://eisai.com,325412,,5444091000,,,,United States,Kan Research Institute,6
+67d8ff25cb7008001d4e03d7,BeOne Medicines,beonemedicines.com,https://beonemedicines.com,325412,,5343033000,,,,United States,,6
+54a12a2f69702d9313c90e02,Incyte,incyte.com,https://incyte.com,325412,,5141242000,,,,United States,,6
+624a7d2baef87000dc14454c,"Allergan Aesthetics, an AbbVie Company",allerganaesthetics.com,https://allerganaesthetics.com,325412,,4860000000,,,,United States,Allergan,6
+5f4db515ec03920001d9b69f,Elanco,elanco.com,https://elanco.com,11231,,4715000000,,,,United States,"TriRx Pharmaceutical Services, LLC",6
+54a13a4869702d0486afbf00,Catalent,catalent.com,https://catalent.com,325412,,4422000000,,,,United States,Novo Holdings,6
+54a1208369702d9d7e902e02,Alnylam Pharmaceuticals,alnylam.com,https://alnylam.com,541714,,3713937000,,,,United States,,6
+57c48a64a6da9815ad366495,Takeda Oncology,takedaoncology.com,https://takedaoncology.com,325412,,3635000000,,,,United States,,6
+624ef987b7ebad008d265c6b,BioMarin Pharmaceutical Inc.,biomarin.com,https://biomarin.com,541714,,3221253000,,,,United States,,6
+5ed83c663529790001f9169a,Amneal Pharmaceuticals,amneal.com,https://amneal.com,325412,,3018760000,,,,United States,,6
+54a1358c69702d4b2ec4a000,Pall Corporation,pall.com,https://pall.com,33911,,2900000000,,,,United States,Danaher,6
+54a1230d69702da4258f6903,Owens & Minor,owens-minor.com,https://owens-minor.com,49211,,2762032000,,,,United States,,6
+5a9ec81fa6da98d98c6fda9d,Cook Medical,cookmedical.com,https://cookmedical.com,339112,,2700000000,,,,United States,The Cook Group,6
+5f443cc14b766d0001a54061,Apotex Inc.,apotex.com,https://apotex.com,325412,,2600000000,,,,Canada,SK Capital Partners,6
+54a13ad169702db45d8d1901,CooperVision,coopervision.com,https://coopervision.com,33911,,2152000000,,,,United States,CooperCompanies,6
+54a1217669702d8ed486b102,Moderna,modernatx.com,https://modernatx.com,541714,,1944000000,,,,United States,,6
+5b150e0da6da987112636337,Legend Biotech,legendbiotech.com,https://legendbiotech.com,325414,,1028900000,,,,United States,GenScript,6
+54a1173c69702d46232d0a00,GenScript,genscript.com,https://genscript.com,541714,,959526000,,,,United States,,6
+54a1340f69702d352f061a00,Cepheid,cepheid.com,https://cepheid.com,33911,,900000000,,,,United States,Danaher,6
+54a11eb569702da75353a101,Warby Parker,warbyparker.com,https://warbyparker.com,33911,,871905000,,,,United States,,6
+54a1224069702d8ed4a70003,Twist Bioscience,twistbioscience.com,https://twistbioscience.com,541714,,376572000,,,,United States,,6
+54a1ca6874686945fafa1f11,Terumo Medical Corporation,terumomedical.com,https://terumomedical.com,339112,,250000000,,,,United States,Terumo,6
+54a1209269702da753784d02,NARS Cosmetics,narscosmetics.com,https://narscosmetics.com,3391,,100000000,,,,United States,Shiseido,6

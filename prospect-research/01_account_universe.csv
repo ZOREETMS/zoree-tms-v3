@@ -1,0 +1,822 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+5a9e1b29a6da98d99779cde3,1X,1x.tech,https://1x.tech,33324,,222500000,,,,United States,,1
+55922d8d7369641739655400,3D Systems Corporation,3dsystems.com,https://3dsystems.com,333248,,386902000,,,,United States,Stratasys,1
+5f48752d3b7b980001996887,A. O. Smith Corporation,aosmith.com,https://aosmith.com,33341,,3830200000,,,,United States,A. O. Smith Nederland,1
+54a11c7369702d97c10eb000,AGCO Corporation,agcocorp.com,https://agcocorp.com,333111,,10082000000,,,,United States,,1
+56d7f6d7f3e5bb5896002c4a,AGI - Ag Growth International,aggrowth.com,https://aggrowth.com,333111,,961492000,,,,Canada,,1
+686ac3bc95c1230001f1a1b8,Allison Off-Highway Drive & Motion Systems,allisonoffhighway.com,https://allisonoffhighway.com,336350,,2767000000,,,,United States,Allison Transmission,1
+54a11c7d69702d88c4c39f00,AMETEK,ametek.com,https://ametek.com,334516,,7401116000,,,,United States,,1
+5e6f97a895820900992540fb,AMP,,,513210,,271600000,,,,United States,,1
+54a12b1169702d8eebc8b502,Andersen Corporation,andersenwindows.com,https://andersenwindows.com,33391,,3300000000,,,,United States,,1
+55921ff073696418e9208000,"Apex Tool Group, LLC",apextoolgroup.com,https://apextoolgroup.com,33231,,1300000000,,,,United States,Bain Capital,1
+5ed29e6d746a300001071ff2,Applied Materials,appliedmaterials.com,https://appliedmaterials.com,333242,,28368000000,,,,United States,,1
+5a9d4a05a6da98d99a3be1ee,Arconic,arconic.com,https://arconic.com,33281,,8100000000,,,,United States,"Hoover Treated Wood Products, Inc.",1
+5569dc8f73696425d735a700,Armstrong Fluid Technology,armstrongfluidtechnology.com,https://armstrongfluidtechnology.com,333914,,275000000,,,,Canada,,1
+54a2214e74686930c26c360f,Array Technologies,arraytechinc.com,https://arraytechinc.com,33451,,1284141000,,,,United States,,1
+5f4a7af6e5b0bd0001f8165c,ASTEC,astecindustries.com,https://astecindustries.com,333120,,1410400000,,,,United States,inTEC GROUP,1
+54a19bf17468695475c96b01,Atkore,atkore.com,https://atkore.com,33593,,2850378000,,,,United States,,1
+54a1293b69702db6483d7401,ATS Corporation,atsautomation.com,https://atsautomation.com,333248,,2144949000,,,,Canada,,1
+54a11b2f69702da7537f2000,Augury,augury.com,https://augury.com,33324,,155000000,,,,United States,,1
+54a1299d69702dcef9e0b601,Averna,averna.com,https://averna.com,333248,,305000000,,,,United States,Spherea Group,1
+54a139ad69702de5b3e15900,Babcock & Wilcox,babcock.com,https://babcock.com,333414,,587676000,,,,United States,,1
+5da66bfcd84d9e0001e69e50,Baker Hughes,bakerhughes.com,https://bakerhughes.com,213112,,27733000000,,,,United States,,1
+54a1210a69702da10fa0a702,Ball Corporation,ball.com,https://ball.com,33299,,13160000000,,,,United States,,1
+54a1ac757468694012a3cb06,Banner Engineering,bannerengineering.com,https://bannerengineering.com,33324,,697800000,,,,United States,,1
+5a9d2b45a6da98d938b98150,Barry-Wehmiller,barrywehmiller.com,https://barrywehmiller.com,333241,,3600000000,,,,United States,,1
+54a13abd69702dc8e4ba0701,Bastian Solutions,bastianautomation.com,https://bastianautomation.com,541614,,749800000,,,,United States,Toyota Motor Corporation,1
+5ef60429aa37fd0114e5e0c8,Beretta USA,,,332994,,1700000000,,,,United States,Beretta Holding,1
+54a1393e69702de5b3941d00,Boart Longyear,boartlongyear.com,https://boartlongyear.com,213114,,913556000,,,,United States,American Industrial Partners,1
+54a1397169702dac840c4200,Bobcat Company,bobcat.com,https://bobcat.com,33392,,6182000000,,,,United States,Doosan,1
+5f4b572153633e00016bb5aa,Bosch USA,bosch.us,https://bosch.us,33632,,18700000000,,,,United States,Bosch,1
+54a11b4169702d8ccc7b2500,Boston Dynamics,bostondynamics.com,https://bostondynamics.com,33311,,130000000,,,,United States,Hyundai Motor Group,1
+5c232fa680f93e69adbfc281,Boyd,boydcorp.com,https://boydcorp.com,33291,,1340000000,,,,United States,Goldman Sachs,1
+5b131ea0a6da98dcd4b76ef9,"Bray International, Inc.",bray.com,https://bray.com,332911,,250000000,,,,United States,,1
+6261785ddb5f9e00a59223e9,Carbon,carbon3d.com,https://carbon3d.com,33324,,100000000,,,,United States,,1
+54a1203e69702d8aa1852502,Carestream,carestream.com,https://carestream.com,33911,,1500000000,,,,United States,,1
+5e57b7d3d2bd6800012090a7,Carlisle Construction Materials,carlisleconstructionmaterials.com,https://carlisleconstructionmaterials.com,32619,,5019900000,,,,United States,,1
+5f50b939a3b2b1008ce62990,Carrier,,,333415,,21747000000,,,,United States,,1
+54a19cb67468694f8fa3be01,CASE Construction Equipment,casece.com,https://casece.com,333120,,900000000,,,,United States,CNH,1
+5e699a8d1d525e00980b32e4,Caterpillar Inc.,caterpillar.com,https://caterpillar.com,333120,,67589000000,,,,United States,,1
+54a1356269702d3e8392a300,CB&I,cbi.com,https://cbi.com,33241,,1000000000,,,,United States,"McDermott International, Ltd",1
+5f0d718edc72ee00da3c2792,ChampionX,championx.com,https://championx.com,21311,,3400000000,,,,United States,SLB,1
+54a11df169702d9a8b8c4601,"CIRCOR International, Inc.",circor.com,https://circor.com,332911,,1100000000,,,,United States,KKR,1
+55f7a1d3f3e5bb3bd5001927,CNH,cnh.com,https://cnh.com,333111,,18095000000,,,,United States,Exor N.V.,1
+54a1ac677468695c823e9706,Cognex Corporation,cognex.com,https://cognex.com,33331,,994359000,,,,United States,,1
+6477b40fadc07300a343f8e0,Copeland,copeland.com,https://copeland.com,33341,,5000000000,,,,United States,Blackstone,1
+604d3ea80539a00001cf1666,Cornerstone Building Brands,cornerstonebuildingbrands.com,https://cornerstonebuildingbrands.com,3212,,5297529000,,,,United States,CD&R,1
+616a85a96faab000f6afa0af,Corning Incorporated,corning.com,https://corning.com,3334,,15629000000,,,,United States,,1
+5569e77773696425d7ffb100,Cricut,cricut.com,https://cricut.com,33324,,708780000,,,,United States,,1
+5c5b0752e089ce0bbbb44638,Crown Equipment Corporation,crown.com,https://crown.com,333924,,5260000000,,,,United States,,1
+54a1344969702d2db4d87c00,"Crown Holdings, Inc.",crowncork.com,https://crowncork.com,33221,,12365000000,,,,United States,,1
+5cb5195ef65125813fa4a215,Crusoe,crusoe.ai,https://crusoe.ai,33324,,290700000,,,,United States,,1
+601a98723a044600cce76294,Cummins Inc.,cummins.com,https://cummins.com,33361,,33670000000,,,,United States,,1
+54a12a9269702d8eeb657702,Daikin Applied Americas,daikinapplied.com,https://daikinapplied.com,333415,,2000000000,,,,United States,"Daikin Industries, Ltd.",1
+5b863074324d44073185d376,Daikin Comfort,daikincomfort.com,https://daikincomfort.com,333415,,10693464000,,,,United States,"Daikin Industries, Ltd.",1
+54a21ffd7468693825f6f70e,"Daniel Defense, LLC",danieldefense.com,https://danieldefense.com,332994,,120000000,,,,United States,,1
+5d32d9d780f93e23acdafedf,Dayco,dayco.com,https://dayco.com,33399,,949999000,,,,United States,Hidden Harbor Capital Partners,1
+60ad012450943b0001843efd,Delta Electronics Americas,delta-americas.com,https://delta-americas.com,334419,,776642000,,,,United States,Delta Electronics EMEA,1
+5b839e81f874f77a3e4fd1a3,Dematic,dematic.com,https://dematic.com,333922,,3567000000,,,,United States,KION Group,1
+54a12a5d69702d8cfccf3c02,Donaldson,donaldson.com,https://donaldson.com,333310,,3690900000,,,,United States,,1
+5e85e6835de51b008d45ae9f,Dover Corporation,,,33324,,8092571000,,,,United States,,1
+54a11fc669702d918c6f0202,Eastman Kodak Company,kodak.com,https://kodak.com,33992,,1069000000,,,,United States,,1
+55e86ca2f3e5bb1bc3000055,EFI,efi.com,https://efi.com,333310,,1000000000,,,,United States,Siris Capital Group,1
+54a129c469702d8b19d64302,Emerson,emerson.com,https://emerson.com,333,,18016000000,,,,United States,,1
+54a11b0569702da425920a00,EthosEnergy,ethosenergy.com,https://ethosenergy.com,33361,,894800000,,,,United States,One Equity Partners,1
+6259340edc79a000a54a8bf0,Evident Industrial,evidentscientific.com,https://evidentscientific.com,33324,,433000000,,,,United States,Private Equity,1
+54a19f8974686942d318b702,Exterran,enerflex.com,https://enerflex.com,33313,,3527746000,,,,United States,,1
+54a23a167468692e713bf517,FANUC America Corporation,fanucamerica.com,https://fanucamerica.com,33324,,7000000000,,,,United States,,1
+54a11feb69702da425e90a02,FARO INSIGHT,faro.com,https://faro.com,33331,,341046000,,,,United States,AMETEK,1
+6287dca6685dbc00d961f49f,Flowserve Corporation,flowserve.com,https://flowserve.com,333911,,4729260000,,,,United States,,1
+5b15914da6da9870efd95844,Fluence,fluenceenergy.com,https://fluenceenergy.com,33361,,2262830000,,,,United States,,1
+55f49364f3e5bb16680000ae,Flynn Group of Companies,flynncompanies.com,https://flynncompanies.com,238150,,750000000,,,,United States,,1
+5b86a248324d4447a1ea529c,"FN America, LLC",fnamerica.com,https://fnamerica.com,332994,,176700000,,,,United States,FN Herstal,1
+54a11caa69702d94a441ae00,Formlabs,formlabs.com,https://formlabs.com,33324,,250000000,,,,United States,,1
+57c50461a6da986a2f711324,GameChange Energy,gamechangeenergy.com,https://gamechangeenergy.com,332311,,114900000,,,,United States,,1
+5f483c96292fe3000185b3e3,Gates Corporation,gates.com,https://gates.com,33361,,3443200000,,,,United States,Blackstone,1
+5d0a7e5ca3ae613a6ca6c128,GE,ge.com,https://ge.com,336412,,45855000000,,,,United States,,1
+54fca3757369647df5a71c00,"GE Appliances, a Haier company",geappliancesco.com,https://geappliancesco.com,33324,,11417000000,,,,United States,Haier Appliances India Pvt Ltd,1
+54a197dc7468695475281100,Gilbarco Veeder-Root,gilbarco.com,https://gilbarco.com,33312,,5000000000,,,,United States,Vontier,1
+54a1285c69702d9ebc13eb00,"GLOCK, Inc.",glock.com,https://glock.com,332994,,250000000,,,,United States,,1
+54a23b4d7468692e71486218,Goodman Air Conditioning & Heating,goodmanmfg.com,https://goodmanmfg.com,333415,,3041989000,,,,United States,"Daikin Industries, Ltd.",1
+54a12af369702db648094b02,Graco,graco.com,https://graco.com,333914,,2236604000,,,,United States,,1
+54a199867468695c8208ae00,Greif,greif.com,https://greif.com,332431,,4290658000,,,,United States,,1
+57c4eff8a6da9869fb3f6564,GreyOrange,greyorange.com,https://greyorange.com,33392,,146000000,,,,United States,,1
+54a11cf769702da75359f700,H&P,hpinc.com,https://hpinc.com,213111,,1381973000,,,,United States,H&P Contractor Inc.,1
+6256ebb58c9ab500d9cae019,"Haas Automation, Inc.",haascnc.com,https://haascnc.com,333517,,812000000,,,,United States,,1
+5e6a859873b61d0124fda667,Hexagon Asset Lifecycle Intelligence,hexagon.com,https://hexagon.com,33324,,6384157000,,,,United States,,1
+54a1285569702d8cfcfa3b01,Honeywell Technologies,honeywell.com,https://honeywell.com,33324,,37442000000,,,,United States,,1
+57c503bea6da986a1b286fb9,Husky Technologies,husky.co,https://husky.co,333248,,1568700000,,,,Canada,Platinum Equity,1
+60f287a3b7d73e0001052365,Hyster-Yale Materials Handling,hyster-yale.com,https://hyster-yale.com,333924,,3769300000,,,,United States,Hyster,1
+54a129d469702dab3753e701,HYTORC,hytorc.com,https://hytorc.com,33324,,131300000,,,,United States,UNEX Manufacturing,1
+5d0958e0a3ae61e77dd33a6d,Häfele America Co.,hafele.com,https://hafele.com,33299,,2050000000,,Archdale,North Carolina,United States,Häfele SE & Co KG,1
+54a1b81074686942d331db0a,Ingersoll Rand,irco.com,https://irco.com,33312,,7650900000,,,,United States,,1
+54a12aec69702d93137b6802,IPEX by Aliaxis,ipexna.com,https://ipexna.com,33291,,754100000,,,,Canada,Aliaxis,1
+5d32d222f651250769054760,iRobot,irobot.com,https://irobot.com,33311,,681849000,,,,United States,,1
+54a1347669702d3a9cc33600,ITT Inc.,itt.com,https://itt.com,33391,,3938500000,,,,United States,,1
+54a128fb69702d9ebcec4201,ITW,itw.com,https://itw.com,33299,,16044000000,,,,United States,,1
+5b1431f9a6da98dcab511c0d,JBT Corporation,jbt-corp.com,https://jbt-corp.com,333241,,3798200000,,,,United States,,1
+54a12a9169702d9b8b3f2c02,JLG Industries,jlg.com,https://jlg.com,333120,,4494400000,,,,United States,Oshkosh Corporation,1
+615dc78121eb73000160beee,John Deere,deere.com,https://deere.com,333111,,44665000000,,,,United States,,1
+54a128a769702d90a27d5301,Kawasaki Robotics,kawasakirobotics.com,https://kawasakirobotics.com,33361,,198600000,,,,United States,"Kawasaki Heavy Industries, Ltd.",1
+55ea5915f3e5bb58e1004bd1,Kennametal,kennametal.com,https://kennametal.com,33299,,1966845000,,,,United States,,1
+54a13bd569702d2bfd66a801,KLA,kla.com,https://kla.com,333242,,13579476000,,,,United States,,1
+55693cbb7369642178f01400,Klein Tools,kleintools.com,https://kleintools.com,33221,,650000000,,,,United States,,1
+5d0a4a67a3ae613a4fadda5e,Kohler Co.,kohlercompany.com,https://kohlercompany.com,33232,,10000000000,,,,United States,KOHLER India,1
+616a6cf0ac4e2000a47fcea5,Lam Research,lamresearch.com,https://lamresearch.com,333242,,23232690000,,,,United States,,1
+54a1272a69702db648672b00,Lennox,lennox.com,https://lennox.com,333415,,5195300000,,,,United States,,1
+54a1225569702d84c5080003,Lexmark,lexmark.com,https://lexmark.com,33331,,3600000000,,,,United States,Xerox,1
+54a1279169702d8cfcfce100,Liberty Energy,libertyenergy.com,https://libertyenergy.com,213112,,4049839000,,,,United States,,1
+54a1c0ee74686942d3ab1c0e,Linamar Corporation,linamar.com,https://linamar.com,33632,,7463820000,,,,Canada,,1
+55921d107369641908427600,Lincoln Electric,lincolnelectric.com,https://lincolnelectric.com,33399,,4230654000,,,,United States,Lincoln Electric Cutting Solutions Europe,1
+556994a473696425e2af5f00,Locus Robotics,locusrobotics.com,https://locusrobotics.com,54133,,180000000,,,,United States,,1
+54a120a669702d84c5e65b02,Makino,makino.com,https://makino.com,333517,,1637000000,,,,United States,Makino Asia Group,1
+5b85d2a0324d4402d3924952,Malin,malinusa.com,https://malinusa.com,33392,,25000000,,Addison,Texas,United States,,1
+5de6d2d28d022a010e7964ac,Mauser Packaging Solutions,mauserpackaging.com,https://mauserpackaging.com,322219,,5600000000,,,,United States,,1
+54a117c469702d49264f0c00,Mercury Marine,mercurymarine.com,https://mercurymarine.com,33661,,2074200000,,,,United States,Brunswick Corporation,1
+5b133a7da6da98dd1384551c,Miller Electric Mfg. LLC,millerwelds.com,https://millerwelds.com,33399,,1200000000,,,,United States,ITW,1
+54a12b4569702dcef9db8f02,Milwaukee Tool,milwaukeetool.com,https://milwaukeetool.com,33299,,3700000000,,,,United States,Techtronic Industries - TTI,1
+5f483bc8babfdc0001d97064,MKS Inc.,mks.com,https://mks.com,333242,,3931000000,,,,United States,,1
+55923ade73696418f652e100,Moen,moen.com,https://moen.com,332913,,1300000000,,,,United States,Fortune Brands Innovations,1
+5592327b73696418c93fc400,Moog Inc.,moog.com,https://moog.com,33661,,3860624000,,,,United States,,1
+54a1380e69702d9639901700,Nabors Industries,nabors.com,https://nabors.com,213112,,3184693000,,,,United States,GEOLOG International,1
+695eb2c1f6e4d0000d65aef2,Nextpower,nextpower.com,https://nextpower.com,333999,,3559390000,,,,United States,,1
+5f3dbd20f79152000102bbc9,Nextracker Inc.,nextracker.com,https://nextracker.com,33451,,3559390000,,,,United States,Flex,1
+5da13dfb1a47300001c6b6d8,Nidec Motor Corporation,nidec.com,https://nidec.com,335312,,17398598000,,,,United States,,1
+5592337573696418b7d5c500,Nordson Corporation,nordson.com,https://nordson.com,333248,,2791687000,,,,United States,,1
+54a1282569702d979c05e700,NOV,nov.com,https://nov.com,333132,,8744000000,,,,United States,,1
+54a1395a69702db45dfb3000,Oceaneering,oceaneering.com,https://oceaneering.com,33311,,2784156000,,,,United States,,1
+5d8d9326a1913e009888e07a,Oil States,oilstatesintl.com,https://oilstatesintl.com,333132,,668988000,,,,United States,"Oil States International, Inc",1
+5a9d4fc4a6da98d94d8b7f6c,Omron Automation,omron.com,https://omron.com,33324,,4809000000,,,,United States,,1
+5569cbf173696425b8079900,OneSubsea,,,21311,,3800000000,,,,United States,SLB,1
+5fd26d447d7bd7008c535512,Otis Elevator Co.,otis.com,https://otis.com,333921,,14431000000,,,,United States,,1
+5cb62919f65125ec4711b23c,Parker Hannifin,parker.com,https://parker.com,33361,,19850000000,,,,United States,,1
+5b843394324d447aa4a5e2f9,Pella Corporation,pella.com,https://pella.com,33391,,2700000000,,,,United States,,1
+5569b6ee736964259cbb7f00,PRAGMA,pragma.co,https://pragma.co,33392,,139400000,,,,United States,,1
+5d0a9c1080f93e2f8f9823d9,Protolabs,protolabs.com,https://protolabs.com,33999,,533127000,,,,United States,,1
+559212fb736964199b995200,PTC,ptc.com,https://ptc.com,333,,2739226000,,,,United States,,1
+5d0a3a8680f93eb3314e3405,Rain Bird Corporation,rainbird.com,https://rainbird.com,33311,,520000000,,,,United States,,1
+61bb7db47510af00f6307499,Regal Rexnord,regalrexnord.com,https://regalrexnord.com,33361,,5934500000,,,,United States,Rexnord,1
+54a23c73746869382553ab18,Rheem Manufacturing Company,rheem.com,https://rheem.com,333415,,6000000000,,,,United States,Paloma Rheem Holdings,1
+5d0a353880f93e1c5461edbd,Rockwell Automation,rockwellautomation.com,https://rockwellautomation.com,333,,8342000000,,,,United States,,1
+5ffbfb7f9212ef00cacc5026,Rolls-Royce Power Systems,mtu-solutions.com,https://mtu-solutions.com,333618,,6706000000,,,,United States,Rolls-Royce,1
+54a12ab769702dab37885102,Sealed Air Corporation,sealedair.com,https://sealedair.com,33992,,5360000000,,,,United States,,1
+5da6dea5b07642000121f2df,SharkNinja,sharkninja.com,https://sharkninja.com,33324,,6399188000,,,,United States,,1
+5f843630ce89850114d27837,Siemens Digital Industries Software,sw.siemens.com,https://sw.siemens.com,513210,,6469000000,,,,United States,,1
+54a1294269702da220b28301,"SIG SAUER, Inc.",sigsauer.com,https://sigsauer.com,332994,,829800000,,,,United States,,1
+54a1206469702d97c1057402,Simpson Strong-Tie,strongtie.com,https://strongtie.com,33232,,2332808000,,,,United States,"Simpson Manufacturing Company, Inc.",1
+5d0a5f51f65125a357b7d39e,SLB,slb.com,https://slb.com,213112,,35709000000,,,,United States,,1
+54a23cbd7468693318975b18,Smith & Wesson,smith-wesson.com,https://smith-wesson.com,332994,,523845000,,,,United States,,1
+6163c17faebddf00da3badae,Snap-on,snapon.com,https://snapon.com,33231,,5156100000,,,,United States,,1
+54a129e069702db8786f9f01,Solar Turbines,solarturbines.com,https://solarturbines.com,333611,,3100000000,,,,United States,Caterpillar Inc.,1
+54a11c8d69702d94a4d2a300,Sonoco,sonoco.com,https://sonoco.com,32222,,7518753000,,,,United States,Ventek Solutions,1
+60c30e6d4f6afa00a4df76fa,SPM Oil & Gas,spmoilandgas.com,https://spmoilandgas.com,33313,,639000000,,,,United States,,1
+57c4c5aaa6da98367a52e8de,"SPX FLOW, Inc.",spxflow.com,https://spxflow.com,333241,,1500000000,,,,United States,ITT Inc.,1
+54a1298369702dc128e66901,SRAM,sram.com,https://sram.com,33299,,755000000,,,,United States,,1
+54a1a2177468695475205f03,"Stanley Black & Decker, Inc.",stanleyblackanddecker.com,https://stanleyblackanddecker.com,33231,,15130400000,,,,United States,Black & Decker,1
+625869f0a5277800a58b6828,Swagelok,swagelok.com,https://swagelok.com,332911,,2000000000,,,,United States,,1
+54a12aa769702d9548721f02,Symbotic,symbotic.com,https://symbotic.com,33392,,2246922000,,,,United States,Walmart,1
+5f4930393b7b98000174b9fb,T.D. Williamson,tdwilliamson.com,https://tdwilliamson.com,21311,,769300000,,,,United States,,1
+54a134d669702d4494f84900,Techtronic Industries - TTI,ttigroup.com,https://ttigroup.com,33324,,15282106000,,,,United States,,1
+54a11e6a69702d9d7e746b01,Tenaris,tenaris.com,https://tenaris.com,331210,,11981157000,,,,United States,Techint Group,1
+605268a527e6730001232491,Tennant Company,tennantco.com,https://tennantco.com,333310,,1203500000,,,,United States,"Worldwide Facilities, LLC",1
+54a139ad69702d2a1eb56600,Teradyne,teradyne.com,https://teradyne.com,33411,,3190024000,,,,United States,,1
+54a12ac869702d8eebf58f02,Terex Corporation,terex.com,https://terex.com,333120,,5421000000,,,,United States,"REV Group, Inc",1
+54a138da69702d2fa6330a00,Textron,textron.com,https://textron.com,336411,,14799000000,,,,United States,,1
+55ee1d0df3e5bb4416000199,The Manitowoc Company,manitowoc.com,https://manitowoc.com,33392,,2240900000,,,,United States,,1
+54a1273069702d8b197bd000,The Timken Company,timken.com,https://timken.com,332991,,4581800000,,,,United States,,1
+54a25e0b746869331843031d,The Toro Company,thetorocompany.com,https://thetorocompany.com,333112,,4510400000,,,,United States,,1
+54a138f169702de5b31d0900,Tokyo Electron US,,,333242,,16227214000,,,,United States,,1
+55ec96a6f3e5bb1315002d27,Topcon Positioning Systems,topconpositioning.com,https://topconpositioning.com,54137,,881000000,,,,United States,Topcon Healthcare Europe,1
+55922fec7369642529c63d00,Toyota Material Handling,toyotaforklift.com,https://toyotaforklift.com,333924,,7000000000,,,,United States,,1
+54a11b3069702da753f32000,"TPI Composites, Inc.",tpicomposites.com,https://tpicomposites.com,33661,,918460000,,,,United States,,1
+5f483be19e3a7000010ca7f0,Trane Technologies,tranetechnologies.com,https://tranetechnologies.com,333415,,21321900000,,,,United States,,1
+5f562f5aa80c1800ef8cce2f,Tyco Fire Products,tyco-fire.com,https://tyco-fire.com,332919,,100000000,,,,United States,Johnson Controls,1
+54a1286b69702d8eeb1b6401,"Valmont Industries, Inc.",valmont.com,https://valmont.com,33232,,4104102000,,,,United States,,1
+5fc89df1e9f52b00be1cfb14,Varel Energy Solutions,varel.com,https://varel.com,333132,,183540000,,,,United States,Sandvik,1
+54a1208869702d84c5d44c02,Vermeer Corporation,vermeer.com,https://vermeer.com,333111,,1300000000,,,,United States,,1
+5d0a8412a3ae6112d69d45a8,Vertiv,vertiv.com,https://vertiv.com,33451,,10229900000,,,,United States,Platinum Equity,1
+54a12a4769702d9ebc49e401,Victaulic,victaulic.com,https://victaulic.com,332919,,1000000000,,,,United States,,1
+54a1343c69702d3cbb4c1800,Videojet Technologies,videojet.com,https://videojet.com,33995,,300000000,,,,United States,Danaher,1
+5fbaeec697059700cc0926f7,Wabtec Corporation,wabteccorp.com,https://wabteccorp.com,33311,,11167000000,,,,United States,,1
+55e86501f3e5bb616400044b,Watts Water Technologies,watts.com,https://watts.com,332911,,2438500000,,,,United States,Ashland,1
+5a9e1ff4a6da98d946722517,Weir Minerals,global.weir,https://global.weir,33391,,3148311000,,,,United States,,1
+62a105dcfc505d00df9c808e,Whirlpool Corporation,whirlpoolcorp.com,https://whirlpoolcorp.com,33324,,15524000000,,,,United States,,1
+54a1a36a7468695475e0bd03,"Woodward, Inc.",woodward.com,https://woodward.com,33361,,3567064000,,,,United States,,1
+5a9efbf9a6da98d97e801a76,Xerox,xerox.com,https://xerox.com,33331,,7022000000,,,,United States,Visioneer,1
+54a1342c69702d2f9fb14900,Xylem,xylem.com,https://xylem.com,22131,,9035000000,,,,United States,,1
+54a11c2d69702da10f568d00,Yaskawa Motoman,motoman.com,https://motoman.com,333248,,112000000,,,,United States,,1
+54a19e4474686949e7654d02,Accuray,accuray.com,https://accuray.com,33911,,458505000,,,,United States,,2
+54a11d7569702d84c5780601,Agilent Technologies,agilent.com,https://agilent.com,334516,,6948000000,,,,United States,VIAVI Solutions,2
+54a1271669702da220214600,Align Technology,aligntech.com,https://aligntech.com,339113,,4034964000,,,,United States,,2
+660d35011b63720301c7460f,Altera,altera.com,https://altera.com,33411,,1500000000,,,,United States,Silver Lake,2
+5ed55aa62ad2940001470627,AMD,amd.com,https://amd.com,334413,,34639000000,,,,United States,,2
+5fdcce3ca1d7ef0001dd74c4,Amphenol,amphenol.com,https://amphenol.com,334419,,23094700000,,,,United States,,2
+54a1232069702d9a8b3e9c03,Analog Devices,analog.com,https://analog.com,334413,,11019707000,,,,United States,,2
+5fcd2cf3ed78c700f9383e4e,Apple,apple.com,https://apple.com,334111,,416161000000,,,,United States,,2
+54a1289969702d8b1966a101,Arista Networks,arista.com,https://arista.com,33411,,9005700000,,,,United States,,2
+60f5049dbfab6500019f5f1b,BD,bd.com,https://bd.com,334510,,21839000000,,,,United States,Bdjobs.com,2
+54a135d669702d425519d100,Belden Inc.,belden.com,https://belden.com,33592,,2715194000,,,,United States,,2
+5b86670f324d445c628f03cf,Benchmark,bench.com,https://bench.com,334418,,2659108000,,,,United States,,2
+54a126be69702d9548eb2300,Bio-Rad Laboratories,bio-rad.com,https://bio-rad.com,334516,,2583200000,,,,United States,,2
+5f7dfbec570ed000bff817ad,Black Box,blackbox.com,https://blackbox.com,33411,,705068000,,,,United States,,2
+54a116d169702d3ec0fd0700,Bloom Energy,bloomenergy.com,https://bloomenergy.com,33591,,2023994000,,,,United States,,2
+5d34a2bea3ae619ebf0801c5,Brady Corporation,bradyid.com,https://bradyid.com,322299,,1513605000,,,,United States,,2
+5e56ff8794c49d00016857dd,Broadcom,broadcom.com,https://broadcom.com,54151,,63887000000,,,,United States,Brocade Communications Systems Inc,2
+5592137c73696419d8b05200,Bruker,bruker.com,https://bruker.com,334516,,3436500000,,,,United States,,2
+5f3ec5d593f32900015246aa,CAE,cae.com,https://cae.com,33999,,3474497000,,,,Canada,,2
+54a129dc69702dcef950d801,Calian Group,calian.com,https://calian.com,54133,,556482000,,,,Canada,,2
+5d098f3580f93e6664cde1eb,Canadian Solar Inc.,csisolar.com,https://csisolar.com,334413,,5595107000,,,,Canada,,2
+5c1dfe5aa3ae61db9a44ac4d,Canon USA,canon.com,https://canon.com,334310,,28500000000,,,,United States,,2
+62ca63b93d2cef00a3abeb92,Celestica,celestica.com,https://celestica.com,339,,12607809000,,,,Canada,,2
+54a11c7369702da75318be00,Ceragon Networks,ceragon.com,https://ceragon.com,334220,,338728000,,,,Canada,Aviat Networks,2
+57c4d059a6da986a8f417c58,Cerebras,cerebras.ai,https://cerebras.ai,334413,,509991000,,,,United States,,2
+5d0a4dafa3ae613a4faddd8f,Checkpoint Systems,checkpointsystems.com,https://checkpointsystems.com,33911,,687000000,,,,United States,CCL Design,2
+54a12ab369702d9548422702,Ciena,ciena.com,https://ciena.com,33421,,4769507000,,,,United States,,2
+62987dc94fbae900a51766b3,Cisco,cisco.com,https://cisco.com,33411,,56654000000,,,,United States,,2
+556d37c67369641284e2b400,Coherent Corp.,coherent.com,https://coherent.com,334413,,5810115000,,,,United States,II-VI China,2
+54a1e5ca7468695c8221d515,Collins Aerospace,collinsaerospace.com,https://collinsaerospace.com,336413,,30196000000,,,,United States,RTX,2
+54a1343269702d2db4126d00,CommScope,commscope.com,https://commscope.com,33411,,1930000000,,,,United States,The Carlyle Group,2
+54a1292369702db648c06801,Corsair,corsair.com,https://corsair.com,334111,,1472480000,,,,United States,EagleTree Capital,2
+55922bfc736964185fecad00,Crestron Electronics,crestron.com,https://crestron.com,33451,,1200000000,,,,United States,,2
+5e570452ebcd930001e32d91,Cubic Corporation,cubic.com,https://cubic.com,33429,,1500000000,,,,United States,Veritas Capital,2
+60998712fb706b00e1031d8d,Curtiss-Wright Corporation,curtisswright.com,https://curtisswright.com,33641,,3498372000,,,,United States,,2
+5f3f3c8253387d00014267a4,Cytiva,cytiva.com,https://cytiva.com,334516,,4000000000,,,,United States,Danaher,2
+54a1213569702d86b63c7e02,Danaher,danaher.com,https://danaher.com,334510,,24568000000,,,,United States,,2
+54a128ff69702dab37537a01,Dell Technologies,dell.com,https://dell.com,334111,,113538000000,,,,United States,,2
+54a11dbb69702d97c1333901,DENSO,denso.com,https://denso.com,336390,,47249020000,,,,United States,DENSO Auto Parts,2
+54a1217569702d7fe6cfda02,Dexcom,dexcom.com,https://dexcom.com,33911,,4662000000,,,,United States,,2
+5b148ceea6da987120e0fcfc,Diebold Nixdorf,dieboldnixdorf.com,https://dieboldnixdorf.com,334118,,3805700000,,,,United States,,2
+5b83f188f874f715d01dd4d8,EcoFlow,ecoflow.com,https://ecoflow.com,33599,,1000000000,,,,United States,,2
+54a11ca669702d84c54db600,eInfochips (An Arrow Company),einfochips.com,https://einfochips.com,33441,,200000000,,,,United States,Arrow Electronics,2
+5a9f533da6da98d97e82a0ae,Enphase Energy,enphase.com,https://enphase.com,33599,,1472985000,,,,United States,,2
+62beb749164deb00a31ef49f,Entegris,entegris.com,https://entegris.com,33911,,3196600000,,,,United States,,2
+54a134e969702d2f9f12bd00,Evertz,evertz.com,https://evertz.com,33431,,377274000,,,,Canada,,2
+5e57be47e983c8000162423b,EXFO,exfo.com,https://exfo.com,334519,,265583000,,,,Canada,,2
+5f49287e213bd00001b78250,Extreme Networks,extremenetworks.com,https://extremenetworks.com,33411,,1140067000,,,,United States,,2
+5f41376719095b00010dd641,First Solar,firstsolar.com,https://firstsolar.com,33661,,5219376000,,,,United States,,2
+5ed5db62f317fd00011e8ae1,Flex,flex.com,https://flex.com,33911,,27914000000,,,,United States,,2
+60fa2b86b9a1ac0184449048,Flir,flir.com,https://flir.com,334511,,1923689000,,,,United States,Teledyne Technologies Incorporated,2
+54a128f869702d9313676201,Fluke Corporation,fluke.com,https://fluke.com,33411,,1000000000,,,,United States,Fortive,2
+56e5ea8af3e5bb17f401247d,Fortive,fortive.com,https://fortive.com,334519,,5142600000,,,,United States,,2
+5d0cee5ee497040939d2a6a9,Garmin,garmin.com,https://garmin.com,334511,,7245519000,,,,United States,Firstbeat Technologies,2
+5f4db889765eb10001a333aa,GE HealthCare,gehealthcare.com,https://gehealthcare.com,33911,,20625000000,,,,United States,GE,2
+5f49b1a4a845d3000189667b,General Dynamics,gd.com,https://gd.com,336611,,52550000000,,,,United States,,2
+57c4cb5fa6da986a37a1cf55,GlobalFoundries,gf.com,https://gf.com,334413,,6791000000,,,,United States,onsemi,2
+54a11bd969702d77c2d66e00,GoPro,gopro.com,https://gopro.com,33411,,651542000,,,,United States,,2
+5d572fe4d4b3b000bdc3afc4,Groq,groq.com,https://groq.com,334413,,500000000,,,,United States,NVIDIA,2
+54a11bb169702d88c4925000,Hach,hach.com,https://hach.com,334516,,5503000000,,,,United States,Veralto,2
+56dd0d18f3e5bb1ac9000fea,Hewlett Packard Enterprise,hpe.com,https://hpe.com,54151,,34296000000,,,,United States,,2
+628f26e27ffb9200d8f4d9c2,HID,hidglobal.com,https://hidglobal.com,334290,,957800000,,,,United States,ASSA ABLOY Group,2
+5da4e6c079b5820001c1d699,Hillrom,hillrom.com,https://hillrom.com,33911,,2950000000,,,,United States,Baxter International Inc.,2
+5d0994cda3ae61b03f943fd2,"Hologic, Inc.",hologic.com,https://hologic.com,334510,,4100500000,,,,United States,Hologic Diagenode,2
+69f7d3b006e7d700019ef393,Honeywell Aerospace,honeywellaerospace.com,https://honeywellaerospace.com,336412,,17404000000,,,,United States,,2
+57c53a82a6da984be99ba3b4,HP,hp.com,https://hp.com,334111,,55295000000,,,,United States,,2
+54a11b7769702da10fed3c00,Hydrafacial,hydrafacial.com,https://hydrafacial.com,33911,,334300000,,,,United States,Vesper Healthcare Acquisition Corp,2
+5d33d0d1a3ae6113e19b1674,IBM,ibm.com,https://ibm.com,541512,,67536000000,,,,United States,,2
+55eba33cf3e5bb23810020b6,Illumina,illumina.com,https://illumina.com,334516,,4338000000,,,,United States,,2
+5e4285a8f89f86008c98f1ed,Insulet Corporation,insulet.com,https://insulet.com,33911,,2708100000,,,,United States,,2
+6551b03afb912500013c3753,Intel,intel.com,https://intel.com,334413,,52853000000,,,,United States,,2
+5a9cbc27a6da98d954d5a3e4,"Itron, Inc.",itron.com,https://itron.com,54133,,2367194000,,,,United States,,2
+5da144e56a35ec00013f9e04,Jabil,jabil.com,https://jabil.com,33411,,29802000000,,,,United States,,2
+6018f6686593a5012069631f,Juniper Networks,juniper.net,https://juniper.net,33411,,5073600000,,,,United States,Hewlett Packard Enterprise,2
+54fca626736964016b123e00,Keysight Technologies,keysight.com,https://keysight.com,334515,,5375000000,,,,United States,,2
+6258526b442862008dbc9bc8,L3Harris Technologies,l3harris.com,https://l3harris.com,334511,,21865000000,,,,United States,,2
+5592218f7369640b18ed1d00,Lattice Semiconductor,latticesemi.com,https://latticesemi.com,334413,,523262000,,,,United States,"CANYON BRIDGE CAPITAL PARTNERS, LLC",2
+54a1215b69702d84c503b802,Lenovo,lenovo.com,https://lenovo.com,334111,,69076968000,,,,United States,,2
+55ea614df3e5bb598f00824a,Leonardo DRS,leonardodrs.com,https://leonardodrs.com,334511,,3648000000,,,,United States,Leonardo,2
+5da296992c81690001c35394,Littelfuse,littelfuse.com,https://littelfuse.com,334419,,2386294000,,,,United States,,2
+5e5694c177202500018c2c86,Logitech,logitech.com,https://logitech.com,334118,,4861685000,,,,United States,,2
+618353d83aa0d600a45ccd7c,Lumileds,lumileds.com,https://lumileds.com,334413,,600000000,,,,United States,Sanan Integrated Circuit,2
+5ccb348a3c80cd0908366922,Marvell Technology,marvell.com,https://marvell.com,334413,,8194600000,,,,United States,,2
+55921d767369644785665700,Masimo,masimo.com,https://masimo.com,334510,,1526900000,,,,United States,Danaher,2
+5ed250ba25b9580001651825,Medtronic,medtronic.com,https://medtronic.com,334510,,36364000000,,,,United States,,2
+55922f707369642529143c00,Methode Electronics,methode.com,https://methode.com,334417,,1019200000,,,,United States,,2
+5cb3e43180f93e6b965bd716,Microchip Technology Inc.,microchip.com,https://microchip.com,334413,,4713100000,,,,United States,Microchip,2
+54a126e269702d8cfc0c8a00,Micron Technology,micron.com,https://micron.com,33411,,37378000000,,,,United States,,2
+54a122f969702d9d7e43e002,Mitel,mitel.com,https://mitel.com,517810,,970000000,,,,Canada,,2
+54a127c169702d8eebb80001,Molex,molex.com,https://molex.com,334417,,9100000000,,,,United States,Koch,2
+55922fb1736964192c0cb900,Motorola Solutions,motorolasolutions.com,https://motorolasolutions.com,334220,,11682000000,,,,United States,Rave Mobile Safety,2
+54a12a9369702dc841fcdc01,MSA - The Safety Company,msasafety.com,https://msasafety.com,33911,,1874814000,,,,United States,,2
+64da38cc71d05e00a31be821,NCR Voyix,ncrvoyix.com,https://ncrvoyix.com,51321,,2687000000,,,,United States,,2
+54a134f169702d3e83b26400,Neotech Global,neotechglobal.com,https://neotechglobal.com,334418,,759200000,,,,United States,,2
+5592276273696418d20d9d00,NetApp,netapp.com,https://netapp.com,334112,,6925000000,,,,United States,,2
+615db49cbad16200a4d0d2a5,NI (National Instruments),ni.com,https://ni.com,51321,,1700000000,,,,United States,Emerson,2
+55695b2b73696425850e1000,Nintendo,nintendo.com,https://nintendo.com,33411,,7774030000,,,,United States,,2
+5f50a22da4560d00e3eddf31,NVIDIA,nvidia.com,https://nvidia.com,334413,,215938000000,,,,United States,"Mellanox Technologies, Ltd.",2
+5f4aa31a27adbb00016b02f3,Olympus Corporation of the Americas,olympusamerica.com,https://olympusamerica.com,339112,,2541000000,,,,United States,Olympus Corporation,2
+5ed262edc3eef50001f060f8,onsemi,onsemi.com,https://onsemi.com,334413,,5995400000,,,,United States,,2
+556978a273696425d7803800,OURA,ouraring.com,https://ouraring.com,33911,,1000000000,,,,United States,,2
+54a1202069702d97c1d24802,PacBio,pacb.com,https://pacb.com,334516,,160005000,,,,United States,,2
+54a12b0b69702d8b19c0ea02,PAR Technology,partech.com,https://partech.com,54151,,455547000,,,,United States,,2
+54a1349c69702d333daa6400,Plexus Corp.,plexus.com,https://plexus.com,33911,,4032966000,,,,United States,,2
+5c901b82ba509b090c1d788f,Poly,poly.com,https://poly.com,517,,1665531000,,,,United States,HP,2
+5da68a0a34d3900001732e57,Pure Storage,purestorage.com,https://purestorage.com,334112,,3662843000,,,,United States,,2
+6020105bace0ed008c69d53f,"Qorvo, Inc.",qorvo.com,https://qorvo.com,334413,,3678517000,,,,United States,"Skyworks Solutions, Inc.",2
+5f6316994abf0b008ce52a3f,Qualcomm,qualcomm.com,https://qualcomm.com,334413,,44284000000,,,,United States,,2
+54a1345b69702d407fa01700,Razer,razer.com,https://razer.com,334310,,1619590000,,,,United States,,2
+54a129ae69702d9548c5ae01,Resmed,resmed.com,https://resmed.com,33911,,5146327000,,,,United States,,2
+6454810389eee10001fa560f,Revvity,revvity.com,https://revvity.com,325413,,2856051000,,,,United States,,2
+5d0aa9e4a3ae618a3d959cd4,"Ricoh USA, Inc.",ricoh-usa.com,https://ricoh-usa.com,334118,,4609000000,,,,United States,,2
+5f4a5821e8ca1c00c7ee9739,RTX,,,334511,,88603000000,,,,United States,,2
+5b837369f874f73891e62b12,SambaNova,sambanova.ai,https://sambanova.ai,334413,,100000000,,,,United States,Intel,2
+61de9291b08ee300a4d3bcdf,Samsung Semiconductor,semiconductor.samsung.com,https://semiconductor.samsung.com,334413,,89729000000,,,,United States,Samsung Electronics,2
+54a11bc269702d8ed4b75900,Sanmina,sanmina.com,https://sanmina.com,334418,,8128382000,,,,United States,,2
+5569c28c736964254f858e00,SCIEX,sciex.com,https://sciex.com,334510,,1000000000,,,,United States,Danaher,2
+54a222e674686935beaee00f,Seagate Technology,seagate.com,https://seagate.com,334112,,12195000000,,,,United States,LaCie,2
+54a1295b69702d979cdfa101,Sensata Technologies,sensata.com,https://sensata.com,334513,,3704500000,,,,United States,,2
+5b14d3d7a6da987135fa3610,"Skyworks Solutions, Inc.",skyworksinc.com,https://skyworksinc.com,334413,,4086900000,,,,United States,"Qorvo, Inc.",2
+54a11fec69702d7fe6163902,"Sonos, Inc.",sonos.com,https://sonos.com,33411,,1443276000,,,,United States,,2
+5ed0665a370e8100011ebb87,Sony Interactive Entertainment,sonyinteractive.com,https://sonyinteractive.com,513210,,29363000000,,,,United States,Sony,2
+5ed1211cea6e0b00013193b7,Stryker,stryker.com,https://stryker.com,339112,,25116000000,,,,United States,,2
+629dd5ff19376c00a35a93f7,SunPower,sunpower.com,https://sunpower.com,33411,,300000000,,,,United States,TotalEnergies,2
+54a1354269702d4b2ef17000,Supermicro,supermicro.com,https://supermicro.com,334111,,21972042000,,,,United States,,2
+54a11e2c69702d77c23c6b01,Tarana Wireless,taranawireless.com,https://taranawireless.com,517,,221000000,,,,United States,,2
+5e55bac902d6b900014ae826,Tektronix,tek.com,https://tek.com,334515,,900000000,,,,United States,Fortive,2
+62a099395b400300b36d8b27,Texas Instruments,ti.com,https://ti.com,334413,,17682000000,,,,United States,,2
+5b12e7e6a6da98dcb5c6791b,Thermo Fisher Scientific,thermofisher.com,https://thermofisher.com,334516,,44556000000,,,,United States,Ion Torrent by Life Technologies,2
+54a25f2b7468693cdd6dc41d,Ubiquiti Inc.,ui.com,https://ui.com,334290,,2573545000,,,,United States,,2
+54a120a569702d84c50c5b02,Varian,varian.com,https://varian.com,334510,,3168200000,,,,United States,Siemens Healthineers,2
+5f42cbbe79786e0001623289,Verifone,verifone.com,https://verifone.com,334118,,1900000000,,,,United States,Francisco Partners,2
+5a9ea055a6da98d97016ea82,VIAVI Solutions,viavisolutions.com,https://viavisolutions.com,33441,,1084300000,,,,United States,,2
+5d0a12c6f651258aca803d2f,ViewSonic,viewsonic.com,https://viewsonic.com,334118,,1000000000,,,,United States,,2
+559235f3736964191255d100,"Vishay Intertechnology, Inc.",vishay.com,https://vishay.com,334413,,3069048000,,,,United States,,2
+54a12ad369702d9548893602,Waters Corporation,waters.com,https://waters.com,334516,,3165286000,,,,United States,,2
+54a133f169702d2f9f9c1500,WD,wd40.com,https://wd40.com,334112,,11777000000,,,,United States,WD-40 Company,2
+54a1213a69702d8cccbba502,WHOOP,whoop.com,https://whoop.com,33911,,1000000000,,,,United States,,2
+5ed20acba23b3300015aaad4,Wolfspeed,wolfspeed.com,https://wolfspeed.com,334413,,757600000,,,,United States,,2
+54a11d9c69702d77c2823601,Zebra Technologies,zebra.com,https://zebra.com,334118,,5396000000,,,,United States,,2
+54a1284b69702db64824e800,ZOLL Medical Corporation,zoll.com,https://zoll.com,33911,,2519000000,,,,United States,Asahi Kasei,2
+5edba935e36c200001d51dcb,3M,3m.com,https://3m.com,33999,,24948000000,,,,United States,Neogen Corporation,3
+5d09d9c0a3ae61974d1aacc6,Abbott,abbott.com,https://abbott.com,339112,,44328000000,,,,United States,,3
+5ee8d375f72f7600e87e3868,ADM,adm.com,https://adm.com,424510,,80269000000,,,,United States,,3
+55922b1673696418a5e6aa00,Amway,amwayglobal.com,https://amwayglobal.com,325411,,7300000000,,,,United States,Alticor Inc.,3
+556dc4b4736964120fdd9901,Anheuser-Busch,anheuser-busch.com,https://anheuser-busch.com,312120,,206200000,,,,United States,AB InBev,3
+54a1278d69702d90a2b6cb00,Arc'teryx Equipment,arcteryx.com,https://arcteryx.com,315250,,2860000000,,,,Canada,Anta,3
+54a1354269702d3e83309400,B. Braun Medical Inc. (US),bbraunusa.com,https://bbraunusa.com,3391,,11020000000,,,,United States,B. Braun Group,3
+54a120fc69702d9a8b99cb02,Bausch + Lomb,bausch.com,https://bausch.com,325412,,5101000000,,,,United States,Bausch Health Companies Inc.,3
+5e6f9b731841ed0099be5edc,Baxter International Inc.,baxter.com,https://baxter.com,33911,,11244000000,,,,United States,,3
+54a13afe69702d267af95b01,Bimbo Bakeries USA,bimbobakeriesusa.com,https://bimbobakeriesusa.com,311812,,11100000000,,,,United States,Grupo Bimbo,3
+56dd6ffbf3e5bb5da6002947,Black Rifle Coffee Company,blackriflecoffee.com,https://blackriflecoffee.com,44529,,398263000,,,,United States,,3
+618e171593acfa00da739027,Boston Scientific,bostonscientific.com,https://bostonscientific.com,339112,,20074000000,,,,United States,,3
+54a11e4969702d84c5b05501,Brown-Forman,brown-forman.com,https://brown-forman.com,312140,,3928000000,,,,United States,Pernod Ricard,3
+5e8709606f76e5008ca845f5,Bunge,bunge.com,https://bunge.com,11115,,70329000000,,,,United States,,3
+55921466736964186a2e5800,Cardinal Health,cardinalhealth.com,https://cardinalhealth.com,424210,,222578000000,,,,United States,,3
+5f42d75ac31d000001fe1ea8,Cargill,cargill.com,https://cargill.com,11141,,154000000000,,,,United States,,3
+54a127b969702d8b197b1b01,Colgate-Palmolive,colgatepalmolive.com,https://colgatepalmolive.com,33911,,20382000000,,,,United States,Colgate PROclub NORDIC,3
+54a12aca69702d979ca24b02,Columbia Sportswear Company,columbiasportswearcompany.com,https://columbiasportswearcompany.com,33992,,3397019000,,,,United States,Forus S.A.,3
+54a11d4069702d7fe62d1301,Conagra Brands,conagrabrands.com,https://conagrabrands.com,31141,,11281600000,,,,United States,,3
+5d0aa85d80f93e5866d39aa9,CONMED Corporation,conmed.com,https://conmed.com,339112,,1374495000,,,,United States,,3
+57c4f4a6a6da986a3f75950f,Dentsply Sirona,dentsplysirona.com,https://dentsplysirona.com,33911,,3680000000,,,,United States,,3
+54a1341769702d333d4b1900,Diversey,diverseybrands.com,https://diverseybrands.com,56172,,7400000000,,,,United States,"Diversey Turkiye, Middle East & Africa",3
+556cdd26736964121f834600,E.L.F. BEAUTY,elfbeauty.com,https://elfbeauty.com,325620,,1636472000,,,,United States,,3
+5fca22e4178e5500be0e3cd3,Ecolab,ecolab.com,https://ecolab.com,33911,,16081200000,,,,United States,,3
+5b85bab6f874f76dba63f342,Edwards Lifesciences,edwards.com,https://edwards.com,339112,,6067600000,,,,United States,,3
+5d09ce5680f93e505ca8bf2e,General Mills,generalmills.com,https://generalmills.com,311,,18424600000,,,,United States,,3
+54a1291b69702d9b8bda7901,Hasbro,hasbro.com,https://hasbro.com,339930,,4701300000,,,,United States,,3
+54a1b864746869547553d40a,Hill's Pet Nutrition,hillspet.com,https://hillspet.com,311111,,4613000000,,,,United States,Colgate-Palmolive,3
+54a1351669702d3cbb818a00,IDEXX,idexx.com,https://idexx.com,54138,,4303702000,,,,United States,,3
+54a128d669702d9ebcd23001,IFF,iff.com,https://iff.com,325199,,10890000000,,,,United States,,3
+618279a347a4fa00f63a0c1f,IGT,igt.com,https://igt.com,3391,,2511000000,,,,United States,"Apollo Global Management, Inc.",3
+57c4bcc8a6da9836fa1a0750,ILIA Beauty,iliabeauty.com,https://iliabeauty.com,325620,,200000000,,,,United States,Famille C Participations,3
+601bfcfe4e15ca00e23408f0,Ingredion Incorporated,ingredion.com,https://ingredion.com,311221,,7219000000,,,,United States,,3
+62cd99f42b3f2f000130b882,Intuitive,intuitive.com,https://intuitive.com,33911,,10064700000,,,,United States,,3
+61758b94c9e96e008cb9b1dd,Johnson & Johnson,jnj.com,https://jnj.com,325412,,94193000000,,,,United States,,3
+6509c6b2828db501e744f478,Kellanova,kellanova.com,https://kellanova.com,311230,,12750000000,,,,United States,Mars,3
+633460ef2c71bf00a34772ac,Kenvue,kenvue.com,https://kenvue.com,33911,,15124000000,,,,United States,Kimberly-Clark,3
+5e56364a6cb219017dd63653,Keurig Dr Pepper Inc.,keurigdrpepper.com,https://keurigdrpepper.com,311920,,16603000000,,,,United States,JAB HOLDING COMPANY LLC,3
+5da4d479b3c1310001ce8e18,Kimberly-Clark,kimberly-clark.com,https://kimberly-clark.com,33911,,17216000000,,,,United States,,3
+5f74f6b288e681016824dcb3,King Arthur Baking Company,kingarthurbaking.com,https://kingarthurbaking.com,311211,,334000000,,Norwich,Vermont,United States,,3
+55f1b737f3e5bb61c9003c6b,Kraft Heinz,kraftheinz.com,https://kraftheinz.com,311513,,24990000000,,,,United States,PT Heinz ABC Indonesia,3
+5d096beaf651257f558237f6,MAC Cosmetics,maccosmetics.com,https://maccosmetics.com,33995,,300000000,,,,United States,The Estee Lauder Companies Inc.,3
+5fe2e194bb6a51014ca8d802,Mars,mars.com,https://mars.com,311351,,65000000000,,,,United States,,3
+5da3c9c8e49fcd0001ed1216,"Mattel, Inc.",mattel.com,https://mattel.com,339930,,5347600000,,,,United States,,3
+54a129b269702d9b8bf7c601,McCain Foods,mccain.com,https://mccain.com,31191,,11250000000,,,,Canada,,3
+54a12afe69702db878bb1c02,McCormick & Company,mccormickcorporation.com,https://mccormickcorporation.com,31193,,6840300000,,,,United States,,3
+54a1230969702d8ccca51603,Medline,medline.com,https://medline.com,33911,,28432000000,,,,United States,,3
+5f46ba9b2357d000018f9eb0,Merz Aesthetics,merzaesthetics.com,https://merzaesthetics.com,33911,,1300000000,,,,United States,Merz Group,3
+57c4ce03a6da986a673c3737,Milk Makeup,milkmakeup.com,https://milkmakeup.com,325620,,110400000,,,,United States,Milk,3
+5e70605ecd2a5c00fcf41592,Molson Coors Beverage Company,molsoncoors.com,https://molsoncoors.com,312120,,11140800000,,,,Canada,,3
+556d440f73696411fd84c400,Mondelez International,mondelezinternational.com,https://mondelezinternational.com,31199,,38537000000,,,,United States,,3
+54a135c869702d333dd30501,Monster Energy,monsterenergy.com,https://monsterenergy.com,312111,,766556000,,,,United States,Monster Beverage Corporation,3
+54a1358369702d2f9fb40f01,Nestle Purina North America,purina.com,https://purina.com,311111,,112708000000,,,,United States,Nestle,3
+5592197a736964199b336a00,Newell Brands,newellbrands.com,https://newellbrands.com,33992,,7204000000,,,,United States,,3
+5f497ca3b2162b0001bbfd46,Nike,nike.com,https://nike.com,315250,,46398000000,,,,United States,GMG,3
+54a1b6947468695c82550f0a,Oakley,oakley.com,https://oakley.com,339920,,2100000000,,,,United States,EssilorLuxottica,3
+5cf6cd7de843c109a966f777,OLIPOP PBC,drinkolipop.com,https://drinkolipop.com,312111,,400000000,,,,United States,,3
+54a1a49a74686942d3553904,Otsuka Pharmaceutical Companies (U.S.),otsuka-us.com,https://otsuka-us.com,325412,,675100000,,,,United States,"Otsuka Pharmaceutical Co., Ltd.",3
+54a129de69702d931302e701,Pantone,pantone.com,https://pantone.com,33994,,219400000,,,,United States,X-Rite,3
+5d09b4ff80f93e0ece8751d8,Peloton Interactive,onepeloton.com,https://onepeloton.com,611620,,2490800000,,,,United States,,3
+6560b80cbe73ab00f5f858b2,PepsiCo,pepsico.com,https://pepsico.com,31214,,93925000000,,,,United States,Royal Unibrew,3
+55922f027369641912d9b800,poppi,drinkpoppi.com,https://drinkpoppi.com,312111,,745000000,,,,United States,PepsiCo,3
+54a1218a69702d94a403bf02,Procter & Gamble,pg.com,https://pg.com,3391,,87032000000,,,,United States,,3
+62eb9fd7aba27000e00b7e9a,Rare Beauty,rarebeauty.com,https://rarebeauty.com,325620,,500000000,,,,United States,,3
+5f492cdde32ae800016808cd,Revlon,revlon.com,https://revlon.com,3391,,1980400000,,,,United States,Revlon Group Holdings LLC,3
+54a135bc69702d4b2e71bb00,Rich Products Corporation,richs.com,https://richs.com,311412,,6000000000,,,,United States,,3
+5a9e229fa6da98d9977a0359,SC Johnson,scjohnson.com,https://scjohnson.com,33911,,11200000000,,,,United States,,3
+54a11c5f69702d8ed4af9a00,Tarte Cosmetics,tartecosmetics.com,https://tartecosmetics.com,325620,,100300000,,,,United States,KOSE Corporation,3
+54a1340b69702d2db46c5100,Teleflex,teleflex.com,https://teleflex.com,339112,,1992713000,,,,United States,Montagu,3
+55f64629f3e5bb193f009d99,The Campbell's Company,thecampbellscompany.com,https://thecampbellscompany.com,31141,,9928000000,,,,United States,,3
+5a9dbfc0a6da98d95ff8f425,The Clorox Company,clorox.com,https://clorox.com,325611,,7104000000,,,,United States,,3
+56e32e01f3e5bb2e9b008cf0,The Coca-Cola Company,coca-cola.com,https://coca-cola.com,312111,,47941000000,,,,United States,EQUATORIAL COCA-COLA BOTTLING COMPANY - MOROCCO,3
+54a12af569702db648e74c02,The Estee Lauder Companies Inc.,elcompanies.com,https://elcompanies.com,3391,,14288000000,,,,United States,,3
+55697d8673696425a9f03f00,The Hershey Company,thehersheycompany.com,https://thehersheycompany.com,311351,,11692576000,,,,United States,,3
+60ebec13ad89520001697ad3,The North Face,thenorthface.com,https://thenorthface.com,33992,,4005800000,,,,United States,,3
+601eeeb4b1ca5e00e6a30470,Tiffany & Co.,tiffany.com,https://tiffany.com,448310,,4400000000,,,,United States,LVMH,3
+5e6fa9c37c894100fdb7059b,Tyson Foods,tysonfoods.com,https://tysonfoods.com,311611,,54441000000,,,,United States,"Cal-Maine Foods, Inc.",3
+54a1341e69702d3cbbad0500,Under Armour,underarmour.com,https://underarmour.com,33992,,4966370000,,,,United States,ITOCHU Corporation,3
+5b14ac77a6da9870fa3dfa0d,YETI,yeti.com,https://yeti.com,33992,,1868494000,,,,United States,,3
+55922445736964192c219000,Zimmer Biomet,zimmerbiomet.com,https://zimmerbiomet.com,33911,,8231500000,,,,United States,,3
+54a1995c74686940125ba500,7-Eleven,7-eleven.com,https://7-eleven.com,445131,,52602000000,,,,United States,Seven & i Holdings,4
+5e74be6ea28fee008c3a131b,Abercrombie & Fitch Co.,abercrombie.com,https://abercrombie.com,458110,,5266292000,,,,United States,,4
+5d0a2017a3ae616113f70817,Ace Hardware Corporation,acehardware.com,https://acehardware.com,44411,,10080000000,,,,United States,Kawan Lama Group,4
+61e18ebb61aa8200a4a806fb,Advance Auto Parts,advanceautoparts.com,https://advanceautoparts.com,441310,,8601000000,,,,United States,,4
+54a1347e69702d3a9c9a3c00,Albertsons Companies,albertsonscompanies.com,https://albertsonscompanies.com,445110,,83172500000,,,,United States,Albertsons,4
+54a120b469702da425407402,ALDO Group,aldogroup.com,https://aldogroup.com,458110,,2700000000,,,,Canada,,4
+54a1b70674686942d3407f0a,ALICE + OLIVIA,aliceandolivia.com,https://aliceandolivia.com,458110,,200000000,,,,United States,,4
+556df1ec736964109c2f1000,ALO,aloyoga.com,https://aloyoga.com,458110,,2000000000,,,,United States,,4
+54a1398369702dac849d4600,American Eagle Outfitters Inc.,aeo-inc.com,https://aeo-inc.com,458110,,5496810000,,,,United States,,4
+55f44573f3e5bb1df900740a,Ann Taylor,anntaylor.com,https://anntaylor.com,458110,,249932000,,,,United States,"Ann, Inc.",4
+54a1274769702d9548507400,Anthropologie,urbn.com,https://urbn.com,458110,,6165376000,,,,United States,,4
+5a9d6999a6da98d938baf960,Ariat International,ariat.com,https://ariat.com,458110,,420000000,,,,United States,,4
+54fca1da7369640154d10900,Aritzia,aritzia.com,https://aritzia.com,458110,,2712494000,,,,Canada,,4
+54a1343d69702d333d3d3300,Ashley Furniture Industries,ashleyfurnitureindustriesllc.com,https://ashleyfurnitureindustriesllc.com,337121,,12300000000,,,,United States,,4
+54a1352769702d2db47ae400,AutoZone,autozone.com,https://autozone.com,441330,,18938717000,,,,United States,"Autozone, Inc",4
+5569c6ca7369642521529200,BARK,bark.co,https://bark.co,459910,,394843000,,,,United States,,4
+54a1353869702d48e2317000,Bass Pro Shops,basspro.com,https://basspro.com,459110,,7000000000,,,,United States,,4
+54a13be769702d24d3ccd601,Bath & Body Works,bathandbodyworks.com,https://bathandbodyworks.com,45612,,7291000000,,,,United States,,4
+54a11df669702d84c5d83301,Bed Bath & Beyond,bedbathandbeyond.com,https://bedbathandbeyond.com,454110,,5344685000,,,,United States,,4
+5f455b967f6cfc0001699e58,Belk,belkcareers.com,https://belkcareers.com,45511,,3700000000,,,,United States,,4
+54a12a2669702d93135c0902,Best Buy,bestbuy.com,https://bestbuy.com,443142,,41691000000,,,,United States,,4
+54a126d169702d8cfce27c00,BJ's Wholesale Club,bjs.com,https://bjs.com,455211,,21457274000,,,,United States,,4
+54a11fe569702d88c4a7ed01,Bridgestone Americas,bridgestoneamericas.com,https://bridgestoneamericas.com,326211,,13605000000,,,,United States,Bridgestone Asia Pacific,4
+54a1203269702d86b6591a02,Brilliant Earth,brilliantearth.com,https://brilliantearth.com,45831,,437483000,,,,United States,,4
+54a11bc369702d9d7eae6100,Brooks Running,brooksrunning.com,https://brooksrunning.com,31621,,1400000000,,,,United States,Berkshire Hathaway,4
+5f49e5fd6e44610001164e21,"Burlington Stores, Inc.",burlington.com,https://burlington.com,45521,,11919351000,,,,United States,Bain Capital,4
+54a1218f69702d9d7ee67402,Callaway Golf,callawaygolf.com,https://callawaygolf.com,339920,,2060100000,,,,United States,Callaway Golf Canada Ltd.,4
+5da2cd5e42bbaa0001a51d4f,Calvin Klein,calvinklein.com,https://calvinklein.com,458110,,3964000000,,,,United States,PVH Corp.,4
+556d8ef8736964126c9b4001,Canada Goose,canadagoose.com,https://canadagoose.com,31521,,1114458000,,,,Canada,Bain Capital,4
+5f49ac9f7b3fbe00010ec355,Canadian Tire Corporation,canadiantire.ca,https://canadiantire.ca,44511,,11901757000,,,,Canada,,4
+54a12b0269702d8cfc9d8d02,Carhartt,carhartt.com,https://carhartt.com,31521,,1800000000,,,,United States,,4
+54a126d369702dab37a10300,CarMax,carmax.com,https://carmax.com,441120,,25881131000,,,,United States,,4
+5d098609f6512524ca43ea24,Carters Inc.,carters.com,https://carters.com,458110,,2898426000,,,,United States,Little Planet Studio,4
+54a13bc269702d2185ccaf01,Chef Works,chefworks.com,https://chefworks.com,315250,,1400000000,,,,United States,,4
+624f0508f1efd000a58f452d,Chewy,chewy.com,https://chewy.com,454110,,12601500000,,,,United States,PetSmart,4
+5bffd5526aaff22124f1f400,Circle K,circlek.com,https://circlek.com,4451,,76506600000,,,,United States,Couche-Tard,4
+54a11d1d69702d9d7ee7f300,Clinique,clinique.com,https://clinique.com,325620,,14326000000,,,,United States,The Estee Lauder Companies Inc.,4
+54a1226169702da10f361203,Coach,coach.com,https://coach.com,31699,,5598500000,,,,United States,Tapestry,4
+5fc8ef4b5f6ccd0001dfe364,Converse,converse.com,https://converse.com,31621,,1692000000,,,,United States,Nike,4
+6012d5a4a42d630120befb16,Copart,copart.com,https://copart.com,53212,,4646958000,,,,United States,,4
+54a11ca569702d84c591b500,Costco Wholesale,costco.com,https://costco.com,455211,,275235000000,,,,United States,,4
+5e477e66a2173b0099d3d6d6,Crate & Barrel,crateandbarrel.com,https://crateandbarrel.com,449110,,1045000000,,,,United States,Otto Group,4
+54a135dd69702d425501d500,"Crocs, Inc.",crocs.com,https://crocs.com,31621,,4040647000,,,,United States,,4
+5e62d73eb0c04e008ccbe82f,CVS Health,cvshealth.com,https://cvshealth.com,62149,,402067000000,,,,United States,,4
+54a1273669702d9ebccb4b00,Deckers Brands,deckers.com,https://deckers.com,31-33,,5454447000,,,,United States,,4
+6136374252ead400a4589a21,DICK'S Sporting Goods,dickssportinggoods.com,https://dickssportinggoods.com,45911,,19204947000,,,,United States,,4
+54a11be369702d84c5506300,Dollar General,dollargeneral.com,https://dollargeneral.com,455219,,42724369000,,,,United States,,4
+62a0490f559f2900b2dea6ed,Dollar Tree Stores,dollartree.com,https://dollartree.com,455219,,19411800000,,,,United States,,4
+5f49fd762e9ce60001e4e83b,Eataly,eataly.com,https://eataly.com,445298,,896000000,,,,United States,Investindustrial,4
+5e4675f5a7d0ac008da9094a,Etsy,etsy.com,https://etsy.com,454110,,2883501000,,,,United States,,4
+54a122b969702d77c2ff2a03,EXPRESS,express.com,https://express.com,458110,,1854357000,,,,United States,,4
+54a1228f69702d84c5351903,Family Dollar,familydollar.com,https://familydollar.com,4451,,13252100000,,,,United States,"Brigade Capital Management, LP",4
+5d0a667180f93e56d7c85789,Fanatics,fanaticsinc.com,https://fanaticsinc.com,454110,,13000000000,,,,United States,,4
+54a1a2f97468695860c6cf03,Fender Musical Instruments Corporation,fender.com,https://fender.com,339992,,474000000,,,,United States,Servco Pacific Inc.,4
+54a11f6c69702da75310ee01,Five Below,fivebelow.com,https://fivebelow.com,45999,,4764147000,,,,United States,,4
+54a197a274686949e7570300,Foot Locker,footlocker-inc.com,https://footlocker-inc.com,458210,,7988000000,,,,United States,DICK'S Sporting Goods,4
+54a12a4b69702dc841fcbc01,Forever 21,forever21.com,https://forever21.com,458110,,2700000000,,,,United States,SPARC Group LLC,4
+54a22f287468692e71226b14,"Fossil Group, Inc.",fossilgroup.com,https://fossilgroup.com,33991,,1004406000,,,,United States,,4
+54a1ba3774686942d351a60b,GameStop,gamestop.com,https://gamestop.com,44-45,,3629900000,,,,United States,,4
+5e5e99da972df300994de8ff,Gap Inc.,gap.com,https://gap.com,458110,,15366000000,,,,United States,,4
+55e177ccf3e5bb6ee2000369,"Giant Eagle, Inc.",gianteagle.com,https://gianteagle.com,445110,,9000000000,,,,United States,Kroger,4
+54a11b5f69702d8aa1442b00,"Guess?, LLC.",guess.com,https://guess.com,458110,,3000000000,,,,United States,Authentic Brands Group,4
+5f43687b79786e0001dd1a2b,H-E-B,heb.com,https://heb.com,445110,,50000000000,,,,United States,,4
+54a11b7c69702d8aa10c3700,Harbor Freight Tools,harborfreight.com,https://harborfreight.com,444140,,7600000000,,,,United States,,4
+54a11b6769702da425063500,Harley-Davidson Motor Company,harley-davidson.com,https://harley-davidson.com,336991,,4473175000,,,,United States,,4
+54a126de69702d979c2d3400,Harry Winston,harrywinston.com,https://harrywinston.com,45831,,260900000,,,,United States,Swatch Group,4
+54a135d469702d46f060cd00,Herbalife,herbalife.com,https://herbalife.com,446191,,5037500000,,,,United States,Herbalife Nutrition,4
+5da41857988bdd0001926fdb,Herman Miller,hermanmiller.com,https://hermanmiller.com,33712,,3841700000,,,,United States,MillerKnoll,4
+54a116dc69702d3ec00b1900,Hobby Lobby,hobbylobby.com,https://hobbylobby.com,45999,,8000000000,,,,United States,,4
+5a9cce14a6da98d935649adc,Hudson's Bay Company,hbc.com,https://hbc.com,455110,,7500000000,,,,United States,National Realty & Development Corp.,4
+5a9e4cf8a6da98d954dbc9e3,Indigo,indigo.ca,https://indigo.ca,44-45,,705400000,,,,Canada,,4
+54a1213c69702d97c162cd02,J.Crew,jcrew.com,https://jcrew.com,458110,,2300000000,,,,United States,"Anchorage Capital Group, L.L.C.",4
+54a12afc69702dab37936c02,JCPenney,jcpenney.com,https://jcpenney.com,45511,,7600000000,,,,United States,Catalyst Brands India,4
+60f3e1b2d8f85000015ba077,kate spade new york,katespade.com,https://katespade.com,45811,,1197100000,,,,United States,Tapestry,4
+5569db237369642585c5a600,"Kendo Brands, Inc.",kendobrands.com,https://kendobrands.com,33995,,100000000,,,,United States,,4
+5e55f0ba07939b0001df4770,Kohl's,kohls.com,https://kohls.com,455110,,15527000000,,,,United States,,4
+5d3b1465c42dce0bf6ccbed1,"Kontoor Brands, Inc.",kontoorbrands.com,https://kontoorbrands.com,31599,,3154110000,,,,United States,VF Corporation,4
+54a1356a69702d3cbb35b900,Kroger,kroger.com,https://kroger.com,445110,,147642000000,,,,United States,,4
+5e566cf5eff1740001290648,Levi Strauss & Co.,levistrauss.com,https://levistrauss.com,31599,,6282000000,,,,United States,,4
+55921fc773696418e9a67f00,Loblaw Companies Limited,loblaw.ca,https://loblaw.ca,445110,,46615671000,,,,Canada,George Weston Limited,4
+619dca1525825d008ca4668c,"Lowe's Companies, Inc.",lowes.com,https://lowes.com,444110,,86286000000,,,,United States,,4
+660d92550716b00006444f9c,lululemon,lululemon.com,https://lululemon.com,31599,,11102600000,,,,United States,,4
+54a128ff69702d979c327601,Lush Fresh Handmade Cosmetics North America,lush.com,https://lush.com,33995,,894000000,,,,United States,Silverwood Brands PLC,4
+55e17a4ff3e5bb54c800004f,Macy's,macys.com,https://macys.com,455110,,12000000000,,,,United States,Macys Corporate Services Ltd,4
+67f6ef0b1e0be8002163ef85,Mammoth Brands,mammothbrands.com,https://mammothbrands.com,33992,,835000000,,,,United States,,4
+54a1211d69702d918c258402,Marc Jacobs,marcjacobs.com,https://marcjacobs.com,458110,,235700000,,,,United States,LVMH,4
+54a1299669702db878ed7b01,Mary Kay Global,marykayglobal.com,https://marykayglobal.com,325620,,2400000000,,,,United States,Mary Kay,4
+54a11cb669702d94a43cb300,Meijer,meijer.com,https://meijer.com,455211,,22000000000,,,,United States,,4
+54a268707468693cdd239e20,Metro Inc.,corpo.metro.ca,https://corpo.metro.ca,445110,,15819889000,,,,Canada,,4
+54a13c6269702d267a39d301,Michael Kors,michaelkors.com,https://michaelkors.com,458110,,3016000000,,,,United States,Capri Holdings Limited,4
+54a116db69702d3ec0e31700,Michaels Stores,michaels.com,https://michaels.com,459120,,5300000000,,,,United States,"Apollo Global Management, Inc.",4
+5da21c313277f00001a50ad4,Neiman Marcus,neimanmarcus.com,https://neimanmarcus.com,455110,,4800000000,,,,United States,Hudson's Bay Company,4
+5d34312580f93e23c7b344ec,New Balance,newbalance.com,https://newbalance.com,316210,,9200000000,,,,United States,,4
+54a1192969702d3ec05b4b00,Nordstrom,nordstrom.com,https://nordstrom.com,455110,,15800000000,,,,United States,,4
+54a19e6d74686945fae26402,O'Reilly Auto Parts,oreillyauto.com,https://oreillyauto.com,441330,,17781992000,,,,United States,,4
+5f4b5e1ca57e21000105e5d6,Office Depot,officedepot.com,https://officedepot.com,45941,,7174000000,,,,United States,The ODP Group,4
+55922df47369641908b3b300,PACSUN,pacsun.com,https://pacsun.com,458110,,1000000000,,,,United States,Golden Gate Capital,4
+54a1273b69702dab37f05700,Patagonia,patagonia.com,https://patagonia.com,3152,,1470000000,,,,United States,Patagonia Store,4
+5fca8be8e3d42f008c9062df,Petco,petco.com,https://petco.com,459910,,5961467000,,,,United States,CVC,4
+55f65b47f3e5bb196100c4a9,PetSmart,petsmart.com,https://petsmart.com,459910,,10500000000,,,,United States,BC Partners,4
+55fa2a3cf3e5bb71b70029b5,PriceSmart,pricesmart.com,https://pricesmart.com,45521,,5270094000,,,,United States,,4
+5dad5eb14ff61d0001175441,Publix Super Markets,publix.com,https://publix.com,445110,,58258000000,,,,United States,,4
+559239ab736964191267de00,PVH Corp.,pvh.com,https://pvh.com,31599,,8950200000,,,,United States,,4
+5f400d2c180a8d00011ee3ba,Quiksilver,quiksilver.com,https://quiksilver.com,31599,,2000000000,,,,United States,QUIKSILVER FOUNDATION,4
+5dfd28cfbb5e6c00d61e6b50,Quince,quince.com,https://quince.com,458110,,1000000000,,,,United States,,4
+5e6703f93b3f3e00980861f4,QVC,qvc.com,https://qvc.com,51612,,8157000000,,,,United States,QVC Group,4
+54a135f869702d46f0d5e900,rag & bone,ragandbone.com,https://ragandbone.com,458110,,237100000,,,,United States,"Guess?, LLC.",4
+54a12a6669702da2201f0b02,Ralph Lauren,ralphlauren.com,https://ralphlauren.com,45811,,8114500000,,,,United States,,4
+615ff6fdd5b88d00dad1ade4,Reebok,reebok.com,https://reebok.com,31599,,5000000000,,,,United States,Authentic Brands Group,4
+6291ea1d80371d00a512ae3e,Reformation,thereformation.com,https://thereformation.com,31599,,300000000,,,,United States,Permira,4
+559226cc73696418ae2f9900,REI,rei.com,https://rei.com,459110,,3540000000,,,,United States,,4
+5e56ae7f2efaed0001b53359,REVOLVE,revolve.com,https://revolve.com,458110,,1225682000,,,,United States,,4
+54a25e0374686933183e001d,RH,rh.com,https://rh.com,44911,,3439536000,,,,United States,,4
+62bc256d8a9d7c00b3961c81,RITE AID,riteaid.com,https://riteaid.com,45611,,23475490000,,,,United States,,4
+54a1349f69702d3cbb2e4c00,"Ross Stores, Inc.",rossstores.com,https://rossstores.com,458110,,22750559000,,,,United States,,4
+5f61f1100f0f9a008c930089,Saks Fifth Avenue,saksfifthavenue.com,https://saksfifthavenue.com,455110,,3800000000,,,,United States,,4
+54a1233969702da425fc8203,Sherwin-Williams,sherwin-williams.com,https://sherwin-williams.com,325510,,23574300000,,,,United States,Warner Bros. Discovery,4
+54a1203d69702d8aa1292402,Shoppers Drug Mart,shoppersdrugmart.ca,https://shoppersdrugmart.ca,45611,,13588000000,,,,Canada,Loblaw Companies Limited,4
+5a9f02e5a6da98d9467495ab,Skechers,skechers.com,https://skechers.com,316210,,8969351000,,,,United States,3G Capital,4
+5da31ea83154c60001f6b582,SKIMS,skims.com,https://skims.com,3152,,1000000000,,,,United States,,4
+54a12a8c69702db648591802,Sobeys,sobeyscareers.com,https://sobeyscareers.com,445110,,23497000000,,,,Canada,Empire Company Limited,4
+5592403b7369643bdd6c9900,Sol de Janeiro,soldejaneiro.com,https://soldejaneiro.com,325620,,1020000000,,,,United States,L'OCCITANE Group,4
+54a127d069702d9ebcd0a300,Sotheby's,sothebys.com,https://sothebys.com,459920,,7000000000,,,,United States,,4
+54a128e369702d95486e4401,Spanx,spanx.com,https://spanx.com,31599,,220000000,,,,United States,Blackstone,4
+54a1a5387468694f8f1f6b04,Sprouts Farmers Market,sprouts.com,https://sprouts.com,445110,,8806159000,,,,United States,,4
+5cb8b5f8a3ae613b0d5d4230,SSENSE,ssense.com,https://ssense.com,454110,,1100000000,,,,Canada,,4
+55920318736964191e811900,Staples,staples.com,https://staples.com,459410,,8000000000,,,,United States,Sycamore Partners,4
+5d88848ad64d780098cb9eef,Starbucks,starbucks.com,https://starbucks.com,44511,,37184400000,,,,United States,Alshaya Group,4
+54a1215069702d97c119e302,Stitch Fix,stitchfix.com,https://stitchfix.com,458110,,1267171000,,,,United States,,4
+5a9d39f9a6da98d99a3b8629,StockX,stockx.com,https://stockx.com,454110,,683100000,,,,United States,,4
+54a11f0d69702d88c4a7a001,Suncor,suncor.com,https://suncor.com,211120,,35760454000,,,,Canada,,4
+5d0169b82c5de50968a19f99,Tapestry,tapestry.com,https://tapestry.com,458110,,7010700000,,,,United States,,4
+5f4b5d08368cd60001abdeaf,Target,target.com,https://target.com,455110,,104780000000,,,,United States,,4
+556db52d73696411fd036801,TaylorMade Golf Company,taylormadegolf.com,https://taylormadegolf.com,339920,,1630000000,,,,United States,"Centroid Investment Partners Co., Ltd.",4
+5f88fc83d4820000c052b564,The Children's Place,childrensplace.com,https://childrensplace.com,458110,,1208830000,,,,United States,,4
+54a1a8a874686942d3f77505,The Home Depot,homedepot.com,https://homedepot.com,444110,,164683000000,,,,United States,,4
+54a1205769702da10fd46102,The RealReal,therealreal.com,https://therealreal.com,459510,,692845000,,,,United States,,4
+54a1289d69702d9313d02d01,"The TJX Companies, Inc.",tjx.com,https://tjx.com,458110,,60372000000,,,,United States,,4
+5500b06d7369642df57c0e00,Thrive Market,thrivemarket.com,https://thrivemarket.com,445110,,700000000,,,,United States,,4
+54a1341669702d2db4655900,Timberland,timberland.com,https://timberland.com,31621,,1735900000,,,,United States,VF Corporation,4
+5e4e2444962df2008da1cc1b,TOM FORD FASHION,tomfordfashion.com,https://tomfordfashion.com,33991,,372000000,,,,United States,TOM FORD,4
+54a120b369702d8aa1b36902,Too Faced Cosmetics,toofaced.com,https://toofaced.com,325620,,391700000,,,,United States,The Estee Lauder Companies Inc.,4
+54a1b7df74686949e740ce0a,TORY BURCH,toryburch.com,https://toryburch.com,458110,,2000000000,,,,United States,,4
+54a11c9369702d86b629ab00,Tractor Supply Company,tractorsupply.com,https://tractorsupply.com,444240,,15520000000,,,,United States,,4
+54a12a5569702d8cfc0f3a02,Trader Joe's,traderjoes.com,https://traderjoes.com,445110,,17000000000,,,,United States,ALDI Nord Group,4
+5e57b2f0fefac20001612950,Trek Bicycle,trekbikes.com,https://trekbikes.com,336991,,2000000000,,,,United States,,4
+5c1dbc0d80f93e5cb8d01829,Trulieve,trulieve.com,https://trulieve.com,11,,1181200000,,,,Canada,,4
+54a1291f69702dc128883a01,Tupperware,tupperware.com,https://tupperware.com,326199,,1305600000,,,,United States,,4
+5592140473696418a5275700,Ulta Beauty,ulta.com,https://ulta.com,45612,,12392820000,,,,United States,,4
+54a1359d69702d46f036ab00,Urban Decay Cosmetics,urbandecay.com,https://urbandecay.com,325620,,200000000,,,,United States,L'Oreal,4
+54a1354f69702d3cbb91aa00,Urban Outfitters,urbanoutfitters.com,https://urbanoutfitters.com,458110,,5410000000,,,,United States,,4
+54a1bb2f74686945fa80ed0b,Vans,vans.com,https://vans.com,315250,,2149100000,,,,United States,,4
+54a26b377468693318643521,VF Corporation,vfc.com,https://vfc.com,315250,,9605207000,,,,United States,,4
+5cb5ff51f65125ca6eae883d,Victoria's Secret & Co.,victoriassecret.com,https://victoriassecret.com,458110,,6553000000,,,,United States,Mast Global,4
+5569594473696425b2cb0d00,Vuori,vuoriclothing.com,https://vuoriclothing.com,31599,,326600000,,,,United States,,4
+54a1274069702dc841891500,Walgreens,walgreens.com,https://walgreens.com,45611,,147658000000,,,,United States,Walgreens Boots Alliance,4
+57c4f9f4a6da986aaa17424d,Walmart Canada,walmart.ca,https://walmart.ca,455211,,23724000000,,,,Canada,Walmart,4
+54a1293569702d93131c8901,"Wawa, Inc.",wawa.com,https://wawa.com,445131,,18640000000,,,,United States,,4
+628d1bf3c4d84900d88f9832,Wayfair,wayfair.com,https://wayfair.com,454110,,12457000000,,,,United States,,4
+54a11cc569702d8ccccec600,Wegmans Food Markets,wegmans.com,https://wegmans.com,445110,,12500000000,,,,United States,,4
+65326a7cbcb1b70001bb6475,Whole Foods Market,wholefoodsmarket.com,https://wholefoodsmarket.com,445110,,22400000000,,,,United States,Amazon,4
+54a1cf8874686949e7c4e912,Wild Fork,wildforkfoods.com,https://wildforkfoods.com,4452,,152700000,,Doral,Florida,United States,,4
+54a11bbe69702d7fe60b6300,"Williams-Sonoma, Inc.",williams-sonomainc.com,https://williams-sonomainc.com,44-45,,7806816000,,,,United States,,4
+54a11fe269702d9d7eab0102,AAM - American Axle & Manufacturing,aam.com,https://aam.com,33639,,5836700000,,,,United States,,5
+5d09e52d80f93e5f6e32d584,ABC Technologies,abctechnologies.com,https://abctechnologies.com,336390,,1626900000,,,,Canada,"Apollo Global Management, Inc.",5
+56e27ab0f3e5bb18dd000863,Adient,adient.com,https://adient.com,33621,,14535000000,,,,United States,,5
+54a12a4e69702d9b8b741002,Allison Transmission,allisontransmission.com,https://allisontransmission.com,33639,,3010000000,,,,United States,,5
+5c26425ef65125e2956a848e,"American Honda Motor Company, Inc.",honda.com,https://honda.com,336110,,70169833000,,,,United States,Honda Motor Co. Ltd.,5
+54a11d7169702d86b6c4fe00,Bendix Commercial Vehicle Systems LLC,bendix.com,https://bendix.com,33634,,5900000000,,,,United States,Knorr Brake Company,5
+5b15077da6da98712ec20a44,Bird,bird.co,https://bird.co,33639,,245000000,,,,United States,,5
+5d333dd6f65125500a798e04,BMW Group US,bmwusa.com,https://bmwusa.com,336110,,578261000,,,,United States,BMW Group,5
+5f96aa2c753654008caff2a7,BorgWarner,borgwarner.com,https://borgwarner.com,33639,,14316000000,,,,United States,,5
+54a12b2569702db6487c6202,Cooper Standard,cooperstandard.com,https://cooperstandard.com,336390,,2740915000,,,,United States,,5
+5b85fffc324d447d3bac5bda,Dana Incorporated,dana.com,https://dana.com,33639,,7500000000,,,,United States,,5
+54a11c5c69702d8ccc8d9a00,Dorman Products,dormanproducts.com,https://dormanproducts.com,336390,,2130319000,,,,United States,,5
+5d5a9adade07ef00f9870270,"First Brands Group, LLC",firstbrandsgroup.com,https://firstbrandsgroup.com,336390,,5000000000,,,,United States,,5
+55920c6673696418bc033a00,Fisker,fiskerinc.com,https://fiskerinc.com,336110,,272900000,,,,United States,,5
+61d2b10c8c3dc900a4e16dbc,Flex-N-Gate,flex-n-gate.com,https://flex-n-gate.com,336390,,9300000000,,,,United States,,5
+55e1552ff3e5bb2fe0000003,Ford Motor Company,ford.com,https://ford.com,336110,,187267000000,,,,United States,,5
+54a1b8517468694012ecfa0a,Fox Factory,ridefox.com,https://ridefox.com,336390,,1467321000,,,,United States,Compass Diversified (NYSE: CODI),5
+5f5fa368134e120100e8fe6b,General Motors,gm.com,https://gm.com,336110,,185019000000,,,,United States,,5
+54a1b91d7468694f8fe9610b,Gentherm,gentherm.com,https://gentherm.com,33631,,1494616000,,,,United States,,5
+5a9f35dba6da98d997812f34,Haas F1 Team,haasf1team.com,https://haasf1team.com,33611,,150000000,,,,United States,,5
+57c4c9aba6da98373fe14866,HARMAN International,harman.com,https://harman.com,334310,,11000000000,,,,United States,Samsung Electronics,5
+54a1222169702da10f630103,Hendrick Motorsports,hendrickmotorsports.com,https://hendrickmotorsports.com,33611,,102000000,,,,United States,,5
+55696c787369642549d42400,Honda Canada Inc.,hondacanada.ca,https://hondacanada.ca,336110,,960500000,,,,Canada,"American Honda Motor Company, Inc.",5
+55f5de37f3e5bb4c4d0031e8,Howmet Aerospace,howmet.com,https://howmet.com,336412,,8252000000,,,,United States,Alcoa,5
+54a11cbd69702da10f38ca00,Hyundai Motor America,,,336110,,3000000000,,,,United States,Hyundai Motor Company,5
+5d34a6a3f651259d8d2eb126,IAC Group,iacgroup.com,https://iacgroup.com,33621,,5300000000,,,,United States,,5
+66ea8ef038ff2301b201a2ad,International,international.com,https://international.com,336120,,7503000000,,,,United States,TRATON GROUP,5
+56e5e6d9f3e5bb17f400d345,Inventus Power,inventuspower.com,https://inventuspower.com,335910,,861674000,,,,United States,H.I.G. Capital,5
+54a1345b69702d3cbb812700,J.B. Poindexter & Co,jbpoindexter.com,https://jbpoindexter.com,336211,,2400000000,,,,United States,,5
+5d344a7c80f93e3fc4a62685,Karma Automotive,karmaautomotive.com,https://karmaautomotive.com,336110,,217000000,,,,United States,Wanxiang America Corporation,5
+54a1354269702d4494608000,Lear Corporation,lear.com,https://lear.com,336360,,23258300000,,,,United States,,5
+54a11b8b69702d77c2e74c00,LION,thelionelectric.com,https://thelionelectric.com,33611,,254276000,,,,Canada,,5
+54a11b0f69702da425b90e00,Lippert,lippert.com,https://lippert.com,33231,,4166944000,,,,United States,"Patrick Industries, Inc.",5
+54a13c4e69702d267aa2cf01,Litens Automotive Group,litens.com,https://litens.com,33639,,1000000000,,,,Canada,,5
+556cefaf73696411f4876500,Lucid Motors,lucidmotors.com,https://lucidmotors.com,336110,,1353790000,,,,United States,,5
+5d370f33f65125158e2a897c,Luminator Technology Group,luminator.com,https://luminator.com,33621,,189300000,,,,United States,Audax Group,5
+55f72e69f3e5bb193f0233a9,Mack Trucks,macktrucks.com,https://macktrucks.com,336120,,872000000,,,,United States,Volvo Group,5
+57c4c2c3a6da9836629e3be3,Magna International,magna.com,https://magna.com,336390,,42745407000,,,,Canada,Veoneer,5
+5d09888ba3ae613e51e3a3b9,Martinrea International,martinrea.com,https://martinrea.com,33621,,3517422000,,,,Canada,,5
+5500b14c7369642dbaf91700,"Mercedes-Benz Research & Development North America, Inc.",mbrdna.com,https://mbrdna.com,33639,,635700000,,,,United States,Daimler Truck AG,5
+5592418e7369643bdd7c9e00,Meritor,meritor.com,https://meritor.com,33634,,4300000000,,,,United States,Cummins Inc.,5
+5d0aa88280f93e5832d9ee36,"Mitsubishi Motors North America, Inc.",mitsubishicars.com,https://mitsubishicars.com,336110,,4144000000,,,,United States,Mitsubishi Motors Middle East & Africa,5
+5f32ce93fcc648008c56ac3d,Motional,motional.com,https://motional.com,3361,,511900000,,,,United States,Hyundai Motor Group,5
+5f4989248bd02900010c4b16,Multimatic,multimatic.com,https://multimatic.com,336390,,1600000000,,,,Canada,,5
+5d09f630a3ae6192d507bc01,New Flyer,newflyer.com,https://newflyer.com,33621,,829800000,,,,Canada,NFI Group Inc.,5
+54a237da7468692e71ec2617,Nexteer Automotive,nexteer.com,https://nexteer.com,33631,,4584217000,,,,United States,,5
+5a9e8749a6da98d977fb8b09,"North American Lighting, Inc.",nal.com,https://nal.com,33621,,1500000000,,,,United States,India Japan Lighting Pvt Ltd,5
+6255cb2f97703400a5a26422,North Sails,northsails.com,https://northsails.com,33621,,380000000,,,,United States,North Technology Group,5
+5a9d145da6da98d93bddac5c,Nuro,nuro.ai,https://nuro.ai,33699,,750000000,,,,Canada,,5
+54a12af569702d9548254902,Oshkosh Corporation,oshkoshcorp.com,https://oshkoshcorp.com,336120,,10422300000,,,,United States,,5
+54a127e069702da2207ac700,PACCAR,paccar.com,https://paccar.com,336120,,28444800000,,,,United States,,5
+5d360dec80f93ebead76760e,Peterbilt Motors Company,peterbilt.com,https://peterbilt.com,336120,,1200000000,,,,United States,,5
+64a2f50fda8c510156f40970,PHINIA,phinia.com,https://phinia.com,336320,,3483000000,,,,United States,BorgWarner,5
+5d09b169a3ae6157efba2c5e,Proterra,proterra.com,https://proterra.com,33611,,322776000,,,,United States,,5
+5c8af96576f90e091b67ac95,Rivian,rivian.com,https://rivian.com,336110,,5387000000,,,,United States,,5
+54a128b869702d9ebcca2101,Roush,roush.com,https://roush.com,33611,,595000000,,,,United States,,5
+630fe76e1e7afc00dfee6fcc,Scout Motors Inc.,scoutmotors.com,https://scoutmotors.com,336110,,552600000,,,,United States,Volkswagen Group,5
+54a1b4d0746869401250d609,Standard Motor Products,smpcorp.com,https://smpcorp.com,336390,,1791158000,,,,United States,,5
+5d0a1ce8f651259f5b0cdb0c,Stoneridge,stoneridge.com,https://stoneridge.com,33631,,861263000,,,,United States,,5
+5500bb0573696460eefb1c00,"Stoughton Trailers, LLC",stoughtontrailers.com,https://stoughtontrailers.com,336212,,322813000,,Stoughton,Wisconsin,United States,,5
+54a11b9569702d918c424600,Subaru of America,subaru.com,https://subaru.com,336110,,4000000000,,,,United States,Subaru Corporation,5
+5e56a6f02519b10001152555,T1 Energy Inc.,t1energy.com,https://t1energy.com,33632,,755295000,,,,United States,,5
+55ea6af2f3e5bb594000bf01,Tenneco,tenneco.com,https://tenneco.com,336330,,10098939000,,,,United States,"Apollo Global Management, Inc.",5
+57c4d9dea6da9869f38f20af,Tesla,tesla.com,https://tesla.com,336110,,94827000000,,,,United States,,5
+5ed0414de3952d0001045f19,TI Fluid Systems,,,336390,,3880398000,,,,United States,ABC Technologies,5
+5d0a6d5080f93e2088b6a885,Torc Robotics,torc.ai,https://torc.ai,33612,,421700000,,,,United States,Daimler Truck AG,5
+5ddc8a1c5a7be5011a08afbd,Toyota Motor Manufacturing Canada,tmmc.ca,https://tmmc.ca,336110,,1000000000,,,,Canada,,5
+5592293d736964188a45a300,Toyota North America,toyota.com,https://toyota.com,336110,,10000000000,,,,United States,Toyota Motor Corporation,5
+5f47957f262b720001a7a442,Veoneer,veoneer.com,https://veoneer.com,33639,,933000000,,,,United States,American Industrial Partners,5
+54a12b3669702dcef99c8502,Visteon Corporation,visteon.com,https://visteon.com,33621,,3768000000,,,,United States,,5
+5592166d73696418d7475d00,"Volkswagen of America, Inc",vw.com,https://vw.com,33611,,3800000000,,,,United States,Volkswagen Group,5
+5f96b9d73726c4008d8af55e,Volvo Trucks North America,volvotrucks.us,https://volvotrucks.us,336120,,103500000,,,,United States,Volvo Trucks,5
+54a12a8869702d8cfc865002,Wabash,onewabash.com,https://onewabash.com,336212,,1542754000,,,,United States,Wabash National Corporation,5
+55eb8837f3e5bb129800003c,Xometry,xometry.com,https://xometry.com,33632,,686631000,,,,United States,,5
+54a128f369702da220ff5801,Yazaki North America,yazaki-na.com,https://yazaki-na.com,33631,,5000000000,,,,United States,,5
+56d38799f3e5bb15ec001124,Zoox,zoox.com,https://zoox.com,336110,,2300000000,,,,United States,Amazon,5
+5fc7b2ff4045230110edd2a1,AbbVie,abbvie.com,https://abbvie.com,325412,,61160000000,,,,United States,,6
+5569a8da7369642529357300,"Alexion Pharmaceuticals, Inc.",alexion.com,https://alexion.com,325414,,6069900000,,,,United States,AstraZeneca,6
+624a7d2baef87000dc14454c,"Allergan Aesthetics, an AbbVie Company",allerganaesthetics.com,https://allerganaesthetics.com,325412,,4860000000,,,,United States,Allergan,6
+54a1208369702d9d7e902e02,Alnylam Pharmaceuticals,alnylam.com,https://alnylam.com,541714,,3713937000,,,,United States,,6
+54a122ad69702d9a8b3d6003,Amgen,amgen.com,https://amgen.com,325414,,36741000000,,,,United States,,6
+5ed83c663529790001f9169a,Amneal Pharmaceuticals,amneal.com,https://amneal.com,325412,,3018760000,,,,United States,,6
+5f443cc14b766d0001a54061,Apotex Inc.,apotex.com,https://apotex.com,325412,,2600000000,,,,Canada,SK Capital Partners,6
+67d8ff25cb7008001d4e03d7,BeOne Medicines,beonemedicines.com,https://beonemedicines.com,325412,,5343033000,,,,United States,,6
+5ed1e718156bb30001dbfc54,Biogen,biogen.com,https://biogen.com,325414,,9810600000,,,,United States,,6
+624ef987b7ebad008d265c6b,BioMarin Pharmaceutical Inc.,biomarin.com,https://biomarin.com,541714,,3221253000,,,,United States,,6
+54a1b144746869401234aa08,Bristol Myers Squibb,bms.com,https://bms.com,325412,,48195000000,,,,United States,,6
+54a13a4869702d0486afbf00,Catalent,catalent.com,https://catalent.com,325412,,4422000000,,,,United States,Novo Holdings,6
+54a1340f69702d352f061a00,Cepheid,cepheid.com,https://cepheid.com,33911,,900000000,,,,United States,Danaher,6
+5a9ec81fa6da98d98c6fda9d,Cook Medical,cookmedical.com,https://cookmedical.com,339112,,2700000000,,,,United States,The Cook Group,6
+54a13ad169702db45d8d1901,CooperVision,coopervision.com,https://coopervision.com,33911,,2152000000,,,,United States,CooperCompanies,6
+5ed5dc3a4d4c6d000168fe11,Daiichi Sankyo US,daiichisankyo.us,https://daiichisankyo.us,325412,,13387234000,,,,United States,Suntory Holdings Limited,6
+55921f8e7369642393132500,Eisai US,eisai.com,https://eisai.com,325412,,5444091000,,,,United States,Kan Research Institute,6
+5f4db515ec03920001d9b69f,Elanco,elanco.com,https://elanco.com,11231,,4715000000,,,,United States,"TriRx Pharmaceutical Services, LLC",6
+54a11fef69702d8ed45b0b02,Eli Lilly and Company,lilly.com,https://lilly.com,325412,,65179000000,,,,United States,,6
+5f499ee464093f000119f13e,FUJIFILM Biotechnologies,fujifilm.com,https://fujifilm.com,42312,,22334384000,,,,United States,Fujifilm Group,6
+5b86f758f874f739743b9a01,Genentech,gene.com,https://gene.com,541714,,26400000000,,,,United States,Roche,6
+54a1173c69702d46232d0a00,GenScript,genscript.com,https://genscript.com,541714,,959526000,,,,United States,,6
+54a11fc869702d9a8bc91702,Gilead Sciences,gilead.com,https://gilead.com,325412,,29442000000,,,,United States,,6
+54a12a2f69702d9313c90e02,Incyte,incyte.com,https://incyte.com,325412,,5141242000,,,,United States,,6
+5b150e0da6da987112636337,Legend Biotech,legendbiotech.com,https://legendbiotech.com,325414,,1028900000,,,,United States,GenScript,6
+6048540916abe500012201fe,Merck,merck.com,https://merck.com,325412,,64926000000,,,,United States,,6
+54a1217669702d8ed486b102,Moderna,modernatx.com,https://modernatx.com,541714,,1944000000,,,,United States,,6
+54a1209269702da753784d02,NARS Cosmetics,narscosmetics.com,https://narscosmetics.com,3391,,100000000,,,,United States,Shiseido,6
+55ea5acbf3e5bb44a9001fcb,Organon,organon.com,https://organon.com,325412,,6216000000,,,,United States,SUN PHARMA,6
+54a1230d69702da4258f6903,Owens & Minor,owens-minor.com,https://owens-minor.com,49211,,2762032000,,,,United States,,6
+54a1358c69702d4b2ec4a000,Pall Corporation,pall.com,https://pall.com,33911,,2900000000,,,,United States,Danaher,6
+54a11e6069702d94a4944501,Pfizer,pfizer.com,https://pfizer.com,325412,,62579000000,,,,United States,Pfizer Pharmaceutical India Pvt. Ltd.,6
+54a1273f69702d9b8bbb6900,Regeneron,regeneron.com,https://regeneron.com,541714,,14342900000,,,,United States,,6
+54a11eb369702d94a4b56201,STERIS,steris.com,https://steris.com,339112,,5935900000,,,,United States,,6
+57c48a64a6da9815ad366495,Takeda Oncology,takedaoncology.com,https://takedaoncology.com,325412,,3635000000,,,,United States,,6
+54a1ca6874686945fafa1f11,Terumo Medical Corporation,terumomedical.com,https://terumomedical.com,339112,,250000000,,,,United States,Terumo,6
+54a1224069702d8ed4a70003,Twist Bioscience,twistbioscience.com,https://twistbioscience.com,541714,,376572000,,,,United States,,6
+54a11f1d69702d7fe6b7cd01,Vertex Pharmaceuticals,vrtx.com,https://vrtx.com,541714,,12074600000,,,,United States,,6
+5e58ce77a7e97a0001f5d8a8,Viatris,viatris.com,https://viatris.com,325412,,14299900000,,,,United States,,6
+54a11eb569702da75353a101,Warby Parker,warbyparker.com,https://warbyparker.com,33911,,871905000,,,,United States,,6
+62585690f484000112c81cab,Zoetis,zoetis.com,https://zoetis.com,325412,,9467000000,,,,United States,,6
+54a222b774686933186d940f,84 Lumber,84lumber.com,https://84lumber.com,44411,,5900000000,,,,United States,,7
+5f45e08586758600012b997f,ABC Supply Co. Inc.,abcsupply.com,https://abcsupply.com,42331,,20200000000,,,,United States,Hendricks Holdings Inc,7
+54a23e5f7468692e711a9519,ADI Global Distribution,adiglobal.com,https://adiglobal.com,42369,,4800000000,,,,United States,Control4,7
+5569bfc273696425dbb08600,Anatolia,anatolia.com,https://anatolia.com,32739,,103800000,,,,Canada,,7
+54a23ca47468693a7ea19518,Arrow Electronics,arrow.com,https://arrow.com,423690,,30852935000,,,,United States,DH electronics GmbH,7
+54a1a1b17468695860c96e03,Avantor,avantorsciences.com,https://avantorsciences.com,32599,,6552200000,,,,United States,,7
+5592201873696418d7318000,Avnet,avnet.com,https://avnet.com,423690,,22200754000,,,,United States,,7
+54a1b3f07468694012579509,Berlin Packaging,berlinpackaging.com,https://berlinpackaging.com,32222,,3000000000,,,,United States,Oak Hill Capital,7
+57c4e597a6da986a9893ec4a,Breakthru Beverage Group,breakthrubev.com,https://breakthrubev.com,424810,,8600000000,,,,United States,,7
+57c4d9b7a6da986aa0d30076,Builders FirstSource,bldr.com,https://bldr.com,44411,,15190638000,,,,United States,,7
+54a138d769702d2fa6bd0900,CDW,cdw.com,https://cdw.com,423430,,22424100000,,,,United States,,7
+64d6339b29fe0702c61471b5,Cencora,cencora.com,https://cencora.com,424210,,321332819000,,,,United States,MWI Animal Health,7
+54a129b069702d8cfc80f001,Central Garden & Pet,central.com,https://central.com,33993,,3129064000,,,,United States,,7
+5cd1c3998a7abb0d045f2178,Connection,connection.com,https://connection.com,541512,,2872746000,,,,United States,,7
+5cb5fddc1e430a0c9c6295e5,Covetrus,covetrus.com,https://covetrus.com,33911,,4640000000,,,,United States,Henry Schein Animal Health,7
+55ee0a99f3e5bb16360006fe,Cresco Labs,crescolabs.com,https://crescolabs.com,42469,,667327000,,,,Canada,,7
+54a11b1d69702d77c2361500,Dawn Foods Global,dawnfoods.com,https://dawnfoods.com,311812,,2500000000,,,,United States,Puratos,7
+54a11b4269702d8aa1d12000,Dole Food Company,dole.com,https://dole.com,11141,,8475000000,,,,United States,Dole plc,7
+54a1229a69702d86b65cf402,doTERRA International LLC,doterra.com,https://doterra.com,42421,,2000000000,,,,United States,,7
+54a135de69702d352f341e01,Ernest,ernestpackaging.com,https://ernestpackaging.com,322211,,250000000,,,,United States,,7
+54a1295f69702d9b8b999c01,Fastenal,fastenal.com,https://fastenal.com,42383,,8200500000,,,,United States,,7
+54a2422b7468693fda89941a,Ferguson,ferguson.com,https://ferguson.com,42372,,31633000000,,,,United States,Ferguson Ventures Inc,7
+60f26ab00633d90001aaa7ea,Finning,finning.com,https://finning.com,423830,,7725874000,,,,Canada,,7
+5500af407369642dd1940100,Future Electronics,futureelectronics.com,https://futureelectronics.com,423690,,992005000,,,,Canada,WT Microelectronics,7
+54a134a769702d3cbb984e00,"GHA Technologies, Inc",gha-associates.com,https://gha-associates.com,541512,,140400000,,,,United States,,7
+5f485e4c3136e20001fd2b42,Global Furniture Group,globalfurnituregroup.com,https://globalfurnituregroup.com,337211,,736400000,,,,Canada,Evolve Furniture Group,7
+559221e873696418a5b08900,Gordon Food Service,gfs.com,https://gfs.com,424410,,23000000000,,,,United States,,7
+54a1284b69702da220880701,Grainger,grainger.com,https://grainger.com,42383,,17942000000,,,,United States,,7
+54a135a869702d407f1bc500,Graybar,graybar.com,https://graybar.com,423610,,12000000000,,,,United States,,7
+54a129ec69702db878daa501,HD Supply,hdsupply.com,https://hdsupply.com,42372,,5989000000,,,,United States,The Home Depot,7
+54a12a8769702d8b1949a402,Henry Schein,henryschein.com,https://henryschein.com,423450,,13184000000,,,,United States,,7
+5ed243fb825e0d00010485df,Incora,incora.com,https://incora.com,42383,,810000000,,Fort Worth,Texas,United States,,7
+5f7186a8f45e1901bee3d3b7,Ingram Micro,ingrammicro.com,https://ingrammicro.com,423430,,52556263000,,,,United States,,7
+5fc8be668a5e8f00be285a76,Intcomex,intcomex.com,https://intcomex.com,423430,,600000000,,,,United States,,7
+5b1437a0a6da98dcc67723e3,Jamieson Wellness Inc.,jamiesonwellness.com,https://jamiesonwellness.com,33993,,599669000,,,,Canada,,7
+54a134b069702d42556e3b00,KeHE Distributors,kehe.com,https://kehe.com,42441,,3178570000,,,,United States,,7
+54a133f969702d36c9960200,"Land O'Lakes, Inc.",landolakesinc.com,https://landolakesinc.com,11199,,16411533000,,,,United States,,7
+54a11b4669702d8ed40b2500,LKQ Corporation,lkqcorp.com,https://lkqcorp.com,42313,,13916000000,,,,United States,,7
+54a11bb069702d86b6245000,Marathon Petroleum Corporation,marathonpetroleum.com,https://marathonpetroleum.com,324110,,132699000000,,,,United States,ConocoPhillips,7
+5b262253a3ae61f442a98c26,McKesson,mckesson.com,https://mckesson.com,424210,,403430000000,,,,United States,,7
+615ec2b7005eb200016731f5,"McLane Company, Inc.",mclaneco.com,https://mclaneco.com,49312,,51916000000,,,,United States,Berkshire Hathaway,7
+5d3715f4a3ae61d4405e723a,Mouser Electronics,mouser.com,https://mouser.com,423690,,289000000,,,,United States,"TTI, Inc.",7
+54a13cb469702d0486530102,MSC Industrial Supply Co.,mscdirect.com,https://mscdirect.com,42383,,3769521000,,,,United States,,7
+5ee43415f6afb200bec877bc,MSI,msisurfaces.com,https://msisurfaces.com,42322,,2500000000,,,,United States,,7
+61e1f475b0db8500c264ca9c,NAPA Auto Parts,genpt.com,https://genpt.com,441330,,24300141000,,,,United States,,7
+5d0923ab9e559f09343362bf,Oldcastle APG,oldcastleapg.com,https://oldcastleapg.com,32733,,120000000,,,,United States,CRH,7
+54a239c97468693fda488f17,Patterson Dental,pattersondental.com,https://pattersondental.com,423450,,6568272000,,,,United States,Patient Square Capital,7
+54a23af67468692e71cb4218,Performance Food Group,pfgc.com,https://pfgc.com,424410,,63298900000,,,,United States,,7
+5cd0913e980bb409b0490777,Porsche Cars North America,,,423110,,41884000000,,,,United States,,7
+54a122b169702d94a4705403,Proximo Spirits,proximospirits.com,https://proximospirits.com,312140,,2168979000,,,,United States,,7
+556d640a736964122f68fb00,QXO,qxo.com,https://qxo.com,42331,,6842200000,,,,United States,Beacon Building Products,7
+61a64b6901dd6f00a4055f08,Republic National Distributing Company,rndc-usa.com,https://rndc-usa.com,424820,,12800000000,,,,United States,,7
+5bd8936c1dc27228d71a1ee2,Resideo,resideo.com,https://resideo.com,334512,,7472000000,,,,United States,,7
+54a128d669702d8eeb339e01,SHI International Corp.,shi.com,https://shi.com,541512,,14000000000,,,,United States,,7
+5b872c4f324d444bfce283c0,SiteOne Landscape Supply,siteone.com,https://siteone.com,42399,,4704800000,,,,United States,,7
+54a1d2cb7468695860cc1a14,Smith,smithweb.com,https://smithweb.com,423690,,3450000000,,,,United States,,7
+602add2af0406b00a49f7374,Southern Glazer's Wine & Spirits,southernglazers.com,https://southernglazers.com,42481,,26000000000,,,,United States,,7
+57cf8a48a6da984c4213ccbc,Sysco,sysco.com,https://sysco.com,424410,,81370000000,,,,United States,,7
+5e56359cdf4794000177c170,TD SYNNEX,,,423430,,62508086000,,,,United States,,7
+54a1227269702d7fe68e2103,The Boelter Companies,boelter.com,https://boelter.com,42344,,480000000,,Waukesha,Wisconsin,United States,,7
+556ce5187369641208f44800,"Tilray Brands, Inc.",tilray.com,https://tilray.com,3122,,915454000,,,,Canada,,7
+5d0a213880f93ee86f8fc872,"TTI, Inc.",tti.com,https://tti.com,423690,,8800000000,,,,United States,Berkshire Hathaway,7
+54a1984774686949e7dd3b00,Uline,uline.com,https://uline.com,42361,,7000000000,,,,United States,,7
+54a1b97674686942d3c25b0b,UNFI,unfi.com,https://unfi.com,424410,,31784000000,,,,United States,,7
+5d094353f6512560f13431e7,Univar Solutions,univarsolutions.com,https://univarsolutions.com,424690,,11475300000,,,,United States,"Apollo Global Management, Inc.",7
+5ed101a1e3781e000147f36a,US Foods,usfoods.com,https://usfoods.com,424410,,39424000000,,,,United States,Harry & David,7
+55920e28736964199b114100,Veritiv,veritiv.com,https://veritiv.com,42393,,7367795000,,,,United States,CD&R,7
+54a133f669702d2f9f1c1c00,Vinmar International,vinmar.com,https://vinmar.com,424610,,4000000000,,,,United States,,7
+54a11ec769702d86b6088101,Wakefern Food Corp.,wakefern.com,https://wakefern.com,445110,,20700000000,,,,United States,,7
+5a9e929ca6da98d97e7d5171,Wesco,wesco.com,https://wesco.com,423610,,23510900000,,,,United States,,7
+5c1e8cdff651257251258e34,Westcon-Comstor,westconcomstor.com,https://westconcomstor.com,423430,,5740000000,,,,United States,Datatec International Limited,7
+54a1359569702d4b2ef0a300,White Cap,whitecap.com,https://whitecap.com,42331,,6100000000,,,,United States,CD&R,7
+5d0a228aa3ae61afb98854e6,World Kinect,,,424710,,36928000000,,,,United States,,7
+54a13a7769702d2a1e17e000,"Zones, LLC",zones.com,https://zones.com,541512,,3200000000,,,,United States,,7
+54a1201e69702d77c2584e02,Air Products,airproducts.com,https://airproducts.com,325120,,12037300000,,,,United States,,8
+54a1229269702d84c5d11c03,Albemarle Corporation,albemarle.com,https://albemarle.com,3251,,5142733000,,,,United States,,8
+68460aa14bb08300013883d0,Amrize,amrize.com,https://amrize.com,327310,,11800000000,,,,United States,Holcim,8
+5b158fc7a6da9870e38cfed1,Anduril Industries,anduril.com,https://anduril.com,336414,,2200000000,,,,United States,,8
+556dc36873696412588a8301,Avery Dennison,averydennison.com,https://averydennison.com,32222,,8855500000,,,,United States,,8
+5f033b0be2382e01309cdaf7,Avient Corporation,avient.com,https://avient.com,32521,,3260200000,,,,United States,,8
+5a9d7abea6da98d94d8ca137,Axiom Space,axiomspace.com,https://axiomspace.com,92711,,380000000,,,,United States,,8
+54a116ee69702d42b7b30100,Blue Origin,blueorigin.com,https://blueorigin.com,336414,,4200000000,,,,United States,,8
+54a1229169702d9a8b695403,Boeing,boeing.com,https://boeing.com,336411,,89463000000,,,,United States,,8
+54a13be869702d2bfd1dab01,Bombardier,bombardier.com,https://bombardier.com,336411,,9551000000,,,,Canada,Alstom,8
+62592967fb21f500d80bd6b0,Cabot Corporation,cabotcorp.com,https://cabotcorp.com,32513,,3713000000,,,,United States,,8
+54a13c0569702d048614cf01,Celanese,celanese.com,https://celanese.com,325110,,9544000000,,,,United States,,8
+54a13b4e69702d2a1e627201,CertainTeed,certainteed.com,https://certainteed.com,32733,,4000000000,,,,United States,Saint-Gobain,8
+54a134d469702d44941e4900,Chevron Phillips Chemical Company,cpchem.com,https://cpchem.com,325110,,12470000000,,,,United States,,8
+54a11e3769702d97c10e6a01,Dow,dow.com,https://dow.com,32521,,39968000000,,,,United States,,8
+55698ce373696425bc745500,DuPont,dupont.com,https://dupont.com,32521,,6849000000,,,,United States,BroadPeak Global,8
+5fcad68ba05e420001018c87,Eastman,eastman.com,https://eastman.com,325211,,8752000000,,,,United States,,8
+5f41550dd4d1a50001269203,Firefly Aerospace,fireflyspace.com,https://fireflyspace.com,336414,,159855000,,,,United States,"AE Industrial Partners, LP",8
+5d0a9cfca3ae61a4cfe077c4,General Atomics,ga.com,https://ga.com,336414,,3200000000,,,,United States,General Atomics Aeronautical Systems,8
+54a1b89e7468695860772c0b,Graphic Packaging International,graphicpkg.com,https://graphicpkg.com,31-33,,8617000000,,,,United States,,8
+54a1293a69702d9b8b3d8b01,Huntsman Corporation,huntsman.com,https://huntsman.com,32599,,5683000000,,,,United States,,8
+5f45dd53be8f6700013c3cea,International Paper,internationalpaper.com,https://internationalpaper.com,32212,,24896000000,,,,United States,West Coast Paper Mills,8
+54a1273369702d8cfc3fb300,James Hardie,jameshardie.com,https://jameshardie.com,32733,,4835800000,,,,United States,James Hardie New Zealand Limited,8
+54a12a8569702da220711902,"JELD-WEN, Inc.",jeld-wen.com,https://jeld-wen.com,321911,,3211181000,,,,United States,,8
+54a11fc569702d8ed41ff701,Kemin Industries,kemin.com,https://kemin.com,32519,,2000000000,,,,United States,,8
+5f3fa0b1978aa7000123c25e,Koch,kochinc.com,https://kochinc.com,32599,,125000000000,,,,United States,Koch Carbon Llc,8
+54a13c4f69702d2185bac701,Lockheed Martin,lockheedmartin.com,https://lockheedmartin.com,336411,,75057000000,,,,United States,,8
+5d0a0b4280f93ef7d5d3e00e,LyondellBasell,lyondellbasell.com,https://lyondellbasell.com,325211,,30153000000,,,,United States,,8
+54a12a1f69702db64828e601,Magellan Aerospace Limited,magellan.aero,https://magellan.aero,336412,,762069000,,,,Canada,,8
+5f80697b4c5613008c0958e8,MDA Space,mda.space,https://mda.space,336414,,1189296000,,,,Canada,Northern Private Capital,8
+5da4296af09b160001a4dd59,Mohawk Industries,mohawkind.com,https://mohawkind.com,33711,,10785400000,,,,United States,Mohawk Group,8
+5f4a214b0745f80001a2c46f,Momentive,momentive.com,https://momentive.com,32521,,2800000000,,,,United States,KCC Corporation,8
+60999a9944cb3700c91a84d8,Northrop Grumman,northropgrumman.com,https://northropgrumman.com,336411,,41954000000,,,,United States,,8
+54a1353469702d3cbbf89a00,O-I,o-i.com,https://o-i.com,327213,,6426000000,,,,United States,,8
+6221ada9ead0a600dc495220,Owens Corning,owenscorning.com,https://owenscorning.com,324122,,10103000000,,,,United States,,8
+54a1364969702d36c99b1501,Oxy,oxy.com,https://oxy.com,211120,,21593000000,,,,United States,Berkshire Hathaway,8
+5592322e7369644859326300,Packaging Corporation of America,packagingcorp.com,https://packagingcorp.com,322211,,8989300000,,,,United States,,8
+54a1349b69702d407fd63800,Panasonic Avionics Corporation,panasonic.aero,https://panasonic.aero,336413,,2263670000,,,,United States,Panasonic,8
+5d0aa713f651254ddbf9d74b,Phillips 66,phillips66.com,https://phillips66.com,324110,,132189000000,,,,United States,,8
+5da287aada76c2000192ecc4,Planet,planet.com,https://planet.com,54151,,307727000,,,,United States,,8
+6256e1d6c5d4aa008d394938,PPG,ppg.com,https://ppg.com,325510,,15875000000,,,,United States,,8
+57c4b606a6da98369210329c,Relativity Space,relativityspace.com,https://relativityspace.com,336414,,181500000,,,,United States,,8
+55e8c4c9f3e5bb0791000002,Rocket Lab,rocketlabcorp.com,https://rocketlabcorp.com,336414,,601799000,,,,United States,,8
+5d0a10e8a3ae61d748b4404b,RRD,rrd.com,https://rrd.com,32311,,4963700000,,,,United States,,8
+54a1391f69702d24d3ba3200,SGK,sgkinc.com,https://sgkinc.com,32222,,532850000,,,,United States,Propelis,8
+5a9da279a6da98d9a15a297d,Shield AI,shield.ai,https://shield.ai,336411,,540000000,,,,United States,,8
+54a1284769702dc12811ca00,Sierra Nevada Corporation,sncorp.com,https://sncorp.com,336411,,787525000,,,,United States,,8
+5b86437af874f7362754a996,Skydio,skydio.com,https://skydio.com,336411,,295100000,,,,United States,,8
+54a1218769702d97c1df0503,SpaceX,spacex.com,https://spacex.com,336414,,8761000000,,,,United States,,8
+54a1357869702d4b2ec59400,Stepan Company,stepan.com,https://stepan.com,32519,,2332114000,,,,United States,,8
+54a134ac69702d3170b97b00,Sun Chemical,sunchemical.com,https://sunchemical.com,32599,,8500000000,,,,United States,DIC Corporation,8
+61360b5aff5e5300f65e1df2,Sylvamo,sylvamo.com,https://sylvamo.com,322110,,3351000000,,,,United States,,8
+55f1923af3e5bb6152002ac6,The Chemours Company,chemours.com,https://chemours.com,3251,,5808000000,,,,United States,,8
+6096e4a804cbb10137c09091,United Launch Alliance (ULA),ulalaunch.com,https://ulalaunch.com,336414,,2600000000,,,,United States,,8
+54a1274269702db878eb2300,Valero,valero.com,https://valero.com,324110,,122687000000,,,,United States,,8
+559238ca7369640b18547100,Viasat,viasat.com,https://viasat.com,517410,,4640280000,,,,United States,,8
+6258dff284b46f00a5e11ee3,W. L. Gore & Associates,gore.com,https://gore.com,325199,,5300000000,,,,United States,,8
+5b859d2a324d4455a9b25025,Waymo,waymo.com,https://waymo.com,33641,,270000000,,,,United States,Alphabet Inc.,8
+55e7a158f3e5bb3037000333,WestRock Company,westrock.com,https://westrock.com,322130,,19456000000,,,,United States,Smurfit Westrock,8
+54a11fd369702d97c19d2a02,Weyerhaeuser,weyerhaeuser.com,https://weyerhaeuser.com,11311,,6905000000,,,,United States,,8

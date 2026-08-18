@@ -1,0 +1,61 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+5d0aa713f651254ddbf9d74b,Phillips 66,phillips66.com,https://phillips66.com,324110,,132189000000,,,,United States,,8
+5f3fa0b1978aa7000123c25e,Koch,kochinc.com,https://kochinc.com,32599,,125000000000,,,,United States,Koch Carbon Llc,8
+54a1274269702db878eb2300,Valero,valero.com,https://valero.com,324110,,122687000000,,,,United States,,8
+54a1229169702d9a8b695403,Boeing,boeing.com,https://boeing.com,336411,,89463000000,,,,United States,,8
+54a13c4f69702d2185bac701,Lockheed Martin,lockheedmartin.com,https://lockheedmartin.com,336411,,75057000000,,,,United States,,8
+60999a9944cb3700c91a84d8,Northrop Grumman,northropgrumman.com,https://northropgrumman.com,336411,,41954000000,,,,United States,,8
+54a11e3769702d97c10e6a01,Dow,dow.com,https://dow.com,32521,,39968000000,,,,United States,,8
+5d0a0b4280f93ef7d5d3e00e,LyondellBasell,lyondellbasell.com,https://lyondellbasell.com,325211,,30153000000,,,,United States,,8
+5f45dd53be8f6700013c3cea,International Paper,internationalpaper.com,https://internationalpaper.com,32212,,24896000000,,,,United States,West Coast Paper Mills,8
+54a1364969702d36c99b1501,Oxy,oxy.com,https://oxy.com,211120,,21593000000,,,,United States,Berkshire Hathaway,8
+55e7a158f3e5bb3037000333,WestRock Company,westrock.com,https://westrock.com,322130,,19456000000,,,,United States,Smurfit Westrock,8
+6256e1d6c5d4aa008d394938,PPG,ppg.com,https://ppg.com,325510,,15875000000,,,,United States,,8
+54a134d469702d44941e4900,Chevron Phillips Chemical Company,cpchem.com,https://cpchem.com,325110,,12470000000,,,,United States,,8
+54a1201e69702d77c2584e02,Air Products,airproducts.com,https://airproducts.com,325120,,12037300000,,,,United States,,8
+68460aa14bb08300013883d0,Amrize,amrize.com,https://amrize.com,327310,,11800000000,,,,United States,Holcim,8
+5da4296af09b160001a4dd59,Mohawk Industries,mohawkind.com,https://mohawkind.com,33711,,10785400000,,,,United States,Mohawk Group,8
+6221ada9ead0a600dc495220,Owens Corning,owenscorning.com,https://owenscorning.com,324122,,10103000000,,,,United States,,8
+54a13be869702d2bfd1dab01,Bombardier,bombardier.com,https://bombardier.com,336411,,9551000000,,,,Canada,Alstom,8
+54a13c0569702d048614cf01,Celanese,celanese.com,https://celanese.com,325110,,9544000000,,,,United States,,8
+5592322e7369644859326300,Packaging Corporation of America,packagingcorp.com,https://packagingcorp.com,322211,,8989300000,,,,United States,,8
+556dc36873696412588a8301,Avery Dennison,averydennison.com,https://averydennison.com,32222,,8855500000,,,,United States,,8
+54a1218769702d97c1df0503,SpaceX,spacex.com,https://spacex.com,336414,,8761000000,,,,United States,,8
+5fcad68ba05e420001018c87,Eastman,eastman.com,https://eastman.com,325211,,8752000000,,,,United States,,8
+54a1b89e7468695860772c0b,Graphic Packaging International,graphicpkg.com,https://graphicpkg.com,31-33,,8617000000,,,,United States,,8
+54a134ac69702d3170b97b00,Sun Chemical,sunchemical.com,https://sunchemical.com,32599,,8500000000,,,,United States,DIC Corporation,8
+54a11fd369702d97c19d2a02,Weyerhaeuser,weyerhaeuser.com,https://weyerhaeuser.com,11311,,6905000000,,,,United States,,8
+55698ce373696425bc745500,DuPont,dupont.com,https://dupont.com,32521,,6849000000,,,,United States,BroadPeak Global,8
+54a1353469702d3cbbf89a00,O-I,o-i.com,https://o-i.com,327213,,6426000000,,,,United States,,8
+55f1923af3e5bb6152002ac6,The Chemours Company,chemours.com,https://chemours.com,3251,,5808000000,,,,United States,,8
+54a1293a69702d9b8b3d8b01,Huntsman Corporation,huntsman.com,https://huntsman.com,32599,,5683000000,,,,United States,,8
+6258dff284b46f00a5e11ee3,W. L. Gore & Associates,gore.com,https://gore.com,325199,,5300000000,,,,United States,,8
+54a1229269702d84c5d11c03,Albemarle Corporation,albemarle.com,https://albemarle.com,3251,,5142733000,,,,United States,,8
+5d0a10e8a3ae61d748b4404b,RRD,rrd.com,https://rrd.com,32311,,4963700000,,,,United States,,8
+54a1273369702d8cfc3fb300,James Hardie,jameshardie.com,https://jameshardie.com,32733,,4835800000,,,,United States,James Hardie New Zealand Limited,8
+559238ca7369640b18547100,Viasat,viasat.com,https://viasat.com,517410,,4640280000,,,,United States,,8
+54a116ee69702d42b7b30100,Blue Origin,blueorigin.com,https://blueorigin.com,336414,,4200000000,,,,United States,,8
+54a13b4e69702d2a1e627201,CertainTeed,certainteed.com,https://certainteed.com,32733,,4000000000,,,,United States,Saint-Gobain,8
+62592967fb21f500d80bd6b0,Cabot Corporation,cabotcorp.com,https://cabotcorp.com,32513,,3713000000,,,,United States,,8
+61360b5aff5e5300f65e1df2,Sylvamo,sylvamo.com,https://sylvamo.com,322110,,3351000000,,,,United States,,8
+5f033b0be2382e01309cdaf7,Avient Corporation,avient.com,https://avient.com,32521,,3260200000,,,,United States,,8
+54a12a8569702da220711902,"JELD-WEN, Inc.",jeld-wen.com,https://jeld-wen.com,321911,,3211181000,,,,United States,,8
+5d0a9cfca3ae61a4cfe077c4,General Atomics,ga.com,https://ga.com,336414,,3200000000,,,,United States,General Atomics Aeronautical Systems,8
+5f4a214b0745f80001a2c46f,Momentive,momentive.com,https://momentive.com,32521,,2800000000,,,,United States,KCC Corporation,8
+6096e4a804cbb10137c09091,United Launch Alliance (ULA),ulalaunch.com,https://ulalaunch.com,336414,,2600000000,,,,United States,,8
+54a1357869702d4b2ec59400,Stepan Company,stepan.com,https://stepan.com,32519,,2332114000,,,,United States,,8
+54a1349b69702d407fd63800,Panasonic Avionics Corporation,panasonic.aero,https://panasonic.aero,336413,,2263670000,,,,United States,Panasonic,8
+5b158fc7a6da9870e38cfed1,Anduril Industries,anduril.com,https://anduril.com,336414,,2200000000,,,,United States,,8
+54a11fc569702d8ed41ff701,Kemin Industries,kemin.com,https://kemin.com,32519,,2000000000,,,,United States,,8
+5f80697b4c5613008c0958e8,MDA Space,mda.space,https://mda.space,336414,,1189296000,,,,Canada,Northern Private Capital,8
+54a1284769702dc12811ca00,Sierra Nevada Corporation,sncorp.com,https://sncorp.com,336411,,787525000,,,,United States,,8
+54a12a1f69702db64828e601,Magellan Aerospace Limited,magellan.aero,https://magellan.aero,336412,,762069000,,,,Canada,,8
+55e8c4c9f3e5bb0791000002,Rocket Lab,rocketlabcorp.com,https://rocketlabcorp.com,336414,,601799000,,,,United States,,8
+5a9da279a6da98d9a15a297d,Shield AI,shield.ai,https://shield.ai,336411,,540000000,,,,United States,,8
+54a1391f69702d24d3ba3200,SGK,sgkinc.com,https://sgkinc.com,32222,,532850000,,,,United States,Propelis,8
+5a9d7abea6da98d94d8ca137,Axiom Space,axiomspace.com,https://axiomspace.com,92711,,380000000,,,,United States,,8
+5da287aada76c2000192ecc4,Planet,planet.com,https://planet.com,54151,,307727000,,,,United States,,8
+5b86437af874f7362754a996,Skydio,skydio.com,https://skydio.com,336411,,295100000,,,,United States,,8
+5b859d2a324d4455a9b25025,Waymo,waymo.com,https://waymo.com,33641,,270000000,,,,United States,Alphabet Inc.,8
+57c4b606a6da98369210329c,Relativity Space,relativityspace.com,https://relativityspace.com,336414,,181500000,,,,United States,,8
+5f41550dd4d1a50001269203,Firefly Aerospace,fireflyspace.com,https://fireflyspace.com,336414,,159855000,,,,United States,"AE Industrial Partners, LP",8

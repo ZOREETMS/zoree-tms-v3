@@ -1,0 +1,1202 @@
+[
+{
+"id": "54c1f2807468697af7cd2062",
+"t": "IT Director, Supply Chain Management",
+"o": "Ford Motor Company",
+"r": "2026-08-10T10:52:19.507+00:00",
+"p": "P2",
+"co_rank": 0
+},
+{
+"id": "610bdab13648d000014ef4eb",
+"t": "Director - NA Material Logistics",
+"o": "Ford Motor Company",
+"r": "2026-08-12T19:54:07.030+00:00",
+"p": "P4",
+"co_rank": 0
+},
+{
+"id": "681e078e8173920001fbc945",
+"t": "Global Head of ERP Architecture and Platform",
+"o": "Ford Motor Company",
+"r": "2026-08-04T21:33:41.627+00:00",
+"p": "P6",
+"co_rank": 0
+},
+{
+"id": "611a084bdaf3bb0001f0bff3",
+"t": "VP of Operations",
+"o": "Ford Motor Company",
+"r": "2026-08-14T06:13:23.058+00:00",
+"p": "P5",
+"co_rank": 0
+},
+{
+"id": "651af34712e4a50001bb76e7",
+"t": "Director of Supply Chain Systems",
+"o": "General Motors",
+"r": "2026-08-09T20:49:23.000+00:00",
+"p": "P2",
+"co_rank": 1
+},
+{
+"id": "5fbd445ec1bf13000184b473",
+"t": "Director - Vehicle Logistics",
+"o": "General Motors",
+"r": "2026-08-07T06:16:35.000+00:00",
+"p": "P4",
+"co_rank": 1
+},
+{
+"id": "67f7adf4a725010001fc8eb2",
+"t": "Director CCA Logistics",
+"o": "General Motors",
+"r": "2026-07-19T11:37:10.000+00:00",
+"p": "P4",
+"co_rank": 1
+},
+{
+"id": "69ec7fe80a678100015c03f8",
+"t": "Head of Supply Chain Strategy",
+"o": "Tesla",
+"r": "2026-07-21T00:08:20.000+00:00",
+"p": "P1",
+"co_rank": 2
+},
+{
+"id": "54ec45b474686943110d4774",
+"t": "Director, Material Planning and Logistics",
+"o": "Tesla",
+"r": "2026-08-12T15:21:01.219+00:00",
+"p": "P4",
+"co_rank": 2
+},
+{
+"id": "610d49f85cfc3e0001a36afa",
+"t": "Vice President Supply Chain",
+"o": "Tesla",
+"r": "2026-08-15T08:34:37.046+00:00",
+"p": "P5",
+"co_rank": 2
+},
+{
+"id": "57ddf5dba6da987b35088add",
+"t": "VP Operations",
+"o": "Tesla",
+"r": "2026-07-24T01:41:15.000+00:00",
+"p": "P5",
+"co_rank": 2
+},
+{
+"id": "54a4c7607468693442e9df62",
+"t": "Department Head, (Auto) Seihan Planning",
+"o": "American Honda Motor Company, Inc.",
+"r": "2026-07-22T12:32:31.000+00:00",
+"p": "P5",
+"co_rank": 3
+},
+{
+"id": "5e66c9aa6fe6af00013b0d44",
+"t": "Director of Operations",
+"o": "American Honda Motor Company, Inc.",
+"r": "2026-07-21T02:40:35.000+00:00",
+"p": "P5",
+"co_rank": 3
+},
+{
+"id": "640f0c4fc4b77d0001d23934",
+"t": "Director, Operations",
+"o": "American Honda Motor Company, Inc.",
+"r": "2026-07-08T21:17:04.903+00:00",
+"p": "P5",
+"co_rank": 3
+},
+{
+"id": "66d3ebf410ac880001dd23f1",
+"t": "Vice President Operations",
+"o": "Magna International",
+"r": "2026-08-07T10:52:34.000+00:00",
+"p": "P5",
+"co_rank": 4
+},
+{
+"id": "60a6b448a65b430001fdb294",
+"t": "Vice President of Operations",
+"o": "Magna International",
+"r": "2026-08-07T08:49:42.343+00:00",
+"p": "P5",
+"co_rank": 4
+},
+{
+"id": "6610d588faf5fe0007afcdc3",
+"t": "Vice President of Operations",
+"o": "Magna International",
+"r": "2026-07-11T20:46:26.000+00:00",
+"p": "P5",
+"co_rank": 4
+},
+{
+"id": "690338d537235800013002e1",
+"t": "Vice President of Supply Chain",
+"o": "Magna International",
+"r": "2025-10-30T10:07:16.865+00:00",
+"p": "P5",
+"co_rank": 4
+},
+{
+"id": "54ec1d8b7468694311570453",
+"t": "Assistant Director of Logistics",
+"o": "PACCAR",
+"r": "2026-08-09T03:26:14.275+00:00",
+"p": "P4",
+"co_rank": 5
+},
+{
+"id": "608aca89f15098000108779d",
+"t": "Director, Packaging & Logistics",
+"o": "Lear Corporation",
+"r": "2026-08-10T06:39:23.386+00:00",
+"p": "P4",
+"co_rank": 6
+},
+{
+"id": "60d059a1a122ce00010a27f7",
+"t": "Vice President, Operations",
+"o": "Lear Corporation",
+"r": "2026-08-09T23:26:22.000+00:00",
+"p": "P5",
+"co_rank": 6
+},
+{
+"id": "609167eb2ccd96000170a6cc",
+"t": "Vice President, Global Logistics",
+"o": "Lear Corporation",
+"r": "2026-08-10T06:18:45.359+00:00",
+"p": "P4",
+"co_rank": 6
+},
+{
+"id": "69dab8defb4cfc0001919262",
+"t": "Vice President Operations",
+"o": "Lear Corporation",
+"r": "2026-08-07T20:21:17.000+00:00",
+"p": "P5",
+"co_rank": 6
+},
+{
+"id": "54abca247468693007ef200d",
+"t": "Director of Logistics",
+"o": "Adient",
+"r": "2026-07-28T11:17:04.000+00:00",
+"p": "P4",
+"co_rank": 7
+},
+{
+"id": "60e26d5b2741a300012e225b",
+"t": "IT Director- ERP Services QAD CoE",
+"o": "Adient",
+"r": "2026-07-25T03:35:00.000+00:00",
+"p": "P6",
+"co_rank": 7
+},
+{
+"id": "55c23d9373696460955b4000",
+"t": "Vice President of Supply Chain",
+"o": "Adient",
+"r": "2026-08-13T14:42:52.576+00:00",
+"p": "P5",
+"co_rank": 7
+},
+{
+"id": "60e7d1ada2af460001e98ef3",
+"t": "Director, Enterprise Supply Chain Management and Data Analytics",
+"o": "BorgWarner",
+"r": "2026-08-08T15:32:17.000+00:00",
+"p": "P2",
+"co_rank": 8
+},
+{
+"id": "60e7d1baa2af460001e98ffa",
+"t": "Supply Chain Director",
+"o": "BorgWarner",
+"r": "2026-08-14T15:59:00.093+00:00",
+"p": "P5",
+"co_rank": 8
+},
+{
+"id": "60e7d1b1c495980001e28869",
+"t": "Vice President Global Supply Chain Management",
+"o": "BorgWarner",
+"r": "2026-08-07T06:01:12.737+00:00",
+"p": "P5",
+"co_rank": 8
+},
+{
+"id": "6858361c869e3f00016c8b6d",
+"t": "Director Supply Chain",
+"o": "BorgWarner",
+"r": "2026-07-28T19:23:17.004+00:00",
+"p": "P5",
+"co_rank": 8
+},
+{
+"id": "60d31b78af47a10001233bbb",
+"t": "Director Digital Supply Chain",
+"o": "HARMAN International",
+"r": "2026-08-06T21:18:24.000+00:00",
+"p": "P1",
+"co_rank": 9
+},
+{
+"id": "604c097c88b7e600013c2b62",
+"t": "Global Logistics Director",
+"o": "HARMAN International",
+"r": "2026-08-07T20:50:51.000+00:00",
+"p": "P4",
+"co_rank": 9
+},
+{
+"id": "60fb984b7e7f99000127797c",
+"t": "VP of Operations",
+"o": "HARMAN International",
+"r": "2026-08-11T18:05:58.790+00:00",
+"p": "P5",
+"co_rank": 9
+},
+{
+"id": "5c39dca3a3ae61e674876e02",
+"t": "Director of Logistics",
+"o": "HARMAN International",
+"r": "2026-07-13T02:57:42.000+00:00",
+"p": "P4",
+"co_rank": 9
+},
+{
+"id": "54c2a6107468697af756f7b4",
+"t": "Director, Logistics",
+"o": "Oshkosh Corporation",
+"r": "2026-08-07T11:06:20.000+00:00",
+"p": "P4",
+"co_rank": 10
+},
+{
+"id": "5570a8b57369641881ff2b00",
+"t": "Director | Enterprise Cloud, Identity, Database, Middleware, Web, and ERP Operations",
+"o": "Oshkosh Corporation",
+"r": "2026-08-06T14:55:51.000+00:00",
+"p": "P6",
+"co_rank": 10
+},
+{
+"id": "65771d3122e09000018d360a",
+"t": "Vice President, Supply Chain",
+"o": "Oshkosh Corporation",
+"r": "2026-08-06T21:12:10.000+00:00",
+"p": "P5",
+"co_rank": 10
+},
+{
+"id": "671a863bcd14aa000101f8e3",
+"t": "Digital Technology Director - ERP Applications for Oshkosh Corporation's Vocational Segment",
+"o": "Oshkosh Corporation",
+"r": "2026-07-20T06:42:58.000+00:00",
+"p": "P6",
+"co_rank": 10
+},
+{
+"id": "67d60e4d6712ec00011235f0",
+"t": "IT Director, Supply Chain IT Portfolio Management",
+"o": "Tenneco",
+"r": "2026-08-13T03:08:21.862+00:00",
+"p": "P2",
+"co_rank": 11
+},
+{
+"id": "6110bae73c84460001a5748b",
+"t": "Director Global Supply Chain Strategy",
+"o": "Tenneco",
+"r": "2026-08-07T18:57:06.000+00:00",
+"p": "P1",
+"co_rank": 11
+},
+{
+"id": "646bc902ca00540001a7d65b",
+"t": "Director of Distribution and Logistics",
+"o": "Tenneco",
+"r": "2026-08-07T20:51:59.000+00:00",
+"p": "P4",
+"co_rank": 11
+},
+{
+"id": "604c72e8d26fd70001e711ec",
+"t": "Vice President Operations",
+"o": "Tenneco",
+"r": "2026-08-15T00:13:31.108+00:00",
+"p": "P5",
+"co_rank": 11
+},
+{
+"id": "676d0e3dacead8000105374c",
+"t": "Vice President, PPM and Supply Chain Strategy",
+"o": "Toyota North America",
+"r": "2026-07-02T11:06:35.000+00:00",
+"p": "P1",
+"co_rank": 12
+},
+{
+"id": "603ea115d5746e000174f98a",
+"t": "Senior Director, Intelligent Automation and Operations",
+"o": "Toyota North America",
+"r": "2026-08-14T09:31:11.865+00:00",
+"p": "P7",
+"co_rank": 12
+},
+{
+"id": "611bad613236a10001328bfb",
+"t": "Director, Global Trade Compliance, Transportation & Cargo Security at Howmet Aerospace",
+"o": "Howmet Aerospace",
+"r": "2026-08-10T16:35:19.126+00:00",
+"p": "P3",
+"co_rank": 14
+},
+{
+"id": "642dacf9514bab0001836aa1",
+"t": "VP - Engineering and Supply Chain",
+"o": "Howmet Aerospace",
+"r": "2026-08-08T17:57:36.572+00:00",
+"p": "P5",
+"co_rank": 14
+},
+{
+"id": "54a4b9ac7468692abf4e6b5e",
+"t": "Vice President Operations",
+"o": "Howmet Aerospace",
+"r": "2026-07-28T11:09:14.000+00:00",
+"p": "P5",
+"co_rank": 14
+},
+{
+"id": "610127ce946763000111cb0a",
+"t": "IT Director, Production & Logistics",
+"o": "International",
+"r": "2026-07-14T13:07:56.000+00:00",
+"p": "P2",
+"co_rank": 15
+},
+{
+"id": "65b0fb77ad625800015ec1ba",
+"t": "Associate Director of Logistics Process",
+"o": "International",
+"r": "2026-08-10T23:27:39.142+00:00",
+"p": "P4",
+"co_rank": 15
+},
+{
+"id": "60b4d4c90457ed0001ea30e5",
+"t": "VP Manufacturing, Supply Chain & Logistics",
+"o": "International",
+"r": "2026-08-15T02:01:52.937+00:00",
+"p": "P5",
+"co_rank": 15
+},
+{
+"id": "66d6c3923ae1de00018411ba",
+"t": "Head of Logistics Way",
+"o": "International",
+"r": "2026-08-10T12:13:19.349+00:00",
+"p": "P4",
+"co_rank": 15
+},
+{
+"id": "54a7764b7468696220b21837",
+"t": "Director of Intercontinental Logistics",
+"o": "Dana Incorporated",
+"r": "2026-08-15T05:51:28.537+00:00",
+"p": "P4",
+"co_rank": 16
+},
+{
+"id": "54a4c9057468693b8c153a63",
+"t": "Vice President Operations",
+"o": "Dana Incorporated",
+"r": "2026-08-08T13:42:58.000+00:00",
+"p": "P5",
+"co_rank": 16
+},
+{
+"id": "611bfb28d251d8000185e5c1",
+"t": "VP fo Supply Chain",
+"o": "Dana Incorporated",
+"r": "2026-08-07T13:57:04.000+00:00",
+"p": "P5",
+"co_rank": 16
+},
+{
+"id": "54ab63bb7468690d2ade9805",
+"t": "VP Operations",
+"o": "Dana Incorporated",
+"r": "2026-07-27T11:52:43.000+00:00",
+"p": "P5",
+"co_rank": 16
+},
+{
+"id": "67db63de6becfc0001ff1352",
+"t": "Director of Operations",
+"o": "Bendix Commercial Vehicle Systems LLC",
+"r": "2026-08-08T15:52:22.702+00:00",
+"p": "P5",
+"co_rank": 17
+},
+{
+"id": "602a4337cf1a4c00011cee95",
+"t": "Director, Supply Integration and Planning",
+"o": "Bendix Commercial Vehicle Systems LLC",
+"r": "2026-07-27T23:27:53.000+00:00",
+"p": "P5",
+"co_rank": 17
+},
+{
+"id": "6219446907307700017f9d10",
+"t": "Vice President Operations",
+"o": "AAM - American Axle & Manufacturing",
+"r": "2026-08-07T20:18:44.000+00:00",
+"p": "P5",
+"co_rank": 18
+},
+{
+"id": "54a754167468696220d4792a",
+"t": "VP Operations, Driveline",
+"o": "AAM - American Axle & Manufacturing",
+"r": "2026-07-13T02:28:54.000+00:00",
+"p": "P5",
+"co_rank": 18
+},
+{
+"id": "54a7c9047468696de7626951",
+"t": "Senior Director, Supply Chain Systems",
+"o": "Rivian",
+"r": "2026-08-12T10:18:38.000+00:00",
+"p": "P2",
+"co_rank": 19
+},
+{
+"id": "57d58681a6da9853cea09943",
+"t": "Director, Logistics Engineering",
+"o": "Rivian",
+"r": "2026-08-13T22:01:29.823+00:00",
+"p": "P4",
+"co_rank": 19
+},
+{
+"id": "610becce67ffed0001d62d13",
+"t": "Director, Supply Chain Technology",
+"o": "Rivian",
+"r": "2026-08-12T05:06:03.000+00:00",
+"p": "P2",
+"co_rank": 19
+},
+{
+"id": "5e5eb6d570d1db0001e03c18",
+"t": "Vice President Logistics",
+"o": "Rivian",
+"r": "2026-08-13T10:02:22.376+00:00",
+"p": "P4",
+"co_rank": 19
+},
+{
+"id": "54a70f377468696220197e11",
+"t": "Vice President, Operations",
+"o": "IAC Group",
+"r": "2026-08-14T16:18:55.357+00:00",
+"p": "P5",
+"co_rank": 20
+},
+{
+"id": "61053753cd35ee00013fcd5b",
+"t": "Vice President Supply Chain",
+"o": "IAC Group",
+"r": "2026-08-10T06:25:56.269+00:00",
+"p": "P5",
+"co_rank": 20
+},
+{
+"id": "54ec1d69746869444c09a052",
+"t": "VP Global Operations +Integrated Supply Chain",
+"o": "First Brands Group, LLC",
+"r": "2026-07-31T10:16:34.962+00:00",
+"p": "P5",
+"co_rank": 21
+},
+{
+"id": "60f17cb211a7e600016b34f9",
+"t": "Director Global Supply Chain",
+"o": "Meritor",
+"r": "2026-08-12T10:16:15.739+00:00",
+"p": "P5",
+"co_rank": 24
+},
+{
+"id": "57d37828f651252c6147bd96",
+"t": "Director of Supply Chain Planning Technical Architecture",
+"o": "Lippert",
+"r": "2026-08-09T18:28:54.000+00:00",
+"p": "P2",
+"co_rank": 25
+},
+{
+"id": "63d155cdba0d6b000160d0ac",
+"t": "Vice President of Supply Chain Strategy",
+"o": "Lippert",
+"r": "2026-08-07T09:25:12.000+00:00",
+"p": "P1",
+"co_rank": 25
+},
+{
+"id": "54a48da57468692abfbe4f50",
+"t": "Director of Transportation",
+"o": "Lippert",
+"r": "2026-08-08T18:48:21.456+00:00",
+"p": "P3",
+"co_rank": 25
+},
+{
+"id": "604ecc0010e4090001935ebe",
+"t": "Vice President of Global Logistics",
+"o": "Lippert",
+"r": "2026-08-07T04:58:00.000+00:00",
+"p": "P4",
+"co_rank": 25
+},
+{
+"id": "5e7451c3b822da0001caf74c",
+"t": "Director Parts & Finished Vehicle Logistics",
+"o": "Mitsubishi Motors North America, Inc.",
+"r": "2026-07-14T11:33:25.647+00:00",
+"p": "P4",
+"co_rank": 26
+},
+{
+"id": "57d38b98f651252c3108c74e",
+"t": "Director, National Transportation",
+"o": "Subaru of America",
+"r": "2026-06-25T17:17:47.000+00:00",
+"p": "P3",
+"co_rank": 27
+},
+{
+"id": "67cbfed1a29dcc00015f8c0a",
+"t": "VP - Vehicle Planning & Logistics",
+"o": "Subaru of America",
+"r": "2026-08-08T17:29:26.000+00:00",
+"p": "P4",
+"co_rank": 27
+},
+{
+"id": "66b9df4183e76f0001216664",
+"t": "IT Director - ERP | WMS | HCM | LMS | Legal | It-jsox",
+"o": "Subaru of America",
+"r": "2026-08-03T17:27:52.848+00:00",
+"p": "P6",
+"co_rank": 27
+},
+{
+"id": "60b23b551a4e30000131ed6a",
+"t": "President and COO",
+"o": "Subaru of America",
+"r": "2026-08-09T04:00:08.960+00:00",
+"p": "P5",
+"co_rank": 27
+},
+{
+"id": "60ffbb49514aad00017ed0c9",
+"t": "Director of Operations",
+"o": "TI Fluid Systems",
+"r": "2026-08-09T20:44:51.407+00:00",
+"p": "P5",
+"co_rank": 28
+},
+{
+"id": "55709505736964515a155000",
+"t": "Senior Vice President of Vehicle and Parts Logistics",
+"o": "Volkswagen of America, Inc",
+"r": "2026-08-07T00:36:04.000+00:00",
+"p": "P4",
+"co_rank": 29
+},
+{
+"id": "607dc2acd48aa90001501519",
+"t": "Director of Global Customs and Transportation",
+"o": "Visteon Corporation",
+"r": "2026-08-11T10:33:30.783+00:00",
+"p": "P3",
+"co_rank": 30
+},
+{
+"id": "5fd48ea1b1cf300001141e91",
+"t": "Vice President, Operations (Metallics BU)",
+"o": "Martinrea International",
+"r": "2026-08-10T19:25:40.775+00:00",
+"p": "P5",
+"co_rank": 31
+},
+{
+"id": "5b261d8da6da98e7c423f29f",
+"t": "Vice President Metallics Supply Chain Operations",
+"o": "Martinrea International",
+"r": "2026-08-05T14:41:59.264+00:00",
+"p": "P5",
+"co_rank": 31
+},
+{
+"id": "685155f47c30d20001ed5e81",
+"t": "Vice President Operations - Fluids Business Unit",
+"o": "Martinrea International",
+"r": "2026-07-23T21:16:50.000+00:00",
+"p": "P5",
+"co_rank": 31
+},
+{
+"id": "54a602ec7468693209a525bb",
+"t": "VP of Operations",
+"o": "Martinrea International",
+"r": "2026-07-09T03:55:00.000+00:00",
+"p": "P5",
+"co_rank": 31
+},
+{
+"id": "565e67c7a6da9811ff00e616",
+"t": "Director of Supply Chain & Logistics",
+"o": "PHINIA",
+"r": "2026-07-30T03:21:22.000+00:00",
+"p": "P4",
+"co_rank": 32
+},
+{
+"id": "6107a661831b180001b596b5",
+"t": "Senior Executive Director: Global ERP & IT Leader Americas Region",
+"o": "PHINIA",
+"r": "2026-08-04T14:12:42.613+00:00",
+"p": "P6",
+"co_rank": 32
+},
+{
+"id": "60d0b604752d0c0001fdb770",
+"t": "Director, Global Supply Chain Logistics and Customs Administration",
+"o": "Allison Transmission",
+"r": "2026-07-30T03:34:26.000+00:00",
+"p": "P4",
+"co_rank": 33
+},
+{
+"id": "610a388d7360e400019a9231",
+"t": "Vice President of Operations",
+"o": "Allison Transmission",
+"r": "2026-08-08T09:28:12.666+00:00",
+"p": "P5",
+"co_rank": 33
+},
+{
+"id": "611124c1e8fb84000123c19a",
+"t": "President and BU Leader, Allison Transmission and Allison Chief Operating Officer",
+"o": "Allison Transmission",
+"r": "2026-08-04T12:53:08.108+00:00",
+"p": "P5",
+"co_rank": 33
+},
+{
+"id": "60a7246a5c5df90001ba3b29",
+"t": "Vice President Operations",
+"o": "Cooper Standard",
+"r": "2026-08-14T10:05:38.100+00:00",
+"p": "P5",
+"co_rank": 35
+},
+{
+"id": "5ae7be54a6da9841aac7fb25",
+"t": "Director Supply Chain Systems and Analytics",
+"o": "J.B. Poindexter & Co",
+"r": "2026-07-28T05:58:01.467+00:00",
+"p": "P2",
+"co_rank": 36
+},
+{
+"id": "69b3c0e7e553c700014233d6",
+"t": "Logistics Director",
+"o": "Zoox",
+"r": "2026-08-09T21:09:16.462+00:00",
+"p": "P4",
+"co_rank": 37
+},
+{
+"id": "60a7e183affd9800018f1bc0",
+"t": "Vice President, Supply Chain, Quality & Reliability",
+"o": "Zoox",
+"r": "2026-08-09T21:07:39.137+00:00",
+"p": "P5",
+"co_rank": 37
+},
+{
+"id": "606adb149ef169000145c0a6",
+"t": "Vice President of Manufacturing Operations",
+"o": "Zoox",
+"r": "2026-08-09T16:22:57.000+00:00",
+"p": "P5",
+"co_rank": 37
+},
+{
+"id": "60f795f8ca3aa10001b773c4",
+"t": "Vice President - Global Logistics, Transportation and Trade Compliance",
+"o": "Dorman Products",
+"r": "2026-08-09T02:10:44.744+00:00",
+"p": "P4",
+"co_rank": 38
+},
+{
+"id": "63f884ff8b0af100010fb827",
+"t": "SVP, Chief Operations Officer",
+"o": "Dorman Products",
+"r": "2026-08-09T23:05:07.000+00:00",
+"p": "P5",
+"co_rank": 38
+},
+{
+"id": "57d79d7ea6da9809fe228e05",
+"t": "Director of Logistics",
+"o": "Dorman Products",
+"r": "2026-07-30T17:15:04.407+00:00",
+"p": "P4",
+"co_rank": 38
+},
+{
+"id": "60fe66a569a8a20001d876ac",
+"t": "Vice President Supply Chain",
+"o": "Dorman Products",
+"r": "2026-08-09T14:33:24.000+00:00",
+"p": "P5",
+"co_rank": 38
+},
+{
+"id": "66f7196bc180660001b96242",
+"t": "VP Supply Chain Management",
+"o": "Standard Motor Products",
+"r": "2026-08-08T17:54:04.000+00:00",
+"p": "P5",
+"co_rank": 39
+},
+{
+"id": "60b5b236e4335b000100cbe3",
+"t": "Vice President Operations",
+"o": "Standard Motor Products",
+"r": "2026-08-07T01:10:19.000+00:00",
+"p": "P5",
+"co_rank": 39
+},
+{
+"id": "642c426f21fb01000135257e",
+"t": "Vice President, North American Operations",
+"o": "Standard Motor Products",
+"r": "2026-07-18T11:34:01.607+00:00",
+"p": "P5",
+"co_rank": 39
+},
+{
+"id": "5aa8cea9a6da98190cefb526",
+"t": "Vice President of US/Canadian Operations",
+"o": "Standard Motor Products",
+"r": "2026-07-11T15:19:31.000+00:00",
+"p": "P5",
+"co_rank": 39
+},
+{
+"id": "601bb681d8b23c00016fd1e4",
+"t": "Vice President of Canadian Operations",
+"o": "ABC Technologies",
+"r": "2026-07-13T15:27:59.000+00:00",
+"p": "P5",
+"co_rank": 40
+},
+{
+"id": "57d979caa6da98721eb6a8be",
+"t": "Executive VP Operations",
+"o": "Multimatic",
+"r": "2026-07-23T04:18:23.000+00:00",
+"p": "P5",
+"co_rank": 41
+},
+{
+"id": "54ebcaf1746869444c995926",
+"t": "EVP of Operations",
+"o": "Multimatic",
+"r": "2026-07-11T18:22:40.000+00:00",
+"p": "P5",
+"co_rank": 41
+},
+{
+"id": "68068c53bff1b10001e751fa",
+"t": "Director,Supply Chain & Logistics",
+"o": "Wabash",
+"r": "2026-08-07T05:36:49.000+00:00",
+"p": "P4",
+"co_rank": 42
+},
+{
+"id": "60b63d63227f000001ce1ab6",
+"t": "Vice President of Global Supply Chain",
+"o": "Wabash",
+"r": "2026-08-10T12:28:39.094+00:00",
+"p": "P5",
+"co_rank": 42
+},
+{
+"id": "54a1c05b74686949e7d6e60d",
+"t": "Director, Parts Operations and Distribution",
+"o": "Wabash",
+"r": "2026-07-26T12:38:56.000+00:00",
+"p": "P4",
+"co_rank": 42
+},
+{
+"id": "689421bcb83f90000180190f",
+"t": "Vice President, Global Operations",
+"o": "Wabash",
+"r": "2026-07-26T11:52:02.000+00:00",
+"p": "P5",
+"co_rank": 42
+},
+{
+"id": "54eb6bcc74686931e275ff11",
+"t": "Director - Production Control (Operations, Supply Chain, & Logistics) & Manufacturing Engineering",
+"o": "North American Lighting, Inc.",
+"r": "2026-08-09T13:58:48.743+00:00",
+"p": "P4",
+"co_rank": 43
+},
+{
+"id": "60af2302af377d000161b994",
+"t": "President & COO",
+"o": "North American Lighting, Inc.",
+"r": "2026-08-13T06:26:16.804+00:00",
+"p": "P5",
+"co_rank": 43
+},
+{
+"id": "66c079ff3bcfd8000119fba9",
+"t": "VP Alabama Operations",
+"o": "North American Lighting, Inc.",
+"r": "2026-07-29T02:52:49.090+00:00",
+"p": "P5",
+"co_rank": 43
+},
+{
+"id": "6099e1eeee8932000152620f",
+"t": "Vice President, Supply Chain & SIOP",
+"o": "Gentherm",
+"r": "2026-08-07T07:50:03.000+00:00",
+"p": "P5",
+"co_rank": 44
+},
+{
+"id": "685197b2d18a0d0001697720",
+"t": "SVP Global Operations and Supply Chain",
+"o": "Gentherm",
+"r": "2026-08-07T06:23:29.000+00:00",
+"p": "P5",
+"co_rank": 44
+},
+{
+"id": "61124a9eceaa0d0001d437bb",
+"t": "Senior Director Logistics",
+"o": "Fox Factory",
+"r": "2026-08-09T00:32:19.193+00:00",
+"p": "P4",
+"co_rank": 45
+},
+{
+"id": "66f95e5a1277160001451b6a",
+"t": "Head of Supply Chain Excellence",
+"o": "Lucid Motors",
+"r": "2026-08-07T15:10:22.000+00:00",
+"p": "P1",
+"co_rank": 46
+},
+{
+"id": "5ac5bc00a3ae618e74b31fcb",
+"t": "Director, Trade Compliance & Logistics",
+"o": "Lucid Motors",
+"r": "2026-08-11T11:33:05.206+00:00",
+"p": "P4",
+"co_rank": 46
+},
+{
+"id": "66fc63e7f1719300011b04e9",
+"t": "Interim Vice President, Supply Chain",
+"o": "Lucid Motors",
+"r": "2026-07-30T03:20:05.000+00:00",
+"p": "P5",
+"co_rank": 46
+},
+{
+"id": "64af9dbba50a1d000133cef3",
+"t": "Director - Supply Chain Strategy & Execution",
+"o": "Lucid Motors",
+"r": "2026-08-06T13:07:39.000+00:00",
+"p": "P1",
+"co_rank": 46
+},
+{
+"id": "54c23f847468697af7ca7488",
+"t": "Director of North America Materials and Logistics",
+"o": "Peterbilt Motors Company",
+"r": "2026-08-07T05:18:06.000+00:00",
+"p": "P4",
+"co_rank": 47
+},
+{
+"id": "67d7aa394915fc000144e0f3",
+"t": "EVP & COO",
+"o": "Honda Canada Inc.",
+"r": "2026-07-13T23:18:14.000+00:00",
+"p": "P5",
+"co_rank": 50
+},
+{
+"id": "611353d5e94cd000017050e8",
+"t": "Senior Director Indirect Supply Chain",
+"o": "Veoneer",
+"r": "2026-08-11T08:55:47.187+00:00",
+"p": "P5",
+"co_rank": 51
+},
+{
+"id": "625537c3c7dc6300019815d2",
+"t": "Director, Supply Chain and Logistics",
+"o": "Mack Trucks",
+"r": "2026-07-29T06:30:33.000+00:00",
+"p": "P4",
+"co_rank": 52
+},
+{
+"id": "608865f8d0c8eb0001ed5be7",
+"t": "Vice President Operations",
+"o": "Mack Trucks",
+"r": "2026-06-27T23:37:11.185+00:00",
+"p": "P5",
+"co_rank": 52
+},
+{
+"id": "557029f4736964586e627600",
+"t": "Director, Logistics",
+"o": "Mack Trucks",
+"r": "2026-07-22T03:45:48.339+00:00",
+"p": "P4",
+"co_rank": 52
+},
+{
+"id": "57dfaf7ea6da980b658ac510",
+"t": "VP & General Manager - Cab & Vehicle Assembly Operations - Macungie Plant",
+"o": "Mack Trucks",
+"r": "2026-06-25T03:48:05.000+00:00",
+"p": "P5",
+"co_rank": 52
+},
+{
+"id": "601ad502150aa00001cda9fb",
+"t": "Vice President Operations",
+"o": "Inventus Power",
+"r": "2026-08-12T20:28:49.030+00:00",
+"p": "P5",
+"co_rank": 53
+},
+{
+"id": "66f6b193e972eb000131b284",
+"t": "Vice President Global Operations and Quality",
+"o": "Inventus Power",
+"r": "2026-08-12T20:27:28.428+00:00",
+"p": "P5",
+"co_rank": 53
+},
+{
+"id": "683b47b48a5dc300015b937f",
+"t": "ERP/Business Systems Director",
+"o": "Stoneridge",
+"r": "2026-08-10T01:22:46.677+00:00",
+"p": "P6",
+"co_rank": 54
+},
+{
+"id": "668d92b5503fec0001176a9e",
+"t": "Director, Materials",
+"o": "New Flyer",
+"r": "2026-07-21T01:38:04.000+00:00",
+"p": "P4",
+"co_rank": 55
+},
+{
+"id": "54c1dd317468697af7536354",
+"t": "VP, Manufacturing Operations",
+"o": "T1 Energy Inc.",
+"r": "2026-08-08T16:01:17.000+00:00",
+"p": "P5",
+"co_rank": 56
+},
+{
+"id": "60ff0ecfa7e8f20001f1622c",
+"t": "Head of Materials, Mfg,and Quality",
+"o": "Nuro",
+"r": "2026-08-07T21:28:33.765+00:00",
+"p": "P5",
+"co_rank": 57
+},
+{
+"id": "5ddbef3db00f30000128fd8c",
+"t": "Head of Operations Strategy & Planning",
+"o": "Nuro",
+"r": "2026-08-06T19:25:24.573+00:00",
+"p": "P5",
+"co_rank": 57
+},
+{
+"id": "60e688320c4bed0001d12ce6",
+"t": "Vice President Global Logistics & Customs",
+"o": "Xometry",
+"r": "2026-08-06T23:36:05.000+00:00",
+"p": "P4",
+"co_rank": 58
+},
+{
+"id": "606b4e22647232000109fe51",
+"t": "Vice President Operations",
+"o": "Xometry",
+"r": "2026-08-14T05:53:35.185+00:00",
+"p": "P5",
+"co_rank": 58
+},
+{
+"id": "54c198c17468691639301627",
+"t": "Director of Global Logistics",
+"o": "Xometry",
+"r": "2026-07-23T16:58:56.000+00:00",
+"p": "P4",
+"co_rank": 58
+},
+{
+"id": "6807bdfa0059b000014b9ac0",
+"t": "VP of Operations",
+"o": "Xometry",
+"r": "2026-08-09T16:35:07.925+00:00",
+"p": "P5",
+"co_rank": 58
+},
+{
+"id": "66f71e51c180660001bad4ac",
+"t": "Director of Integrated Business Planning",
+"o": "Roush",
+"r": "2026-07-12T03:22:24.000+00:00",
+"p": "P1",
+"co_rank": 60
+},
+{
+"id": "6106f1e6cb0bd30001f4f6bd",
+"t": "Director of Operations",
+"o": "Roush",
+"r": "2026-08-07T22:53:29.000+00:00",
+"p": "P5",
+"co_rank": 60
+},
+{
+"id": "62e14b6eea07aa0001df2562",
+"t": "Department Head, Parts Logistics",
+"o": "BMW Group US",
+"r": "2026-06-27T07:12:39.000+00:00",
+"p": "P4",
+"co_rank": 61
+},
+{
+"id": "5f0c88695766710001b88338",
+"t": "Head of IT Logistics Planning & Business Lead - ERP / SAP S/4hana",
+"o": "Scout Motors Inc.",
+"r": "2026-08-12T14:10:48.600+00:00",
+"p": "P2",
+"co_rank": 62
+},
+{
+"id": "6721c5933f0dd300013f1d8d",
+"t": "Head of Logistics Planning",
+"o": "Scout Motors Inc.",
+"r": "2026-08-09T00:43:14.923+00:00",
+"p": "P4",
+"co_rank": 62
+},
+{
+"id": "67c29e27128bde0001513f5c",
+"t": "Head of Logistics",
+"o": "Scout Motors Inc.",
+"r": "2026-07-28T14:59:08.654+00:00",
+"p": "P4",
+"co_rank": 62
+},
+{
+"id": "657c3b4aca316600013b1775",
+"t": "Director of Operations",
+"o": "Motional",
+"r": "2026-07-27T07:43:32.000+00:00",
+"p": "P5",
+"co_rank": 63
+},
+{
+"id": "5ff026a05768d70001e7f427",
+"t": "Director of Operations",
+"o": "Torc Robotics",
+"r": "2026-08-07T21:54:16.000+00:00",
+"p": "P5",
+"co_rank": 64
+},
+{
+"id": "5f9b2a00e124070001865380",
+"t": "Director of Operations",
+"o": "Torc Robotics",
+"r": "2026-07-28T09:42:18.000+00:00",
+"p": "P5",
+"co_rank": 64
+},
+{
+"id": "610232ab2f91cd0001ef661b",
+"t": "Vice President Operations",
+"o": "Stoughton Trailers, LLC",
+"r": "2026-08-12T13:10:46.877+00:00",
+"p": "P5",
+"co_rank": 66
+},
+{
+"id": "611229dbf521d30001e9a41e",
+"t": "Chief Supply Chain Officer",
+"o": "Stoughton Trailers, LLC",
+"r": "2026-07-23T03:28:58.000+00:00",
+"p": "P5",
+"co_rank": 66
+},
+{
+"id": "5d57685ca3ae61f0c5a589e4",
+"t": "Director - Logistics, Planning & Master Data",
+"o": "LION",
+"r": "2026-07-09T23:01:24.000+00:00",
+"p": "P4",
+"co_rank": 69
+},
+{
+"id": "54a40d1c746869344203a128",
+"t": "Vice President of Global Operations",
+"o": "Bird",
+"r": "2026-08-07T20:54:43.000+00:00",
+"p": "P5",
+"co_rank": 70
+},
+{
+"id": "54a82f6a7468696de710ee65",
+"t": "Director Service Center & Transport Parts for Service Market Logistics NA",
+"o": "Volvo Trucks North America",
+"r": "2026-07-02T08:14:09.000+00:00",
+"p": "P4",
+"co_rank": 74
+}
+]

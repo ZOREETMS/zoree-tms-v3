@@ -1,0 +1,186 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+5e699a8d1d525e00980b32e4,Caterpillar Inc.,caterpillar.com,https://caterpillar.com,333120,,67589000000,,,,United States,,1
+5d0a7e5ca3ae613a6ca6c128,GE,ge.com,https://ge.com,336412,,45855000000,,,,United States,,1
+615dc78121eb73000160beee,John Deere,deere.com,https://deere.com,333111,,44665000000,,,,United States,,1
+54a1285569702d8cfcfa3b01,Honeywell Technologies,honeywell.com,https://honeywell.com,33324,,37442000000,,,,United States,,1
+5d0a5f51f65125a357b7d39e,SLB,slb.com,https://slb.com,213112,,35709000000,,,,United States,,1
+601a98723a044600cce76294,Cummins Inc.,cummins.com,https://cummins.com,33361,,33670000000,,,,United States,,1
+5ed29e6d746a300001071ff2,Applied Materials,appliedmaterials.com,https://appliedmaterials.com,333242,,28368000000,,,,United States,,1
+5da66bfcd84d9e0001e69e50,Baker Hughes,bakerhughes.com,https://bakerhughes.com,213112,,27733000000,,,,United States,,1
+616a6cf0ac4e2000a47fcea5,Lam Research,lamresearch.com,https://lamresearch.com,333242,,23232690000,,,,United States,,1
+5f50b939a3b2b1008ce62990,Carrier,,,333415,,21747000000,,,,United States,,1
+5f483be19e3a7000010ca7f0,Trane Technologies,tranetechnologies.com,https://tranetechnologies.com,333415,,21321900000,,,,United States,,1
+5cb62919f65125ec4711b23c,Parker Hannifin,parker.com,https://parker.com,33361,,19850000000,,,,United States,,1
+5f4b572153633e00016bb5aa,Bosch USA,bosch.us,https://bosch.us,33632,,18700000000,,,,United States,Bosch,1
+55f7a1d3f3e5bb3bd5001927,CNH,cnh.com,https://cnh.com,333111,,18095000000,,,,United States,Exor N.V.,1
+54a129c469702d8b19d64302,Emerson,emerson.com,https://emerson.com,333,,18016000000,,,,United States,,1
+5da13dfb1a47300001c6b6d8,Nidec Motor Corporation,nidec.com,https://nidec.com,335312,,17398598000,,,,United States,,1
+54a138f169702de5b31d0900,Tokyo Electron US,,,333242,,16227214000,,,,United States,,1
+54a128fb69702d9ebcec4201,ITW,itw.com,https://itw.com,33299,,16044000000,,,,United States,,1
+616a85a96faab000f6afa0af,Corning Incorporated,corning.com,https://corning.com,3334,,15629000000,,,,United States,,1
+62a105dcfc505d00df9c808e,Whirlpool Corporation,whirlpoolcorp.com,https://whirlpoolcorp.com,33324,,15524000000,,,,United States,,1
+54a134d669702d4494f84900,Techtronic Industries - TTI,ttigroup.com,https://ttigroup.com,33324,,15282106000,,,,United States,,1
+54a1a2177468695475205f03,"Stanley Black & Decker, Inc.",stanleyblackanddecker.com,https://stanleyblackanddecker.com,33231,,15130400000,,,,United States,Black & Decker,1
+54a138da69702d2fa6330a00,Textron,textron.com,https://textron.com,336411,,14799000000,,,,United States,,1
+5fd26d447d7bd7008c535512,Otis Elevator Co.,otis.com,https://otis.com,333921,,14431000000,,,,United States,,1
+54a13bd569702d2bfd66a801,KLA,kla.com,https://kla.com,333242,,13579476000,,,,United States,,1
+54a1210a69702da10fa0a702,Ball Corporation,ball.com,https://ball.com,33299,,13160000000,,,,United States,,1
+54a1344969702d2db4d87c00,"Crown Holdings, Inc.",crowncork.com,https://crowncork.com,33221,,12365000000,,,,United States,,1
+54a11e6a69702d9d7e746b01,Tenaris,tenaris.com,https://tenaris.com,331210,,11981157000,,,,United States,Techint Group,1
+54fca3757369647df5a71c00,"GE Appliances, a Haier company",geappliancesco.com,https://geappliancesco.com,33324,,11417000000,,,,United States,Haier Appliances India Pvt Ltd,1
+5fbaeec697059700cc0926f7,Wabtec Corporation,wabteccorp.com,https://wabteccorp.com,33311,,11167000000,,,,United States,,1
+5b863074324d44073185d376,Daikin Comfort,daikincomfort.com,https://daikincomfort.com,333415,,10693464000,,,,United States,"Daikin Industries, Ltd.",1
+5d0a8412a3ae6112d69d45a8,Vertiv,vertiv.com,https://vertiv.com,33451,,10229900000,,,,United States,Platinum Equity,1
+54a11c7369702d97c10eb000,AGCO Corporation,agcocorp.com,https://agcocorp.com,333111,,10082000000,,,,United States,,1
+5d0a4a67a3ae613a4fadda5e,Kohler Co.,kohlercompany.com,https://kohlercompany.com,33232,,10000000000,,,,United States,KOHLER India,1
+54a1342c69702d2f9fb14900,Xylem,xylem.com,https://xylem.com,22131,,9035000000,,,,United States,,1
+54a1282569702d979c05e700,NOV,nov.com,https://nov.com,333132,,8744000000,,,,United States,,1
+5d0a353880f93e1c5461edbd,Rockwell Automation,rockwellautomation.com,https://rockwellautomation.com,333,,8342000000,,,,United States,,1
+5a9d4a05a6da98d99a3be1ee,Arconic,arconic.com,https://arconic.com,33281,,8100000000,,,,United States,"Hoover Treated Wood Products, Inc.",1
+5e85e6835de51b008d45ae9f,Dover Corporation,,,33324,,8092571000,,,,United States,,1
+54a1b81074686942d331db0a,Ingersoll Rand,irco.com,https://irco.com,33312,,7650900000,,,,United States,,1
+54a11c8d69702d94a4d2a300,Sonoco,sonoco.com,https://sonoco.com,32222,,7518753000,,,,United States,Ventek Solutions,1
+54a1c0ee74686942d3ab1c0e,Linamar Corporation,linamar.com,https://linamar.com,33632,,7463820000,,,,Canada,,1
+54a11c7d69702d88c4c39f00,AMETEK,ametek.com,https://ametek.com,334516,,7401116000,,,,United States,,1
+5a9efbf9a6da98d97e801a76,Xerox,xerox.com,https://xerox.com,33331,,7022000000,,,,United States,Visioneer,1
+54a23a167468692e713bf517,FANUC America Corporation,fanucamerica.com,https://fanucamerica.com,33324,,7000000000,,,,United States,,1
+55922fec7369642529c63d00,Toyota Material Handling,toyotaforklift.com,https://toyotaforklift.com,333924,,7000000000,,,,United States,,1
+5ffbfb7f9212ef00cacc5026,Rolls-Royce Power Systems,mtu-solutions.com,https://mtu-solutions.com,333618,,6706000000,,,,United States,Rolls-Royce,1
+5f843630ce89850114d27837,Siemens Digital Industries Software,sw.siemens.com,https://sw.siemens.com,513210,,6469000000,,,,United States,,1
+5da6dea5b07642000121f2df,SharkNinja,sharkninja.com,https://sharkninja.com,33324,,6399188000,,,,United States,,1
+5e6a859873b61d0124fda667,Hexagon Asset Lifecycle Intelligence,hexagon.com,https://hexagon.com,33324,,6384157000,,,,United States,,1
+54a1397169702dac840c4200,Bobcat Company,bobcat.com,https://bobcat.com,33392,,6182000000,,,,United States,Doosan,1
+54a23c73746869382553ab18,Rheem Manufacturing Company,rheem.com,https://rheem.com,333415,,6000000000,,,,United States,Paloma Rheem Holdings,1
+61bb7db47510af00f6307499,Regal Rexnord,regalrexnord.com,https://regalrexnord.com,33361,,5934500000,,,,United States,Rexnord,1
+5de6d2d28d022a010e7964ac,Mauser Packaging Solutions,mauserpackaging.com,https://mauserpackaging.com,322219,,5600000000,,,,United States,,1
+54a12ac869702d8eebf58f02,Terex Corporation,terex.com,https://terex.com,333120,,5421000000,,,,United States,"REV Group, Inc",1
+54a12ab769702dab37885102,Sealed Air Corporation,sealedair.com,https://sealedair.com,33992,,5360000000,,,,United States,,1
+604d3ea80539a00001cf1666,Cornerstone Building Brands,cornerstonebuildingbrands.com,https://cornerstonebuildingbrands.com,3212,,5297529000,,,,United States,CD&R,1
+5c5b0752e089ce0bbbb44638,Crown Equipment Corporation,crown.com,https://crown.com,333924,,5260000000,,,,United States,,1
+54a1272a69702db648672b00,Lennox,lennox.com,https://lennox.com,333415,,5195300000,,,,United States,,1
+6163c17faebddf00da3badae,Snap-on,snapon.com,https://snapon.com,33231,,5156100000,,,,United States,,1
+5e57b7d3d2bd6800012090a7,Carlisle Construction Materials,carlisleconstructionmaterials.com,https://carlisleconstructionmaterials.com,32619,,5019900000,,,,United States,,1
+6477b40fadc07300a343f8e0,Copeland,copeland.com,https://copeland.com,33341,,5000000000,,,,United States,Blackstone,1
+54a197dc7468695475281100,Gilbarco Veeder-Root,gilbarco.com,https://gilbarco.com,33312,,5000000000,,,,United States,Vontier,1
+5a9d4fc4a6da98d94d8b7f6c,Omron Automation,omron.com,https://omron.com,33324,,4809000000,,,,United States,,1
+6287dca6685dbc00d961f49f,Flowserve Corporation,flowserve.com,https://flowserve.com,333911,,4729260000,,,,United States,,1
+54a1273069702d8b197bd000,The Timken Company,timken.com,https://timken.com,332991,,4581800000,,,,United States,,1
+54a25e0b746869331843031d,The Toro Company,thetorocompany.com,https://thetorocompany.com,333112,,4510400000,,,,United States,,1
+54a12a9169702d9b8b3f2c02,JLG Industries,jlg.com,https://jlg.com,333120,,4494400000,,,,United States,Oshkosh Corporation,1
+54a199867468695c8208ae00,Greif,greif.com,https://greif.com,332431,,4290658000,,,,United States,,1
+55921d107369641908427600,Lincoln Electric,lincolnelectric.com,https://lincolnelectric.com,33399,,4230654000,,,,United States,Lincoln Electric Cutting Solutions Europe,1
+54a1286b69702d8eeb1b6401,"Valmont Industries, Inc.",valmont.com,https://valmont.com,33232,,4104102000,,,,United States,,1
+54a1279169702d8cfcfce100,Liberty Energy,libertyenergy.com,https://libertyenergy.com,213112,,4049839000,,,,United States,,1
+54a1347669702d3a9cc33600,ITT Inc.,itt.com,https://itt.com,33391,,3938500000,,,,United States,,1
+5f483bc8babfdc0001d97064,MKS Inc.,mks.com,https://mks.com,333242,,3931000000,,,,United States,,1
+5592327b73696418c93fc400,Moog Inc.,moog.com,https://moog.com,33661,,3860624000,,,,United States,,1
+5f48752d3b7b980001996887,A. O. Smith Corporation,aosmith.com,https://aosmith.com,33341,,3830200000,,,,United States,A. O. Smith Nederland,1
+5569cbf173696425b8079900,OneSubsea,,,21311,,3800000000,,,,United States,SLB,1
+5b1431f9a6da98dcab511c0d,JBT Corporation,jbt-corp.com,https://jbt-corp.com,333241,,3798200000,,,,United States,,1
+60f287a3b7d73e0001052365,Hyster-Yale Materials Handling,hyster-yale.com,https://hyster-yale.com,333924,,3769300000,,,,United States,Hyster,1
+54a12b4569702dcef9db8f02,Milwaukee Tool,milwaukeetool.com,https://milwaukeetool.com,33299,,3700000000,,,,United States,Techtronic Industries - TTI,1
+54a12a5d69702d8cfccf3c02,Donaldson,donaldson.com,https://donaldson.com,333310,,3690900000,,,,United States,,1
+5a9d2b45a6da98d938b98150,Barry-Wehmiller,barrywehmiller.com,https://barrywehmiller.com,333241,,3600000000,,,,United States,,1
+54a1225569702d84c5080003,Lexmark,lexmark.com,https://lexmark.com,33331,,3600000000,,,,United States,Xerox,1
+54a1a36a7468695475e0bd03,"Woodward, Inc.",woodward.com,https://woodward.com,33361,,3567064000,,,,United States,,1
+5b839e81f874f77a3e4fd1a3,Dematic,dematic.com,https://dematic.com,333922,,3567000000,,,,United States,KION Group,1
+695eb2c1f6e4d0000d65aef2,Nextpower,nextpower.com,https://nextpower.com,333999,,3559390000,,,,United States,,1
+5f3dbd20f79152000102bbc9,Nextracker Inc.,nextracker.com,https://nextracker.com,33451,,3559390000,,,,United States,Flex,1
+54a19f8974686942d318b702,Exterran,enerflex.com,https://enerflex.com,33313,,3527746000,,,,United States,,1
+5f483c96292fe3000185b3e3,Gates Corporation,gates.com,https://gates.com,33361,,3443200000,,,,United States,Blackstone,1
+5f0d718edc72ee00da3c2792,ChampionX,championx.com,https://championx.com,21311,,3400000000,,,,United States,SLB,1
+54a12b1169702d8eebc8b502,Andersen Corporation,andersenwindows.com,https://andersenwindows.com,33391,,3300000000,,,,United States,,1
+54a139ad69702d2a1eb56600,Teradyne,teradyne.com,https://teradyne.com,33411,,3190024000,,,,United States,,1
+54a1380e69702d9639901700,Nabors Industries,nabors.com,https://nabors.com,213112,,3184693000,,,,United States,GEOLOG International,1
+5a9e1ff4a6da98d946722517,Weir Minerals,global.weir,https://global.weir,33391,,3148311000,,,,United States,,1
+54a129e069702db8786f9f01,Solar Turbines,solarturbines.com,https://solarturbines.com,333611,,3100000000,,,,United States,Caterpillar Inc.,1
+54a23b4d7468692e71486218,Goodman Air Conditioning & Heating,goodmanmfg.com,https://goodmanmfg.com,333415,,3041989000,,,,United States,"Daikin Industries, Ltd.",1
+54a19bf17468695475c96b01,Atkore,atkore.com,https://atkore.com,33593,,2850378000,,,,United States,,1
+5592337573696418b7d5c500,Nordson Corporation,nordson.com,https://nordson.com,333248,,2791687000,,,,United States,,1
+54a1395a69702db45dfb3000,Oceaneering,oceaneering.com,https://oceaneering.com,33311,,2784156000,,,,United States,,1
+686ac3bc95c1230001f1a1b8,Allison Off-Highway Drive & Motion Systems,allisonoffhighway.com,https://allisonoffhighway.com,336350,,2767000000,,,,United States,Allison Transmission,1
+559212fb736964199b995200,PTC,ptc.com,https://ptc.com,333,,2739226000,,,,United States,,1
+5b843394324d447aa4a5e2f9,Pella Corporation,pella.com,https://pella.com,33391,,2700000000,,,,United States,,1
+55e86501f3e5bb616400044b,Watts Water Technologies,watts.com,https://watts.com,332911,,2438500000,,,,United States,Ashland,1
+54a1206469702d97c1057402,Simpson Strong-Tie,strongtie.com,https://strongtie.com,33232,,2332808000,,,,United States,"Simpson Manufacturing Company, Inc.",1
+5b15914da6da9870efd95844,Fluence,fluenceenergy.com,https://fluenceenergy.com,33361,,2262830000,,,,United States,,1
+54a12aa769702d9548721f02,Symbotic,symbotic.com,https://symbotic.com,33392,,2246922000,,,,United States,Walmart,1
+55ee1d0df3e5bb4416000199,The Manitowoc Company,manitowoc.com,https://manitowoc.com,33392,,2240900000,,,,United States,,1
+54a12af369702db648094b02,Graco,graco.com,https://graco.com,333914,,2236604000,,,,United States,,1
+54a1293b69702db6483d7401,ATS Corporation,atsautomation.com,https://atsautomation.com,333248,,2144949000,,,,Canada,,1
+54a117c469702d49264f0c00,Mercury Marine,mercurymarine.com,https://mercurymarine.com,33661,,2074200000,,,,United States,Brunswick Corporation,1
+5d0958e0a3ae61e77dd33a6d,Häfele America Co.,hafele.com,https://hafele.com,33299,,2050000000,,Archdale,North Carolina,United States,Häfele SE & Co KG,1
+54a12a9269702d8eeb657702,Daikin Applied Americas,daikinapplied.com,https://daikinapplied.com,333415,,2000000000,,,,United States,"Daikin Industries, Ltd.",1
+625869f0a5277800a58b6828,Swagelok,swagelok.com,https://swagelok.com,332911,,2000000000,,,,United States,,1
+55ea5915f3e5bb58e1004bd1,Kennametal,kennametal.com,https://kennametal.com,33299,,1966845000,,,,United States,,1
+5ef60429aa37fd0114e5e0c8,Beretta USA,,,332994,,1700000000,,,,United States,Beretta Holding,1
+54a120a669702d84c5e65b02,Makino,makino.com,https://makino.com,333517,,1637000000,,,,United States,Makino Asia Group,1
+57c503bea6da986a1b286fb9,Husky Technologies,husky.co,https://husky.co,333248,,1568700000,,,,Canada,Platinum Equity,1
+54a1203e69702d8aa1852502,Carestream,carestream.com,https://carestream.com,33911,,1500000000,,,,United States,,1
+57c4c5aaa6da98367a52e8de,"SPX FLOW, Inc.",spxflow.com,https://spxflow.com,333241,,1500000000,,,,United States,ITT Inc.,1
+5f4a7af6e5b0bd0001f8165c,ASTEC,astecindustries.com,https://astecindustries.com,333120,,1410400000,,,,United States,inTEC GROUP,1
+54a11cf769702da75359f700,H&P,hpinc.com,https://hpinc.com,213111,,1381973000,,,,United States,H&P Contractor Inc.,1
+5c232fa680f93e69adbfc281,Boyd,boydcorp.com,https://boydcorp.com,33291,,1340000000,,,,United States,Goldman Sachs,1
+55921ff073696418e9208000,"Apex Tool Group, LLC",apextoolgroup.com,https://apextoolgroup.com,33231,,1300000000,,,,United States,Bain Capital,1
+55923ade73696418f652e100,Moen,moen.com,https://moen.com,332913,,1300000000,,,,United States,Fortune Brands Innovations,1
+54a1208869702d84c5d44c02,Vermeer Corporation,vermeer.com,https://vermeer.com,333111,,1300000000,,,,United States,,1
+54a2214e74686930c26c360f,Array Technologies,arraytechinc.com,https://arraytechinc.com,33451,,1284141000,,,,United States,,1
+605268a527e6730001232491,Tennant Company,tennantco.com,https://tennantco.com,333310,,1203500000,,,,United States,"Worldwide Facilities, LLC",1
+5b133a7da6da98dd1384551c,Miller Electric Mfg. LLC,millerwelds.com,https://millerwelds.com,33399,,1200000000,,,,United States,ITW,1
+54a11df169702d9a8b8c4601,"CIRCOR International, Inc.",circor.com,https://circor.com,332911,,1100000000,,,,United States,KKR,1
+54a11fc669702d918c6f0202,Eastman Kodak Company,kodak.com,https://kodak.com,33992,,1069000000,,,,United States,,1
+54a1356269702d3e8392a300,CB&I,cbi.com,https://cbi.com,33241,,1000000000,,,,United States,"McDermott International, Ltd",1
+55e86ca2f3e5bb1bc3000055,EFI,efi.com,https://efi.com,333310,,1000000000,,,,United States,Siris Capital Group,1
+54a12a4769702d9ebc49e401,Victaulic,victaulic.com,https://victaulic.com,332919,,1000000000,,,,United States,,1
+54a1ac677468695c823e9706,Cognex Corporation,cognex.com,https://cognex.com,33331,,994359000,,,,United States,,1
+56d7f6d7f3e5bb5896002c4a,AGI - Ag Growth International,aggrowth.com,https://aggrowth.com,333111,,961492000,,,,Canada,,1
+5d32d9d780f93e23acdafedf,Dayco,dayco.com,https://dayco.com,33399,,949999000,,,,United States,Hidden Harbor Capital Partners,1
+54a11b3069702da753f32000,"TPI Composites, Inc.",tpicomposites.com,https://tpicomposites.com,33661,,918460000,,,,United States,,1
+54a1393e69702de5b3941d00,Boart Longyear,boartlongyear.com,https://boartlongyear.com,213114,,913556000,,,,United States,American Industrial Partners,1
+54a19cb67468694f8fa3be01,CASE Construction Equipment,casece.com,https://casece.com,333120,,900000000,,,,United States,CNH,1
+54a11b0569702da425920a00,EthosEnergy,ethosenergy.com,https://ethosenergy.com,33361,,894800000,,,,United States,One Equity Partners,1
+55ec96a6f3e5bb1315002d27,Topcon Positioning Systems,topconpositioning.com,https://topconpositioning.com,54137,,881000000,,,,United States,Topcon Healthcare Europe,1
+54a1294269702da220b28301,"SIG SAUER, Inc.",sigsauer.com,https://sigsauer.com,332994,,829800000,,,,United States,,1
+6256ebb58c9ab500d9cae019,"Haas Automation, Inc.",haascnc.com,https://haascnc.com,333517,,812000000,,,,United States,,1
+60ad012450943b0001843efd,Delta Electronics Americas,delta-americas.com,https://delta-americas.com,334419,,776642000,,,,United States,Delta Electronics EMEA,1
+5f4930393b7b98000174b9fb,T.D. Williamson,tdwilliamson.com,https://tdwilliamson.com,21311,,769300000,,,,United States,,1
+54a1298369702dc128e66901,SRAM,sram.com,https://sram.com,33299,,755000000,,,,United States,,1
+54a12aec69702d93137b6802,IPEX by Aliaxis,ipexna.com,https://ipexna.com,33291,,754100000,,,,Canada,Aliaxis,1
+55f49364f3e5bb16680000ae,Flynn Group of Companies,flynncompanies.com,https://flynncompanies.com,238150,,750000000,,,,United States,,1
+54a13abd69702dc8e4ba0701,Bastian Solutions,bastianautomation.com,https://bastianautomation.com,541614,,749800000,,,,United States,Toyota Motor Corporation,1
+5569e77773696425d7ffb100,Cricut,cricut.com,https://cricut.com,33324,,708780000,,,,United States,,1
+54a1ac757468694012a3cb06,Banner Engineering,bannerengineering.com,https://bannerengineering.com,33324,,697800000,,,,United States,,1
+5d32d222f651250769054760,iRobot,irobot.com,https://irobot.com,33311,,681849000,,,,United States,,1
+5d8d9326a1913e009888e07a,Oil States,oilstatesintl.com,https://oilstatesintl.com,333132,,668988000,,,,United States,"Oil States International, Inc",1
+55693cbb7369642178f01400,Klein Tools,kleintools.com,https://kleintools.com,33221,,650000000,,,,United States,,1
+60c30e6d4f6afa00a4df76fa,SPM Oil & Gas,spmoilandgas.com,https://spmoilandgas.com,33313,,639000000,,,,United States,,1
+54a139ad69702de5b3e15900,Babcock & Wilcox,babcock.com,https://babcock.com,333414,,587676000,,,,United States,,1
+5d0a9c1080f93e2f8f9823d9,Protolabs,protolabs.com,https://protolabs.com,33999,,533127000,,,,United States,,1
+54a23cbd7468693318975b18,Smith & Wesson,smith-wesson.com,https://smith-wesson.com,332994,,523845000,,,,United States,,1
+5d0a3a8680f93eb3314e3405,Rain Bird Corporation,rainbird.com,https://rainbird.com,33311,,520000000,,,,United States,,1
+6259340edc79a000a54a8bf0,Evident Industrial,evidentscientific.com,https://evidentscientific.com,33324,,433000000,,,,United States,Private Equity,1
+55922d8d7369641739655400,3D Systems Corporation,3dsystems.com,https://3dsystems.com,333248,,386902000,,,,United States,Stratasys,1
+54a11feb69702da425e90a02,FARO INSIGHT,faro.com,https://faro.com,33331,,341046000,,,,United States,AMETEK,1
+54a1299d69702dcef9e0b601,Averna,averna.com,https://averna.com,333248,,305000000,,,,United States,Spherea Group,1
+54a1343c69702d3cbb4c1800,Videojet Technologies,videojet.com,https://videojet.com,33995,,300000000,,,,United States,Danaher,1
+5cb5195ef65125813fa4a215,Crusoe,crusoe.ai,https://crusoe.ai,33324,,290700000,,,,United States,,1
+5569dc8f73696425d735a700,Armstrong Fluid Technology,armstrongfluidtechnology.com,https://armstrongfluidtechnology.com,333914,,275000000,,,,Canada,,1
+5e6f97a895820900992540fb,AMP,,,513210,,271600000,,,,United States,,1
+5b131ea0a6da98dcd4b76ef9,"Bray International, Inc.",bray.com,https://bray.com,332911,,250000000,,,,United States,,1
+54a11caa69702d94a441ae00,Formlabs,formlabs.com,https://formlabs.com,33324,,250000000,,,,United States,,1
+54a1285c69702d9ebc13eb00,"GLOCK, Inc.",glock.com,https://glock.com,332994,,250000000,,,,United States,,1
+5a9e1b29a6da98d99779cde3,1X,1x.tech,https://1x.tech,33324,,222500000,,,,United States,,1
+54a128a769702d90a27d5301,Kawasaki Robotics,kawasakirobotics.com,https://kawasakirobotics.com,33361,,198600000,,,,United States,"Kawasaki Heavy Industries, Ltd.",1
+5fc89df1e9f52b00be1cfb14,Varel Energy Solutions,varel.com,https://varel.com,333132,,183540000,,,,United States,Sandvik,1
+556994a473696425e2af5f00,Locus Robotics,locusrobotics.com,https://locusrobotics.com,54133,,180000000,,,,United States,,1
+5b86a248324d4447a1ea529c,"FN America, LLC",fnamerica.com,https://fnamerica.com,332994,,176700000,,,,United States,FN Herstal,1
+54a11b2f69702da7537f2000,Augury,augury.com,https://augury.com,33324,,155000000,,,,United States,,1
+57c4eff8a6da9869fb3f6564,GreyOrange,greyorange.com,https://greyorange.com,33392,,146000000,,,,United States,,1
+5569b6ee736964259cbb7f00,PRAGMA,pragma.co,https://pragma.co,33392,,139400000,,,,United States,,1
+54a129d469702dab3753e701,HYTORC,hytorc.com,https://hytorc.com,33324,,131300000,,,,United States,UNEX Manufacturing,1
+54a11b4169702d8ccc7b2500,Boston Dynamics,bostondynamics.com,https://bostondynamics.com,33311,,130000000,,,,United States,Hyundai Motor Group,1
+54a21ffd7468693825f6f70e,"Daniel Defense, LLC",danieldefense.com,https://danieldefense.com,332994,,120000000,,,,United States,,1
+57c50461a6da986a2f711324,GameChange Energy,gamechangeenergy.com,https://gamechangeenergy.com,332311,,114900000,,,,United States,,1
+54a11c2d69702da10f568d00,Yaskawa Motoman,motoman.com,https://motoman.com,333248,,112000000,,,,United States,,1
+6261785ddb5f9e00a59223e9,Carbon,carbon3d.com,https://carbon3d.com,33324,,100000000,,,,United States,,1
+5f562f5aa80c1800ef8cce2f,Tyco Fire Products,tyco-fire.com,https://tyco-fire.com,332919,,100000000,,,,United States,Johnson Controls,1

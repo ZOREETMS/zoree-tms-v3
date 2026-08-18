@@ -1,0 +1,258 @@
+[
+{
+"id": "610826ca9e56f1000136d6fa",
+"t": "Vice President, Supply Chain Technology",
+"o": "Staples",
+"r": "2026-08-15T21:14:59.862+00:00",
+"p": "P2",
+"e": 1
+},
+{
+"id": "5ff8a446f8dfbe0001e17837",
+"t": "SVP Supply Chain, Fleet, & Supplier Collaboration",
+"o": "Staples",
+"r": "2026-08-07T06:14:10.000+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "5fb67122d003b60001de2cd2",
+"t": "Vice President Supply Chain Strategy & Operations Business Lead",
+"o": "Staples",
+"r": "2026-08-11T13:52:11.819+00:00",
+"p": "P1",
+"e": 1
+},
+{
+"id": "66f687da17c7bb0001a03a75",
+"t": "Vice President Supply Chain Strategy & Programs",
+"o": "lululemon",
+"r": "2026-08-15T00:54:46.877+00:00",
+"p": "P1",
+"e": 1
+},
+{
+"id": "604cb29b3a8e620001fe72d2",
+"t": "VP, Global Supply Chain Technology",
+"o": "lululemon",
+"r": "2026-07-30T03:31:43.000+00:00",
+"p": "P2",
+"e": 1
+},
+{
+"id": "60cc834cc72bbc00015d816d",
+"t": "Sr. Vice President Supply Chain",
+"o": "Bass Pro Shops",
+"r": "2026-07-16T12:03:32.000+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "60ccb77a7d8cf90001a71f04",
+"t": "SVP Supply Chain",
+"o": "Advance Auto Parts",
+"r": "2026-08-15T12:10:17.930+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "54a6002274686938ac8436ba",
+"t": "Director Supply Chain Technology and Transformation",
+"o": "Advance Auto Parts",
+"r": "2026-07-24T14:11:04.352+00:00",
+"p": "P2",
+"e": 1
+},
+{
+"id": "659c2d713bdf780001c714f6",
+"t": "Senior Vice President Supply Chain",
+"o": "PetSmart",
+"r": "2026-08-07T06:29:03.000+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "5fdbcd5ac8dc8800017f4cae",
+"t": "Senior Vice President Supply Chain Operations",
+"o": "Canadian Tire Corporation",
+"r": "2026-08-15T13:36:08.224+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "61125573d7aa4000013b8d87",
+"t": "Chief Supply Chain Officer",
+"o": "Williams-Sonoma, Inc.",
+"r": "2026-08-07T11:34:51.000+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "54ebd206746869444c779e2c",
+"t": "Vice President, Chief Supply Chain Officer",
+"o": "VF Corporation",
+"r": "2026-08-14T03:01:36.396+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "611b916f0fe26d0001cde548",
+"t": "Vice President, Supply Chain Planning & Analytics",
+"o": "Bath & Body Works",
+"r": "2026-08-09T04:15:51.000+00:00",
+"p": "P2",
+"e": 1
+},
+{
+"id": "6113b5dc12d0a00001a0f5b7",
+"t": "Vice President Supply Chain",
+"o": "Bath & Body Works",
+"r": "2026-08-07T19:52:51.000+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "66f1894d1ec9600001891840",
+"t": "EVP / Chief Supply Chain Officer",
+"o": "Ace Hardware Corporation",
+"r": "2026-08-12T12:18:52.757+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "605cb96481e75800015ab8f6",
+"t": "IT Director Business Systems - Supply Chain",
+"o": "Ace Hardware Corporation",
+"r": "2026-07-31T05:29:49.000+00:00",
+"p": "P2",
+"e": 1
+},
+{
+"id": "60bf4f2dbe41d00001a0a94b",
+"t": "Global Head of Operations and Chief Supply Chain Officer",
+"o": "PVH Corp.",
+"r": "2026-08-11T16:44:35.241+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "60f2a62a35bff800016b0cbb",
+"t": "Chief Supply Chain Officer",
+"o": "Sprouts Farmers Market",
+"r": "2026-08-11T11:11:18.327+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "611d1688af555900019b7a0f",
+"t": "Vice President, Supply Chain Operations",
+"o": "Foot Locker",
+"r": "2026-08-14T20:18:15.477+00:00",
+"p": "P5",
+"e": 1
+},
+{
+"id": "54a4c0427468692fa221d560",
+"t": "Global Head, Merchandising and Supply Chain Technology",
+"o": "Tapestry",
+"r": "2026-08-07T02:35:10.000+00:00",
+"p": "P2",
+"e": 1
+},
+{
+"id": "54a49a1e74686936766e4f54",
+"t": "VP of Transportation and Logistics",
+"o": "Advance Auto Parts",
+"r": "2026-08-07T09:14:48.000+00:00",
+"p": "P3",
+"e": 1
+},
+{
+"id": "66f30341c17e810001ce48fb",
+"t": "Director, Logistics and Transportation",
+"o": "Ace Hardware Corporation",
+"r": "2026-08-08T13:37:25.267+00:00",
+"p": "P3",
+"e": 1
+},
+{
+"id": "54a962c07468692d1c791812",
+"t": "Director, Global Logistics & Transportation",
+"o": "Harbor Freight Tools",
+"r": "2026-08-09T07:31:54.103+00:00",
+"p": "P3",
+"e": 1
+},
+{
+"id": "60e47a16ba1fd000014d945b",
+"t": "Senior Director, Distribution Operations",
+"o": "Harbor Freight Tools",
+"r": "2026-08-10T19:49:54.856+00:00",
+"p": "P4",
+"e": 1
+},
+{
+"id": "645ba67804b29b00015e72ca",
+"t": "Vice President Global Transportation & Logistics",
+"o": "VF Corporation",
+"r": "2026-07-13T19:56:46.000+00:00",
+"p": "P3",
+"e": 1
+},
+{
+"id": "6401a2f4e87b550001e170f7",
+"t": "Director, Distribution Operations",
+"o": "lululemon",
+"r": "2026-08-07T21:16:19.000+00:00",
+"p": "P4",
+"e": 1
+},
+{
+"id": "606226114eb2150001bba197",
+"t": "Director of Transportation",
+"o": "Bass Pro Shops",
+"r": "2026-07-28T09:28:34.526+00:00",
+"p": "P3",
+"e": 1
+},
+{
+"id": "60df042b11bd870001c43661",
+"t": "Director of Fulfillment Centers",
+"o": "Staples",
+"r": "2026-08-09T06:25:26.000+00:00",
+"p": "P4",
+"e": 1
+},
+{
+"id": "60c657e4cc2f740001c58517",
+"t": "Vice President Fulfillment",
+"o": "JCPenney",
+"r": "2026-08-07T22:20:32.000+00:00",
+"p": "P4",
+"e": 1
+},
+{
+"id": "5571422173696457fa840100",
+"t": "Director Enterprise Fulfillment",
+"o": "JCPenney",
+"r": "2026-07-12T20:28:15.000+00:00",
+"p": "P4",
+"e": 1
+},
+{
+"id": "54aa596174686908c8575101",
+"t": "Senior Vice President Distribution Operations",
+"o": "Williams-Sonoma, Inc.",
+"r": "2026-08-07T20:38:10.000+00:00",
+"p": "P4",
+"e": 1
+},
+{
+"id": "613865dbf5f9510001c60cfd",
+"t": "Director of Customer Fulfillment",
+"o": "Ace Hardware Corporation",
+"r": "2026-08-07T15:28:11.000+00:00",
+"p": "P4",
+"e": 1
+}
+]

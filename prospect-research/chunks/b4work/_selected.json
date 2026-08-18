@@ -1,0 +1,1622 @@
+[
+{
+"id": "66fcc80b7fa64100015ce040",
+"t": "VP Supply Chain Strategy & Product Flow",
+"o": "CVS Health",
+"r": "2026-08-07T05:25:39.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "cvshealth"
+},
+{
+"id": "62125805c4c95a0001f290f6",
+"t": "Vice President | Retail Supply Chain Operations",
+"o": "Costco Wholesale",
+"r": "2026-07-30T10:33:31.792+00:00",
+"p": "P5",
+"e": 1,
+"k": "costcowholesale"
+},
+{
+"id": "63bd7f5ec585dd00016e159d",
+"t": "Senior Vice President Supply Chain",
+"o": "The Home Depot",
+"r": "2026-08-07T09:08:10.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "thehomedepot"
+},
+{
+"id": "60ccb8550df8fb00016089a9",
+"t": "Senior Vice President Supply Chain - Inventory & Analytics",
+"o": "Walgreens",
+"r": "2026-08-07T06:26:57.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "walgreens"
+},
+{
+"id": "60fe75692654ac00017425ca",
+"t": "VP Supply Chain Strategy and Engineering",
+"o": "Kroger",
+"r": "2026-08-04T05:53:22.454+00:00",
+"p": "P1",
+"e": 1,
+"k": "kroger"
+},
+{
+"id": "616668ff8587a800010713ce",
+"t": "Chief Supply Chain Officer",
+"o": "Target",
+"r": "2026-08-11T10:05:07.356+00:00",
+"p": "P5",
+"e": 1,
+"k": "target"
+},
+{
+"id": "60fc19cab6d68a0001c9b830",
+"t": "Chief Supply Chain Officer",
+"o": "Lowe's Companies, Inc.",
+"r": "2026-08-12T23:12:31.647+00:00",
+"p": "P5",
+"e": 1,
+"k": "lowescompaniesinc"
+},
+{
+"id": "6121c76078841c0001503944",
+"t": "Director of Supply Chain Strategy & Analytics",
+"o": "Albertsons Companies",
+"r": "2026-08-05T02:57:20.332+00:00",
+"p": "P1",
+"e": 1,
+"k": "albertsonscompanies"
+},
+{
+"id": "607733905304790001bb5d31",
+"t": "AVP Supply Chain IT Solution Delivery",
+"o": "The TJX Companies, Inc.",
+"r": "2026-08-07T10:14:46.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "thetjxcompaniesinc"
+},
+{
+"id": "61219f69d137a300013207d4",
+"t": "Director of Transportation Operations",
+"o": "7-Eleven",
+"r": "2026-06-25T19:13:29.101+00:00",
+"p": "P3",
+"e": 1,
+"k": "7eleven"
+},
+{
+"id": "677f62f0f2143800015b023f",
+"t": "Director, Supply Chain Systems, Programs & Analytics",
+"o": "H-E-B",
+"r": "2026-08-03T23:30:50.100+00:00",
+"p": "P2",
+"e": 1,
+"k": "heb"
+},
+{
+"id": "67d4fede03940200018a41b8",
+"t": "Vice President, Supply Chain Analytics",
+"o": "Loblaw Companies Limited",
+"r": "2026-07-04T06:49:48.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "loblawcompanieslimited"
+},
+{
+"id": "54a534b774686936767d5585",
+"t": "Director, Distribution Operations",
+"o": "Dollar General",
+"r": "2026-08-09T18:37:50.625+00:00",
+"p": "P4",
+"e": 1,
+"k": "dollargeneral"
+},
+{
+"id": "60e6f5ea756abc0001913fe5",
+"t": "Sr Vice President-Supply Chain Operations, Engineering, and Automation",
+"o": "Best Buy",
+"r": "2026-08-06T18:25:50.829+00:00",
+"p": "P1",
+"e": 1,
+"k": "bestbuy"
+},
+{
+"id": "67012f49fd76940001b0c1a2",
+"t": "EVP, Chief Supply Chain Officer",
+"o": "Starbucks",
+"r": "2026-08-11T18:01:36.917+00:00",
+"p": "P5",
+"e": 1,
+"k": "starbucks"
+},
+{
+"id": "646e5e61a934db0001135945",
+"t": "Director Supply Chain Management",
+"o": "Suncor",
+"r": "2026-08-08T06:32:07.405+00:00",
+"p": "P1",
+"e": 1,
+"k": "suncor"
+},
+{
+"id": "66f6d84b6737540001a217d5",
+"t": "Director of Software Engineering - Supply Chain",
+"o": "CarMax",
+"r": "2026-08-06T07:30:12.146+00:00",
+"p": "P2",
+"e": 1,
+"k": "carmax"
+},
+{
+"id": "60ff8cbd76137800019f03fc",
+"t": "VP Supply Chain & Logistics",
+"o": "Walmart Canada",
+"r": "2026-08-07T15:32:42.614+00:00",
+"p": "P5",
+"e": 1,
+"k": "walmartcanada"
+},
+{
+"id": "66fad1d6d727a30001b930c4",
+"t": "Senior IT Director - Supply Chain Systems",
+"o": "Sherwin-Williams",
+"r": "2026-08-06T07:53:44.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "sherwinwilliams"
+},
+{
+"id": "60a88a061240550001e890da",
+"t": "Senior Vice President Supply Chain",
+"o": "Sobeys",
+"r": "2026-07-25T23:24:08.278+00:00",
+"p": "P5",
+"e": 1,
+"k": "sobeys"
+},
+{
+"id": "54aba9b67468692ca1c70204",
+"t": "SVP Supply Chain",
+"o": "RITE AID",
+"r": "2026-07-19T00:40:11.317+00:00",
+"p": "P5",
+"e": 0,
+"k": "riteaid"
+},
+{
+"id": "60ec5ffcc08524000101ceb4",
+"t": "Senior Vice President, Supply Chain",
+"o": "Ross Stores, Inc.",
+"r": "2026-08-10T22:10:05.281+00:00",
+"p": "P5",
+"e": 1,
+"k": "rossstoresinc"
+},
+{
+"id": "60cb6e4338830100018e0e3f",
+"t": "Vice President, Supply Chain Operations",
+"o": "Whole Foods Market",
+"r": "2026-06-26T04:52:21.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "wholefoodsmarket"
+},
+{
+"id": "60cb78a36a76ff000118b65e",
+"t": "Chief Supply Chain Officer",
+"o": "Meijer",
+"r": "2026-08-06T08:27:38.492+00:00",
+"p": "P5",
+"e": 1,
+"k": "meijer"
+},
+{
+"id": "54c2272074686916391d5f7e",
+"t": "Chief Supply Chain Officer",
+"o": "BJ's Wholesale Club",
+"r": "2026-08-14T13:26:24.008+00:00",
+"p": "P5",
+"e": 1,
+"k": "bjswholesaleclub"
+},
+{
+"id": "680f8eeaa59fa800013ed715",
+"t": "EVP, Chief Supply Chain Officer",
+"o": "Dollar Tree Stores",
+"r": "2026-08-07T11:03:15.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "dollartreestores"
+},
+{
+"id": "6110fda58bce81000179a4bf",
+"t": "Senior Vice President, Supply Chain",
+"o": "DICK'S Sporting Goods",
+"r": "2026-08-06T17:10:55.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "dickssportinggoods"
+},
+{
+"id": "64a81291d3906d0001304a4a",
+"t": "VP Supply Chain",
+"o": "AutoZone",
+"r": "2026-08-14T03:01:52.932+00:00",
+"p": "P5",
+"e": 1,
+"k": "autozone"
+},
+{
+"id": "67c95d76e245c70001d480ea",
+"t": "Chief Supply Chain Officer",
+"o": "Wawa, Inc.",
+"r": "2026-08-13T19:48:32.430+00:00",
+"p": "P5",
+"e": 1,
+"k": "wawainc"
+},
+{
+"id": "5d4835e0a3ae611a1973bc2b",
+"t": "Director of Fleet",
+"o": "O'Reilly Auto Parts",
+"r": "2026-07-14T20:37:24.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "oreillyautoparts"
+},
+{
+"id": "6419dd3e69bc9a00012548bb",
+"t": "Vice President of Supply Chain",
+"o": "Trader Joe's",
+"r": "2026-08-11T09:58:37.218+00:00",
+"p": "P5",
+"e": 1,
+"k": "traderjoes"
+},
+{
+"id": "67c96563976bff0001f7847b",
+"t": "Director of Supply Chain Optimization",
+"o": "Metro Inc.",
+"r": "2026-08-06T09:15:11.639+00:00",
+"p": "P1",
+"e": 1,
+"k": "metroinc"
+},
+{
+"id": "54a387b87468693b8c077601",
+"t": "Vice President, Supply Chain",
+"o": "Nordstrom",
+"r": "2026-08-14T06:32:40.931+00:00",
+"p": "P5",
+"e": 1,
+"k": "nordstrom"
+},
+{
+"id": "6100918451bfaa00018117a3",
+"t": "Senior Vice President of Supply Chain - Fulfillment Operations, Optimization and Engineering",
+"o": "Kohl's",
+"r": "2026-08-09T04:14:25.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "kohls"
+},
+{
+"id": "60a3b64a213ce40001139587",
+"t": "Chief Supply Chain Officer",
+"o": "Tractor Supply Company",
+"r": "2026-08-14T01:01:10.121+00:00",
+"p": "P5",
+"e": 1,
+"k": "tractorsupplycompany"
+},
+{
+"id": "6012cfce613924000168bc7f",
+"t": "Vice President, Global Supply Chain Strategy",
+"o": "Gap Inc.",
+"r": "2026-08-07T10:44:41.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "gapinc"
+},
+{
+"id": "60d45642d4859d00015d415f",
+"t": "Executive Director, Global Brand Supply Chain",
+"o": "Clinique",
+"r": "2026-08-06T22:43:30.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "clinique"
+},
+{
+"id": "6910f9ef8acd630001a326c4",
+"t": "Executive Director of Consumer Supply Chain",
+"o": "Bridgestone Americas",
+"r": "2026-08-05T14:15:54.490+00:00",
+"p": "P5",
+"e": 1,
+"k": "bridgestoneamericas"
+},
+{
+"id": "682eb861db466d0001f73adc",
+"t": "Senior Director, Supply Chain Operations",
+"o": "Shoppers Drug Mart",
+"r": "2026-08-01T16:24:46.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "shoppersdrugmart"
+},
+{
+"id": "54a61b497468692cf0d34ac2",
+"t": "Chief Supply Chain Officer",
+"o": "Family Dollar",
+"r": "2026-08-12T05:03:02.088+00:00",
+"p": "P5",
+"e": 1,
+"k": "familydollar"
+},
+{
+"id": "62c60aaa6baa810001511b72",
+"t": "Vice President of Global Supply Chain",
+"o": "Fanatics",
+"r": "2026-07-30T03:52:57.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "fanatics"
+},
+{
+"id": "66f42f43b9c79a0001428b7d",
+"t": "Vice President of Operations & Supply Chain Technology",
+"o": "Chewy",
+"r": "2026-08-12T23:57:50.368+00:00",
+"p": "P2",
+"e": 1,
+"k": "chewy"
+},
+{
+"id": "5c1096e8a3ae614958063f7a",
+"t": "Senior Vice President of Supply Chain and Food Safety",
+"o": "Wegmans Food Markets",
+"r": "2026-08-08T13:49:16.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "wegmansfoodmarkets"
+},
+{
+"id": "6104068fe5d27b0001008800",
+"t": "Associate Director, Supply Chain Strategy & Technology",
+"o": "Wayfair",
+"r": "2026-08-07T04:35:10.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "wayfair"
+},
+{
+"id": "6119d0f9d409e0000128b9c7",
+"t": "Senior Vice President, Supply Chain Planning and Operations at ULTA Beauty",
+"o": "Ulta Beauty",
+"r": "2026-08-07T07:20:57.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "ultabeauty"
+},
+{
+"id": "60e34f879010f20001bfe1fd",
+"t": "Senior Vice President, Supply Chain, Customer Sucess & Delivery",
+"o": "Ashley Furniture Industries",
+"r": "2026-08-12T12:12:02.512+00:00",
+"p": "P5",
+"e": 1,
+"k": "ashleyfurnitureindustries"
+},
+{
+"id": "60b3fe867954a400014d1977",
+"t": "Senior Vice President, Supply Chain",
+"o": "Macy's",
+"r": "2026-08-07T08:22:14.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "macys"
+},
+{
+"id": "609ad52ca4375e000151f568",
+"t": "EVP & Chief Supply Chain Officer",
+"o": "Burlington Stores, Inc.",
+"r": "2026-08-14T19:40:18.975+00:00",
+"p": "P5",
+"e": 1,
+"k": "burlingtonstoresinc"
+},
+{
+"id": "5fdbcd5ac8dc8800017f4cae",
+"t": "Senior Vice President Supply Chain Operations",
+"o": "Canadian Tire Corporation",
+"r": "2026-08-15T13:36:08.224+00:00",
+"p": "P5",
+"e": 1,
+"k": "canadiantirecorporation"
+},
+{
+"id": "66f687da17c7bb0001a03a75",
+"t": "Vice President Supply Chain Strategy & Programs",
+"o": "lululemon",
+"r": "2026-08-15T00:54:46.877+00:00",
+"p": "P1",
+"e": 1,
+"k": "lululemon"
+},
+{
+"id": "659c2d713bdf780001c714f6",
+"t": "Senior Vice President Supply Chain",
+"o": "PetSmart",
+"r": "2026-08-07T06:29:03.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "petsmart"
+},
+{
+"id": "66f1894d1ec9600001891840",
+"t": "EVP / Chief Supply Chain Officer",
+"o": "Ace Hardware Corporation",
+"r": "2026-08-12T12:18:52.757+00:00",
+"p": "P5",
+"e": 1,
+"k": "acehardwarecorporation"
+},
+{
+"id": "54ebd206746869444c779e2c",
+"t": "Vice President, Chief Supply Chain Officer",
+"o": "VF Corporation",
+"r": "2026-08-14T03:01:36.396+00:00",
+"p": "P5",
+"e": 1,
+"k": "vfcorporation"
+},
+{
+"id": "55c19f167369642f20f44800",
+"t": "Director, Supply Chain Operations and Resilience",
+"o": "New Balance",
+"r": "2026-08-05T15:50:21.040+00:00",
+"p": "P1",
+"e": 1,
+"k": "newbalance"
+},
+{
+"id": "66feb357a9133a0001b9bb22",
+"t": "Sr. Director, Transportation",
+"o": "Giant Eagle, Inc.",
+"r": "2026-08-06T20:44:30.524+00:00",
+"p": "P3",
+"e": 1,
+"k": "gianteagleinc"
+},
+{
+"id": "60bf4f2dbe41d00001a0a94b",
+"t": "Global Head of Operations and Chief Supply Chain Officer",
+"o": "PVH Corp.",
+"r": "2026-08-11T16:44:35.241+00:00",
+"p": "P5",
+"e": 1,
+"k": "pvhcorp"
+},
+{
+"id": "60f2a62a35bff800016b0cbb",
+"t": "Chief Supply Chain Officer",
+"o": "Sprouts Farmers Market",
+"r": "2026-08-11T11:11:18.327+00:00",
+"p": "P5",
+"e": 1,
+"k": "sproutsfarmersmarket"
+},
+{
+"id": "60ccb77a7d8cf90001a71f04",
+"t": "SVP Supply Chain",
+"o": "Advance Auto Parts",
+"r": "2026-08-15T12:10:17.930+00:00",
+"p": "P5",
+"e": 1,
+"k": "advanceautoparts"
+},
+{
+"id": "64f4d3552587cf000111d728",
+"t": "Global Head - Distribution and Logistics Technology",
+"o": "Ralph Lauren",
+"r": "2026-07-08T11:18:58.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "ralphlauren"
+},
+{
+"id": "5ff8a446f8dfbe0001e17837",
+"t": "SVP Supply Chain, Fleet, & Supplier Collaboration",
+"o": "Staples",
+"r": "2026-08-07T06:14:10.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "staples"
+},
+{
+"id": "611d1688af555900019b7a0f",
+"t": "Vice President, Supply Chain Operations",
+"o": "Foot Locker",
+"r": "2026-08-14T20:18:15.477+00:00",
+"p": "P5",
+"e": 1,
+"k": "footlocker"
+},
+{
+"id": "61125573d7aa4000013b8d87",
+"t": "Chief Supply Chain Officer",
+"o": "Williams-Sonoma, Inc.",
+"r": "2026-08-07T11:34:51.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "williamssonomainc"
+},
+{
+"id": "54a962c07468692d1c791812",
+"t": "Director, Global Logistics & Transportation",
+"o": "Harbor Freight Tools",
+"r": "2026-08-09T07:31:54.103+00:00",
+"p": "P3",
+"e": 1,
+"k": "harborfreighttools"
+},
+{
+"id": "60c657e4cc2f740001c58517",
+"t": "Vice President Fulfillment",
+"o": "JCPenney",
+"r": "2026-08-07T22:20:32.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "jcpenney"
+},
+{
+"id": "6113b5dc12d0a00001a0f5b7",
+"t": "Vice President Supply Chain",
+"o": "Bath & Body Works",
+"r": "2026-08-07T19:52:51.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "bathbodyworks"
+},
+{
+"id": "54a4c0427468692fa221d560",
+"t": "Global Head, Merchandising and Supply Chain Technology",
+"o": "Tapestry",
+"r": "2026-08-07T02:35:10.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "tapestry"
+},
+{
+"id": "60cc834cc72bbc00015d816d",
+"t": "Sr. Vice President Supply Chain",
+"o": "Bass Pro Shops",
+"r": "2026-07-16T12:03:32.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "bassproshops"
+},
+{
+"id": "60803744d625900001c82ef7",
+"t": "SVP Supply Chain Strategy & Operations",
+"o": "Victoria's Secret & Co.",
+"r": "2026-08-14T01:06:53.826+00:00",
+"p": "P1",
+"e": 1,
+"k": "victoriassecretco"
+},
+{
+"id": "611b75462f60cc0001ceca5f",
+"t": "Chief Supply Chain Officer",
+"o": "Levi Strauss & Co.",
+"r": "2026-08-08T12:09:11.084+00:00",
+"p": "P5",
+"e": 1,
+"k": "levistraussco"
+},
+{
+"id": "66f1a48e5401710001975946",
+"t": "Sr. Director, Supply Chain Strategy",
+"o": "Petco",
+"r": "2026-08-07T14:25:19.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "petco"
+},
+{
+"id": "610d47ec5cfc3e0001a364cc",
+"t": "Vice President, Distribution, Transportation, and Customs Compliance",
+"o": "Coach",
+"r": "2026-07-17T16:23:03.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "coach"
+},
+{
+"id": "6240a4093e8bba00013f0f97",
+"t": "Vice President Supply Chain Execution",
+"o": "American Eagle Outfitters Inc.",
+"r": "2026-08-09T17:58:17.853+00:00",
+"p": "P5",
+"e": 1,
+"k": "americaneagleoutfittersinc"
+},
+{
+"id": "60ef188cbd2d190001840bde",
+"t": "Chief Supply Chain Officer",
+"o": "Deckers Brands",
+"r": "2026-08-07T11:13:07.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "deckersbrands"
+},
+{
+"id": "609a15a627c5c6000157dd5a",
+"t": "Executive Director, Global Transportation",
+"o": "Urban Outfitters",
+"r": "2026-08-09T01:13:25.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "urbanoutfitters"
+},
+{
+"id": "5f9bdabb8e348300011d20fc",
+"t": "Executive Vice President, Chief Supply Chain Officer",
+"o": "Michaels Stores",
+"r": "2026-08-12T18:29:05.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "michaelsstores"
+},
+{
+"id": "61bde5ec65df73000100f36b",
+"t": "Vice President of Transportation & US Distribution",
+"o": "PriceSmart",
+"r": "2026-08-10T11:26:54.920+00:00",
+"p": "P3",
+"e": 1,
+"k": "pricesmart"
+},
+{
+"id": "6867b24733f1940001bd5252",
+"t": "Group Vice President, Supply Chain",
+"o": "Abercrombie & Fitch Co.",
+"r": "2026-08-08T10:08:03.176+00:00",
+"p": "P5",
+"e": 1,
+"k": "abercrombiefitchco"
+},
+{
+"id": "61162c9b99685600018a9ac8",
+"t": "Sr. Director Technology and Transformation - WW Supply Chain",
+"o": "Herbalife",
+"r": "2026-08-11T03:13:00.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "herbalife"
+},
+{
+"id": "60ba378f9948cf00014b4387",
+"t": "Head of Supply Chain Management",
+"o": "Reebok",
+"r": "2026-08-07T07:50:52.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "reebok"
+},
+{
+"id": "60ee09cd983eee00018332a3",
+"t": "Vice President, Global Transportation",
+"o": "Five Below",
+"r": "2026-07-22T15:22:47.951+00:00",
+"p": "P3",
+"e": 1,
+"k": "fivebelow"
+},
+{
+"id": "66f1d0422205ec00014c6436",
+"t": "VP, Global Supply Chain",
+"o": "Harley-Davidson Motor Company",
+"r": "2026-07-25T20:52:03.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "harleydavidsonmotorcompany"
+},
+{
+"id": "6115fef74eca7600013a5af1",
+"t": "Chief Supply Chain Officer",
+"o": "Crocs, Inc.",
+"r": "2026-08-13T13:33:24.426+00:00",
+"p": "P5",
+"e": 1,
+"k": "crocsinc"
+},
+{
+"id": "6477397d79f3f2000171220a",
+"t": "Senior Vice President Supply Chain",
+"o": "Calvin Klein",
+"r": "2026-08-08T18:16:33.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "calvinklein"
+},
+{
+"id": "686a7a2487f32600013b519c",
+"t": "Vice President of Global Logistics and Supply Chain",
+"o": "Herman Miller",
+"r": "2026-08-15T12:57:40.360+00:00",
+"p": "P5",
+"e": 1,
+"k": "hermanmiller"
+},
+{
+"id": "63ea22e9a8b3480001b55151",
+"t": "Vice President of Supply Chain and Logistics",
+"o": "Saks Fifth Avenue",
+"r": "2026-07-15T14:19:17.523+00:00",
+"p": "P5",
+"e": 1,
+"k": "saksfifthavenue"
+},
+{
+"id": "6087193e87e7090001c4143c",
+"t": "Senior Director Supply Chain - Transportation",
+"o": "Belk",
+"r": "2026-08-07T15:20:09.301+00:00",
+"p": "P3",
+"e": 1,
+"k": "belk"
+},
+{
+"id": "608c01ab70be090001b73cea",
+"t": "Director, Supply Chain Systems",
+"o": "GameStop",
+"r": "2026-07-09T11:30:35.889+00:00",
+"p": "P2",
+"e": 1,
+"k": "gamestop"
+},
+{
+"id": "66ed78a35f9a85000187dcac",
+"t": "Director Supply Chain Operations",
+"o": "REI",
+"r": "2026-07-10T19:52:11.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "rei"
+},
+{
+"id": "5ac53bb3a6da9883669e7978",
+"t": "Chief Supply Chain Officer and President of Home Delivery",
+"o": "RH",
+"r": "2026-08-10T19:48:55.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "rh"
+},
+{
+"id": "607888ac3b918c000152727d",
+"t": "VP, IT - AI Strategy, Enterprise Analytics & Supply Chain Applications",
+"o": "Kontoor Brands, Inc.",
+"r": "2026-08-12T07:27:00.609+00:00",
+"p": "P2",
+"e": 1,
+"k": "kontoorbrandsinc"
+},
+{
+"id": "5ac59560a6da98918470cefc",
+"t": "Vice President of Logistics",
+"o": "Guess?, LLC.",
+"r": "2026-08-14T01:29:55.232+00:00",
+"p": "P4",
+"e": 1,
+"k": "guessllc"
+},
+{
+"id": "6434dde2cacd21000165efae",
+"t": "SVP Supply Chain: Global Operations, Distribution, and Logistics",
+"o": "Carters Inc.",
+"r": "2026-08-16T05:17:57.814+00:00",
+"p": "P5",
+"e": 1,
+"k": "cartersinc"
+},
+{
+"id": "67eee32698e4ca0001e6c5b0",
+"t": "Head of Global Shipping",
+"o": "Etsy",
+"r": "2026-08-07T06:17:13.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "etsy"
+},
+{
+"id": "60f8060c81ed2500016dfba9",
+"t": "Chief Supply Chain Officer",
+"o": "Aritzia",
+"r": "2026-08-08T13:15:04.734+00:00",
+"p": "P5",
+"e": 1,
+"k": "aritzia"
+},
+{
+"id": "60e61ac92ed0f20001697ce3",
+"t": "Chief Supply Chain Officer",
+"o": "ALDO Group",
+"r": "2026-08-15T18:00:23.746+00:00",
+"p": "P5",
+"e": 1,
+"k": "aldogroup"
+},
+{
+"id": "54a88cfc7468692d1c59c800",
+"t": "Senior Director, Global Logistics",
+"o": "Forever 21",
+"r": "2026-08-10T02:05:54.221+00:00",
+"p": "P4",
+"e": 1,
+"k": "forever21"
+},
+{
+"id": "60b0cf8ded8dc500015a9a90",
+"t": "Vice President, IT Supply Chain Systems",
+"o": "Mary Kay Global",
+"r": "2026-07-28T19:56:13.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "marykayglobal"
+},
+{
+"id": "60d4905947f6c60001088963",
+"t": "Senior Vice President Supply Chain",
+"o": "J.Crew",
+"r": "2026-08-10T17:57:09.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "jcrew"
+},
+{
+"id": "66f3e347dd5d050001e70be4",
+"t": "Senior Director - Distribution and Fulfillment",
+"o": "Callaway Golf",
+"r": "2026-08-09T19:03:00.299+00:00",
+"p": "P4",
+"e": 1,
+"k": "callawaygolf"
+},
+{
+"id": "5571514c7369642c564d8300",
+"t": "Executive Vice President of Supply Chain and Operations",
+"o": "ALO",
+"r": "2026-08-07T11:39:49.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "alo"
+},
+{
+"id": "60d58c6b33d9aa0001af039c",
+"t": "Director-Supply Chain Strategy & PLM Projects",
+"o": "TORY BURCH",
+"r": "2026-07-31T23:43:21.173+00:00",
+"p": "P1",
+"e": 1,
+"k": "toryburch"
+},
+{
+"id": "671d7a7a966ad70001946b3f",
+"t": "Senior Director - Distribution & Transportation (NA / EMEA)",
+"o": "Trek Bicycle",
+"r": "2026-08-10T11:03:13.614+00:00",
+"p": "P3",
+"e": 1,
+"k": "trekbicycle"
+},
+{
+"id": "68f69fd0b4831c0001d0aa4d",
+"t": "Vice President Supply Chain",
+"o": "EXPRESS",
+"r": "2026-08-07T06:03:24.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "express"
+},
+{
+"id": "5f9f4e62dcc99e00013b1ec8",
+"t": "Senior Vice President of Supply Chain",
+"o": "Carhartt",
+"r": "2026-07-08T05:40:30.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "carhartt"
+},
+{
+"id": "55c9d48ff3e5bb1301005759",
+"t": "Head of Supply Chain Capabilities",
+"o": "Converse",
+"r": "2026-08-11T11:44:28.536+00:00",
+"p": "P1",
+"e": 1,
+"k": "converse"
+},
+{
+"id": "66fc2380e7579f000175b8ba",
+"t": "Director - Supply Chain Systems",
+"o": "TaylorMade Golf Company",
+"r": "2026-07-23T16:50:15.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "taylormadegolfcompany"
+},
+{
+"id": "66f449c1b29c40000154c60e",
+"t": "Sr Director, Supply Chain Technology at Patagonia",
+"o": "Patagonia",
+"r": "2026-07-13T10:34:06.962+00:00",
+"p": "P2",
+"e": 1,
+"k": "patagonia"
+},
+{
+"id": "61004b8066f4ac00015696c0",
+"t": "SVP Supply Chain Operations",
+"o": "Brooks Running",
+"r": "2026-08-07T09:27:39.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "brooksrunning"
+},
+{
+"id": "60a5f8415bc0e90001d371b4",
+"t": "Vice President of Global Supply Chain",
+"o": "Chef Works",
+"r": "2026-08-12T21:01:08.636+00:00",
+"p": "P5",
+"e": 1,
+"k": "chefworks"
+},
+{
+"id": "6a55eb1c8e50660001774599",
+"t": "Vice President Transportation",
+"o": "Tupperware",
+"r": "2026-07-15T03:03:13.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "tupperware"
+},
+{
+"id": "5c52ed93a3ae616b04176efc",
+"t": "Director of Transportation and Strategy",
+"o": "Stitch Fix",
+"r": "2026-08-05T21:44:25.817+00:00",
+"p": "P3",
+"e": 1,
+"k": "stitchfix"
+},
+{
+"id": "611cdb99aa18350001e3c9c4",
+"t": "SVP, Logistics & Customer Experience",
+"o": "REVOLVE",
+"r": "2026-08-03T03:12:49.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "revolve"
+},
+{
+"id": "54a4e23e7468693209ad9b6a",
+"t": "Director of Domestic Transportation",
+"o": "The Children's Place",
+"r": "2026-08-15T06:45:35.502+00:00",
+"p": "P3",
+"e": 1,
+"k": "thechildrensplace"
+},
+{
+"id": "6112b0b4e1e2210001615e10",
+"t": "Director, Logistics",
+"o": "kate spade new york",
+"r": "2026-06-23T11:35:58.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "katespadenewyork"
+},
+{
+"id": "6102bc61ed1d2b00011d391c",
+"t": "Director of Supply Chain & Logistics",
+"o": "Trulieve",
+"r": "2026-08-13T18:11:26.598+00:00",
+"p": "P4",
+"e": 1,
+"k": "trulieve"
+},
+{
+"id": "610054a6e0693b0001056be3",
+"t": "Vice President, Product Flow & Fulfillment",
+"o": "Canada Goose",
+"r": "2026-08-03T21:25:27.996+00:00",
+"p": "P4",
+"e": 1,
+"k": "canadagoose"
+},
+{
+"id": "57dd8e00a6da987b456108b2",
+"t": "Director, Fulfillment Center Operations",
+"o": "SSENSE",
+"r": "2026-08-13T01:50:45.187+00:00",
+"p": "P4",
+"e": 1,
+"k": "ssense"
+},
+{
+"id": "610ab5e114a266000172b82e",
+"t": "Vice President Supply Chain",
+"o": "Crate & Barrel",
+"r": "2026-08-15T06:05:57.175+00:00",
+"p": "P5",
+"e": 1,
+"k": "cratebarrel"
+},
+{
+"id": "60fadc09504bb40001f69f0f",
+"t": "Senior Vice President Supply Chain",
+"o": "Sol de Janeiro",
+"r": "2026-07-29T03:15:01.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "soldejaneiro"
+},
+{
+"id": "621b897329c95d0001b85eea",
+"t": "Chief Supply Chain Officer",
+"o": "Fossil Group, Inc.",
+"r": "2026-08-09T04:14:18.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "fossilgroupinc"
+},
+{
+"id": "5ad356f7a6da988376ddb37b",
+"t": "Director of Logistics",
+"o": "PACSUN",
+"r": "2026-08-08T13:50:10.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "pacsun"
+},
+{
+"id": "68f627328ac35b00018a571f",
+"t": "SVP - Global Operations and Supply Chain",
+"o": "Quince",
+"r": "2026-08-11T22:59:03.626+00:00",
+"p": "P5",
+"e": 1,
+"k": "quince"
+},
+{
+"id": "62ede2110548780001a02c38",
+"t": "Sr. Vice President Supply Chain",
+"o": "SKIMS",
+"r": "2026-08-15T22:41:29.159+00:00",
+"p": "P5",
+"e": 1,
+"k": "skims"
+},
+{
+"id": "5f5490ff848dd200018c33f4",
+"t": "Director of Supply Chain North America",
+"o": "Eataly",
+"r": "2026-08-08T08:31:32.704+00:00",
+"p": "P1",
+"e": 1,
+"k": "eataly"
+},
+{
+"id": "66fcbf3c7fa641000159dc31",
+"t": "Head of Product Planning & Logistics",
+"o": "Lush Fresh Handmade Cosmetics North America",
+"r": "2026-08-13T09:56:41.321+00:00",
+"p": "P4",
+"e": 1,
+"k": "lushfreshhandmadecosmeticsnorthamerica"
+},
+{
+"id": "610459e349e495000169b727",
+"t": "Senior Director, Customer Supply Chain",
+"o": "Mammoth Brands",
+"r": "2026-07-23T15:04:28.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "mammothbrands"
+},
+{
+"id": "66ff5bc493a365000127c681",
+"t": "Vice President, Supply Chain Operations",
+"o": "Indigo",
+"r": "2026-08-09T11:31:14.282+00:00",
+"p": "P5",
+"e": 1,
+"k": "indigo"
+},
+{
+"id": "54a5cfa47468692cf0875caa",
+"t": "Vice President Fulfillment Operations",
+"o": "Thrive Market",
+"r": "2026-08-07T19:14:54.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "thrivemarket"
+},
+{
+"id": "6009affe32dace00011fe29c",
+"t": "Head of Transportation",
+"o": "The RealReal",
+"r": "2026-08-07T11:36:56.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "therealreal"
+},
+{
+"id": "54a7396d7468696de7c59920",
+"t": "Head of Supply Chain and Operations, SVP",
+"o": "StockX",
+"r": "2026-08-12T08:34:12.485+00:00",
+"p": "P5",
+"e": 1,
+"k": "stockx"
+},
+{
+"id": "610e0e40edf90800014dc91d",
+"t": "SVP Supply Chain",
+"o": "Fender Musical Instruments Corporation",
+"r": "2026-08-08T06:49:41.885+00:00",
+"p": "P5",
+"e": 1,
+"k": "fendermusicalinstrumentscorporation"
+},
+{
+"id": "621b8e27c134030001f1a265",
+"t": "VP, Logistics, Trade, Transportation, and Indirect Procurement",
+"o": "Ariat International",
+"r": "2026-08-07T06:59:50.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "ariatinternational"
+},
+{
+"id": "60a6a546cad7ba00013a956f",
+"t": "Senior Vice President - Supply Chain",
+"o": "BARK",
+"r": "2026-07-21T18:45:28.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "bark"
+},
+{
+"id": "60a73837bb948500018bb800",
+"t": "Vice President Supply Chain Operations",
+"o": "Vuori",
+"r": "2026-08-08T05:06:21.000+00:00",
+"p": "P5",
+"e": 1,
+"k": "vuori"
+},
+{
+"id": "609bafd7e61c3c000118fcc0",
+"t": "Vice President Global Logistics, Trade Compliance and Vault Operations",
+"o": "Harry Winston",
+"r": "2026-08-16T15:11:49.194+00:00",
+"p": "P4",
+"e": 1,
+"k": "harrywinston"
+},
+{
+"id": "66f33220e24e0b000183fcc5",
+"t": "Vice President Global Logistics & Customer Service, rag & bone",
+"o": "rag & bone",
+"r": "2026-07-30T03:37:53.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "ragbone"
+},
+{
+"id": "60dd973262c8830001ee0769",
+"t": "Chief Supply Chain & Transformation Officer",
+"o": "Marc Jacobs",
+"r": "2026-08-15T01:12:12.794+00:00",
+"p": "P5",
+"e": 1,
+"k": "marcjacobs"
+},
+{
+"id": "54ec1cf0746869444c4d3d52",
+"t": "Director, Supply Chain Systems",
+"o": "Spanx",
+"r": "2026-08-07T11:11:44.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "spanx"
+},
+{
+"id": "66f788b326ca4800012df47c",
+"t": "Senior Vice President Distribution and Logistics",
+"o": "ALICE + OLIVIA",
+"r": "2026-08-17T00:16:48.373+00:00",
+"p": "P4",
+"e": 1,
+"k": "aliceolivia"
+},
+{
+"id": "673199d20d55d0000115884f",
+"t": "Head of Logistics & Distribution",
+"o": "Wild Fork",
+"r": "2026-08-06T14:43:43.288+00:00",
+"p": "P4",
+"e": 1,
+"k": "wildfork"
+},
+{
+"id": "593b6f9da6da98c9f8641577",
+"t": "Senior Director Global Distribution/E-Commerce Fulfillment and 3PL Operations",
+"o": "Kendo Brands, Inc.",
+"r": "2026-07-05T03:27:45.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "kendobrandsinc"
+},
+{
+"id": "642e924a2a55280001b2344c",
+"t": "Vice President, Distribution Center Operations",
+"o": "CVS Health",
+"r": "2026-08-09T00:25:01.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "cvshealth"
+},
+{
+"id": "621a2d394bfc4a0001b3ddb3",
+"t": "IT AVP - Global eCom Fulfillment & LTL Logistics",
+"o": "Costco Wholesale",
+"r": "2026-07-26T13:04:13.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "costcowholesale"
+},
+{
+"id": "654228ca268ae7000190583f",
+"t": "Vice President, Information Technology Supply Chain",
+"o": "The Home Depot",
+"r": "2026-07-07T09:04:15.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "thehomedepot"
+},
+{
+"id": "684bc9b58069310001628279",
+"t": "Senior Director, ERP",
+"o": "Walgreens",
+"r": "2026-08-15T18:13:31.660+00:00",
+"p": "P6",
+"e": 1,
+"k": "walgreens"
+},
+{
+"id": "68646e4b6d9f7200019879ff",
+"t": "Director Logistics International Transportation",
+"o": "Target",
+"r": "2026-07-26T01:08:13.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "target"
+},
+{
+"id": "63c144d0e59d35000186d4fc",
+"t": "Vice President Supply Chain Strategy and Engineering",
+"o": "Lowe's Companies, Inc.",
+"r": "2026-08-09T08:24:55.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "lowescompaniesinc"
+},
+{
+"id": "6621e4772bcafa0007780556",
+"t": "Distribution Center Director",
+"o": "Albertsons Companies",
+"r": "2026-08-05T19:22:16.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "albertsonscompanies"
+},
+{
+"id": "646f6e4bdc8ba80001ef781e",
+"t": "Vice President Distribution and Fulfillment Operations",
+"o": "The TJX Companies, Inc.",
+"r": "2026-08-07T11:04:51.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "thetjxcompaniesinc"
+},
+{
+"id": "6070ad7a8a8a350001443410",
+"t": "Director Distribution Engineering",
+"o": "7-Eleven",
+"r": "2026-08-09T16:23:39.831+00:00",
+"p": "P4",
+"e": 1,
+"k": "7eleven"
+},
+{
+"id": "671c5da99c6cfb0001a45948",
+"t": "VP, SAP & Supply Chain Systems, Loblaw Technology & Analytics",
+"o": "Loblaw Companies Limited",
+"r": "2026-08-12T08:43:16.326+00:00",
+"p": "P2",
+"e": 1,
+"k": "loblawcompanieslimited"
+},
+{
+"id": "54aa618d74686908c8fdb602",
+"t": "Senior Director, Walton Distribution Center",
+"o": "Dollar General",
+"r": "2026-08-07T08:18:37.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "dollargeneral"
+},
+{
+"id": "605e3e80c0c90900017c9066",
+"t": "Director, Regional Distribution Center",
+"o": "Best Buy",
+"r": "2026-08-09T07:19:02.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "bestbuy"
+},
+{
+"id": "62eb1cb1b4b73b00014084a8",
+"t": "Vice President Supply Chain Technology",
+"o": "Starbucks",
+"r": "2026-07-29T03:10:34.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "starbucks"
+},
+{
+"id": "5b34c221a6da98b2a9275415",
+"t": "Transportation Director",
+"o": "CarMax",
+"r": "2026-07-12T03:51:40.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "carmax"
+},
+{
+"id": "63a754c85e34a70001ef35c2",
+"t": "Senior Director, Supply Chain Technology Solutions",
+"o": "Walmart Canada",
+"r": "2026-08-06T14:59:15.787+00:00",
+"p": "P2",
+"e": 1,
+"k": "walmartcanada"
+},
+{
+"id": "60f689337b1baa0001908da7",
+"t": "Delivery Director, ERP",
+"o": "Sobeys",
+"r": "2026-07-11T00:38:20.000+00:00",
+"p": "P6",
+"e": 1,
+"k": "sobeys"
+},
+{
+"id": "609578642d44f20001d26e19",
+"t": "Senior Vice President - Supply Chain Engineering and Network Strategy",
+"o": "Ross Stores, Inc.",
+"r": "2026-08-10T16:14:03.557+00:00",
+"p": "P1",
+"e": 1,
+"k": "rossstoresinc"
+},
+{
+"id": "6108f48835a2340001a4e3be",
+"t": "Director, Supply Chain",
+"o": "Whole Foods Market",
+"r": "2026-08-09T01:14:14.239+00:00",
+"p": "P1",
+"e": 1,
+"k": "wholefoodsmarket"
+},
+{
+"id": "5c40d90b80f93e1c887920fd",
+"t": "Vice President Supply Chain Strategy and Services",
+"o": "Meijer",
+"r": "2026-08-09T11:41:27.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "meijer"
+},
+{
+"id": "64074e0cc912bc00018ca251",
+"t": "SVP Corporate Systems & Supply Chain Technology",
+"o": "BJ's Wholesale Club",
+"r": "2026-08-07T10:26:13.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "bjswholesaleclub"
+},
+{
+"id": "66f40e0b9dce69000173e159",
+"t": "VP, IT Supply Chain",
+"o": "Dollar Tree Stores",
+"r": "2026-08-07T10:43:38.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "dollartreestores"
+},
+{
+"id": "624d376bd9c5a900014b2f2c",
+"t": "VP, Global Logistics and Omni Channel Fulfillment",
+"o": "DICK'S Sporting Goods",
+"r": "2026-08-09T03:22:41.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "dickssportinggoods"
+},
+{
+"id": "66f4375853623d0001393b21",
+"t": "IT Director, Supply Chain",
+"o": "AutoZone",
+"r": "2026-08-12T03:39:58.651+00:00",
+"p": "P2",
+"e": 1,
+"k": "autozone"
+},
+{
+"id": "6422038b38e99e0001bdbd8a",
+"t": "Director of Distribution Operations Support",
+"o": "O'Reilly Auto Parts",
+"r": "2026-08-07T16:41:06.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "oreillyautoparts"
+},
+{
+"id": "54a3a7f874686934429e4b08",
+"t": "VP - Logistics & Distribution",
+"o": "Metro Inc.",
+"r": "2026-07-13T22:45:26.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "metroinc"
+},
+{
+"id": "60ff0d606bf9f900019914a3",
+"t": "Senior Vice President, Logistics and Transportation",
+"o": "Nordstrom",
+"r": "2026-08-11T17:11:21.946+00:00",
+"p": "P3",
+"e": 1,
+"k": "nordstrom"
+},
+{
+"id": "5ff83e004423aa0001fd3688",
+"t": "Director of Logistics, e-Commerce Fulfillment",
+"o": "Kohl's",
+"r": "2026-08-07T06:11:34.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "kohls"
+},
+{
+"id": "60e52f4461da640001cb70c2",
+"t": "Director, Supply Chain Analytics, Systems, & PI",
+"o": "Tractor Supply Company",
+"r": "2026-08-06T05:04:15.854+00:00",
+"p": "P2",
+"e": 1,
+"k": "tractorsupplycompany"
+},
+{
+"id": "678fda73fb149e00017ae71d",
+"t": "Distribution Center Director of Operations",
+"o": "Gap Inc.",
+"r": "2026-08-07T09:24:48.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "gapinc"
+},
+{
+"id": "610aa3cbc05bbf0001929c3f",
+"t": "Director of Supply Chain",
+"o": "Bridgestone Americas",
+"r": "2026-08-11T02:51:28.801+00:00",
+"p": "P1",
+"e": 1,
+"k": "bridgestoneamericas"
+},
+{
+"id": "54a766c27468696220c55031",
+"t": "Director Supply Chain and Logistics",
+"o": "Shoppers Drug Mart",
+"r": "2026-07-13T15:25:24.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "shoppersdrugmart"
+},
+{
+"id": "54a6242374686932095284c5",
+"t": "Director, Distribution Operations",
+"o": "Family Dollar",
+"r": "2026-07-02T06:37:49.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "familydollar"
+},
+{
+"id": "6112028d88ac1f00018fd271",
+"t": "Vice President of Software Engineering | Supply Chain Technology",
+"o": "Fanatics",
+"r": "2026-08-01T04:40:02.000+00:00",
+"p": "P2",
+"e": 1,
+"k": "fanatics"
+},
+{
+"id": "5ff8610a2f4c680001c6bae5",
+"t": "Senior Director of Supply Chain & Logistics, Transportation",
+"o": "Chewy",
+"r": "2026-08-09T06:28:22.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "chewy"
+},
+{
+"id": "54c17c147468697af7872216",
+"t": "Director of PA Distribution Center",
+"o": "Wegmans Food Markets",
+"r": "2026-08-06T11:31:55.000+00:00",
+"p": "P4",
+"e": 1,
+"k": "wegmansfoodmarkets"
+},
+{
+"id": "68c91dbebd9b42000121ffda",
+"t": "Vice President Supply Chain Strategy and Systems",
+"o": "Ulta Beauty",
+"r": "2026-08-16T17:20:36.975+00:00",
+"p": "P2",
+"e": 1,
+"k": "ultabeauty"
+},
+{
+"id": "610bdb279817240001fa80a4",
+"t": "Sr. IT Director, Supply Chain Systems",
+"o": "Ashley Furniture Industries",
+"r": "2026-08-17T05:07:57.379+00:00",
+"p": "P2",
+"e": 1,
+"k": "ashleyfurnitureindustries"
+},
+{
+"id": "5ffb17b7e3bfa10001e50e62",
+"t": "Senior Director of Transportation & Logistics",
+"o": "Macy's",
+"r": "2026-08-07T21:05:00.000+00:00",
+"p": "P3",
+"e": 1,
+"k": "macys"
+},
+{
+"id": "60f2fd9aded9310001dde36b",
+"t": "Sr. Vice President - Supply Chain Strategy, Engineering, and Analytics",
+"o": "Burlington Stores, Inc.",
+"r": "2026-07-30T03:07:24.000+00:00",
+"p": "P1",
+"e": 1,
+"k": "burlingtonstoresinc"
+}
+]

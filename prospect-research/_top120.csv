@@ -1,0 +1,121 @@
+rank,company_name,apollo_org_id,domain,industry,revenue
+1,Apple,5fcd2cf3ed78c700f9383e4e,apple.com,,416161000000
+2,McKesson,5b262253a3ae61f442a98c26,mckesson.com,,403430000000
+3,CVS Health,5e62d73eb0c04e008ccbe82f,cvshealth.com,,402067000000
+4,Cencora,64d6339b29fe0702c61471b5,cencora.com,,321332819000
+5,Costco Wholesale,54a11ca569702d84c591b500,costco.com,,275235000000
+6,Cardinal Health,55921466736964186a2e5800,cardinalhealth.com,,222578000000
+7,NVIDIA,5f50a22da4560d00e3eddf31,nvidia.com,,215938000000
+8,Ford Motor Company,55e1552ff3e5bb2fe0000003,ford.com,,187267000000
+9,General Motors,5f5fa368134e120100e8fe6b,gm.com,,185019000000
+10,The Home Depot,54a1a8a874686942d3f77505,homedepot.com,,164683000000
+11,Cargill,5f42d75ac31d000001fe1ea8,cargill.com,,154000000000
+12,Walgreens,54a1274069702dc841891500,walgreens.com,,147658000000
+13,Kroger,54a1356a69702d3cbb35b900,kroger.com,,147642000000
+14,Marathon Petroleum Corporation,54a11bb069702d86b6245000,marathonpetroleum.com,,132699000000
+15,Phillips 66,5d0aa713f651254ddbf9d74b,phillips66.com,,132189000000
+16,Koch,5f3fa0b1978aa7000123c25e,kochinc.com,,125000000000
+17,Valero,54a1274269702db878eb2300,valero.com,,122687000000
+18,Dell Technologies,54a128ff69702dab37537a01,dell.com,,113538000000
+19,Nestle Purina North America,54a1358369702d2f9fb40f01,purina.com,,112708000000
+20,Target,5f4b5d08368cd60001abdeaf,target.com,,104780000000
+21,Tesla,57c4d9dea6da9869f38f20af,tesla.com,,94827000000
+22,Johnson & Johnson,61758b94c9e96e008cb9b1dd,jnj.com,,94193000000
+23,PepsiCo,6560b80cbe73ab00f5f858b2,pepsico.com,,93925000000
+24,Samsung Semiconductor,61de9291b08ee300a4d3bcdf,semiconductor.samsung.com,,89729000000
+25,Boeing,54a1229169702d9a8b695403,boeing.com,,89463000000
+26,RTX,5f4a5821e8ca1c00c7ee9739,,,88603000000
+27,Procter & Gamble,54a1218a69702d94a403bf02,pg.com,,87032000000
+28,"Lowe's Companies, Inc.",619dca1525825d008ca4668c,lowes.com,,86286000000
+29,Albertsons Companies,54a1347e69702d3a9c9a3c00,albertsonscompanies.com,,83172500000
+30,Sysco,57cf8a48a6da984c4213ccbc,sysco.com,,81370000000
+31,ADM,5ee8d375f72f7600e87e3868,adm.com,,80269000000
+32,Circle K,5bffd5526aaff22124f1f400,circlek.com,,76506600000
+33,Lockheed Martin,54a13c4f69702d2185bac701,lockheedmartin.com,,75057000000
+34,Bunge,5e8709606f76e5008ca845f5,bunge.com,,70329000000
+35,"American Honda Motor Company, Inc.",5c26425ef65125e2956a848e,honda.com,,70169833000
+36,Lenovo,54a1215b69702d84c503b802,lenovo.com,,69076968000
+37,Caterpillar Inc.,5e699a8d1d525e00980b32e4,caterpillar.com,,67589000000
+38,IBM,5d33d0d1a3ae6113e19b1674,ibm.com,,67536000000
+39,Eli Lilly and Company,54a11fef69702d8ed45b0b02,lilly.com,,65179000000
+40,Mars,5fe2e194bb6a51014ca8d802,mars.com,,65000000000
+41,Merck,6048540916abe500012201fe,merck.com,,64926000000
+42,Broadcom,5e56ff8794c49d00016857dd,broadcom.com,,63887000000
+43,Performance Food Group,54a23af67468692e71cb4218,pfgc.com,,63298900000
+44,Pfizer,54a11e6069702d94a4944501,pfizer.com,,62579000000
+45,TD SYNNEX,5e56359cdf4794000177c170,,,62508086000
+46,AbbVie,5fc7b2ff4045230110edd2a1,abbvie.com,,61160000000
+47,"The TJX Companies, Inc.",54a1289d69702d9313d02d01,tjx.com,,60372000000
+48,Publix Super Markets,5dad5eb14ff61d0001175441,publix.com,,58258000000
+49,Cisco,62987dc94fbae900a51766b3,cisco.com,,56654000000
+50,HP,57c53a82a6da984be99ba3b4,hp.com,,55295000000
+51,Tyson Foods,5e6fa9c37c894100fdb7059b,tysonfoods.com,,54441000000
+52,Intel,6551b03afb912500013c3753,intel.com,,52853000000
+53,7-Eleven,54a1995c74686940125ba500,7-eleven.com,,52602000000
+54,Ingram Micro,5f7186a8f45e1901bee3d3b7,ingrammicro.com,,52556263000
+55,General Dynamics,5f49b1a4a845d3000189667b,gd.com,,52550000000
+56,"McLane Company, Inc.",615ec2b7005eb200016731f5,mclaneco.com,,51916000000
+57,H-E-B,5f43687b79786e0001dd1a2b,heb.com,,50000000000
+58,Bristol Myers Squibb,54a1b144746869401234aa08,bms.com,,48195000000
+59,The Coca-Cola Company,56e32e01f3e5bb2e9b008cf0,coca-cola.com,,47941000000
+60,DENSO,54a11dbb69702d97c1333901,denso.com,,47249020000
+61,Loblaw Companies Limited,55921fc773696418e9a67f00,loblaw.ca,,46615671000
+62,Nike,5f497ca3b2162b0001bbfd46,nike.com,,46398000000
+63,GE,5d0a7e5ca3ae613a6ca6c128,ge.com,,45855000000
+64,John Deere,615dc78121eb73000160beee,deere.com,,44665000000
+65,Thermo Fisher Scientific,5b12e7e6a6da98dcb5c6791b,thermofisher.com,,44556000000
+66,Abbott,5d09d9c0a3ae61974d1aacc6,abbott.com,,44328000000
+67,Qualcomm,5f6316994abf0b008ce52a3f,qualcomm.com,,44284000000
+68,Magna International,57c4c2c3a6da9836629e3be3,magna.com,,42745407000
+69,Dollar General,54a11be369702d84c5506300,dollargeneral.com,,42724369000
+70,Northrop Grumman,60999a9944cb3700c91a84d8,northropgrumman.com,,41954000000
+71,Porsche Cars North America,5cd0913e980bb409b0490777,,,41884000000
+72,Best Buy,54a12a2669702d93135c0902,bestbuy.com,,41691000000
+73,Dow,54a11e3769702d97c10e6a01,dow.com,,39968000000
+74,US Foods,5ed101a1e3781e000147f36a,usfoods.com,,39424000000
+75,Mondelez International,556d440f73696411fd84c400,mondelezinternational.com,,38537000000
+76,Honeywell Technologies,54a1285569702d8cfcfa3b01,honeywell.com,,37442000000
+77,Micron Technology,54a126e269702d8cfc0c8a00,micron.com,,37378000000
+78,Starbucks,5d88848ad64d780098cb9eef,starbucks.com,,37184400000
+79,World Kinect,5d0a228aa3ae61afb98854e6,,,36928000000
+80,Amgen,54a122ad69702d9a8b3d6003,amgen.com,,36741000000
+81,Medtronic,5ed250ba25b9580001651825,medtronic.com,,36364000000
+82,Suncor,54a11f0d69702d88c4a7a001,suncor.com,,35760454000
+83,SLB,5d0a5f51f65125a357b7d39e,slb.com,,35709000000
+84,AMD,5ed55aa62ad2940001470627,amd.com,,34639000000
+85,Hewlett Packard Enterprise,56dd0d18f3e5bb1ac9000fea,hpe.com,,34296000000
+86,Cummins Inc.,601a98723a044600cce76294,cummins.com,,33670000000
+87,UNFI,54a1b97674686942d3c25b0b,unfi.com,,31784000000
+88,Ferguson,54a2422b7468693fda89941a,ferguson.com,,31633000000
+89,Arrow Electronics,54a23ca47468693a7ea19518,arrow.com,,30852935000
+90,Collins Aerospace,54a1e5ca7468695c8221d515,collinsaerospace.com,,30196000000
+91,LyondellBasell,5d0a0b4280f93ef7d5d3e00e,lyondellbasell.com,,30153000000
+92,Jabil,5da144e56a35ec00013f9e04,jabil.com,,29802000000
+93,Gilead Sciences,54a11fc869702d9a8bc91702,gilead.com,,29442000000
+94,Sony Interactive Entertainment,5ed0665a370e8100011ebb87,sonyinteractive.com,,29363000000
+95,Canon USA,5c1dfe5aa3ae61db9a44ac4d,canon.com,,28500000000
+96,PACCAR,54a127e069702da2207ac700,paccar.com,,28444800000
+97,Medline,54a1230969702d8ccca51603,medline.com,,28432000000
+98,Applied Materials,5ed29e6d746a300001071ff2,appliedmaterials.com,,28368000000
+99,Flex,5ed5db62f317fd00011e8ae1,flex.com,,27914000000
+100,Baker Hughes,5da66bfcd84d9e0001e69e50,bakerhughes.com,,27733000000
+101,Genentech,5b86f758f874f739743b9a01,gene.com,,26400000000
+102,Southern Glazer's Wine & Spirits,602add2af0406b00a49f7374,southernglazers.com,,26000000000
+103,CarMax,54a126d369702dab37a10300,carmax.com,,25881131000
+104,Stryker,5ed1211cea6e0b00013193b7,stryker.com,,25116000000
+105,Kraft Heinz,55f1b737f3e5bb61c9003c6b,kraftheinz.com,,24990000000
+106,3M,5edba935e36c200001d51dcb,3m.com,,24948000000
+107,International Paper,5f45dd53be8f6700013c3cea,internationalpaper.com,,24896000000
+108,Danaher,54a1213569702d86b63c7e02,danaher.com,,24568000000
+109,NAPA Auto Parts,61e1f475b0db8500c264ca9c,genpt.com,,24300141000
+110,Walmart Canada,57c4f9f4a6da986aaa17424d,walmart.ca,,23724000000
+111,Sherwin-Williams,54a1233969702da425fc8203,sherwin-williams.com,,23574300000
+112,Wesco,5a9e929ca6da98d97e7d5171,wesco.com,,23510900000
+113,Sobeys,54a12a8c69702db648591802,sobeyscareers.com,,23497000000
+114,RITE AID,62bc256d8a9d7c00b3961c81,riteaid.com,,23475490000
+115,Lear Corporation,54a1354269702d4494608000,lear.com,,23258300000
+116,Lam Research,616a6cf0ac4e2000a47fcea5,lamresearch.com,,23232690000
+117,Amphenol,5fdcce3ca1d7ef0001dd74c4,amphenol.com,,23094700000
+118,Gordon Food Service,559221e873696418a5b08900,gfs.com,,23000000000
+119,"Ross Stores, Inc.",54a1349f69702d3cbb2e4c00,rossstores.com,,22750559000
+120,CDW,54a138d769702d2fa6bd0900,cdw.com,,22424100000

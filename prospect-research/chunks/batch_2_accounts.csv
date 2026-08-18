@@ -1,0 +1,142 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+5fcd2cf3ed78c700f9383e4e,Apple,apple.com,https://apple.com,334111,,416161000000,,,,United States,,2
+5f50a22da4560d00e3eddf31,NVIDIA,nvidia.com,https://nvidia.com,334413,,215938000000,,,,United States,"Mellanox Technologies, Ltd.",2
+54a128ff69702dab37537a01,Dell Technologies,dell.com,https://dell.com,334111,,113538000000,,,,United States,,2
+61de9291b08ee300a4d3bcdf,Samsung Semiconductor,semiconductor.samsung.com,https://semiconductor.samsung.com,334413,,89729000000,,,,United States,Samsung Electronics,2
+5f4a5821e8ca1c00c7ee9739,RTX,,,334511,,88603000000,,,,United States,,2
+54a1215b69702d84c503b802,Lenovo,lenovo.com,https://lenovo.com,334111,,69076968000,,,,United States,,2
+5d33d0d1a3ae6113e19b1674,IBM,ibm.com,https://ibm.com,541512,,67536000000,,,,United States,,2
+5e56ff8794c49d00016857dd,Broadcom,broadcom.com,https://broadcom.com,54151,,63887000000,,,,United States,Brocade Communications Systems Inc,2
+62987dc94fbae900a51766b3,Cisco,cisco.com,https://cisco.com,33411,,56654000000,,,,United States,,2
+57c53a82a6da984be99ba3b4,HP,hp.com,https://hp.com,334111,,55295000000,,,,United States,,2
+6551b03afb912500013c3753,Intel,intel.com,https://intel.com,334413,,52853000000,,,,United States,,2
+5f49b1a4a845d3000189667b,General Dynamics,gd.com,https://gd.com,336611,,52550000000,,,,United States,,2
+54a11dbb69702d97c1333901,DENSO,denso.com,https://denso.com,336390,,47249020000,,,,United States,DENSO Auto Parts,2
+5b12e7e6a6da98dcb5c6791b,Thermo Fisher Scientific,thermofisher.com,https://thermofisher.com,334516,,44556000000,,,,United States,Ion Torrent by Life Technologies,2
+5f6316994abf0b008ce52a3f,Qualcomm,qualcomm.com,https://qualcomm.com,334413,,44284000000,,,,United States,,2
+54a126e269702d8cfc0c8a00,Micron Technology,micron.com,https://micron.com,33411,,37378000000,,,,United States,,2
+5ed250ba25b9580001651825,Medtronic,medtronic.com,https://medtronic.com,334510,,36364000000,,,,United States,,2
+5ed55aa62ad2940001470627,AMD,amd.com,https://amd.com,334413,,34639000000,,,,United States,,2
+56dd0d18f3e5bb1ac9000fea,Hewlett Packard Enterprise,hpe.com,https://hpe.com,54151,,34296000000,,,,United States,,2
+54a1e5ca7468695c8221d515,Collins Aerospace,collinsaerospace.com,https://collinsaerospace.com,336413,,30196000000,,,,United States,RTX,2
+5da144e56a35ec00013f9e04,Jabil,jabil.com,https://jabil.com,33411,,29802000000,,,,United States,,2
+5ed0665a370e8100011ebb87,Sony Interactive Entertainment,sonyinteractive.com,https://sonyinteractive.com,513210,,29363000000,,,,United States,Sony,2
+5c1dfe5aa3ae61db9a44ac4d,Canon USA,canon.com,https://canon.com,334310,,28500000000,,,,United States,,2
+5ed5db62f317fd00011e8ae1,Flex,flex.com,https://flex.com,33911,,27914000000,,,,United States,,2
+5ed1211cea6e0b00013193b7,Stryker,stryker.com,https://stryker.com,339112,,25116000000,,,,United States,,2
+54a1213569702d86b63c7e02,Danaher,danaher.com,https://danaher.com,334510,,24568000000,,,,United States,,2
+5fdcce3ca1d7ef0001dd74c4,Amphenol,amphenol.com,https://amphenol.com,334419,,23094700000,,,,United States,,2
+54a1354269702d4b2ef17000,Supermicro,supermicro.com,https://supermicro.com,334111,,21972042000,,,,United States,,2
+6258526b442862008dbc9bc8,L3Harris Technologies,l3harris.com,https://l3harris.com,334511,,21865000000,,,,United States,,2
+60f5049dbfab6500019f5f1b,BD,bd.com,https://bd.com,334510,,21839000000,,,,United States,Bdjobs.com,2
+5f4db889765eb10001a333aa,GE HealthCare,gehealthcare.com,https://gehealthcare.com,33911,,20625000000,,,,United States,GE,2
+62a099395b400300b36d8b27,Texas Instruments,ti.com,https://ti.com,334413,,17682000000,,,,United States,,2
+69f7d3b006e7d700019ef393,Honeywell Aerospace,honeywellaerospace.com,https://honeywellaerospace.com,336412,,17404000000,,,,United States,,2
+62ca63b93d2cef00a3abeb92,Celestica,celestica.com,https://celestica.com,339,,12607809000,,,,Canada,,2
+54a222e674686935beaee00f,Seagate Technology,seagate.com,https://seagate.com,334112,,12195000000,,,,United States,LaCie,2
+54a133f169702d2f9f9c1500,WD,wd40.com,https://wd40.com,334112,,11777000000,,,,United States,WD-40 Company,2
+55922fb1736964192c0cb900,Motorola Solutions,motorolasolutions.com,https://motorolasolutions.com,334220,,11682000000,,,,United States,Rave Mobile Safety,2
+54a1232069702d9a8b3e9c03,Analog Devices,analog.com,https://analog.com,334413,,11019707000,,,,United States,,2
+54a127c169702d8eebb80001,Molex,molex.com,https://molex.com,334417,,9100000000,,,,United States,Koch,2
+54a1289969702d8b1966a101,Arista Networks,arista.com,https://arista.com,33411,,9005700000,,,,United States,,2
+5ccb348a3c80cd0908366922,Marvell Technology,marvell.com,https://marvell.com,334413,,8194600000,,,,United States,,2
+54a11bc269702d8ed4b75900,Sanmina,sanmina.com,https://sanmina.com,334418,,8128382000,,,,United States,,2
+55695b2b73696425850e1000,Nintendo,nintendo.com,https://nintendo.com,33411,,7774030000,,,,United States,,2
+5d0cee5ee497040939d2a6a9,Garmin,garmin.com,https://garmin.com,334511,,7245519000,,,,United States,Firstbeat Technologies,2
+54a11d7569702d84c5780601,Agilent Technologies,agilent.com,https://agilent.com,334516,,6948000000,,,,United States,VIAVI Solutions,2
+5592276273696418d20d9d00,NetApp,netapp.com,https://netapp.com,334112,,6925000000,,,,United States,,2
+57c4cb5fa6da986a37a1cf55,GlobalFoundries,gf.com,https://gf.com,334413,,6791000000,,,,United States,onsemi,2
+5ed262edc3eef50001f060f8,onsemi,onsemi.com,https://onsemi.com,334413,,5995400000,,,,United States,,2
+556d37c67369641284e2b400,Coherent Corp.,coherent.com,https://coherent.com,334413,,5810115000,,,,United States,II-VI China,2
+5d098f3580f93e6664cde1eb,Canadian Solar Inc.,csisolar.com,https://csisolar.com,334413,,5595107000,,,,Canada,,2
+54a11bb169702d88c4925000,Hach,hach.com,https://hach.com,334516,,5503000000,,,,United States,Veralto,2
+54a11d9c69702d77c2823601,Zebra Technologies,zebra.com,https://zebra.com,334118,,5396000000,,,,United States,,2
+54fca626736964016b123e00,Keysight Technologies,keysight.com,https://keysight.com,334515,,5375000000,,,,United States,,2
+5f41376719095b00010dd641,First Solar,firstsolar.com,https://firstsolar.com,33661,,5219376000,,,,United States,,2
+54a129ae69702d9548c5ae01,Resmed,resmed.com,https://resmed.com,33911,,5146327000,,,,United States,,2
+56e5ea8af3e5bb17f401247d,Fortive,fortive.com,https://fortive.com,334519,,5142600000,,,,United States,,2
+6018f6686593a5012069631f,Juniper Networks,juniper.net,https://juniper.net,33411,,5073600000,,,,United States,Hewlett Packard Enterprise,2
+5e5694c177202500018c2c86,Logitech,logitech.com,https://logitech.com,334118,,4861685000,,,,United States,,2
+54a12ab369702d9548422702,Ciena,ciena.com,https://ciena.com,33421,,4769507000,,,,United States,,2
+5cb3e43180f93e6b965bd716,Microchip Technology Inc.,microchip.com,https://microchip.com,334413,,4713100000,,,,United States,Microchip,2
+54a1217569702d7fe6cfda02,Dexcom,dexcom.com,https://dexcom.com,33911,,4662000000,,,,United States,,2
+5d0aa9e4a3ae618a3d959cd4,"Ricoh USA, Inc.",ricoh-usa.com,https://ricoh-usa.com,334118,,4609000000,,,,United States,,2
+55eba33cf3e5bb23810020b6,Illumina,illumina.com,https://illumina.com,334516,,4338000000,,,,United States,,2
+5d0994cda3ae61b03f943fd2,"Hologic, Inc.",hologic.com,https://hologic.com,334510,,4100500000,,,,United States,Hologic Diagenode,2
+5b14d3d7a6da987135fa3610,"Skyworks Solutions, Inc.",skyworksinc.com,https://skyworksinc.com,334413,,4086900000,,,,United States,"Qorvo, Inc.",2
+54a1271669702da220214600,Align Technology,aligntech.com,https://aligntech.com,339113,,4034964000,,,,United States,,2
+54a1349c69702d333daa6400,Plexus Corp.,plexus.com,https://plexus.com,33911,,4032966000,,,,United States,,2
+5f3f3c8253387d00014267a4,Cytiva,cytiva.com,https://cytiva.com,334516,,4000000000,,,,United States,Danaher,2
+5b148ceea6da987120e0fcfc,Diebold Nixdorf,dieboldnixdorf.com,https://dieboldnixdorf.com,334118,,3805700000,,,,United States,,2
+54a1295b69702d979cdfa101,Sensata Technologies,sensata.com,https://sensata.com,334513,,3704500000,,,,United States,,2
+6020105bace0ed008c69d53f,"Qorvo, Inc.",qorvo.com,https://qorvo.com,334413,,3678517000,,,,United States,"Skyworks Solutions, Inc.",2
+5da68a0a34d3900001732e57,Pure Storage,purestorage.com,https://purestorage.com,334112,,3662843000,,,,United States,,2
+55ea614df3e5bb598f00824a,Leonardo DRS,leonardodrs.com,https://leonardodrs.com,334511,,3648000000,,,,United States,Leonardo,2
+60998712fb706b00e1031d8d,Curtiss-Wright Corporation,curtisswright.com,https://curtisswright.com,33641,,3498372000,,,,United States,,2
+5f3ec5d593f32900015246aa,CAE,cae.com,https://cae.com,33999,,3474497000,,,,Canada,,2
+5592137c73696419d8b05200,Bruker,bruker.com,https://bruker.com,334516,,3436500000,,,,United States,,2
+62beb749164deb00a31ef49f,Entegris,entegris.com,https://entegris.com,33911,,3196600000,,,,United States,,2
+54a120a569702d84c50c5b02,Varian,varian.com,https://varian.com,334510,,3168200000,,,,United States,Siemens Healthineers,2
+54a12ad369702d9548893602,Waters Corporation,waters.com,https://waters.com,334516,,3165286000,,,,United States,,2
+559235f3736964191255d100,"Vishay Intertechnology, Inc.",vishay.com,https://vishay.com,334413,,3069048000,,,,United States,,2
+5da4e6c079b5820001c1d699,Hillrom,hillrom.com,https://hillrom.com,33911,,2950000000,,,,United States,Baxter International Inc.,2
+6454810389eee10001fa560f,Revvity,revvity.com,https://revvity.com,325413,,2856051000,,,,United States,,2
+54a135d669702d425519d100,Belden Inc.,belden.com,https://belden.com,33592,,2715194000,,,,United States,,2
+5e4285a8f89f86008c98f1ed,Insulet Corporation,insulet.com,https://insulet.com,33911,,2708100000,,,,United States,,2
+64da38cc71d05e00a31be821,NCR Voyix,ncrvoyix.com,https://ncrvoyix.com,51321,,2687000000,,,,United States,,2
+5b86670f324d445c628f03cf,Benchmark,bench.com,https://bench.com,334418,,2659108000,,,,United States,,2
+54a126be69702d9548eb2300,Bio-Rad Laboratories,bio-rad.com,https://bio-rad.com,334516,,2583200000,,,,United States,,2
+54a25f2b7468693cdd6dc41d,Ubiquiti Inc.,ui.com,https://ui.com,334290,,2573545000,,,,United States,,2
+5f4aa31a27adbb00016b02f3,Olympus Corporation of the Americas,olympusamerica.com,https://olympusamerica.com,339112,,2541000000,,,,United States,Olympus Corporation,2
+54a1284b69702db64824e800,ZOLL Medical Corporation,zoll.com,https://zoll.com,33911,,2519000000,,,,United States,Asahi Kasei,2
+5da296992c81690001c35394,Littelfuse,littelfuse.com,https://littelfuse.com,334419,,2386294000,,,,United States,,2
+5a9cbc27a6da98d954d5a3e4,"Itron, Inc.",itron.com,https://itron.com,54133,,2367194000,,,,United States,,2
+54a116d169702d3ec0fd0700,Bloom Energy,bloomenergy.com,https://bloomenergy.com,33591,,2023994000,,,,United States,,2
+54a1343269702d2db4126d00,CommScope,commscope.com,https://commscope.com,33411,,1930000000,,,,United States,The Carlyle Group,2
+60fa2b86b9a1ac0184449048,Flir,flir.com,https://flir.com,334511,,1923689000,,,,United States,Teledyne Technologies Incorporated,2
+5f42cbbe79786e0001623289,Verifone,verifone.com,https://verifone.com,334118,,1900000000,,,,United States,Francisco Partners,2
+54a12a9369702dc841fcdc01,MSA - The Safety Company,msasafety.com,https://msasafety.com,33911,,1874814000,,,,United States,,2
+615db49cbad16200a4d0d2a5,NI (National Instruments),ni.com,https://ni.com,51321,,1700000000,,,,United States,Emerson,2
+5c901b82ba509b090c1d788f,Poly,poly.com,https://poly.com,517,,1665531000,,,,United States,HP,2
+54a1345b69702d407fa01700,Razer,razer.com,https://razer.com,334310,,1619590000,,,,United States,,2
+55921d767369644785665700,Masimo,masimo.com,https://masimo.com,334510,,1526900000,,,,United States,Danaher,2
+5d34a2bea3ae619ebf0801c5,Brady Corporation,bradyid.com,https://bradyid.com,322299,,1513605000,,,,United States,,2
+660d35011b63720301c7460f,Altera,altera.com,https://altera.com,33411,,1500000000,,,,United States,Silver Lake,2
+5e570452ebcd930001e32d91,Cubic Corporation,cubic.com,https://cubic.com,33429,,1500000000,,,,United States,Veritas Capital,2
+5a9f533da6da98d97e82a0ae,Enphase Energy,enphase.com,https://enphase.com,33599,,1472985000,,,,United States,,2
+54a1292369702db648c06801,Corsair,corsair.com,https://corsair.com,334111,,1472480000,,,,United States,EagleTree Capital,2
+54a11fec69702d7fe6163902,"Sonos, Inc.",sonos.com,https://sonos.com,33411,,1443276000,,,,United States,,2
+55922bfc736964185fecad00,Crestron Electronics,crestron.com,https://crestron.com,33451,,1200000000,,,,United States,,2
+5f49287e213bd00001b78250,Extreme Networks,extremenetworks.com,https://extremenetworks.com,33411,,1140067000,,,,United States,,2
+5a9ea055a6da98d97016ea82,VIAVI Solutions,viavisolutions.com,https://viavisolutions.com,33441,,1084300000,,,,United States,,2
+55922f707369642529143c00,Methode Electronics,methode.com,https://methode.com,334417,,1019200000,,,,United States,,2
+5b83f188f874f715d01dd4d8,EcoFlow,ecoflow.com,https://ecoflow.com,33599,,1000000000,,,,United States,,2
+54a128f869702d9313676201,Fluke Corporation,fluke.com,https://fluke.com,33411,,1000000000,,,,United States,Fortive,2
+556978a273696425d7803800,OURA,ouraring.com,https://ouraring.com,33911,,1000000000,,,,United States,,2
+5569c28c736964254f858e00,SCIEX,sciex.com,https://sciex.com,334510,,1000000000,,,,United States,Danaher,2
+5d0a12c6f651258aca803d2f,ViewSonic,viewsonic.com,https://viewsonic.com,334118,,1000000000,,,,United States,,2
+54a1213a69702d8cccbba502,WHOOP,whoop.com,https://whoop.com,33911,,1000000000,,,,United States,,2
+54a122f969702d9d7e43e002,Mitel,mitel.com,https://mitel.com,517810,,970000000,,,,Canada,,2
+628f26e27ffb9200d8f4d9c2,HID,hidglobal.com,https://hidglobal.com,334290,,957800000,,,,United States,ASSA ABLOY Group,2
+5e55bac902d6b900014ae826,Tektronix,tek.com,https://tek.com,334515,,900000000,,,,United States,Fortive,2
+54a134f169702d3e83b26400,Neotech Global,neotechglobal.com,https://neotechglobal.com,334418,,759200000,,,,United States,,2
+5ed20acba23b3300015aaad4,Wolfspeed,wolfspeed.com,https://wolfspeed.com,334413,,757600000,,,,United States,,2
+5f7dfbec570ed000bff817ad,Black Box,blackbox.com,https://blackbox.com,33411,,705068000,,,,United States,,2
+5d0a4dafa3ae613a4faddd8f,Checkpoint Systems,checkpointsystems.com,https://checkpointsystems.com,33911,,687000000,,,,United States,CCL Design,2
+54a11bd969702d77c2d66e00,GoPro,gopro.com,https://gopro.com,33411,,651542000,,,,United States,,2
+618353d83aa0d600a45ccd7c,Lumileds,lumileds.com,https://lumileds.com,334413,,600000000,,,,United States,Sanan Integrated Circuit,2
+54a129dc69702dcef950d801,Calian Group,calian.com,https://calian.com,54133,,556482000,,,,Canada,,2
+5592218f7369640b18ed1d00,Lattice Semiconductor,latticesemi.com,https://latticesemi.com,334413,,523262000,,,,United States,"CANYON BRIDGE CAPITAL PARTNERS, LLC",2
+57c4d059a6da986a8f417c58,Cerebras,cerebras.ai,https://cerebras.ai,334413,,509991000,,,,United States,,2
+5d572fe4d4b3b000bdc3afc4,Groq,groq.com,https://groq.com,334413,,500000000,,,,United States,NVIDIA,2
+54a19e4474686949e7654d02,Accuray,accuray.com,https://accuray.com,33911,,458505000,,,,United States,,2
+54a12b0b69702d8b19c0ea02,PAR Technology,partech.com,https://partech.com,54151,,455547000,,,,United States,,2
+54a134e969702d2f9f12bd00,Evertz,evertz.com,https://evertz.com,33431,,377274000,,,,Canada,,2
+54a11c7369702da75318be00,Ceragon Networks,ceragon.com,https://ceragon.com,334220,,338728000,,,,Canada,Aviat Networks,2
+54a11b7769702da10fed3c00,Hydrafacial,hydrafacial.com,https://hydrafacial.com,33911,,334300000,,,,United States,Vesper Healthcare Acquisition Corp,2
+629dd5ff19376c00a35a93f7,SunPower,sunpower.com,https://sunpower.com,33411,,300000000,,,,United States,TotalEnergies,2
+5e57be47e983c8000162423b,EXFO,exfo.com,https://exfo.com,334519,,265583000,,,,Canada,,2
+54a11e2c69702d77c23c6b01,Tarana Wireless,taranawireless.com,https://taranawireless.com,517,,221000000,,,,United States,,2
+54a11ca669702d84c54db600,eInfochips (An Arrow Company),einfochips.com,https://einfochips.com,33441,,200000000,,,,United States,Arrow Electronics,2
+54a1202069702d97c1d24802,PacBio,pacb.com,https://pacb.com,334516,,160005000,,,,United States,,2
+5b837369f874f73891e62b12,SambaNova,sambanova.ai,https://sambanova.ai,334413,,100000000,,,,United States,Intel,2

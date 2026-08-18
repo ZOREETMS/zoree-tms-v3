@@ -1,0 +1,77 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+55e1552ff3e5bb2fe0000003,Ford Motor Company,ford.com,https://ford.com,336110,,187267000000,,,,United States,,5
+5f5fa368134e120100e8fe6b,General Motors,gm.com,https://gm.com,336110,,185019000000,,,,United States,,5
+57c4d9dea6da9869f38f20af,Tesla,tesla.com,https://tesla.com,336110,,94827000000,,,,United States,,5
+5c26425ef65125e2956a848e,"American Honda Motor Company, Inc.",honda.com,https://honda.com,336110,,70169833000,,,,United States,Honda Motor Co. Ltd.,5
+57c4c2c3a6da9836629e3be3,Magna International,magna.com,https://magna.com,336390,,42745407000,,,,Canada,Veoneer,5
+54a127e069702da2207ac700,PACCAR,paccar.com,https://paccar.com,336120,,28444800000,,,,United States,,5
+54a1354269702d4494608000,Lear Corporation,lear.com,https://lear.com,336360,,23258300000,,,,United States,,5
+56e27ab0f3e5bb18dd000863,Adient,adient.com,https://adient.com,33621,,14535000000,,,,United States,,5
+5f96aa2c753654008caff2a7,BorgWarner,borgwarner.com,https://borgwarner.com,33639,,14316000000,,,,United States,,5
+57c4c9aba6da98373fe14866,HARMAN International,harman.com,https://harman.com,334310,,11000000000,,,,United States,Samsung Electronics,5
+54a12af569702d9548254902,Oshkosh Corporation,oshkoshcorp.com,https://oshkoshcorp.com,336120,,10422300000,,,,United States,,5
+55ea6af2f3e5bb594000bf01,Tenneco,tenneco.com,https://tenneco.com,336330,,10098939000,,,,United States,"Apollo Global Management, Inc.",5
+5592293d736964188a45a300,Toyota North America,toyota.com,https://toyota.com,336110,,10000000000,,,,United States,Toyota Motor Corporation,5
+61d2b10c8c3dc900a4e16dbc,Flex-N-Gate,flex-n-gate.com,https://flex-n-gate.com,336390,,9300000000,,,,United States,,5
+55f5de37f3e5bb4c4d0031e8,Howmet Aerospace,howmet.com,https://howmet.com,336412,,8252000000,,,,United States,Alcoa,5
+66ea8ef038ff2301b201a2ad,International,international.com,https://international.com,336120,,7503000000,,,,United States,TRATON GROUP,5
+5b85fffc324d447d3bac5bda,Dana Incorporated,dana.com,https://dana.com,33639,,7500000000,,,,United States,,5
+54a11d7169702d86b6c4fe00,Bendix Commercial Vehicle Systems LLC,bendix.com,https://bendix.com,33634,,5900000000,,,,United States,Knorr Brake Company,5
+54a11fe269702d9d7eab0102,AAM - American Axle & Manufacturing,aam.com,https://aam.com,33639,,5836700000,,,,United States,,5
+5c8af96576f90e091b67ac95,Rivian,rivian.com,https://rivian.com,336110,,5387000000,,,,United States,,5
+5d34a6a3f651259d8d2eb126,IAC Group,iacgroup.com,https://iacgroup.com,33621,,5300000000,,,,United States,,5
+5d5a9adade07ef00f9870270,"First Brands Group, LLC",firstbrandsgroup.com,https://firstbrandsgroup.com,336390,,5000000000,,,,United States,,5
+54a128f369702da220ff5801,Yazaki North America,yazaki-na.com,https://yazaki-na.com,33631,,5000000000,,,,United States,,5
+54a237da7468692e71ec2617,Nexteer Automotive,nexteer.com,https://nexteer.com,33631,,4584217000,,,,United States,,5
+5592418e7369643bdd7c9e00,Meritor,meritor.com,https://meritor.com,33634,,4300000000,,,,United States,Cummins Inc.,5
+54a11b0f69702da425b90e00,Lippert,lippert.com,https://lippert.com,33231,,4166944000,,,,United States,"Patrick Industries, Inc.",5
+5d0aa88280f93e5832d9ee36,"Mitsubishi Motors North America, Inc.",mitsubishicars.com,https://mitsubishicars.com,336110,,4144000000,,,,United States,Mitsubishi Motors Middle East & Africa,5
+54a11b9569702d918c424600,Subaru of America,subaru.com,https://subaru.com,336110,,4000000000,,,,United States,Subaru Corporation,5
+5ed0414de3952d0001045f19,TI Fluid Systems,,,336390,,3880398000,,,,United States,ABC Technologies,5
+5592166d73696418d7475d00,"Volkswagen of America, Inc",vw.com,https://vw.com,33611,,3800000000,,,,United States,Volkswagen Group,5
+54a12b3669702dcef99c8502,Visteon Corporation,visteon.com,https://visteon.com,33621,,3768000000,,,,United States,,5
+5d09888ba3ae613e51e3a3b9,Martinrea International,martinrea.com,https://martinrea.com,33621,,3517422000,,,,Canada,,5
+64a2f50fda8c510156f40970,PHINIA,phinia.com,https://phinia.com,336320,,3483000000,,,,United States,BorgWarner,5
+54a12a4e69702d9b8b741002,Allison Transmission,allisontransmission.com,https://allisontransmission.com,33639,,3010000000,,,,United States,,5
+54a11cbd69702da10f38ca00,Hyundai Motor America,,,336110,,3000000000,,,,United States,Hyundai Motor Company,5
+54a12b2569702db6487c6202,Cooper Standard,cooperstandard.com,https://cooperstandard.com,336390,,2740915000,,,,United States,,5
+54a1345b69702d3cbb812700,J.B. Poindexter & Co,jbpoindexter.com,https://jbpoindexter.com,336211,,2400000000,,,,United States,,5
+56d38799f3e5bb15ec001124,Zoox,zoox.com,https://zoox.com,336110,,2300000000,,,,United States,Amazon,5
+54a11c5c69702d8ccc8d9a00,Dorman Products,dormanproducts.com,https://dormanproducts.com,336390,,2130319000,,,,United States,,5
+54a1b4d0746869401250d609,Standard Motor Products,smpcorp.com,https://smpcorp.com,336390,,1791158000,,,,United States,,5
+5d09e52d80f93e5f6e32d584,ABC Technologies,abctechnologies.com,https://abctechnologies.com,336390,,1626900000,,,,Canada,"Apollo Global Management, Inc.",5
+5f4989248bd02900010c4b16,Multimatic,multimatic.com,https://multimatic.com,336390,,1600000000,,,,Canada,,5
+54a12a8869702d8cfc865002,Wabash,onewabash.com,https://onewabash.com,336212,,1542754000,,,,United States,Wabash National Corporation,5
+5a9e8749a6da98d977fb8b09,"North American Lighting, Inc.",nal.com,https://nal.com,33621,,1500000000,,,,United States,India Japan Lighting Pvt Ltd,5
+54a1b91d7468694f8fe9610b,Gentherm,gentherm.com,https://gentherm.com,33631,,1494616000,,,,United States,,5
+54a1b8517468694012ecfa0a,Fox Factory,ridefox.com,https://ridefox.com,336390,,1467321000,,,,United States,Compass Diversified (NYSE: CODI),5
+556cefaf73696411f4876500,Lucid Motors,lucidmotors.com,https://lucidmotors.com,336110,,1353790000,,,,United States,,5
+5d360dec80f93ebead76760e,Peterbilt Motors Company,peterbilt.com,https://peterbilt.com,336120,,1200000000,,,,United States,,5
+54a13c4e69702d267aa2cf01,Litens Automotive Group,litens.com,https://litens.com,33639,,1000000000,,,,Canada,,5
+5ddc8a1c5a7be5011a08afbd,Toyota Motor Manufacturing Canada,tmmc.ca,https://tmmc.ca,336110,,1000000000,,,,Canada,,5
+55696c787369642549d42400,Honda Canada Inc.,hondacanada.ca,https://hondacanada.ca,336110,,960500000,,,,Canada,"American Honda Motor Company, Inc.",5
+5f47957f262b720001a7a442,Veoneer,veoneer.com,https://veoneer.com,33639,,933000000,,,,United States,American Industrial Partners,5
+55f72e69f3e5bb193f0233a9,Mack Trucks,macktrucks.com,https://macktrucks.com,336120,,872000000,,,,United States,Volvo Group,5
+56e5e6d9f3e5bb17f400d345,Inventus Power,inventuspower.com,https://inventuspower.com,335910,,861674000,,,,United States,H.I.G. Capital,5
+5d0a1ce8f651259f5b0cdb0c,Stoneridge,stoneridge.com,https://stoneridge.com,33631,,861263000,,,,United States,,5
+5d09f630a3ae6192d507bc01,New Flyer,newflyer.com,https://newflyer.com,33621,,829800000,,,,Canada,NFI Group Inc.,5
+5e56a6f02519b10001152555,T1 Energy Inc.,t1energy.com,https://t1energy.com,33632,,755295000,,,,United States,,5
+5a9d145da6da98d93bddac5c,Nuro,nuro.ai,https://nuro.ai,33699,,750000000,,,,Canada,,5
+55eb8837f3e5bb129800003c,Xometry,xometry.com,https://xometry.com,33632,,686631000,,,,United States,,5
+5500b14c7369642dbaf91700,"Mercedes-Benz Research & Development North America, Inc.",mbrdna.com,https://mbrdna.com,33639,,635700000,,,,United States,Daimler Truck AG,5
+54a128b869702d9ebcca2101,Roush,roush.com,https://roush.com,33611,,595000000,,,,United States,,5
+5d333dd6f65125500a798e04,BMW Group US,bmwusa.com,https://bmwusa.com,336110,,578261000,,,,United States,BMW Group,5
+630fe76e1e7afc00dfee6fcc,Scout Motors Inc.,scoutmotors.com,https://scoutmotors.com,336110,,552600000,,,,United States,Volkswagen Group,5
+5f32ce93fcc648008c56ac3d,Motional,motional.com,https://motional.com,3361,,511900000,,,,United States,Hyundai Motor Group,5
+5d0a6d5080f93e2088b6a885,Torc Robotics,torc.ai,https://torc.ai,33612,,421700000,,,,United States,Daimler Truck AG,5
+6255cb2f97703400a5a26422,North Sails,northsails.com,https://northsails.com,33621,,380000000,,,,United States,North Technology Group,5
+5500bb0573696460eefb1c00,"Stoughton Trailers, LLC",stoughtontrailers.com,https://stoughtontrailers.com,336212,,322813000,,Stoughton,Wisconsin,United States,,5
+5d09b169a3ae6157efba2c5e,Proterra,proterra.com,https://proterra.com,33611,,322776000,,,,United States,,5
+55920c6673696418bc033a00,Fisker,fiskerinc.com,https://fiskerinc.com,336110,,272900000,,,,United States,,5
+54a11b8b69702d77c2e74c00,LION,thelionelectric.com,https://thelionelectric.com,33611,,254276000,,,,Canada,,5
+5b15077da6da98712ec20a44,Bird,bird.co,https://bird.co,33639,,245000000,,,,United States,,5
+5d344a7c80f93e3fc4a62685,Karma Automotive,karmaautomotive.com,https://karmaautomotive.com,336110,,217000000,,,,United States,Wanxiang America Corporation,5
+5d370f33f65125158e2a897c,Luminator Technology Group,luminator.com,https://luminator.com,33621,,189300000,,,,United States,Audax Group,5
+5a9f35dba6da98d997812f34,Haas F1 Team,haasf1team.com,https://haasf1team.com,33611,,150000000,,,,United States,,5
+5f96b9d73726c4008d8af55e,Volvo Trucks North America,volvotrucks.us,https://volvotrucks.us,336120,,103500000,,,,United States,Volvo Trucks,5
+54a1222169702da10f630103,Hendrick Motorsports,hendrickmotorsports.com,https://hendrickmotorsports.com,33611,,102000000,,,,United States,,5

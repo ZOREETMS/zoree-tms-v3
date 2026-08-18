@@ -1,0 +1,75 @@
+apollo_org_id,company_name,primary_domain,website_url,naics_primary,industry,estimated_revenue,employee_count,hq_city,hq_state,hq_country,owned_by_organization_name,vertical_batch
+5b262253a3ae61f442a98c26,McKesson,mckesson.com,https://mckesson.com,424210,,403430000000,,,,United States,,7
+64d6339b29fe0702c61471b5,Cencora,cencora.com,https://cencora.com,424210,,321332819000,,,,United States,MWI Animal Health,7
+54a11bb069702d86b6245000,Marathon Petroleum Corporation,marathonpetroleum.com,https://marathonpetroleum.com,324110,,132699000000,,,,United States,ConocoPhillips,7
+57cf8a48a6da984c4213ccbc,Sysco,sysco.com,https://sysco.com,424410,,81370000000,,,,United States,,7
+54a23af67468692e71cb4218,Performance Food Group,pfgc.com,https://pfgc.com,424410,,63298900000,,,,United States,,7
+5e56359cdf4794000177c170,TD SYNNEX,,,423430,,62508086000,,,,United States,,7
+5f7186a8f45e1901bee3d3b7,Ingram Micro,ingrammicro.com,https://ingrammicro.com,423430,,52556263000,,,,United States,,7
+615ec2b7005eb200016731f5,"McLane Company, Inc.",mclaneco.com,https://mclaneco.com,49312,,51916000000,,,,United States,Berkshire Hathaway,7
+5cd0913e980bb409b0490777,Porsche Cars North America,,,423110,,41884000000,,,,United States,,7
+5ed101a1e3781e000147f36a,US Foods,usfoods.com,https://usfoods.com,424410,,39424000000,,,,United States,Harry & David,7
+5d0a228aa3ae61afb98854e6,World Kinect,,,424710,,36928000000,,,,United States,,7
+54a1b97674686942d3c25b0b,UNFI,unfi.com,https://unfi.com,424410,,31784000000,,,,United States,,7
+54a2422b7468693fda89941a,Ferguson,ferguson.com,https://ferguson.com,42372,,31633000000,,,,United States,Ferguson Ventures Inc,7
+54a23ca47468693a7ea19518,Arrow Electronics,arrow.com,https://arrow.com,423690,,30852935000,,,,United States,DH electronics GmbH,7
+602add2af0406b00a49f7374,Southern Glazer's Wine & Spirits,southernglazers.com,https://southernglazers.com,42481,,26000000000,,,,United States,,7
+61e1f475b0db8500c264ca9c,NAPA Auto Parts,genpt.com,https://genpt.com,441330,,24300141000,,,,United States,,7
+5a9e929ca6da98d97e7d5171,Wesco,wesco.com,https://wesco.com,423610,,23510900000,,,,United States,,7
+559221e873696418a5b08900,Gordon Food Service,gfs.com,https://gfs.com,424410,,23000000000,,,,United States,,7
+54a138d769702d2fa6bd0900,CDW,cdw.com,https://cdw.com,423430,,22424100000,,,,United States,,7
+5592201873696418d7318000,Avnet,avnet.com,https://avnet.com,423690,,22200754000,,,,United States,,7
+54a11ec769702d86b6088101,Wakefern Food Corp.,wakefern.com,https://wakefern.com,445110,,20700000000,,,,United States,,7
+5f45e08586758600012b997f,ABC Supply Co. Inc.,abcsupply.com,https://abcsupply.com,42331,,20200000000,,,,United States,Hendricks Holdings Inc,7
+54a1284b69702da220880701,Grainger,grainger.com,https://grainger.com,42383,,17942000000,,,,United States,,7
+54a133f969702d36c9960200,"Land O'Lakes, Inc.",landolakesinc.com,https://landolakesinc.com,11199,,16411533000,,,,United States,,7
+57c4d9b7a6da986aa0d30076,Builders FirstSource,bldr.com,https://bldr.com,44411,,15190638000,,,,United States,,7
+54a128d669702d8eeb339e01,SHI International Corp.,shi.com,https://shi.com,541512,,14000000000,,,,United States,,7
+54a11b4669702d8ed40b2500,LKQ Corporation,lkqcorp.com,https://lkqcorp.com,42313,,13916000000,,,,United States,,7
+54a12a8769702d8b1949a402,Henry Schein,henryschein.com,https://henryschein.com,423450,,13184000000,,,,United States,,7
+61a64b6901dd6f00a4055f08,Republic National Distributing Company,rndc-usa.com,https://rndc-usa.com,424820,,12800000000,,,,United States,,7
+54a135a869702d407f1bc500,Graybar,graybar.com,https://graybar.com,423610,,12000000000,,,,United States,,7
+5d094353f6512560f13431e7,Univar Solutions,univarsolutions.com,https://univarsolutions.com,424690,,11475300000,,,,United States,"Apollo Global Management, Inc.",7
+5d0a213880f93ee86f8fc872,"TTI, Inc.",tti.com,https://tti.com,423690,,8800000000,,,,United States,Berkshire Hathaway,7
+57c4e597a6da986a9893ec4a,Breakthru Beverage Group,breakthrubev.com,https://breakthrubev.com,424810,,8600000000,,,,United States,,7
+54a11b4269702d8aa1d12000,Dole Food Company,dole.com,https://dole.com,11141,,8475000000,,,,United States,Dole plc,7
+54a1295f69702d9b8b999c01,Fastenal,fastenal.com,https://fastenal.com,42383,,8200500000,,,,United States,,7
+60f26ab00633d90001aaa7ea,Finning,finning.com,https://finning.com,423830,,7725874000,,,,Canada,,7
+5bd8936c1dc27228d71a1ee2,Resideo,resideo.com,https://resideo.com,334512,,7472000000,,,,United States,,7
+55920e28736964199b114100,Veritiv,veritiv.com,https://veritiv.com,42393,,7367795000,,,,United States,CD&R,7
+54a1984774686949e7dd3b00,Uline,uline.com,https://uline.com,42361,,7000000000,,,,United States,,7
+556d640a736964122f68fb00,QXO,qxo.com,https://qxo.com,42331,,6842200000,,,,United States,Beacon Building Products,7
+54a239c97468693fda488f17,Patterson Dental,pattersondental.com,https://pattersondental.com,423450,,6568272000,,,,United States,Patient Square Capital,7
+54a1a1b17468695860c96e03,Avantor,avantorsciences.com,https://avantorsciences.com,32599,,6552200000,,,,United States,,7
+54a1359569702d4b2ef0a300,White Cap,whitecap.com,https://whitecap.com,42331,,6100000000,,,,United States,CD&R,7
+54a129ec69702db878daa501,HD Supply,hdsupply.com,https://hdsupply.com,42372,,5989000000,,,,United States,The Home Depot,7
+54a222b774686933186d940f,84 Lumber,84lumber.com,https://84lumber.com,44411,,5900000000,,,,United States,,7
+5c1e8cdff651257251258e34,Westcon-Comstor,westconcomstor.com,https://westconcomstor.com,423430,,5740000000,,,,United States,Datatec International Limited,7
+54a23e5f7468692e711a9519,ADI Global Distribution,adiglobal.com,https://adiglobal.com,42369,,4800000000,,,,United States,Control4,7
+5b872c4f324d444bfce283c0,SiteOne Landscape Supply,siteone.com,https://siteone.com,42399,,4704800000,,,,United States,,7
+5cb5fddc1e430a0c9c6295e5,Covetrus,covetrus.com,https://covetrus.com,33911,,4640000000,,,,United States,Henry Schein Animal Health,7
+54a133f669702d2f9f1c1c00,Vinmar International,vinmar.com,https://vinmar.com,424610,,4000000000,,,,United States,,7
+54a13cb469702d0486530102,MSC Industrial Supply Co.,mscdirect.com,https://mscdirect.com,42383,,3769521000,,,,United States,,7
+54a1d2cb7468695860cc1a14,Smith,smithweb.com,https://smithweb.com,423690,,3450000000,,,,United States,,7
+54a13a7769702d2a1e17e000,"Zones, LLC",zones.com,https://zones.com,541512,,3200000000,,,,United States,,7
+54a134b069702d42556e3b00,KeHE Distributors,kehe.com,https://kehe.com,42441,,3178570000,,,,United States,,7
+54a129b069702d8cfc80f001,Central Garden & Pet,central.com,https://central.com,33993,,3129064000,,,,United States,,7
+54a1b3f07468694012579509,Berlin Packaging,berlinpackaging.com,https://berlinpackaging.com,32222,,3000000000,,,,United States,Oak Hill Capital,7
+5cd1c3998a7abb0d045f2178,Connection,connection.com,https://connection.com,541512,,2872746000,,,,United States,,7
+54a11b1d69702d77c2361500,Dawn Foods Global,dawnfoods.com,https://dawnfoods.com,311812,,2500000000,,,,United States,Puratos,7
+5ee43415f6afb200bec877bc,MSI,msisurfaces.com,https://msisurfaces.com,42322,,2500000000,,,,United States,,7
+54a122b169702d94a4705403,Proximo Spirits,proximospirits.com,https://proximospirits.com,312140,,2168979000,,,,United States,,7
+54a1229a69702d86b65cf402,doTERRA International LLC,doterra.com,https://doterra.com,42421,,2000000000,,,,United States,,7
+5500af407369642dd1940100,Future Electronics,futureelectronics.com,https://futureelectronics.com,423690,,992005000,,,,Canada,WT Microelectronics,7
+556ce5187369641208f44800,"Tilray Brands, Inc.",tilray.com,https://tilray.com,3122,,915454000,,,,Canada,,7
+5ed243fb825e0d00010485df,Incora,incora.com,https://incora.com,42383,,810000000,,Fort Worth,Texas,United States,,7
+5f485e4c3136e20001fd2b42,Global Furniture Group,globalfurnituregroup.com,https://globalfurnituregroup.com,337211,,736400000,,,,Canada,Evolve Furniture Group,7
+55ee0a99f3e5bb16360006fe,Cresco Labs,crescolabs.com,https://crescolabs.com,42469,,667327000,,,,Canada,,7
+5fc8be668a5e8f00be285a76,Intcomex,intcomex.com,https://intcomex.com,423430,,600000000,,,,United States,,7
+5b1437a0a6da98dcc67723e3,Jamieson Wellness Inc.,jamiesonwellness.com,https://jamiesonwellness.com,33993,,599669000,,,,Canada,,7
+54a1227269702d7fe68e2103,The Boelter Companies,boelter.com,https://boelter.com,42344,,480000000,,Waukesha,Wisconsin,United States,,7
+5d3715f4a3ae61d4405e723a,Mouser Electronics,mouser.com,https://mouser.com,423690,,289000000,,,,United States,"TTI, Inc.",7
+54a135de69702d352f341e01,Ernest,ernestpackaging.com,https://ernestpackaging.com,322211,,250000000,,,,United States,,7
+54a134a769702d3cbb984e00,"GHA Technologies, Inc",gha-associates.com,https://gha-associates.com,541512,,140400000,,,,United States,,7
+5d0923ab9e559f09343362bf,Oldcastle APG,oldcastleapg.com,https://oldcastleapg.com,32733,,120000000,,,,United States,CRH,7
+5569bfc273696425dbb08600,Anatolia,anatolia.com,https://anatolia.com,32739,,103800000,,,,Canada,,7

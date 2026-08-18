@@ -1,0 +1,1098 @@
+[
+{
+"id": "60e72d45fdcd980001a809a9",
+"lr": "2026-08-14",
+"he": true,
+"org": "Graphic Packaging International",
+"p": "P5",
+"t": "SVP Supply Chain"
+},
+{
+"id": "606445be2eaee400014d39e0",
+"lr": "2026-08-03",
+"he": true,
+"org": "Graphic Packaging International",
+"p": "P1",
+"t": "Sr Dir SC Strategy & Transformation"
+},
+{
+"id": "687024f573a2da00012e6f4e",
+"lr": "2026-08-08",
+"he": true,
+"org": "Graphic Packaging International",
+"p": "P3",
+"t": "Director of Transportation"
+},
+{
+"id": "60bdc3236568b90001e2364f",
+"lr": "2026-08-09",
+"he": true,
+"org": "Mohawk Industries",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "61fece157c3a560001bd2f44",
+"lr": "2026-08-07",
+"he": true,
+"org": "Mohawk Industries",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "66f880f18dcef000015182d6",
+"lr": "2026-08-15",
+"he": true,
+"org": "Mohawk Industries",
+"p": "P3",
+"t": "Director Transportation Services"
+},
+{
+"id": "5b3dd31ba6da98a0c905c19e",
+"lr": "2026-08-10",
+"he": true,
+"org": "Mohawk Industries",
+"p": "P3",
+"t": "VP of Transportation"
+},
+{
+"id": "60a50c50cb130a000184168f",
+"lr": "2026-07-13",
+"he": true,
+"org": "Bombardier",
+"p": "P2",
+"t": "Director Supply Chain IT"
+},
+{
+"id": "5f4c533763cd8f0001bcd0a3",
+"lr": "2026-07-11",
+"he": true,
+"org": "Bombardier",
+"p": "P4",
+"t": "Dir Head of Commercial Transportation & Logistics"
+},
+{
+"id": "66f88bb48dcef0000154735b",
+"lr": "2026-07-29",
+"he": true,
+"org": "Valero",
+"p": "P1",
+"t": "SVP Supply Chain Optimization"
+},
+{
+"id": "67ec499f386db7000117f51e",
+"lr": "2026-07-17",
+"he": true,
+"org": "Valero",
+"p": "P3",
+"t": "Exec Dir Rail Transportation"
+},
+{
+"id": "57e09f3fa6da981be578519c",
+"lr": "2026-08-09",
+"he": true,
+"org": "Northrop Grumman",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "6a55fd46d5249800016ab50d",
+"lr": "2026-08-07",
+"he": true,
+"org": "Northrop Grumman",
+"p": "P5",
+"t": "VP & CSCO"
+},
+{
+"id": "67ed364069310c0001ce4b78",
+"lr": "2026-07-31",
+"he": true,
+"org": "Northrop Grumman",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "54a4d5907468692cf06e2867",
+"lr": "2026-08-13",
+"he": true,
+"org": "Northrop Grumman",
+"p": "P4",
+"t": "Director Logistics"
+},
+{
+"id": "66f653fe68121e000164962c",
+"lr": "2026-08-07",
+"he": true,
+"org": "Amrize",
+"p": "P5",
+"t": "Chief Supply Chain Officer"
+},
+{
+"id": "5b2ac4fba6da988a7945d835",
+"lr": "2026-07-28",
+"he": true,
+"org": "Amrize",
+"p": "P4",
+"t": "Director of Logistics"
+},
+{
+"id": "61dc5ddb839344000147ad2a",
+"lr": "2026-08-11",
+"he": true,
+"org": "Celanese",
+"p": "P2",
+"t": "IT Sr Dir Digital Supply Chain"
+},
+{
+"id": "645a4b57ce9b77000142fe7d",
+"lr": "2026-06-29",
+"he": false,
+"org": "Celanese",
+"p": "P5",
+"t": "VP Supply Chain Operations"
+},
+{
+"id": "608af1a13ec2ae00016b4511",
+"lr": "2026-08-11",
+"he": true,
+"org": "SpaceX",
+"p": "P5",
+"t": "Sr Director Supply Chain"
+},
+{
+"id": "54a4b6a674686938ac3bd15d",
+"lr": "2026-08-11",
+"he": true,
+"org": "SpaceX",
+"p": "P5",
+"t": "Director Starlink Supply Chain"
+},
+{
+"id": "5ad34eb5a6da9883b83ace46",
+"lr": "2026-08-08",
+"he": true,
+"org": "SpaceX",
+"p": "P5",
+"t": "Director Starship Supply Chain"
+},
+{
+"id": "68f8e2f10909bf0001443327",
+"lr": "2026-08-07",
+"he": true,
+"org": "SpaceX",
+"p": "P5",
+"t": "Director Starlink Supply Chain"
+},
+{
+"id": "613098938c4e110001045cbb",
+"lr": "2026-08-13",
+"he": true,
+"org": "Boeing",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "6561a035811339000148ea03",
+"lr": "2026-07-23",
+"he": true,
+"org": "Boeing",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "681e60d09fa84b0001a3b233",
+"lr": "2026-08-08",
+"he": true,
+"org": "Boeing",
+"p": "P2",
+"t": "Sr Dir IT & Data Analytics Supply Chain"
+},
+{
+"id": "5d4f2053f651252cc12b7b60",
+"lr": "2026-07-29",
+"he": true,
+"org": "Boeing",
+"p": "P2",
+"t": "Director BCA Supply Chain Systems"
+},
+{
+"id": "66f4664c941bdc00012e6aa6",
+"lr": "2026-07-30",
+"he": true,
+"org": "PPG",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "611bac1360321600018ce8fe",
+"lr": "2026-07-22",
+"he": true,
+"org": "PPG",
+"p": "P4",
+"t": "Global Dir Logistics and Transportation"
+},
+{
+"id": "642c5bfe3e74d70001733deb",
+"lr": "2026-08-07",
+"he": true,
+"org": "Avery Dennison",
+"p": "P5",
+"t": "VP Operations & Supply Chain"
+},
+{
+"id": "54a234197468693cdd5bc815",
+"lr": "2026-08-07",
+"he": true,
+"org": "Avery Dennison",
+"p": "P5",
+"t": "Global Supply Chain Director"
+},
+{
+"id": "601848d4bcab0e000194058e",
+"lr": "2026-08-12",
+"he": true,
+"org": "Oxy",
+"p": "P5",
+"t": "VP Supply Chain Management"
+},
+{
+"id": "6101b32b52180f0001886391",
+"lr": "2026-08-09",
+"he": true,
+"org": "Oxy",
+"p": "P4",
+"t": "Dir Crude Terminal Ops & Portfolio Analysis"
+},
+{
+"id": "67c548b83f8b33000109c63a",
+"lr": "2026-08-07",
+"he": true,
+"org": "Owens Corning",
+"p": "P5",
+"t": "Supply Chain Director - Roofing"
+},
+{
+"id": "604687dfe9d48d0001dc5b86",
+"lr": "2026-07-11",
+"he": true,
+"org": "Owens Corning",
+"p": "P3",
+"t": "Director of Transportation"
+},
+{
+"id": "5e6e1194cc8f1e0001c67ac0",
+"lr": "2026-08-14",
+"he": true,
+"org": "Lockheed Martin",
+"p": "P5",
+"t": "Director of Supply Chain"
+},
+{
+"id": "5ad01492a6da98d094e17f17",
+"lr": "2026-08-13",
+"he": true,
+"org": "Lockheed Martin",
+"p": "P5",
+"t": "Director of Supply Chain Management"
+},
+{
+"id": "63748e4d3e03380001cc90a1",
+"lr": "2026-08-11",
+"he": true,
+"org": "Lockheed Martin",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "57d3d461a6da9853e63fe953",
+"lr": "2026-08-09",
+"he": true,
+"org": "Lockheed Martin",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "64f2abb548f9cb0001762ed8",
+"lr": "2026-08-09",
+"he": true,
+"org": "Phillips 66",
+"p": "P3",
+"t": "Director Rail Transportation"
+},
+{
+"id": "5cc176f3f651256c92e2b41b",
+"lr": "2026-08-09",
+"he": true,
+"org": "Phillips 66",
+"p": "P3",
+"t": "Dir Rail Maintenance & Regulatory"
+},
+{
+"id": "5ac842e0a6da9840a6290f28",
+"lr": "2026-06-26",
+"he": true,
+"org": "Phillips 66",
+"p": "P3",
+"t": "Director NGL Rail Optimization"
+},
+{
+"id": "54a4c7537468693b8c3ab262",
+"lr": "2026-05-11",
+"he": true,
+"org": "Phillips 66",
+"p": "P3",
+"t": "Dir Rail Compliance and Equipment"
+},
+{
+"id": "54a58dfe7468693b8cd1589b",
+"lr": "2026-08-06",
+"he": false,
+"org": "Chevron Phillips Chemical Company",
+"p": "P3",
+"t": "Dir Transportation Services - Rail"
+},
+{
+"id": "66f5c13a0895ac0001feb0ed",
+"lr": "2026-08-13",
+"he": true,
+"org": "Dow",
+"p": "P4",
+"t": "Global Dir Rail Logistics Procurement"
+},
+{
+"id": "655c74ae2d483500014fe970",
+"lr": "2026-07-25",
+"he": true,
+"org": "Dow",
+"p": "P4",
+"t": "Global Procurement Director - Rail"
+},
+{
+"id": "5e5f2795f504fd000137580a",
+"lr": "2026-08-03",
+"he": true,
+"org": "Dow",
+"p": "P3",
+"t": "Global Rail Modal Director"
+},
+{
+"id": "588aa7b4f651252fa705e938",
+"lr": "2026-06-11",
+"he": true,
+"org": "Koch",
+"p": "P4",
+"t": "VP Terminal Operations"
+},
+{
+"id": "5ffdcbfaf0fcb30001492e43",
+"lr": "2026-07-29",
+"he": true,
+"org": "WestRock Company",
+"p": "P4",
+"t": "Director Rail Procurement"
+},
+{
+"id": "63426193eae9140001685f3c",
+"lr": "2026-07-29",
+"he": true,
+"org": "Packaging Corporation of America",
+"p": "P3",
+"t": "Managing Director Transportation"
+},
+{
+"id": "611d1c3a4d18570001a15b3d",
+"lr": "2026-07-25",
+"he": true,
+"org": "Packaging Corporation of America",
+"p": "P3",
+"t": "Director of Transportation"
+},
+{
+"id": "641e758be665f300013646b4",
+"lr": "2026-08-14",
+"he": true,
+"org": "Albemarle Corporation",
+"p": "P5",
+"t": "Chief Supply Chain Officer"
+},
+{
+"id": "66f3c0fd9ea8310001ed1cfd",
+"lr": "2026-07-19",
+"he": true,
+"org": "Albemarle Corporation",
+"p": "P5",
+"t": "Chief Supply Chain Officer"
+},
+{
+"id": "54c1877c7468691639bd061c",
+"lr": "2026-08-14",
+"he": true,
+"org": "Blue Origin",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "66fc58118cfb690001cf391a",
+"lr": "2026-08-01",
+"he": true,
+"org": "Blue Origin",
+"p": "P2",
+"t": "VP Supply Chain Engineering & Global Expansion"
+},
+{
+"id": "63fdf0050f11720001ba33d4",
+"lr": "2026-08-11",
+"he": true,
+"org": "Blue Origin",
+"p": "P4",
+"t": "Sr Director Supply Chain and Logistics"
+},
+{
+"id": "5ac03866a6da98cf112e3e05",
+"lr": "2026-08-10",
+"he": true,
+"org": "Blue Origin",
+"p": "P4",
+"t": "Director Supply Chain and Logistics"
+},
+{
+"id": "602f9757d0974d00018842cd",
+"lr": "2026-08-07",
+"he": true,
+"org": "Huntsman Corporation",
+"p": "P5",
+"t": "VP Global Purchasing & Logistics"
+},
+{
+"id": "655daadd978db60001adfb5e",
+"lr": "2026-08-06",
+"he": true,
+"org": "Huntsman Corporation",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "647ec20109891100010996a7",
+"lr": "2026-07-11",
+"he": true,
+"org": "Huntsman Corporation",
+"p": "P5",
+"t": "Head Supply Chain Global Elastomers"
+},
+{
+"id": "60d2081c38180100013c7ce3",
+"lr": "2026-08-10",
+"he": true,
+"org": "Huntsman Corporation",
+"p": "P4",
+"t": "Sr Dir Global Strategic Sourcing COE Logistics & Packaging"
+},
+{
+"id": "54a7ddb47468696b7fb5a254",
+"lr": "2026-08-09",
+"he": true,
+"org": "James Hardie",
+"p": "P5",
+"t": "VP Supply Chain North America"
+},
+{
+"id": "5dcc73ff58ed8e010c229c78",
+"lr": "2026-08-06",
+"he": true,
+"org": "James Hardie",
+"p": "P3",
+"t": "Director of Transportation"
+},
+{
+"id": "60f5371701a8e50001cfbe16",
+"lr": "2026-08-07",
+"he": true,
+"org": "Viasat",
+"p": "P2",
+"t": "Sr Director Supply Chain Technology"
+},
+{
+"id": "5ff93ed2356f18000176285b",
+"lr": "2026-08-06",
+"he": true,
+"org": "Viasat",
+"p": "P4",
+"t": "Sr Dir Global Logistics and Transportation"
+},
+{
+"id": "54ebff77746869444c2d353a",
+"lr": "2026-08-09",
+"he": true,
+"org": "RRD",
+"p": "P5",
+"t": "Vice President Operations"
+},
+{
+"id": "54a7fcea74686975f83d495b",
+"lr": "2026-08-07",
+"he": true,
+"org": "RRD",
+"p": "P5",
+"t": "Vice President Operations"
+},
+{
+"id": "62e3e2ee9beaf500017a57a5",
+"lr": "2026-08-09",
+"he": true,
+"org": "MDA Space",
+"p": "P5",
+"t": "Supply Chain Manager / Director"
+},
+{
+"id": "54a3a6db7468692abf3d9d07",
+"lr": "2026-07-28",
+"he": true,
+"org": "MDA Space",
+"p": "P5",
+"t": "Vice President Operations"
+},
+{
+"id": "601c4eac663de70001405cd2",
+"lr": "2026-07-23",
+"he": true,
+"org": "MDA Space",
+"p": "P5",
+"t": "Vice President Operations"
+},
+{
+"id": "5abb7097a6da9840720c415a",
+"lr": "2026-08-13",
+"he": true,
+"org": "The Chemours Company",
+"p": "P5",
+"t": "VP Operations"
+},
+{
+"id": "54eb78a974686931e28b7213",
+"lr": "2026-07-15",
+"he": true,
+"org": "CertainTeed",
+"p": "P5",
+"t": "Vice President Operations"
+},
+{
+"id": "63ebbf85d7d53a0001a73cce",
+"lr": "2026-07-29",
+"he": true,
+"org": "CertainTeed",
+"p": "P4",
+"t": "Logistics Director"
+},
+{
+"id": "54ec03417468694311d7953d",
+"lr": "2026-08-14",
+"he": true,
+"org": "Anduril Industries",
+"p": "P5",
+"t": "VP of Operations"
+},
+{
+"id": "610a8aa87a61930001645abc",
+"lr": "2026-08-05",
+"he": true,
+"org": "Anduril Industries",
+"p": "P5",
+"t": "Director of Supply Chain"
+},
+{
+"id": "66f887928dcef000015359f9",
+"lr": "2026-08-12",
+"he": true,
+"org": "Weyerhaeuser",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "6111466b045b720001dbfe7c",
+"lr": "2026-08-07",
+"he": true,
+"org": "Weyerhaeuser",
+"p": "P5",
+"t": "Director of Supply Chain and Finance"
+},
+{
+"id": "66f8827d8dcef0000151ec0c",
+"lr": "2026-07-30",
+"he": true,
+"org": "Weyerhaeuser",
+"p": "P4",
+"t": "Director of Logistics"
+},
+{
+"id": "690b37ab59f698000189152d",
+"lr": "2026-08-06",
+"he": true,
+"org": "W. L. Gore & Associates",
+"p": "P4",
+"t": "Director Global Distribution and Logistics"
+},
+{
+"id": "60fc8ce259214200012bf7af",
+"lr": "2026-07-30",
+"he": true,
+"org": "W. L. Gore & Associates",
+"p": "P4",
+"t": "Director Global Logistics"
+},
+{
+"id": "66eb32d031b113000115672f",
+"lr": "2026-08-14",
+"he": true,
+"org": "Momentive",
+"p": "P4",
+"t": "Procurement Director Global Logistics"
+},
+{
+"id": "5ae2f6a7a6da981b89626079",
+"lr": "2026-08-07",
+"he": false,
+"org": "Momentive",
+"p": "P4",
+"t": "Director Global Logistics Procurement"
+},
+{
+"id": "605c0db54ef0da000107dc7c",
+"lr": "2026-08-17",
+"he": true,
+"org": "O-I",
+"p": "P4",
+"t": "Director Supply Chain Planning & Logistics"
+},
+{
+"id": "54a5fa967468693b8c219eb8",
+"lr": "2026-08-07",
+"he": true,
+"org": "Avient Corporation",
+"p": "P5",
+"t": "VP Global Sourcing and Logistics"
+},
+{
+"id": "57e8a9ad7ff0bb5eda0a5c18",
+"lr": "2026-08-08",
+"he": true,
+"org": "Relativity Space",
+"p": "P5",
+"t": "VP Supply Chain"
+},
+{
+"id": "607ee7387c64010001ba5fae",
+"lr": "2026-07-17",
+"he": true,
+"org": "Relativity Space",
+"p": "P5",
+"t": "SVP Manufacturing & Supply Chain"
+},
+{
+"id": "60dd6d1079a2ed0001a1acfb",
+"lr": "2026-08-07",
+"he": true,
+"org": "Waymo",
+"p": "P5",
+"t": "Head of Supply Chain Manufacturing and Fleet Operations"
+},
+{
+"id": "63ce84233297af000167bdbb",
+"lr": "2026-08-06",
+"he": true,
+"org": "Waymo",
+"p": "P2",
+"t": "Head of Supply Chain and GTM Systems"
+},
+{
+"id": "611c486de655b30001e84282",
+"lr": "2026-08-15",
+"he": true,
+"org": "Waymo",
+"p": "P4",
+"t": "Director Supply Chain Planning & Logistics"
+},
+{
+"id": "60f5a9a54e0208000150dd75",
+"lr": "2026-08-15",
+"he": true,
+"org": "Rocket Lab",
+"p": "P5",
+"t": "VP Global Supply Chain"
+},
+{
+"id": "604ef73d90c2bb0001b437a9",
+"lr": "2026-08-12",
+"he": true,
+"org": "Magellan Aerospace Limited",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "54a1a7b574686945fac22205",
+"lr": "2026-07-31",
+"he": true,
+"org": "Magellan Aerospace Limited",
+"p": "P5",
+"t": "VP Corporate Stewardship & Operational Excellence"
+},
+{
+"id": "6470bc76f0c62e00012ffd63",
+"lr": "2026-07-28",
+"he": true,
+"org": "Magellan Aerospace Limited",
+"p": "P5",
+"t": "VP North American Operations"
+},
+{
+"id": "57d9ececa6da9875f4924815",
+"lr": "2026-08-16",
+"he": true,
+"org": "Skydio",
+"p": "P5",
+"t": "VP of Manufacturing Operations"
+},
+{
+"id": "61a8be9401a6370001b0799a",
+"lr": "2026-07-23",
+"he": false,
+"org": "Skydio",
+"p": "P5",
+"t": "VP Hardware Operations"
+},
+{
+"id": "5ae5d55aa6da98d3e84e39e5",
+"lr": "2026-08-10",
+"he": true,
+"org": "Shield AI",
+"p": "P4",
+"t": "Head of Fleet Asset Management"
+},
+{
+"id": "66f98dc7d1c6fd000162aef7",
+"lr": "2026-07-24",
+"he": false,
+"org": "Shield AI",
+"p": "P5",
+"t": "VP of Program Operations"
+},
+{
+"id": "5e061f663120bd0001ed29f9",
+"lr": "2026-08-06",
+"he": false,
+"org": "Firefly Aerospace",
+"p": "P4",
+"t": "Director Supply Chain and Logistics"
+},
+{
+"id": "54a5c9fc7468692fa298c9a8",
+"lr": "2026-08-12",
+"he": true,
+"org": "International Paper",
+"p": "P5",
+"t": "Director Supply Chain"
+},
+{
+"id": "60cba5ca145cbe00017a6b94",
+"lr": "2026-07-13",
+"he": true,
+"org": "International Paper",
+"p": "P5",
+"t": "Director Supply Chain and Joint Marketing"
+},
+{
+"id": "60b501fe7b86c900014aefbb",
+"lr": "2026-08-09",
+"he": true,
+"org": "International Paper",
+"p": "P4",
+"t": "Director Containerboard Supply Chain / Logistics"
+},
+{
+"id": "6273f5e871c0fe0001ffe21c",
+"lr": "2026-07-09",
+"he": true,
+"org": "International Paper",
+"p": "P4",
+"t": "Director International Distribution"
+},
+{
+"id": "65c89e83085c040001c701de",
+"lr": "2026-08-12",
+"he": true,
+"org": "United Launch Alliance (ULA)",
+"p": "P5",
+"t": "Supply Chain Executive"
+},
+{
+"id": "66f757d71c88dc0001d81d8f",
+"lr": "2026-07-15",
+"he": true,
+"org": "United Launch Alliance (ULA)",
+"p": "P5",
+"t": "SVP Production Operations and Supply Chain"
+},
+{
+"id": "5c5c374b80f93e3de955185f",
+"lr": "2026-08-15",
+"he": true,
+"org": "Sierra Nevada Corporation",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "641c45aabbeb5e0001362c8d",
+"lr": "2026-08-06",
+"he": true,
+"org": "Sierra Nevada Corporation",
+"p": "P5",
+"t": "Director of Supply Chain Program Management"
+},
+{
+"id": "611432c4bdeee1000122f989",
+"lr": "2026-07-26",
+"he": true,
+"org": "Sierra Nevada Corporation",
+"p": "P5",
+"t": "Director Supply Chain Assurance"
+},
+{
+"id": "68493b78e5e0a60001fea573",
+"lr": "2026-07-11",
+"he": true,
+"org": "SGK",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "69d37b8535f300000134d6c6",
+"lr": "2026-08-09",
+"he": false,
+"org": "SGK",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "57d398cff651252c61499b92",
+"lr": "2026-08-16",
+"he": true,
+"org": "Eastman",
+"p": "P5",
+"t": "VP Global Supply Chain and MD LAR"
+},
+{
+"id": "60b8b26006565f000103030e",
+"lr": "2026-08-10",
+"he": true,
+"org": "Eastman",
+"p": "P5",
+"t": "Global Supply Chain Director"
+},
+{
+"id": "57d5f5d5a6da9839ca92f709",
+"lr": "2026-07-27",
+"he": true,
+"org": "Eastman",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "60f04fdbf658ba0001b65d46",
+"lr": "2026-07-27",
+"he": true,
+"org": "Eastman",
+"p": "P4",
+"t": "Order to Cash Director Global Supply Chain"
+},
+{
+"id": "54c20e677468691639616b72",
+"lr": "2026-08-13",
+"he": true,
+"org": "JELD-WEN, Inc.",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "60369c8a7e2e6100015e2f42",
+"lr": "2026-07-11",
+"he": true,
+"org": "DuPont",
+"p": "P5",
+"t": "Director Global Supply Chain"
+},
+{
+"id": "54aaad217468690b753fb811",
+"lr": "2026-08-16",
+"he": false,
+"org": "DuPont",
+"p": "P5",
+"t": "Supply Chain Director"
+},
+{
+"id": "600c5427a94af10001d35fd1",
+"lr": "2026-08-09",
+"he": true,
+"org": "Sun Chemical",
+"p": "P5",
+"t": "Global Supply Chain Leader/Director"
+},
+{
+"id": "610a89c67c607d0001b4c799",
+"lr": "2026-08-09",
+"he": true,
+"org": "Sun Chemical",
+"p": "P5",
+"t": "Chief Supply Chain Quality & Business Improvement Officer"
+},
+{
+"id": "686ab6136c255c000143b33b",
+"lr": "2026-08-06",
+"he": true,
+"org": "Sun Chemical",
+"p": "P5",
+"t": "Director Supply Chain North America Packaging & Graphics"
+},
+{
+"id": "54a50b4674686932094ec277",
+"lr": "2026-08-15",
+"he": true,
+"org": "Panasonic Avionics Corporation",
+"p": "P5",
+"t": "Director Service Supply Chain"
+},
+{
+"id": "6769c170607089000191b110",
+"lr": "2026-07-13",
+"he": false,
+"org": "Air Products",
+"p": "P5",
+"t": "Director of Supply Chain Planning"
+},
+{
+"id": "54a63fae7468693b8ceec3ce",
+"lr": "2026-07-27",
+"he": false,
+"org": "Air Products",
+"p": "P4",
+"t": "Director IG Distribution Americas"
+},
+{
+"id": "644b63b6e310dd0001f3d41b",
+"lr": "2026-08-14",
+"he": true,
+"org": "LyondellBasell",
+"p": "P5",
+"t": "EVP Refining Intermediates & Derivatives and Supply Chain"
+},
+{
+"id": "5f919df7eedca600012f82c1",
+"lr": "2026-08-11",
+"he": true,
+"org": "LyondellBasell",
+"p": "P5",
+"t": "Vice President Global Supply Chain"
+},
+{
+"id": "5ae13037a6da984cbf8bc2c9",
+"lr": "2026-07-26",
+"he": true,
+"org": "Sylvamo",
+"p": "P5",
+"t": "Director of Supply Chain & Customer Service"
+},
+{
+"id": "60f96e3939a0f40001f86654",
+"lr": "2026-02-02",
+"he": false,
+"org": "Cabot Corporation",
+"p": "P5",
+"t": "Executive Head of Global Supply Chain Purchasing and Trading"
+},
+{
+"id": "68ab107ef018ec000117f24f",
+"lr": "2025-10-29",
+"he": false,
+"org": "Cabot Corporation",
+"p": "P5",
+"t": "VP of Global Supply Chain and Trading"
+},
+{
+"id": "60d61e3fe5972b0001f6ec13",
+"lr": "2026-08-13",
+"he": true,
+"org": "Stepan Company",
+"p": "P5",
+"t": "NA Vice President of Operations"
+},
+{
+"id": "5e61aa2423c68800013a9e0f",
+"lr": "2026-08-12",
+"he": true,
+"org": "Stepan Company",
+"p": "P5",
+"t": "Head of Global Procurement Center of Excellence"
+},
+{
+"id": "5f7794c6ea55cd0001f92429",
+"lr": "2026-08-11",
+"he": true,
+"org": "Stepan Company",
+"p": "P2",
+"t": "Director of Supply Planning"
+},
+{
+"id": "5ae06db1a6da984dd3cdaddb",
+"lr": "2026-08-06",
+"he": true,
+"org": "Kemin Industries",
+"p": "P5",
+"t": "Director of Operations"
+},
+{
+"id": "632d8541e444fe0001dd2308",
+"lr": "2026-08-06",
+"he": true,
+"org": "Kemin Industries",
+"p": "P5",
+"t": "Director of Operations"
+},
+{
+"id": "5e73f40239beb2000153837c",
+"lr": "2026-08-01",
+"he": true,
+"org": "Kemin Industries",
+"p": "P5",
+"t": "Director of Operations"
+},
+{
+"id": "63151c300bed4b00016487a1",
+"lr": "2026-08-10",
+"he": true,
+"org": "General Atomics",
+"p": "P5",
+"t": "Director of Operations"
+},
+{
+"id": "60e67c6f20544800011dc6e9",
+"lr": "2026-08-10",
+"he": true,
+"org": "General Atomics",
+"p": "P5",
+"t": "Director of Operations"
+},
+{
+"id": "5fc97dae68428b0001b443c3",
+"lr": "2026-08-01",
+"he": true,
+"org": "General Atomics",
+"p": "P5",
+"t": "Chief Operating Officer"
+},
+{
+"id": "66fab7c501d297000172d8ef",
+"lr": "2026-08-14",
+"he": true,
+"org": "Axiom Space",
+"p": "P5",
+"t": "Chief Operating Officer"
+}
+]
