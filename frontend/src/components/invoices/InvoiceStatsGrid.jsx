@@ -31,12 +31,15 @@ export default function InvoiceStatsGrid({ stats }) {
       </div>
 
       <div className="stat-card blue">
-        <div className="stat-label">Overbilling Flagged</div>
+        <div className="stat-label">Overbilled vs contract</div>
         <div className="stat-value" style={{ fontSize: 22 }}>
-          {formatCurrency(stats.auditSavingsAmt)}
+          {formatCurrency(stats.overbilledAmt ?? stats.auditSavingsAmt)}
         </div>
         <div className="stat-delta">
-          {stats.auditSavingsPct}% above agreed cost
+          {stats.overbilledCount ?? 0} invoice{stats.overbilledCount === 1 ? "" : "s"} · base or fuel above the contract rate
+          {stats.extrasAwaitingAmt > 0 && (
+            <div style={{ marginTop: 2 }}>+ {formatCurrency(stats.extrasAwaitingAmt)} in extras awaiting approval</div>
+          )}
         </div>
       </div>
     </div>

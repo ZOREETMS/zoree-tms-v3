@@ -32,6 +32,7 @@ function Badge({ status }) {
 }
 
 function VarianceCell({ variance }) {
+  if (variance == null) return <td style={{ color: "var(--text3)", fontSize: 11.5 }} title="No shipment or contract rate to compare with">No shipment</td>;
   if (variance === 0) return <td className="mono" style={{ color: "var(--text3)" }}>—</td>;
   const color = variance > 0 ? "var(--red)" : "var(--green)";
   const sign = variance > 0 ? "+" : "";
@@ -164,7 +165,7 @@ export default function InvoiceTable({
                 </td>
                 <td className="mono">{inv.date}</td>
                 <td className="mono">{inv.due}</td>
-                <td className="mono">${(inv.agreed || 0).toLocaleString()}</td>
+                <td className="mono">{inv.agreedKnown === false ? <span style={{ color: "var(--text3)" }}>—</span> : `$${(inv.agreed || 0).toLocaleString()}`}</td>
                 <td className="mono">${(inv.amount || 0).toLocaleString()}</td>
                 <VarianceCell variance={inv.variance} />
                 <td>
@@ -206,7 +207,17 @@ export default function InvoiceTable({
                       📄 View
                     </button>
                   )}
-                  {onApprove && canManualApprove(inv.status) && (
+                  {onApprove && canManualApprove(inv.status) && inv.readByAgent && (
+                    <button
+                      className="btn btn-success btn-sm"
+                      disabled
+                      style={{ marginRight: 4, opacity: 0.45, cursor: "not-allowed" }}
+                      title="Approve this in the Approval queue: it only works once the 3-way match passes. A note can't approve past a contract mismatch."
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {onApprove && canManualApprove(inv.status) && !inv.readByAgent && (
                     <button
                       className="btn btn-success btn-sm"
                       onClick={actionClick(onApprove, inv.id || inv.num)}

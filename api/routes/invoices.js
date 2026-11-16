@@ -67,7 +67,15 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
         filters, order: { col: 'received_at', asc: false },
         limit: parseInt(req.query.limit, 10) || 500,
       });
-      res.json({ invoices: rows, total: rows.length });
+      // Billed extras per invoice (liftgate, detention…), so the list can tell
+      // a rate overcharge apart from an extra still waiting for approval.
+      const ids = rows.map((r) => r.id).filter(Boolean);
+      const extras = new Map();
+      if (ids.length) {
+        const lines = await db.dbSelect('invoice_cost_lines', { select: 'invoice_id,cost_type,invoice_cost', filters: [['invoice_id', 'in', ids], ['cost_type', 'eq', 'accessorial']], limit: 5000 }).catch(() => []);
+        for (const l of lines) extras.set(l.invoice_id, Math.round(((extras.get(l.invoice_id) || 0) + Number(l.invoice_cost || 0)) * 100) / 100);
+      }
+      res.json({ invoices: rows.map((r) => ({ ...r, extras_billed: extras.get(r.id) || 0 })), total: rows.length });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }

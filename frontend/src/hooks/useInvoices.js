@@ -40,7 +40,7 @@ export default function useInvoices(invoices = []) {
 
     return list.map((inv) => ({
       ...inv,
-      variance: computeVariance(inv.agreed, inv.amount),
+      variance: inv.agreedKnown === false ? null : computeVariance(inv.agreed, inv.amount),
     }));
   }, [invoices, search, statusFilter, carrierFilter, sortCol, sortAsc]);
 

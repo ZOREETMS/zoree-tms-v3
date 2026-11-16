@@ -49,6 +49,9 @@ export function mapDbInvoice(row) {
     date: row.invoice_date || row.date || "",
     due: row.due_date || row.due || "",
     agreed: parseFloat(row.agreed_cost ?? row.agreed_rate ?? row.agreed) || 0,
+    // False when there is no shipment/rate to compare with (e.g. shipment not in the TMS).
+    agreedKnown: (row.agreed_cost ?? row.agreed_rate ?? row.agreed) != null,
+    extrasBilled: parseFloat(row.extras_billed) || 0,
     amount: parseFloat(row.invoiced_amount ?? row.amount) || 0,
     status: row.status || "Pending",
     paymentTerms: row.payment_terms || "NET30",
