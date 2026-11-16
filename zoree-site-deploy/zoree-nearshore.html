@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="favicon-32.png"/>
+  <link rel="shortcut icon" href="favicon.ico"/>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+  <title>Nearshore Implementation Services — Zoree | LATAM AI Delivery</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600&family=Lora:ital,wght@0,400;1,400&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --navy:       #071020;
+      --navy-mid:   #0a1628;
+      --navy-light: #0d1e38;
+      --teal:       #0e9f8e;
+      --teal-light: #13c4b0;
+      --gold:       #0e9f8e;
+      --gold-light: #13c4b0;
+      --green:      #22c55e;
+      --text-light: #475569;
+    }
+    html { scroll-behavior:smooth; }
+    body { background:var(--navy); color: #0f172a; font-family:'Inter Tight',sans-serif; overflow-x:hidden; }
+
+    /* ── NAV ── */
+    nav {
+      position:fixed; top:0; left:0; right:0; z-index:1000;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 60px; height:72px;
+      background:rgba(7,16,32,0.95); backdrop-filter:blur(16px);
+      border-bottom:1px solid rgba(255,255,255,0.07);
+    }
+    .logo { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:20px; color: #0f172a; text-decoration:none; }
+    .nav-links { display:flex; gap:40px; list-style:none; }
+    .nav-links a { font-size:12px; letter-spacing:0.08em; color:var(--text-light); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: #0f172a; }
+    .nav-item { position:relative; }
+    .nav-item .nav-arrow { display:inline-block; margin-left:4px; font-size:9px; transition:transform 0.25s; vertical-align:middle; color:var(--text-light); }
+    .nav-item:hover .nav-arrow, .nav-item.open .nav-arrow { transform:rotate(180deg); color: #0f172a; }
+    .nav-item:hover > a { color: #0f172a; }
+    .dropdown { position:absolute; top:calc(100% + 18px); left:50%; background:#0d1e38; border:1px solid rgba(255,255,255,0.1); border-top:2px solid var(--teal); min-width:240px; opacity:0; visibility:hidden; pointer-events:none; transform:translateX(-50%) translateY(-8px); transition:opacity 0.22s,transform 0.22s,visibility 0.22s; z-index:99999; }
+    .nav-item.open .dropdown, .nav-item:hover .dropdown { opacity:1; visibility:visible; pointer-events:all; transform:translateX(-50%) translateY(0); }
+    .dropdown-item { display:block; padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.06); text-decoration:none; transition:background 0.15s; }
+    .dropdown-item:last-child { border-bottom:none; }
+    .dropdown-item:hover { background:rgba(14,159,142,0.1); }
+    .dropdown-item-label { font-size:12px; font-weight:600; letter-spacing:0.06em; color: #0f172a; text-transform:uppercase; margin-bottom:3px; }
+    .dropdown-item-desc { font-size:11px; color: #475569; line-height:1.4;  text-transform:none;}
+    .di-icon { display: block; width: 28px; height: 28px; margin-bottom: 8px; }
+    .di-icon svg { width: 28px; height: 28px; display: block; }
+    .nav-book-call {
+      font-size: 12px; letter-spacing: 0.08em; color: var(--teal-light, #10c4af);
+      background: transparent; border: 1px solid var(--teal, #0e9f8e);
+      padding: 9px 22px; text-transform: uppercase; text-decoration: none;
+      transition: background 0.2s, color 0.2s, transform 0.2s;
+      margin-right: 8px;
+    }
+    .nav-book-call:hover { background: rgba(14,159,142,0.15); transform: translateY(-1px); }
+
+    .nav-cta { font-size:12px; letter-spacing:0.08em; color: #0f172a; background:var(--teal); padding:10px 26px; text-transform:uppercase; text-decoration:none; transition:background 0.2s,transform 0.2s; }
+    .nav-cta:hover { background:var(--teal-light); transform:translateY(-1px); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100svh;
+      background: var(--navy);
+      position: relative; overflow: hidden;
+      display: flex; align-items: center;
+      padding: 120px 60px 80px;
+    }
+    /* animated diagonal gradient backdrop */
+    .hero-backdrop {
+      position:absolute; inset:0;
+      background: linear-gradient(135deg,
+        #071020 0%,
+        #0a2028 30%,
+        #0d1f30 60%,
+        #071020 100%);
+      animation: backdropPulse 8s ease-in-out infinite alternate;
+    }
+    @keyframes backdropPulse {
+      0%   { opacity:1; }
+      100% { filter:brightness(1.15); }
+    }
+    /* dot grid */
+    .hero-grid {
+      position:absolute; inset:0;
+      background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 80% 70% at 60% 50%, black 0%, transparent 100%);
+    }
+    /* big latam map SVG background */
+    .hero-map {
+      position:absolute; right:-60px; top:50%; transform:translateY(-50%);
+      width:680px; opacity:0.07; pointer-events:none;
+    }
+    /* gold accent line */
+    .hero-accent-line {
+      position:absolute; left:0; top:0; bottom:0; width:4px;
+      background: linear-gradient(to bottom, transparent, var(--gold), var(--teal), transparent);
+    }
+    .hero-inner { position:relative; z-index:2; max-width:700px; }
+    .hero-eyebrow {
+      display:inline-flex; align-items:center; gap:10px;
+      font-size:10px; letter-spacing:0.28em; text-transform:uppercase;
+      color:var(--gold-light); margin-bottom:28px;
+    }
+    .hero-eyebrow::before { content:''; display:block; width:28px; height:1px; background:var(--gold); }
+    .hero h1 {
+      font-family:'Plus Jakarta Sans',sans-serif; font-size:clamp(44px,7vw,82px);
+      font-weight:900; line-height:1.0; letter-spacing:-3px; margin-bottom:28px;
+    }
+    .hero h1 .line2 { color:#a5b4fc; display:block; }
+    .hero h1 .line3 { color:var(--teal-light); display:block; font-size:0.65em; font-weight:600; letter-spacing:-1px; margin-top:8px; }
+    .hero-sub {
+      font-family:'Lora',serif; font-size:18px; line-height:1.8;
+      color: #475569; max-width:540px; margin-bottom:44px;
+    }
+    .hero-badges { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:44px; }
+    .badge {
+      display:flex; align-items:center; gap:8px;
+      padding:8px 16px; font-size:11px; letter-spacing:0.1em; text-transform:uppercase;
+      background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); color: #475569;
+    }
+    .badge .flag { font-size:16px; }
+    .hero-cta { display:flex; gap:16px; flex-wrap:wrap; }
+    .btn-gold { background:var(--gold); color:#071020; font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:13px; letter-spacing:0.05em; padding:16px 36px; text-decoration:none; transition:background 0.2s,transform 0.2s,box-shadow 0.2s; }
+    .btn-gold:hover { background:var(--gold-light); transform:translateY(-2px); box-shadow:0 12px 36px rgba(14,159,142,0.35); }
+    .btn-ghost { border:1px solid rgba(255,255,255,0.2); color: #475569; font-family:'Plus Jakarta Sans',sans-serif; font-weight:600; font-size:13px; padding:16px 36px; text-decoration:none; transition:border-color 0.2s,color 0.2s; }
+    .btn-ghost:hover { border-color: #475569; color: #0f172a; }
+
+    /* ── SAVINGS STRIP ── */
+    .savings-strip {
+      background: linear-gradient(90deg, rgba(14,159,142,0.1) 0%, rgba(14,159,142,0.08) 100%);
+      border-top:1px solid rgba(14,159,142,0.2); border-bottom:1px solid rgba(14,159,142,0.2);
+      padding:36px 60px; display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+    }
+    .saving-item { text-align:center; padding:0 20px; position:relative; }
+    .saving-item + .saving-item::before { content:''; position:absolute; left:0; top:10%; bottom:10%; width:1px; background:rgba(255,255,255,0.07); }
+    .saving-num { font-family:'Plus Jakarta Sans',sans-serif; font-size:44px; font-weight:900; color:var(--gold-light); line-height:1; margin-bottom:6px; }
+    .saving-num sup { font-size:0.5em; vertical-align:super; }
+    .saving-label { font-size:11px; letter-spacing:0.1em; color:var(--text-light); text-transform:uppercase; line-height:1.5; }
+
+    /* ── SECTION COMMON ── */
+    section { padding:100px 60px; }
+    .section-tag { font-size:10px; letter-spacing:0.3em; color:var(--teal-light); text-transform:uppercase; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+    .section-tag::before { content:''; display:block; width:24px; height:1px; background:var(--teal); }
+    h2.section-title { font-family:'Plus Jakarta Sans',sans-serif; font-size:clamp(32px,4.5vw,52px); font-weight:800; line-height:1.1; letter-spacing:-1.5px; margin-bottom:20px; }
+    h2.section-title em { font-style:normal; color:var(--gold-light); }
+    .section-sub { font-family:'Lora',serif; font-size:16px; line-height:1.85; color: #475569; max-width:600px; margin-bottom:60px; }
+
+    /* ── HOW IT WORKS ── */
+    .how-section { background:var(--navy-mid); }
+    .how-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:rgba(255,255,255,0.06); }
+    .how-item { background:var(--navy-mid); padding:48px 36px; position:relative; overflow:hidden; }
+    .how-item::after {
+      content:''; position:absolute; bottom:0; left:0; right:0; height:3px;
+      background:linear-gradient(90deg, var(--gold), var(--teal));
+      transform:scaleX(0); transform-origin:left; transition:transform 0.4s ease;
+    }
+    .how-item:hover::after { transform:scaleX(1); }
+    .how-num { font-family:'Plus Jakarta Sans',sans-serif; font-size:64px; font-weight:900; color:var(--teal); line-height:1; margin-bottom:20px; }
+    .how-icon { font-size:32px; margin-bottom:16px; display:block; }
+    .how-item h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:18px; font-weight:700; letter-spacing:-0.3px; margin-bottom:12px; }
+    .how-item p { font-size:13px; line-height:1.75; color:var(--text-light); }
+
+    /* ── COUNTRIES ── */
+    .countries-section { background:var(--navy); }
+    .countries-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+    .country-card {
+      border:1px solid rgba(255,255,255,0.07); padding:40px 36px;
+      position:relative; overflow:hidden; transition:border-color 0.3s, transform 0.3s;
+      background:var(--navy-mid);
+    }
+    .country-card:hover { border-color:var(--gold); transform:translateY(-4px); }
+    .country-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:3px;
+    }
+    .country-card.mx::before { background:linear-gradient(90deg,#006847,#fff,#ce1126); }
+    .country-card.co::before { background:linear-gradient(90deg,#fcd116,#003087,#ce1126); }
+    .country-card.br::before { background:linear-gradient(90deg,#009c3b,#ffdf00,#002776); }
+    .country-card.ar::before { background:linear-gradient(90deg,#74acdf,#fff,#74acdf); }
+    .country-card.cl::before { background:linear-gradient(90deg,#d52b1e,#fff,#0033a0); }
+    .country-card.cr::before { background:linear-gradient(90deg,#002B7F,#CF142B,#fff,#CF142B,#002B7F); }
+    .country-flag { font-size:40px; margin-bottom:16px; display:block; }
+    .country-card h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:20px; font-weight:800; margin-bottom:4px; }
+    .country-city { font-size:11px; letter-spacing:0.15em; color:var(--gold-light); text-transform:uppercase; margin-bottom:16px; }
+    .country-card p { font-size:13px; line-height:1.7; color:var(--text-light); margin-bottom:20px; }
+    .country-tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .ctag { font-size:10px; letter-spacing:0.1em; padding:4px 10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); color: #475569; text-transform:uppercase; }
+
+    /* ── WHY NEARSHORE ── */
+    .why-section { background:var(--navy-mid); }
+    .why-layout { display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:start; }
+    .why-left { position:sticky; top:100px; }
+    .why-items { display:flex; flex-direction:column; gap:0; }
+    .why-item { padding:28px 0; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; gap:20px; align-items:flex-start; }
+    .why-item:last-child { border-bottom:none; }
+    .why-icon-wrap { width:44px; height:44px; background:rgba(14,159,142,0.1); border:1px solid rgba(14,159,142,0.2); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+    .why-text h4 { font-family:'Plus Jakarta Sans',sans-serif; font-size:16px; font-weight:700; margin-bottom:6px; }
+    .why-text p { font-size:13px; line-height:1.7; color:var(--text-light); }
+
+    /* ── AI ADVANTAGE ── */
+    .ai-section { background:var(--navy); position:relative; overflow:hidden; }
+    .ai-glow { position:absolute; width:600px; height:600px; background:radial-gradient(circle,rgba(14,159,142,0.1) 0%,transparent 60%); right:-100px; top:-100px; pointer-events:none; }
+    .ai-grid { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; }
+    .ai-visual {
+      background:var(--navy-mid); border:1px solid rgba(255,255,255,0.08); padding:48px;
+      position:relative;
+    }
+    .ai-visual-label { font-size:10px; letter-spacing:0.25em; color:var(--teal-light); text-transform:uppercase; margin-bottom:32px; }
+    .ai-flow { display:flex; flex-direction:column; gap:0; }
+    .af-row { display:flex; align-items:center; gap:0; }
+    .af-box {
+      flex:1; padding:16px 20px; font-size:12px; letter-spacing:0.06em; text-transform:uppercase;
+      font-family:'Plus Jakarta Sans',sans-serif; font-weight:600; text-align:center; border:1px solid;
+    }
+    .af-box.us { border-color: #475569; color: #475569; background:rgba(255,255,255,0.03); }
+    .af-box.ai { border-color:var(--teal); color:var(--teal); background:rgba(14,159,142,0.08); }
+    .af-box.latam { border-color:#6366f1; color:#4f46e5; background:rgba(99,102,241,0.08); }
+    .af-arrow { width:32px; text-align:center; color: #475569; font-size:16px; flex-shrink:0; }
+    .af-connector { width:2px; background:rgba(255,255,255,0.07); height:20px; margin:0 auto; }
+    .af-connector.teal { background:var(--teal); opacity:0.4; }
+    .af-metric { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+    .af-metric:last-child { border-bottom:none; }
+    .af-metric-label { font-size:12px; color:var(--text-light); }
+    .af-metric-val { font-family:'Plus Jakarta Sans',sans-serif; font-size:14px; font-weight:700; color:var(--gold-light); }
+    .ai-points { display:flex; flex-direction:column; gap:24px; }
+    .ai-point { padding:28px; background:var(--navy-mid); border:1px solid rgba(255,255,255,0.07); border-left:3px solid var(--teal); }
+    .ai-point h4 { font-family:'Plus Jakarta Sans',sans-serif; font-size:15px; font-weight:700; margin-bottom:8px; }
+    .ai-point p { font-size:13px; line-height:1.7; color:var(--text-light); }
+
+    /* ── ENGAGEMENT MODELS ── */
+    .models-section { background:var(--navy-mid); }
+    .models-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+    .model-card { padding:40px 32px; border:1px solid rgba(255,255,255,0.08); position:relative; transition:border-color 0.3s; }
+    .model-card:hover { border-color:var(--teal); }
+    .model-card.featured { border-color:var(--gold); background:rgba(14,159,142,0.04); }
+    .model-badge { position:absolute; top:-1px; left:32px; background:var(--gold); color:#071020; font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:9px; letter-spacing:0.2em; padding:4px 12px; text-transform:uppercase; }
+    .model-icon { font-size:36px; margin-bottom:20px; display:block; }
+    .model-card h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:20px; font-weight:800; letter-spacing:-0.3px; margin-bottom:10px; }
+    .model-card .tagline { font-size:12px; letter-spacing:0.1em; color:var(--gold-light); text-transform:uppercase; margin-bottom:20px; }
+    .model-card p { font-size:13px; line-height:1.75; color:var(--text-light); margin-bottom:24px; }
+    .model-features { list-style:none; display:flex; flex-direction:column; gap:8px; }
+    .model-features li { font-size:13px; color: #475569; padding-left:18px; position:relative; }
+    .model-features li::before { content:'→'; position:absolute; left:0; color:var(--teal-light); font-size:11px; }
+
+    /* ── PROCESS ── */
+    .process-section { background:var(--navy); }
+    .process-steps { display:grid; grid-template-columns:repeat(5,1fr); gap:0; position:relative; }
+    .process-steps::after {
+      content:''; position:absolute; top:36px; left:10%; right:10%; height:1px;
+      background:linear-gradient(90deg, transparent, var(--gold), var(--teal), var(--gold), transparent);
+      opacity:0.3;
+    }
+    .process-step { text-align:center; padding:0 16px; }
+    .ps-dot { width:72px; height:72px; border-radius:50%; background:var(--navy-mid); border:2px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 20px; position:relative; z-index:2; transition:border-color 0.3s; }
+    .process-step:hover .ps-dot { border-color:var(--gold); }
+    .ps-week { font-size:10px; letter-spacing:0.2em; color:var(--gold-light); text-transform:uppercase; margin-bottom:8px; font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; }
+    .process-step h4 { font-family:'Plus Jakarta Sans',sans-serif; font-size:13px; font-weight:700; margin-bottom:6px; }
+    .process-step p { font-size:11px; line-height:1.6; color:var(--text-light); }
+
+    /* ── CTA SECTION ── */
+    .cta-section {
+      background:linear-gradient(135deg, #0a1820 0%, #071020 50%, #0a1410 100%);
+      padding:120px 60px; position:relative; overflow:hidden; text-align:center;
+    }
+    .cta-glow { position:absolute; width:800px; height:800px; background:radial-gradient(circle, rgba(14,159,142,0.08) 0%, transparent 60%); top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; }
+    .cta-section h2 { font-family:'Plus Jakarta Sans',sans-serif; font-size:clamp(36px,5vw,64px); font-weight:900; letter-spacing:-2px; line-height:1.05; margin-bottom:20px; position:relative; z-index:2; }
+    .cta-section h2 em { font-style:normal; color:var(--gold-light); }
+    .cta-section p { font-family:'Lora',serif; font-size:17px; line-height:1.8; color: #475569; max-width:560px; margin:0 auto 48px; position:relative; z-index:2; }
+    .cta-actions { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; position:relative; z-index:2; }
+
+    /* ── FOOTER ── */
+    footer { background:#040c18; padding:40px 60px; text-align:center; border-top:1px solid rgba(255,255,255,0.06); }
+    .footer-logo { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:18px; color: #0f172a; margin-bottom:12px; }
+    footer p { font-size:11px; letter-spacing:0.1em; color:var(--text-light); text-transform:uppercase; line-height:1.8; }
+
+    /* ── REVEAL ── */
+    .reveal { opacity:0; transform:translateY(28px); transition:opacity 0.75s ease, transform 0.75s ease; }
+    .reveal.visible { opacity:1; transform:none; }
+    .reveal-delay-1 { transition-delay:0.1s; }
+    .reveal-delay-2 { transition-delay:0.2s; }
+    .reveal-delay-3 { transition-delay:0.3s; }
+
+    /* ── MOBILE ── */
+    @media(max-width:960px) {
+      nav, .hero, section, .savings-strip, .cta-section, footer { padding-left:24px; padding-right:24px; }
+      .how-grid, .countries-grid, .models-grid { grid-template-columns:1fr; }
+      .process-steps { grid-template-columns:1fr 1fr; gap:32px; }
+      .process-steps::after { display:none; }
+      .why-layout { grid-template-columns:1fr; }
+      .why-left { position:static; }
+      .ai-grid { grid-template-columns:1fr; }
+      .savings-strip { grid-template-columns:1fr 1fr; padding:28px 24px; }
+      .hero-map { display:none; }
+      .cta-section { padding:80px 24px; }
+    }
+    @media(max-width:600px) {
+      .savings-strip { grid-template-columns:1fr; }
+    }
+
+    /* ── HAMBURGER MENU ── */
+    #hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 28px;
+      height: 20px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      z-index: 1001;
+      flex-shrink: 0;
+    }
+    #hamburger span {
+      display: block;
+      width: 100%;
+      height: 2px;
+      background: #fff;
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+    #hamburger.open span:nth-child(1) { transform: translateY(9px) rotate(45deg); }
+    #hamburger.open span:nth-child(2) { opacity: 0; }
+    #hamburger.open span:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      .nav-cta { display: none; }
+      .mobile-book-call-li { display: list-item !important; }
+      #hamburger { display: flex; }
+      .nav-links {
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 61px;
+        left: 0; right: 0;
+        background: rgba(10,22,40,0.98);
+        backdrop-filter: blur(20px);
+        padding: 20px 24px 32px;
+        gap: 0;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        z-index: 999;
+      }
+      .nav-links.mobile-open { display: flex; }
+      .nav-links li { border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .nav-links li:last-child { border-bottom: none; }
+      .nav-links a {
+        display: block;
+        padding: 14px 0;
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        color: #475569;
+      }
+      .nav-links a:hover { color: #0f172a; }
+      /* Mobile dropdown */
+      .dropdown {
+        position: static;
+        transform: none;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: all !important;
+        background: rgba(255,255,255,0.04);
+        border: none;
+        border-top: none;
+        min-width: unset;
+        width: 100%;
+        margin-top: 0;
+        display: none;
+      }
+      .nav-item.open .dropdown { display: block; }
+      .dropdown-item { padding: 12px 16px; }
+      .dropdown-item .di-icon { display: block; width: 28px; height: 28px; margin-bottom: 8px; }
+      .dropdown-item-label { display: inline; font-size: 12px; }
+      .dropdown-item-desc { margin-top: 4px;  text-transform:none;}
+      /* Mobile Book a Call link */
+      .mobile-book-call {
+        display: block;
+        margin-top: 20px;
+        text-align: center;
+        padding: 12px;
+        background: var(--teal);
+        color: #0f172a;
+        font-family: 'Inter Tight', sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+      footer { flex-direction: column !important; align-items: flex-start !important; gap: 4px; padding-top: 32px !important; padding-bottom: 32px !important; }
+      footer p { margin-top: 4px !important; }
+      /* Fix dropdown clipping on mobile */
+      .dropdown { left: 0 !important; transform: none !important; }
+    }
+      /* Highlighted Demo link */
+    .nav-links a.nav-demo {
+      color: var(--teal-light); border: 1px solid rgba(19,196,176,0.55);
+      background: rgba(19,196,176,0.12); border-radius: 5px; padding: 7px 16px;
+      display: inline-flex; align-items: center; gap: 7px;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
+      animation: demoPulse 2.4s ease-out infinite;
+    }
+    .nav-links a.nav-demo::before { content: '▶'; font-size: 8px; }
+    .nav-links a.nav-demo:hover {
+      color: #0f172a; background: var(--teal);
+      box-shadow: 0 6px 20px rgba(19,196,176,0.4); transform: translateY(-1px);
+      animation: none;
+    }
+    @keyframes demoPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(19,196,176,0.45); }
+      50%      { box-shadow: 0 0 0 6px rgba(19,196,176,0); }
+    }
+  
+/* === LIGHT REDESIGN OVERRIDE v3 === */
+html, body { background:#ffffff; }
+h1 { font-weight:600; letter-spacing:-0.03em; }
+h2 { font-weight:600; letter-spacing:-0.02em; }
+h3 { font-weight:600; letter-spacing:-0.01em; }
+
+/* NAV: dark, normal-case, medium weight (dtskill-style) */
+nav { background:rgba(255,255,255,0.9) !important; backdrop-filter:blur(20px); border-bottom:1px solid #e5e7eb !important; }
+.logo { color:#0f172a !important; }
+.nav-links a { color:#1f2937 !important; text-transform:none !important; font-size:15px !important; letter-spacing:0 !important; font-weight:500 !important; font-family:'Plus Jakarta Sans',sans-serif !important; }
+.nav-links a:hover { color:#000000 !important; }
+.nav-item .nav-arrow { color:#1f2937 !important; }
+.nav-item.open > a, .nav-item.open .nav-arrow { color:#000000 !important; }
+.dropdown { background:#ffffff !important; border:1px solid #e5e7eb !important; border-top:2px solid #14b8a6 !important; box-shadow:0 20px 50px rgba(15,23,42,0.12); }
+.dropdown-item { border-bottom:1px solid #f1f5f9 !important; }
+.dropdown-item:hover { background:#f8fafc !important; }
+.dropdown-item-label { color:#0f172a !important; }
+.dropdown-item-desc { color:#6b7280 !important; }
+#hamburger span { background:#0f172a !important; }
+
+/* Buttons -> dark slate pills (text white) */
+.btn-primary, .nav-cta, .mobile-book-call, .btn-teal, .send-btn, .btn-submit, .btn-calendly { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; border:none !important; }
+.btn-primary *, .nav-cta *, .mobile-book-call *, .btn-teal *, .send-btn *, .btn-submit *, .btn-calendly * { color:#ffffff !important; }
+.btn-outline { background:transparent !important; color:#111827 !important; border:1px solid #111827 !important; border-radius:40px !important; }
+.btn-primary:hover, .nav-cta:hover, .btn-teal:hover, .send-btn:hover, .btn-submit:hover, .btn-calendly:hover { background:#1f2937 !important; box-shadow:0 12px 30px rgba(17,24,39,0.18) !important; }
+.nav-book-call { color:#111827 !important; border:1px solid #111827 !important; border-radius:40px !important; }
+.nav-book-call:hover { background:#f3f4f6 !important; }
+.nav-links a.nav-demo { color:#ffffff !important; border:1px solid #111827 !important; background:#111827 !important; border-radius:40px !important; font-size:13px !important; position:relative !important; overflow:hidden !important; animation:none !important; }
+.nav-links a.nav-demo::before { color:#2dd4bf; }
+.nav-links a.nav-demo::after { content:''; position:absolute; top:0; left:-80%; width:55%; height:100%; background:linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%); transform:skewX(-20deg); animation:demoShine 3.6s ease-in-out infinite; pointer-events:none; }
+@keyframes demoShine { 0% { left:-80%; } 40% { left:130%; } 100% { left:130%; } }
+.nav-links a.nav-demo:hover { color:#ffffff !important; background:#1f2937 !important; border-color:#2dd4bf !important; box-shadow:0 4px 16px rgba(19,196,176,0.35) !important; }
+.btn-ghost { color:#475569 !important; border-bottom:1px solid #cbd5e1 !important; }
+.btn-ghost:hover { color:#0f172a !important; border-color:#0f172a !important; }
+
+/* Dark SECTION BACKGROUNDS -> light (text dark; eyebrows/accents keep color) */
+.demo-section, .cta-section, .stats-band, .why-section, .how-section, .journey-section, .timeline-section, .process-section, .models-section, .ai-section, .countries-section, .verdict-section, .blog-section, .smart, .cap-section, .overview-strip, .article-hero, .page-hero { background:#ffffff !important; }
+.cta-section, .stats-band, .overview-strip, .cap-section { background:#f8fafc !important; }
+.demo-section h2, .cta-section h2, .stats-band h2, .why-section h2, .how-section h2, .journey-section h2, .timeline-section h2, .process-section h2, .models-section h2, .ai-section h2, .countries-section h2, .verdict-section h2, .blog-section h2, .smart h2, .cap-section h2, .overview-strip h2, .article-hero h2, .page-hero h2, .demo-section h3, .cta-section h3, .stats-band h3, .why-section h3, .how-section h3, .journey-section h3, .timeline-section h3, .process-section h3, .models-section h3, .ai-section h3, .countries-section h3, .verdict-section h3, .blog-section h3, .smart h3, .cap-section h3, .overview-strip h3, .article-hero h3, .page-hero h3, .demo-section h4, .cta-section h4, .stats-band h4, .why-section h4, .how-section h4, .journey-section h4, .timeline-section h4, .process-section h4, .models-section h4, .ai-section h4, .countries-section h4, .verdict-section h4, .blog-section h4, .smart h4, .cap-section h4, .overview-strip h4, .article-hero h4, .page-hero h4 { color:#0f172a !important; }
+
+/* Cards on former-dark sections -> white panels (headings/body dark; accent spans keep color) */
+.blog-card, .stat-box, .stat-card, .how-item, .cap-item, .ai-point, .prereq-item, .tl-content, .country-card, .band-stat, .model-card, .step-card, .feature-card, .pc-box, .week-block, .callout, .af-box, .verdict-card, .agent-card, .vs-card, .calendly-block, .article-cta, .inline-cta, .service-card { background:#ffffff !important; border:1px solid #e5e7eb !important; }
+.blog-card h2, .blog-card h3, .blog-card h4, .blog-card p, .blog-card li, .stat-box h2, .stat-box h3, .stat-box h4, .stat-box p, .stat-box li, .stat-card h2, .stat-card h3, .stat-card h4, .stat-card p, .stat-card li, .how-item h2, .how-item h3, .how-item h4, .how-item p, .how-item li, .cap-item h2, .cap-item h3, .cap-item h4, .cap-item p, .cap-item li, .ai-point h2, .ai-point h3, .ai-point h4, .ai-point p, .ai-point li, .prereq-item h2, .prereq-item h3, .prereq-item h4, .prereq-item p, .prereq-item li, .tl-content h2, .tl-content h3, .tl-content h4, .tl-content p, .tl-content li, .country-card h2, .country-card h3, .country-card h4, .country-card p, .country-card li, .band-stat h2, .band-stat h3, .band-stat h4, .band-stat p, .band-stat li, .model-card h2, .model-card h3, .model-card h4, .model-card p, .model-card li, .step-card h2, .step-card h3, .step-card h4, .step-card p, .step-card li, .feature-card h2, .feature-card h3, .feature-card h4, .feature-card p, .feature-card li, .pc-box h2, .pc-box h3, .pc-box h4, .pc-box p, .pc-box li, .week-block h2, .week-block h3, .week-block h4, .week-block p, .week-block li, .callout h2, .callout h3, .callout h4, .callout p, .callout li, .af-box h2, .af-box h3, .af-box h4, .af-box p, .af-box li, .verdict-card h2, .verdict-card h3, .verdict-card h4, .verdict-card p, .verdict-card li, .agent-card h2, .agent-card h3, .agent-card h4, .agent-card p, .agent-card li, .vs-card h2, .vs-card h3, .vs-card h4, .vs-card p, .vs-card li, .calendly-block h2, .calendly-block h3, .calendly-block h4, .calendly-block p, .calendly-block li, .article-cta h2, .article-cta h3, .article-cta h4, .article-cta p, .article-cta li, .inline-cta h2, .inline-cta h3, .inline-cta h4, .inline-cta p, .inline-cta li, .service-card h2, .service-card h3, .service-card h4, .service-card p, .service-card li { color:#0f172a !important; }
+.blog-card { box-shadow:0 8px 28px rgba(15,23,42,0.06) !important; }
+
+/* Footer -> light */
+footer { background:#f8fafc !important; border-top:1px solid #e5e7eb !important; }
+.footer-logo { color:#0f172a !important; }
+footer p { color:#6b7280 !important; }
+
+/* Keep DARK heroes - light base text; colored accent spans stay colored */
+.hero, .hero-backdrop { color:#ffffff !important; }
+.hero h1, .hero h2, .hero h3, .hero h4, .hero li, .hero strong, .hero-backdrop h1, .hero-backdrop h2, .hero-backdrop h3, .hero-backdrop h4, .hero-backdrop li, .hero-backdrop strong { color:#ffffff !important; }
+.hero-sub { color:rgba(255,255,255,0.82) !important; }
+.hero .btn-primary, .hero .btn-gold { background:#ffffff !important; color:#111827 !important; }
+.hero .btn-primary:hover, .hero .btn-gold:hover { background:#e9eef5 !important; }
+.hero .btn-ghost { color:rgba(255,255,255,0.85) !important; border-bottom-color:rgba(255,255,255,0.45) !important; }
+.hero-badges .badge { color:rgba(255,255,255,0.85) !important; border-color:rgba(255,255,255,0.22) !important; background:rgba(255,255,255,0.05) !important; }
+.btn-gold { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; border:none !important; }
+
+/* Product mockups stay dark, light text */
+.chat-panel, .chat-header, .chat-input-row, .map-panel, .map-header, .platform-header, .shipment-info-card, .thumb-tms, .ai-visual { color:rgba(255,255,255,0.92) !important; }
+.chat-panel *, .chat-header *, .chat-input-row *, .map-panel *, .map-header *, .platform-header *, .shipment-info-card *, .thumb-tms *, .ai-visual * { color:rgba(255,255,255,0.9) !important; }
+/* af-boxes inside ai-visual are white panels -> need dark text */
+.ai-visual .af-box, .ai-visual .af-box * { color:#334155 !important; }
+.ai-visual .af-box.ai, .ai-visual .af-box.ai * { color:#0e9f8e !important; }
+.ai-visual .af-box.latam, .ai-visual .af-box.latam * { color:#4f46e5 !important; }
+
+/* small tag/chips: light text on their (colored/dark) pill */
+/* dark-pill overlays keep white text */
+.coming-label, .map-legend, .rank-badge, .coming-label *, .map-legend *, .rank-badge * { color:#ffffff !important; }
+/* light tinted chips on white pages need dark teal text */
+.agent-tag, .article-tag, .blog-tag, .tag, .chip, .agent-tag *, .article-tag *, .blog-tag *, .tag *, .chip * { color:#0f766e !important; }
+.tag { background:rgba(14,159,142,0.08) !important; border-color:rgba(14,159,142,0.30) !important; }
+/* hero-badge sits on a light page-hero -> light pill, keep colored label */
+.hero-badge { background:#f1f5f9 !important; border:1px solid #e5e7eb !important; }
+
+/* Logo strip stays dark (white client logos); marquee keeps its colored band */
+.hero-trust { background:#0f172a !important; border-top:1px solid rgba(255,255,255,0.08) !important; }
+.hero-trust-label { color:rgba(255,255,255,0.45) !important; }
+.trust-badge { border-right:1px solid rgba(255,255,255,0.08) !important; }
+.marquee-item { color:rgba(255,255,255,0.95) !important; }
+.marquee-item span { color:rgba(255,255,255,0.6) !important; }
+
+/* Per-feature MULTI-COLOR accents */
+.services-grid > *:nth-child(4n+1) .service-num, .services-grid > *:nth-child(4n+1) .agent-icon, .services-grid > *:nth-child(4n+1) .cap-icon, .services-grid > *:nth-child(4n+1) .feature-icon, .services-grid > *:nth-child(4n+1) .overview-icon, .services-grid > *:nth-child(4n+1) .how-icon, .services-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.services-grid > *:nth-child(4n+2) .service-num, .services-grid > *:nth-child(4n+2) .agent-icon, .services-grid > *:nth-child(4n+2) .cap-icon, .services-grid > *:nth-child(4n+2) .feature-icon, .services-grid > *:nth-child(4n+2) .overview-icon, .services-grid > *:nth-child(4n+2) .how-icon, .services-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.services-grid > *:nth-child(4n+3) .service-num, .services-grid > *:nth-child(4n+3) .agent-icon, .services-grid > *:nth-child(4n+3) .cap-icon, .services-grid > *:nth-child(4n+3) .feature-icon, .services-grid > *:nth-child(4n+3) .overview-icon, .services-grid > *:nth-child(4n+3) .how-icon, .services-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.services-grid > *:nth-child(4n+4) .service-num, .services-grid > *:nth-child(4n+4) .agent-icon, .services-grid > *:nth-child(4n+4) .cap-icon, .services-grid > *:nth-child(4n+4) .feature-icon, .services-grid > *:nth-child(4n+4) .overview-icon, .services-grid > *:nth-child(4n+4) .how-icon, .services-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.agents-grid > *:nth-child(4n+1) .service-num, .agents-grid > *:nth-child(4n+1) .agent-icon, .agents-grid > *:nth-child(4n+1) .cap-icon, .agents-grid > *:nth-child(4n+1) .feature-icon, .agents-grid > *:nth-child(4n+1) .overview-icon, .agents-grid > *:nth-child(4n+1) .how-icon, .agents-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.agents-grid > *:nth-child(4n+2) .service-num, .agents-grid > *:nth-child(4n+2) .agent-icon, .agents-grid > *:nth-child(4n+2) .cap-icon, .agents-grid > *:nth-child(4n+2) .feature-icon, .agents-grid > *:nth-child(4n+2) .overview-icon, .agents-grid > *:nth-child(4n+2) .how-icon, .agents-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.agents-grid > *:nth-child(4n+3) .service-num, .agents-grid > *:nth-child(4n+3) .agent-icon, .agents-grid > *:nth-child(4n+3) .cap-icon, .agents-grid > *:nth-child(4n+3) .feature-icon, .agents-grid > *:nth-child(4n+3) .overview-icon, .agents-grid > *:nth-child(4n+3) .how-icon, .agents-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.agents-grid > *:nth-child(4n+4) .service-num, .agents-grid > *:nth-child(4n+4) .agent-icon, .agents-grid > *:nth-child(4n+4) .cap-icon, .agents-grid > *:nth-child(4n+4) .feature-icon, .agents-grid > *:nth-child(4n+4) .overview-icon, .agents-grid > *:nth-child(4n+4) .how-icon, .agents-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.caps-grid > *:nth-child(4n+1) .service-num, .caps-grid > *:nth-child(4n+1) .agent-icon, .caps-grid > *:nth-child(4n+1) .cap-icon, .caps-grid > *:nth-child(4n+1) .feature-icon, .caps-grid > *:nth-child(4n+1) .overview-icon, .caps-grid > *:nth-child(4n+1) .how-icon, .caps-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.caps-grid > *:nth-child(4n+2) .service-num, .caps-grid > *:nth-child(4n+2) .agent-icon, .caps-grid > *:nth-child(4n+2) .cap-icon, .caps-grid > *:nth-child(4n+2) .feature-icon, .caps-grid > *:nth-child(4n+2) .overview-icon, .caps-grid > *:nth-child(4n+2) .how-icon, .caps-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.caps-grid > *:nth-child(4n+3) .service-num, .caps-grid > *:nth-child(4n+3) .agent-icon, .caps-grid > *:nth-child(4n+3) .cap-icon, .caps-grid > *:nth-child(4n+3) .feature-icon, .caps-grid > *:nth-child(4n+3) .overview-icon, .caps-grid > *:nth-child(4n+3) .how-icon, .caps-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.caps-grid > *:nth-child(4n+4) .service-num, .caps-grid > *:nth-child(4n+4) .agent-icon, .caps-grid > *:nth-child(4n+4) .cap-icon, .caps-grid > *:nth-child(4n+4) .feature-icon, .caps-grid > *:nth-child(4n+4) .overview-icon, .caps-grid > *:nth-child(4n+4) .how-icon, .caps-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.features-grid > *:nth-child(4n+1) .service-num, .features-grid > *:nth-child(4n+1) .agent-icon, .features-grid > *:nth-child(4n+1) .cap-icon, .features-grid > *:nth-child(4n+1) .feature-icon, .features-grid > *:nth-child(4n+1) .overview-icon, .features-grid > *:nth-child(4n+1) .how-icon, .features-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.features-grid > *:nth-child(4n+2) .service-num, .features-grid > *:nth-child(4n+2) .agent-icon, .features-grid > *:nth-child(4n+2) .cap-icon, .features-grid > *:nth-child(4n+2) .feature-icon, .features-grid > *:nth-child(4n+2) .overview-icon, .features-grid > *:nth-child(4n+2) .how-icon, .features-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.features-grid > *:nth-child(4n+3) .service-num, .features-grid > *:nth-child(4n+3) .agent-icon, .features-grid > *:nth-child(4n+3) .cap-icon, .features-grid > *:nth-child(4n+3) .feature-icon, .features-grid > *:nth-child(4n+3) .overview-icon, .features-grid > *:nth-child(4n+3) .how-icon, .features-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.features-grid > *:nth-child(4n+4) .service-num, .features-grid > *:nth-child(4n+4) .agent-icon, .features-grid > *:nth-child(4n+4) .cap-icon, .features-grid > *:nth-child(4n+4) .feature-icon, .features-grid > *:nth-child(4n+4) .overview-icon, .features-grid > *:nth-child(4n+4) .how-icon, .features-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.overview-grid > *:nth-child(4n+1) .service-num, .overview-grid > *:nth-child(4n+1) .agent-icon, .overview-grid > *:nth-child(4n+1) .cap-icon, .overview-grid > *:nth-child(4n+1) .feature-icon, .overview-grid > *:nth-child(4n+1) .overview-icon, .overview-grid > *:nth-child(4n+1) .how-icon, .overview-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.overview-grid > *:nth-child(4n+2) .service-num, .overview-grid > *:nth-child(4n+2) .agent-icon, .overview-grid > *:nth-child(4n+2) .cap-icon, .overview-grid > *:nth-child(4n+2) .feature-icon, .overview-grid > *:nth-child(4n+2) .overview-icon, .overview-grid > *:nth-child(4n+2) .how-icon, .overview-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.overview-grid > *:nth-child(4n+3) .service-num, .overview-grid > *:nth-child(4n+3) .agent-icon, .overview-grid > *:nth-child(4n+3) .cap-icon, .overview-grid > *:nth-child(4n+3) .feature-icon, .overview-grid > *:nth-child(4n+3) .overview-icon, .overview-grid > *:nth-child(4n+3) .how-icon, .overview-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.overview-grid > *:nth-child(4n+4) .service-num, .overview-grid > *:nth-child(4n+4) .agent-icon, .overview-grid > *:nth-child(4n+4) .cap-icon, .overview-grid > *:nth-child(4n+4) .feature-icon, .overview-grid > *:nth-child(4n+4) .overview-icon, .overview-grid > *:nth-child(4n+4) .how-icon, .overview-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+
+@media (max-width: 768px) {
+  .nav-links { background:rgba(255,255,255,0.98) !important; border-bottom:1px solid #e5e7eb !important; }
+  .nav-links li { border-bottom:1px solid #f1f5f9 !important; }
+  .nav-links a { color:#1f2937 !important; }
+  .dropdown { background:#f8fafc !important; box-shadow:none; }
+  .nav-links a.mobile-book-call { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; }
+}
+
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="logo" style="text-decoration:none;display:inline-flex;align-items:center;gap:11px;">
+  <svg width="36" height="36" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+    <defs><linearGradient id="znav2" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+    <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#znav2)" stroke-width="1.8"/>
+    <line x1="15" y1="18" x2="47" y2="18" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="47" y1="18" x2="15" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="15" y1="44" x2="47" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
+  </svg>
+  <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#38BDF8,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">zoree</span>
+</a>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="index.html#about">About</a></li>
+    <li class="nav-item">
+      <a href="index.html#services">Services <span class="nav-arrow">▼</span></a>
+      <div class="dropdown">
+        <a class="dropdown-item" href="zoree-smart-tms.html">
+          <span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="24" height="16" rx="3" stroke="#13c4b0" stroke-width="1.8"/><circle cx="16" cy="16" r="4" stroke="#13c4b0" stroke-width="1.8"/><line x1="16" y1="4" x2="16" y2="8" stroke="#13c4b0" stroke-width="1.8" stroke-linecap="round"/><line x1="16" y1="24" x2="16" y2="28" stroke="#13c4b0" stroke-width="1.8" stroke-linecap="round"/><line x1="4" y1="16" x2="8" y2="16" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/><line x1="24" y1="16" x2="28" y2="16" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="16" r="1.5" fill="#13c4b0"/></svg></span>
+          <div class="dropdown-item-label">Smart TMS</div>
+          <div class="dropdown-item-desc">AI-powered TMS in 12–16 weeks</div>
+        </a>
+        <a class="dropdown-item" href="zoree-tms-implementation.html">
+          <span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="16" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><circle cx="24" cy="8" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><circle cx="24" cy="24" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><line x1="11.5" y1="14.5" x2="20.5" y2="9.5" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/><line x1="11.5" y1="17.5" x2="20.5" y2="22.5" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+          <div class="dropdown-item-label">TMS Implementation Services</div>
+          <div class="dropdown-item-desc">Oracle Transportation Management — end-to-end</div>
+        </a>
+        <a class="dropdown-item" href="zoree-nearshore.html" style="background:rgba(14,159,142,0.06);">
+          <span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="11" stroke="#13c4b0" stroke-width="1.8"/><ellipse cx="16" cy="16" rx="5" ry="11" stroke="#13c4b0" stroke-width="1.6"/><line x1="5" y1="16" x2="27" y2="16" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/><path d="M7 10.5 Q16 13 25 10.5" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round" fill="none"/><path d="M7 21.5 Q16 19 25 21.5" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg></span>
+          <div class="dropdown-item-label">Nearshore Delivery</div>
+          <div class="dropdown-item-desc">LATAM AI implementation teams — 40–60% cost savings</div>
+        </a>
+      </div>
+    </li>
+    <li><a href="zoree-demo.html#demo-video" class="nav-demo">Demo</a></li>
+    <li><a href="zoree-blog.html">Blog</a></li>
+    <li><a href="zoree-contact.html">Contact</a></li>
+    <li class="mobile-book-call-li" style="display:none"><a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" style="display:block;margin:16px 0 0;text-align:center;padding:13px;background:var(--teal);color: #0f172a;font-family:'Inter Tight',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-decoration:none;text-transform:uppercase;border-radius:4px;">Book a Call</a></li>
+  </ul>
+  <a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" class="nav-cta">Book a Call</a>
+    <button id="hamburger" aria-label="Open menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-backdrop"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-accent-line"></div>
+
+  <!-- LATAM Map SVG -->
+  <svg class="hero-map" viewBox="0 0 400 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Mexico -->
+    <path d="M60 80 L180 70 L200 110 L220 130 L200 160 L160 170 L120 180 L80 160 L50 130 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Central America -->
+    <path d="M190 165 L210 175 L215 200 L205 220 L195 215 L185 195 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Colombia -->
+    <path d="M150 230 L200 220 L230 240 L240 270 L220 300 L180 310 L150 290 L130 260 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Venezuela -->
+    <path d="M220 235 L270 225 L300 240 L310 265 L280 280 L240 275 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Brazil -->
+    <path d="M200 300 L280 290 L350 310 L380 360 L370 430 L340 470 L290 490 L240 480 L200 450 L180 400 L170 350 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Peru -->
+    <path d="M130 300 L180 310 L200 350 L190 400 L160 420 L120 410 L100 370 L110 330 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Chile -->
+    <path d="M120 420 L155 415 L165 460 L160 510 L145 550 L130 560 L115 520 L110 470 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Argentina -->
+    <path d="M155 420 L200 410 L230 430 L240 480 L230 530 L210 560 L180 570 L155 540 L145 490 L150 450 Z" fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Glowing dots for key cities -->
+    <circle cx="130" cy="130" r="6" fill="#13c4b0" opacity="0.9"/>
+    <circle cx="185" cy="260" r="6" fill="#13c4b0" opacity="0.9"/>
+    <circle cx="280" cy="390" r="6" fill="#13c4b0" opacity="0.9"/>
+    <circle cx="140" cy="360" r="5" fill="#13c4b0" opacity="0.9"/>
+    <circle cx="190" cy="460" r="5" fill="#13c4b0" opacity="0.7"/>
+    <circle cx="135" cy="490" r="5" fill="#13c4b0" opacity="0.7"/>
+  </svg>
+
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Nearshore Delivery</div>
+    <h1>
+      Enterprise Implementations.
+      <span class="line2">LATAM Talent.</span>
+      <span class="line3">40–60% Cost Reduction</span>
+    </h1>
+    <p class="hero-sub">
+      Zoree delivers Oracle OTM, custom TMS, and AI implementation projects through elite nearshore teams in Mexico, Colombia, and across Latin America — same timezone, same quality, dramatically lower cost.
+    </p>
+    <div class="hero-badges">
+      <div class="badge"><span class="flag">🇲🇽</span> Mexico City</div>
+      <div class="badge"><span class="flag">🇨🇴</span> Bogotá &amp; Medellín</div>
+      <div class="badge"><span class="flag">🇧🇷</span> São Paulo</div>
+      <div class="badge"><span class="flag">🇦🇷</span> Buenos Aires</div>
+      <div class="badge"><span class="flag">🇨🇱</span> Santiago</div>
+      <div class="badge"><span class="flag">🇨🇷</span> San José</div>
+    </div>
+    <div class="hero-cta">
+      <a href="index.html#contact" class="btn-gold">Get a Cost Estimate</a>
+      <a href="#how-it-works" class="btn-ghost">How It Works</a>
+    </div>
+  </div>
+</div>
+
+<!-- SAVINGS STRIP -->
+<div class="savings-strip">
+  <div class="saving-item">
+    <div class="saving-num">60<sup>%</sup></div>
+    <div class="saving-label">Cost savings vs US-based teams</div>
+  </div>
+  <div class="saving-item">
+    <div class="saving-num">0–2</div>
+    <div class="saving-label">Hour time zone difference with US East</div>
+  </div>
+  <div class="saving-item">
+    <div class="saving-num">100<sup>%</sup></div>
+    <div class="saving-label">English-proficient delivery leads</div>
+  </div>
+  <div class="saving-item">
+    <div class="saving-num">12<sup>wk</sup></div>
+    <div class="saving-label">Typical team onboarding to production</div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works" class="how-section">
+  <div class="section-tag">The Model</div>
+  <h2 class="section-title reveal">How <em>Nearshore Delivery</em> Works at Zoree</h2>
+  <p class="section-sub reveal">We don't staff augment. We deliver. Zoree manages dedicated nearshore teams end-to-end — from hiring and training to project delivery and quality assurance — so you get implementation results, not billable hours.</p>
+  <div class="how-grid">
+    <div class="how-item reveal">
+      <div class="how-num">01</div>
+      <span class="how-icon">🎯</span>
+      <h3>Scoped, Not Staffed</h3>
+      <p>You get a delivery commitment against defined scope — not a body shop. Zoree owns the outcome, the methodology, and the quality bar. Your internal team provides domain knowledge and approvals.</p>
+    </div>
+    <div class="how-item reveal reveal-delay-1">
+      <div class="how-num">02</div>
+      <span class="how-icon">🤖</span>
+      <h3>AI-Augmented Teams</h3>
+      <p>Every Zoree nearshore team uses AI tooling throughout the delivery lifecycle — automated testing, AI-assisted configuration validation, documentation generation, and code review — compressing timelines without cutting corners.</p>
+    </div>
+    <div class="how-item reveal reveal-delay-2">
+      <div class="how-num">03</div>
+      <span class="how-icon">🕐</span>
+      <h3>Real-Time Collaboration</h3>
+      <p>Mexico City is CT. Bogotá is ET. Our LATAM hubs operate fully within North American business hours — no async-only workflows, no overnight handoffs, no "we'll have that tomorrow morning."</p>
+    </div>
+  </div>
+</section>
+
+<!-- COUNTRIES -->
+<section class="countries-section">
+  <div class="section-tag">Our Hubs</div>
+  <h2 class="section-title reveal">Where We <em>Deliver From</em></h2>
+  <p class="section-sub reveal">Six strategic LATAM hubs chosen for technical talent density, timezone alignment, infrastructure quality, and track record in enterprise IT delivery.</p>
+  <div class="countries-grid">
+    <div class="country-card mx reveal">
+      <span class="country-flag">🇲🇽</span>
+      <h3>Mexico</h3>
+      <div class="country-city">Mexico City · Guadalajara · Monterrey</div>
+      <p>Our primary hub. Mexico City's tech ecosystem is one of the fastest-growing in the hemisphere, with deep Oracle, SAP, and supply chain talent pools. CT timezone means perfect overlap with US Central and East Coast teams.</p>
+      <div class="country-tags">
+        <span class="ctag">OTM Implementation</span>
+        <span class="ctag">Oracle Cloud</span>
+        <span class="ctag">AI/ML</span>
+      </div>
+    </div>
+    <div class="country-card co reveal reveal-delay-1">
+      <span class="country-flag">🇨🇴</span>
+      <h3>Colombia</h3>
+      <div class="country-city">Bogotá · Medellín</div>
+      <p>Medellín's transformation into a technology hub is well documented. Bogotá's enterprise consulting depth rivals any major Latin American market. ET timezone — fully synchronized with New York and Miami operations.</p>
+      <div class="country-tags">
+        <span class="ctag">TMS Configuration</span>
+        <span class="ctag">Integration Dev</span>
+        <span class="ctag">QA/Testing</span>
+      </div>
+    </div>
+    <div class="country-card br reveal reveal-delay-2">
+      <span class="country-flag">🇧🇷</span>
+      <h3>Brazil</h3>
+      <div class="country-city">São Paulo · Curitiba</div>
+      <p>Latin America's largest technology market, with particular strength in enterprise software engineering and supply chain systems. São Paulo's logistics industry expertise is unmatched in the region.</p>
+      <div class="country-tags">
+        <span class="ctag">Supply Chain Dev</span>
+        <span class="ctag">Data Engineering</span>
+        <span class="ctag">Custom TMS</span>
+      </div>
+    </div>
+    <div class="country-card ar reveal">
+      <span class="country-flag">🇦🇷</span>
+      <h3>Argentina</h3>
+      <div class="country-city">Buenos Aires · Córdoba</div>
+      <p>Argentina produces some of the highest-caliber software engineers in the world. Buenos Aires has a well-established nearshore delivery track record with Fortune 500 clients across financial services and logistics.</p>
+      <div class="country-tags">
+        <span class="ctag">AI Development</span>
+        <span class="ctag">Backend Engineering</span>
+        <span class="ctag">Architecture</span>
+      </div>
+    </div>
+    <div class="country-card cl reveal reveal-delay-1">
+      <span class="country-flag">🇨🇱</span>
+      <h3>Chile</h3>
+      <div class="country-city">Santiago</div>
+      <p>Chile's stable business environment and strong engineering university system make Santiago a reliable delivery hub. Chilean teams are known for process discipline and documentation quality — critical for enterprise TMS work.</p>
+      <div class="country-tags">
+        <span class="ctag">Project Delivery</span>
+        <span class="ctag">ERP Integration</span>
+        <span class="ctag">Documentation</span>
+      </div>
+    </div>
+    <div class="country-card cr reveal reveal-delay-2">
+      <span class="country-flag">🇨🇷</span>
+      <h3>Costa Rica</h3>
+      <div class="country-city">San José · Heredia</div>
+      <p>Costa Rica is one of the most mature nearshore markets in Central America, with a highly educated bilingual workforce and established relationships with US technology and logistics companies. CT timezone alignment.</p>
+      <div class="country-tags">
+        <span class="ctag">Bilingual Support</span>
+        <span class="ctag">Training Delivery</span>
+        <span class="ctag">User Acceptance</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY NEARSHORE -->
+<section class="why-section">
+  <div class="why-layout">
+    <div class="why-left reveal">
+      <div class="section-tag">Why It Works</div>
+      <h2 class="section-title" style="max-width:420px;">Not Cheaper.<br/><em>Better Value.</em></h2>
+      <p style="font-family:'Lora',serif;font-size:16px;line-height:1.85;color: #475569;margin-top:20px;">Nearshore isn't a cost-cutting compromise. It's the right delivery model when timezone alignment, cultural fit, and scalable talent depth matter as much as rate card.</p>
+
+      <!-- cost comparison visual -->
+      <div style="margin-top:44px;background:var(--navy);border:1px solid rgba(255,255,255,0.08);padding:32px;">
+        <div style="font-size:10px;letter-spacing:0.2em;color:rgba(255,255,255,0.6);text-transform:uppercase;margin-bottom:24px;">Blended Day Rate Comparison</div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;">
+              <span style="color:#cbd5e1;">🇺🇸 US-Based Consultant</span>
+              <span style="color:#cbd5e1;">$1,200–$1,600/day</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:2px;">
+              <div style="background:rgba(239,68,68,0.5);height:100%;width:100%;border-radius:2px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;">
+              <span style="color:#cbd5e1;">🇮🇳 Offshore (India)</span>
+              <span style="color:#cbd5e1;">$350–$550/day</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:2px;">
+              <div style="background:rgba(99,102,241,0.5);height:100%;width:30%;border-radius:2px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;">
+              <span style="color:#cbd5e1;">🌎 Zoree LATAM Nearshore</span>
+              <span style="color:var(--gold-light);font-weight:600;">$650–$850/day</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:2px;">
+              <div style="background:var(--gold);height:100%;width:47%;border-radius:2px;"></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px;font-size:11px;color:rgba(255,255,255,0.6);font-style:italic;">LATAM nearshore: offshore pricing with same-timezone collaboration</div>
+      </div>
+    </div>
+
+    <div class="why-items">
+      <div class="why-item reveal">
+        <div class="why-icon-wrap">⏱</div>
+        <div class="why-text">
+          <h4>Same-Timezone Collaboration</h4>
+          <p>LATAM nearshore teams work within 0–2 hours of US Eastern and Central time. No 12-hour async gaps, no late-night calls, no productivity lost to handoff delays. Real-time standups, live debugging, same-day issue resolution.</p>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-icon-wrap">🌎</div>
+        <div class="why-text">
+          <h4>Cultural & Business Alignment</h4>
+          <p>LATAM professionals have grown up working with US enterprise clients. Communication styles, project management norms, and stakeholder expectations are already calibrated for North American engagements — reducing friction offshore models never fully resolve.</p>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-icon-wrap">🤖</div>
+        <div class="why-text">
+          <h4>AI-Multiplied Productivity</h4>
+          <p>Every Zoree LATAM team member works with AI tooling as standard — automated testing, documentation generation, configuration review, and code analysis. A LATAM consultant with AI tooling often outperforms an offshore team without it.</p>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-icon-wrap">📈</div>
+        <div class="why-text">
+          <h4>Rapid Scalability</h4>
+          <p>Need to scale from 3 consultants to 12 in 60 days? LATAM's technology talent density makes this possible. We maintain pre-vetted talent pipelines in Mexico City, Bogotá, and Buenos Aires for fast ramp-up without quality compromise.</p>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-icon-wrap">🔒</div>
+        <div class="why-text">
+          <h4>Data Security & Compliance</h4>
+          <p>LATAM engagements operate under US-standard data security frameworks. All team members sign US-format NDAs. Infrastructure runs in Oracle Cloud or AWS, not on local hardware. SOC 2 compliant delivery processes throughout.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI ADVANTAGE -->
+<section class="ai-section">
+  <div class="ai-glow"></div>
+  <div class="section-tag reveal">The Zoree Difference</div>
+  <h2 class="section-title reveal">AI-Augmented Delivery<br/><em>Changes the Math</em></h2>
+  <p class="section-sub reveal">Traditional nearshore simply moves labor cost. Zoree's AI-augmented model compresses the number of hours needed — so you get both the cost benefit of nearshore rates and the speed benefit of AI-accelerated delivery.</p>
+  <div class="ai-grid">
+    <div class="ai-visual reveal">
+      <div class="ai-visual-label">Delivery Flow — AI-Augmented Nearshore</div>
+      <div class="ai-flow">
+        <div class="af-row">
+          <div class="af-box us">US Stakeholder</div>
+          <div class="af-arrow">→</div>
+          <div class="af-box ai">Zoree AI Layer</div>
+          <div class="af-arrow">→</div>
+          <div class="af-box latam">LATAM Team</div>
+        </div>
+        <div style="display:flex;justify-content:space-around;padding:8px 0;">
+          <div style="width:2px;background:rgba(148,163,184,0.55);height:18px;"></div>
+          <div style="width:2px;background:rgba(14,159,142,0.7);height:18px;"></div>
+          <div style="width:2px;background:rgba(99,102,241,0.7);height:18px;"></div>
+        </div>
+        <div class="af-row" style="margin-bottom:32px;">
+          <div class="af-box us" style="font-size:11px;color: #475569;">Requirements &amp; Approvals</div>
+          <div class="af-arrow"></div>
+          <div class="af-box ai" style="font-size:11px;">Auto-Testing · Doc Gen · Code Review</div>
+          <div class="af-arrow"></div>
+          <div class="af-box latam" style="font-size:11px;">Config · Integration · Delivery</div>
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:24px;">
+          <div class="af-metric"><span class="af-metric-label">Configuration velocity</span><span class="af-metric-val">3× faster</span></div>
+          <div class="af-metric"><span class="af-metric-label">Test cycle time</span><span class="af-metric-val">−65%</span></div>
+          <div class="af-metric"><span class="af-metric-label">Documentation effort</span><span class="af-metric-val">−70%</span></div>
+          <div class="af-metric"><span class="af-metric-label">Defect escape rate</span><span class="af-metric-val">−45%</span></div>
+          <div class="af-metric"><span class="af-metric-label">Total project cost vs US onshore</span><span class="af-metric-val">−55%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-points">
+      <div class="ai-point reveal">
+        <h4>AI-Assisted OTM Configuration</h4>
+        <p>Our AI tooling validates OTM configuration against best-practice rule sets in real time, catching errors that manual review misses and suggesting optimizations. Configuration cycles that typically take a week can close in two days.</p>
+      </div>
+      <div class="ai-point reveal reveal-delay-1">
+        <h4>Automated Integration Testing</h4>
+        <p>Every ERP and carrier integration is tested against an AI-generated test suite covering edge cases drawn from real OTM production data patterns. Defects that typically surface in UAT are caught in the build phase.</p>
+      </div>
+      <div class="ai-point reveal reveal-delay-2">
+        <h4>AI-Generated Documentation</h4>
+        <p>System design documents, configuration workbooks, training materials, and operational runbooks are generated as a byproduct of the delivery process — not as a separate work stream. Documentation is always current, not always late.</p>
+      </div>
+      <div class="ai-point reveal">
+        <h4>Intelligent Knowledge Transfer</h4>
+        <p>At project close, we hand over an AI-powered knowledge base of your implementation — searchable, queryable, and structured for your operations team. Your internal team can ask it questions about why things are configured the way they are.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ENGAGEMENT MODELS -->
+<section class="models-section">
+  <div class="section-tag reveal">Engagement Options</div>
+  <h2 class="section-title reveal">Choose Your <em>Delivery Model</em></h2>
+  <p class="section-sub reveal">Every engagement is scoped and priced before it starts. No open-ended time-and-materials surprises.</p>
+  <div class="models-grid">
+    <div class="model-card reveal">
+      <span class="model-icon">🚀</span>
+      <h3>Project Sprint</h3>
+      <div class="tagline">Fixed Scope · Fixed Price</div>
+      <p>A defined project delivered by a dedicated nearshore team in a fixed timeframe. OTM core deployments, integration builds, custom module development. You know the cost before kickoff.</p>
+      <ul class="model-features">
+        <li>Defined deliverables and acceptance criteria</li>
+        <li>Weekly milestone checkpoints</li>
+        <li>AI-accelerated delivery throughout</li>
+        <li>Post-go-live hypercare included</li>
+      </ul>
+    </div>
+    <div class="model-card featured reveal reveal-delay-1">
+      <div class="model-badge">Most Popular</div>
+      <span class="model-icon">🔄</span>
+      <h3>Dedicated Pod</h3>
+      <div class="tagline">Continuous Delivery · Monthly</div>
+      <p>A dedicated 3–6 person nearshore team embedded with your organization on a monthly retainer. Handles ongoing OTM enhancements, new feature rollouts, quarterly Oracle updates, and continuous improvement initiatives.</p>
+      <ul class="model-features">
+        <li>Dedicated team, not rotated consultants</li>
+        <li>Flexible monthly capacity allocation</li>
+        <li>Scales up or down with 30-day notice</li>
+        <li>Monthly velocity and ROI reporting</li>
+      </ul>
+    </div>
+    <div class="model-card reveal reveal-delay-2">
+      <span class="model-icon">🔧</span>
+      <h3>AMS Support</h3>
+      <div class="tagline">Application Managed Services</div>
+      <p>Ongoing support, administration, and optimization of your live OTM or custom TMS environment. Nearshore delivery makes comprehensive AMS affordable at a level that previously required offshore-only models.</p>
+      <ul class="model-features">
+        <li>L1, L2, L3 support tiers</li>
+        <li>SLA-backed response times</li>
+        <li>Proactive optimization and monitoring</li>
+        <li>Oracle quarterly update management</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- DELIVERY PROCESS -->
+<section class="process-section">
+  <div class="section-tag reveal">How We Start</div>
+  <h2 class="section-title reveal" style="text-align:center;">From First Call to <em>First Delivery</em></h2>
+  <p class="section-sub reveal" style="text-align:center;margin:0 auto 60px;">A structured onboarding process that moves fast without cutting corners.</p>
+  <div class="process-steps">
+    <div class="process-step reveal">
+      <div class="ps-dot">📋</div>
+      <div class="ps-week">Week 1</div>
+      <h4>Discovery Call</h4>
+      <p>Scope, current state, objectives, and budget alignment. No sales theater — just an honest conversation about fit.</p>
+    </div>
+    <div class="process-step reveal reveal-delay-1">
+      <div class="ps-dot">📐</div>
+      <div class="ps-week">Week 2</div>
+      <h4>Proposal & Pricing</h4>
+      <p>Fixed-price proposal with defined scope, team composition, timeline, and delivery milestones.</p>
+    </div>
+    <div class="process-step reveal reveal-delay-2">
+      <div class="ps-dot">👥</div>
+      <div class="ps-week">Week 3</div>
+      <h4>Team Assembly</h4>
+      <p>Your dedicated nearshore team is assembled and briefed. You meet them before the project starts.</p>
+    </div>
+    <div class="process-step reveal reveal-delay-1">
+      <div class="ps-dot">⚡</div>
+      <div class="ps-week">Week 4</div>
+      <h4>Kickoff & Sprint 1</h4>
+      <p>Environment access granted, tools configured, first sprint underway. Delivery velocity visible from day one.</p>
+    </div>
+    <div class="process-step reveal reveal-delay-2">
+      <div class="ps-dot">🏁</div>
+      <div class="ps-week">Ongoing</div>
+      <h4>Milestone Delivery</h4>
+      <p>Regular demos, milestone sign-offs, and transparent progress tracking throughout the engagement.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-section">
+  <div class="cta-glow"></div>
+  <h2>Same Quality.<br/><em>60% Less Cost.</em><br/>Same Timezone.</h2>
+  <p>Let's scope your OTM implementation, TMS build, or AMS engagement with a nearshore delivery model. We'll send a cost comparison within 48 hours of your first call.</p>
+  <div class="cta-actions">
+    <a href="mailto:contact@zoree.io" class="btn-ghost" style="display:inline-block;">✉ Email Us</a>
+    <a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" class="btn-gold">📅 Book a 30-Min Call</a>
+    <a href="zoree-tms-implementation.html" class="btn-ghost">View OTM Services</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:12px;">
+  <svg width="30" height="30" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+    <defs><linearGradient id="zftr2" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+    <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#zftr2)" stroke-width="1.8"/>
+    <line x1="15" y1="18" x2="47" y2="18" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="47" y1="18" x2="15" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="15" y1="44" x2="47" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
+  </svg>
+  <span style="font-size:18px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#38BDF8,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">zoree</span>
+</div>
+  <p>© 2026 Zoree — AI &amp; Transportation</p>
+  <p style="margin-top:10px;"><a href="mailto:contact@zoree.io" style="color:var(--teal);text-decoration:none;letter-spacing:0.05em;">contact@zoree.io</a></p>
+    <p style="margin-top:8px;"><a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" style="color:var(--teal,#0e9f8e);text-decoration:none;letter-spacing:0.05em;">📅 Book a 30-Min Call</a></p>
+  <p style="margin-top:8px;line-height:1.8;">1309 Coffeen Ave, Ste 3336<br/>Sheridan, WY 82801</p>
+</footer>
+
+
+  <script>
+    // ── DROPDOWN NAV ──
+    (function () {
+      function initDropdowns() {
+        document.querySelectorAll('.nav-item').forEach(function (item) {
+          var dropdown = item.querySelector('.dropdown');
+          if (!dropdown) return;
+          var timer = null;
+          function openMenu() { clearTimeout(timer); item.classList.add('open'); }
+          function closeMenu() { timer = setTimeout(function () { item.classList.remove('open'); }, 150); }
+          item.addEventListener('mouseenter', openMenu);
+          item.addEventListener('mouseleave', closeMenu);
+          dropdown.addEventListener('mouseenter', openMenu);
+          dropdown.addEventListener('mouseleave', closeMenu);
+          var topLink = item.querySelector(':scope > a');
+          if (topLink) topLink.addEventListener('click', function (e) { e.preventDefault(); item.classList.toggle('open'); });
+          dropdown.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', function (e) { e.stopPropagation(); });
+          });
+        });
+        document.addEventListener('click', function (e) {
+          if (!e.target.closest('.nav-item')) {
+            document.querySelectorAll('.nav-item').forEach(function (i) { i.classList.remove('open'); });
+          }
+        });
+      }
+      document.readyState === 'loading'
+        ? document.addEventListener('DOMContentLoaded', initDropdowns)
+        : initDropdowns();
+    })();
+
+    // ── HAMBURGER MENU (mobile) ──
+    (function () {
+      var hamburger = document.getElementById('hamburger');
+      var navLinks = document.getElementById('navLinks');
+      if (hamburger && navLinks) {
+        hamburger.addEventListener('click', function (e) {
+          e.stopPropagation();
+          hamburger.classList.toggle('open');
+          navLinks.classList.toggle('mobile-open');
+        });
+        document.addEventListener('click', function (e) {
+          if (!e.target.closest('nav')) {
+            hamburger.classList.remove('open');
+            navLinks.classList.remove('mobile-open');
+          }
+        });
+      }
+    })();
+
+    // ── SCROLL REVEAL ──
+    (function () {
+      var els = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) {
+        els.forEach(function (el) { el.classList.add('visible'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.12 });
+      els.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="favicon-32.png"/>
+  <link rel="shortcut icon" href="favicon.ico"/>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+  <title>Oracle OTM vs Blue Yonder vs SAP TM vs Zoree Smart TMS — Zoree Blog</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --navy:#071020; --navy-mid:#0a1628; --navy-light:#0d1e38;
+      --teal:#0e9f8e; --teal-light:#13c4b0;
+      --otm:#13c4b0; --by:#3b82f6; --sap:#f59e0b; --zoree:#8b5cf6;
+      --text-light: #475569;
+    }
+    html { scroll-behavior:smooth; }
+    body { background:var(--navy); color: #0f172a; font-family:'Inter Tight',sans-serif; }
+    nav { position:fixed; top:0; left:0; right:0; z-index:1000; display:flex; align-items:center; justify-content:space-between; padding:0 60px; height:72px; background:rgba(7,16,32,0.92); backdrop-filter:blur(16px); border-bottom:1px solid rgba(255,255,255,0.07); }
+    .logo { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:20px; color: #0f172a; text-decoration:none; }
+    .nav-links { display:flex; gap:40px; list-style:none; }
+    .nav-links a { font-size:12px; letter-spacing:0.08em; color:var(--text-light); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: #0f172a; }
+    .nav-item { position:relative; }
+    .nav-arrow { display:inline-block; margin-left:4px; font-size:9px; transition:transform 0.25s; vertical-align:middle; }
+    .nav-item:hover .nav-arrow { transform:rotate(180deg); }
+    .dropdown { position:absolute; top:calc(100% + 18px); left:50%; background:#0d1e38; border:1px solid rgba(255,255,255,0.1); border-top:2px solid var(--teal); min-width:240px; opacity:0; visibility:hidden; pointer-events:none; transform:translateX(-50%) translateY(-8px); transition:opacity 0.22s,transform 0.22s,visibility 0.22s; z-index:99999; }
+    .nav-item.open .dropdown, .nav-item:hover .dropdown { opacity:1; visibility:visible; pointer-events:all; transform:translateX(-50%) translateY(0); }
+    .dropdown-item { display:block; padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.06); text-decoration:none; transition:background 0.15s; }
+    .dropdown-item:last-child { border-bottom:none; }
+    .dropdown-item:hover { background:rgba(14,159,142,0.1); }
+    .dropdown-item-label { font-size:12px; font-weight:600; letter-spacing:0.06em; color: #0f172a; text-transform:uppercase; margin-bottom:3px; }
+    .dropdown-item-desc { font-size:11px; color: #475569; line-height:1.4;  text-transform:none;}
+    .di-icon { display: block; width: 28px; height: 28px; margin-bottom: 8px; }
+    .di-icon svg { width: 28px; height: 28px; display: block; }
+    .nav-cta { font-size:12px; letter-spacing:0.08em; color: #0f172a; background:var(--teal); border:none; padding:10px 26px; text-transform:uppercase; cursor:pointer; text-decoration:none; transition:background 0.2s; }
+    .nav-cta:hover { background:var(--teal-light); }
+
+    .article-hero { background:linear-gradient(160deg,#071020 0%,#0a1e3d 60%,#071020 100%); padding:140px 60px 80px; position:relative; overflow:hidden; }
+    .hero-bg-grid { position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px); background-size:60px 60px; }
+    .hero-glow { position:absolute; width:700px; height:700px; background:radial-gradient(circle,rgba(14,159,142,0.1) 0%,transparent 65%); top:-20%; right:-15%; pointer-events:none; }
+    .article-hero-inner { position:relative; z-index:2; max-width:900px; margin:0 auto; }
+    .breadcrumb { font-size:11px; letter-spacing:0.15em; color: #475569; text-transform:uppercase; margin-bottom:28px; }
+    .breadcrumb a { color:var(--teal-light); text-decoration:none; }
+    .article-tag { display:inline-flex; align-items:center; gap:8px; background:rgba(14,159,142,0.12); border:1px solid rgba(14,159,142,0.25); padding:5px 14px; font-size:10px; letter-spacing:0.2em; color:var(--teal-light); text-transform:uppercase; margin-bottom:24px; }
+    .article-hero h1 { font-family:'Plus Jakarta Sans',sans-serif; font-size:clamp(32px,5vw,58px); font-weight:800; line-height:1.1; letter-spacing:-1.5px; margin-bottom:24px; }
+    .article-hero h1 em { font-style:normal; color:var(--teal-light); }
+    .article-meta { display:flex; align-items:center; gap:24px; font-size:12px; color: #475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:40px; }
+    .verdict-banner { display:grid; grid-template-columns:repeat(4,1fr); border:1px solid rgba(255,255,255,0.08); margin-top:48px; }
+    .verdict-card { padding:28px 24px; border-right:1px solid rgba(255,255,255,0.08); position:relative; }
+    .verdict-card:last-child { border-right:none; }
+    .verdict-rank { font-family:'Plus Jakarta Sans',sans-serif; font-size:52px; font-weight:800; line-height:1; margin-bottom:8px; }
+    .rank-1 .verdict-rank { color:var(--otm); }
+    .rank-2 .verdict-rank { color:var(--by); }
+    .rank-3 .verdict-rank { color:var(--sap); }
+    .rank-1 { background:rgba(14,159,142,0.05); border-bottom:3px solid var(--otm); }
+    .rank-2 { background:rgba(59,130,246,0.05); border-bottom:3px solid var(--by); }
+    .rank-3 { background:rgba(245,158,11,0.05); border-bottom:3px solid var(--sap); }
+    .rank-z .verdict-rank { color:var(--zoree); }
+    .rank-z { background:rgba(129,140,248,0.08); border-bottom:3px solid var(--zoree); box-shadow:inset 0 0 0 1px rgba(129,140,248,0.25); }
+    .rank-z .verdict-name { color: #0f172a; }
+    .verdict-name { font-family:'Plus Jakarta Sans',sans-serif; font-size:18px; font-weight:700; margin-bottom:4px; }
+    .verdict-sub { font-size:11px; color:var(--text-light); letter-spacing:0.06em; }
+    .rank-badge { position:absolute; top:16px; right:16px; font-size:20px; }
+
+    .article-body { max-width:900px; margin:0 auto; padding:80px 60px; }
+    .article-body h2 { font-family:'Plus Jakarta Sans',sans-serif; font-size:28px; font-weight:700; letter-spacing:-0.5px; margin:64px 0 20px; color: #0f172a; padding-top:64px; border-top:1px solid rgba(255,255,255,0.07); }
+    .article-body h2:first-child { margin-top:0; padding-top:0; border-top:none; }
+    .article-body h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:18px; font-weight:600; margin:32px 0 12px; color: #0f172a; }
+    .article-body p { font-family:'Merriweather',serif; font-size:15px; line-height:1.95; color: #475569; margin-bottom:20px; }
+    .article-body strong { color: #0f172a; font-weight:700; }
+    .article-lead { font-family:'Merriweather',serif; font-size:18px; line-height:1.85; color: #475569; margin-bottom:40px; border-left:3px solid var(--teal); padding-left:24px; }
+
+    .platform-header { display:flex; align-items:center; gap:16px; padding:20px 28px; margin:48px 0 28px; border-left:4px solid; }
+    .platform-header.otm { border-color:var(--otm); background:rgba(14,159,142,0.06); }
+    .platform-header.by  { border-color:var(--by);  background:rgba(59,130,246,0.06); }
+    .platform-header.sap { border-color:var(--sap); background:rgba(245,158,11,0.06); }
+    .platform-header.zoree { border-color:var(--zoree); background:rgba(129,140,248,0.08); }
+    .ph-rank { font-family:'Plus Jakarta Sans',sans-serif; font-size:36px; font-weight:800; line-height:1; }
+    .platform-header.otm .ph-rank { color:var(--otm); }
+    .platform-header.by  .ph-rank { color:var(--by); }
+    .platform-header.sap .ph-rank { color:var(--sap); }
+    .platform-header.zoree .ph-rank { color:var(--zoree); font-size:30px; }
+    .ph-name { font-family:'Plus Jakarta Sans',sans-serif; font-size:22px; font-weight:700; }
+    .ph-tagline { font-size:12px; color:var(--text-light); letter-spacing:0.08em; margin-top:3px; }
+
+    .pros-cons { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0 40px; }
+    .pc-box { padding:24px; border:1px solid; }
+    .pc-box.pros { border-color:rgba(14,159,142,0.3); background:rgba(14,159,142,0.05); }
+    .pc-box.cons { border-color:rgba(255,80,80,0.2); background:rgba(255,80,80,0.04); }
+    .pc-title { font-family:'Plus Jakarta Sans',sans-serif; font-size:11px; letter-spacing:0.2em; text-transform:uppercase; margin-bottom:16px; }
+    .pc-box.pros .pc-title { color:var(--teal-light); }
+    .pc-box.cons .pc-title { color:#f87171; }
+    .pc-item { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; font-size:13px; line-height:1.6; color: #475569; }
+    .pc-dot { width:6px; height:6px; border-radius:50%; margin-top:6px; flex-shrink:0; }
+    .pros .pc-dot { background:var(--teal-light); }
+    .cons .pc-dot { background:#f87171; }
+
+    .callout { background:rgba(14,159,142,0.08); border:1px solid rgba(14,159,142,0.2); border-left:4px solid var(--teal); padding:24px 28px; margin:32px 0; }
+    .callout-label { font-size:10px; letter-spacing:0.22em; color:var(--teal-light); text-transform:uppercase; margin-bottom:10px; }
+    .callout p { font-family:'Inter Tight',sans-serif; font-size:14px; line-height:1.75; color: #475569; margin:0; }
+
+    .comparison-table { width:100%; border-collapse:collapse; margin:32px 0 48px; font-size:13px; }
+    .comparison-table th { font-family:'Plus Jakarta Sans',sans-serif; font-size:11px; letter-spacing:0.15em; text-transform:uppercase; padding:14px 16px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.12); }
+    .comparison-table th:nth-child(2) { color:var(--otm); }
+    .comparison-table th:nth-child(3) { color:var(--by); }
+    .comparison-table th:nth-child(4) { color:var(--sap); }
+    .comparison-table th:nth-child(5) { color:var(--zoree); }
+    .comparison-table th:nth-child(5), .comparison-table td:nth-child(5) { background:rgba(129,140,248,0.06); }
+    .comparison-table td { padding:13px 16px; border-bottom:1px solid rgba(255,255,255,0.05); color: #475569; vertical-align:top; line-height:1.5; }
+    .comparison-table tr:hover td { background:rgba(255,255,255,0.02); }
+    .comparison-table td:first-child { color: #475569; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; }
+    .check { color:#4ade80; }
+    .cross { color:#f87171; }
+    .partial { color:var(--sap); }
+
+    .verdict-section { background:var(--navy-mid); border:1px solid rgba(255,255,255,0.07); padding:48px; margin:48px 0; }
+    .verdict-section h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:22px; font-weight:700; margin-bottom:20px; }
+    .verdict-row { display:flex; align-items:flex-start; gap:20px; padding:20px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+    .verdict-row:last-child { border-bottom:none; padding-bottom:0; }
+    .vr-num { font-family:'Plus Jakarta Sans',sans-serif; font-size:28px; font-weight:800; width:48px; flex-shrink:0; line-height:1; margin-top:2px; }
+    .vr-num.c1 { color:var(--otm); }
+    .vr-num.c2 { color:var(--by); }
+    .vr-num.c3 { color:var(--sap); }
+    .vr-num.cz { color:var(--zoree); }
+    .vr-body strong { display:block; font-family:'Plus Jakarta Sans',sans-serif; font-size:16px; font-weight:700; margin-bottom:6px; }
+    .vr-body p { font-family:'Inter Tight',sans-serif; font-size:13px; line-height:1.75; color: #475569; margin:0; }
+
+    .article-cta { background:linear-gradient(135deg,rgba(14,159,142,0.12) 0%,rgba(14,159,142,0.04) 100%); border:1px solid rgba(14,159,142,0.2); padding:48px; margin:64px 0 0; text-align:center; }
+    .article-cta h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:26px; font-weight:700; margin-bottom:12px; }
+    .article-cta p { font-size:14px; color:var(--text-light); line-height:1.8; margin-bottom:28px; }
+    .btn-primary { display:inline-block; background:var(--teal); color: #0f172a; font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:14px; padding:15px 36px; text-decoration:none; transition:background 0.2s,transform 0.2s,box-shadow 0.2s; }
+    .btn-primary:hover { background:var(--teal-light); transform:translateY(-2px); box-shadow:0 12px 36px rgba(14,159,142,0.4); }
+
+    footer { background:#040c18; padding:40px 60px; text-align:center; border-top:1px solid rgba(255,255,255,0.06); }
+    .footer-logo { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:18px; color: #0f172a; margin-bottom:12px; }
+    footer p { font-size:11px; letter-spacing:0.1em; color:var(--text-light); text-transform:uppercase; line-height:1.8; }
+
+    .reveal {}
+    .reveal.visible {}
+
+    @media(max-width:960px){
+      nav { padding:0 24px; }
+      .nav-links { display:none; }
+      .article-hero { padding:120px 24px 60px; }
+      .article-body { padding:48px 24px; }
+      .verdict-banner { grid-template-columns:1fr; }
+      .verdict-card { border-right:none; border-bottom:1px solid rgba(255,255,255,0.08); }
+      .pros-cons { grid-template-columns:1fr; }
+      .comparison-table th, .comparison-table td { padding:10px 8px; font-size:11px; }
+      .verdict-section { padding:28px; }
+      .article-cta { padding:32px 24px; }
+      footer { padding:32px 24px; }
+    }
+
+    /* ── HAMBURGER MENU ── */
+    #hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 28px;
+      height: 20px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      z-index: 1001;
+      flex-shrink: 0;
+    }
+    #hamburger span {
+      display: block;
+      width: 100%;
+      height: 2px;
+      background: #fff;
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+    #hamburger.open span:nth-child(1) { transform: translateY(9px) rotate(45deg); }
+    #hamburger.open span:nth-child(2) { opacity: 0; }
+    #hamburger.open span:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      .nav-cta { display: none; }
+      .mobile-book-call-li { display: list-item !important; }
+      #hamburger { display: flex; }
+      .nav-links {
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 61px;
+        left: 0; right: 0;
+        background: rgba(10,22,40,0.98);
+        backdrop-filter: blur(20px);
+        padding: 20px 24px 32px;
+        gap: 0;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        z-index: 999;
+      }
+      .nav-links.mobile-open { display: flex; }
+      .nav-links li { border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .nav-links li:last-child { border-bottom: none; }
+      .nav-links a {
+        display: block;
+        padding: 14px 0;
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        color: #475569;
+      }
+      .nav-links a:hover { color: #0f172a; }
+      /* Mobile dropdown */
+      .dropdown {
+        position: static;
+        transform: none;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: all !important;
+        background: rgba(255,255,255,0.04);
+        border: none;
+        border-top: none;
+        min-width: unset;
+        width: 100%;
+        margin-top: 0;
+        display: none;
+      }
+      .nav-item.open .dropdown { display: block; }
+      .dropdown-item { padding: 12px 16px; }
+      .dropdown-item .di-icon { display: block; width: 28px; height: 28px; margin-bottom: 8px; }
+    .di-icon svg { width: 28px; height: 28px; display: block; }
+      .dropdown-item-label { display: inline; font-size: 12px; }
+      .dropdown-item-desc { margin-top: 4px;  text-transform:none;}
+      /* Mobile Book a Call link */
+      .mobile-book-call {
+        display: block;
+        margin-top: 20px;
+        text-align: center;
+        padding: 12px;
+        background: var(--teal);
+        color: #0f172a;
+        font-family: 'Inter Tight', sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+      footer { flex-direction: column !important; align-items: flex-start !important; gap: 4px; padding-top: 32px !important; padding-bottom: 32px !important; }
+      footer p { margin-top: 4px !important; }
+      /* Fix dropdown clipping on mobile */
+      .dropdown { left: 0 !important; transform: none !important; }
+    }
+      /* Highlighted Demo link */
+    .nav-links a.nav-demo {
+      color: var(--teal-light); border: 1px solid rgba(19,196,176,0.55);
+      background: rgba(19,196,176,0.12); border-radius: 5px; padding: 7px 16px;
+      display: inline-flex; align-items: center; gap: 7px;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
+      animation: demoPulse 2.4s ease-out infinite;
+    }
+    .nav-links a.nav-demo::before { content: '▶'; font-size: 8px; }
+    .nav-links a.nav-demo:hover {
+      color: #0f172a; background: var(--teal);
+      box-shadow: 0 6px 20px rgba(19,196,176,0.4); transform: translateY(-1px);
+      animation: none;
+    }
+    @keyframes demoPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(19,196,176,0.45); }
+      50%      { box-shadow: 0 0 0 6px rgba(19,196,176,0); }
+    }
+  
+/* === LIGHT REDESIGN OVERRIDE v3 === */
+html, body { background:#ffffff; }
+h1 { font-weight:600; letter-spacing:-0.03em; }
+h2 { font-weight:600; letter-spacing:-0.02em; }
+h3 { font-weight:600; letter-spacing:-0.01em; }
+
+/* NAV: dark, normal-case, medium weight (dtskill-style) */
+nav { background:rgba(255,255,255,0.9) !important; backdrop-filter:blur(20px); border-bottom:1px solid #e5e7eb !important; }
+.logo { color:#0f172a !important; }
+.nav-links a { color:#1f2937 !important; text-transform:none !important; font-size:15px !important; letter-spacing:0 !important; font-weight:500 !important; font-family:'Plus Jakarta Sans',sans-serif !important; }
+.nav-links a:hover { color:#000000 !important; }
+.nav-item .nav-arrow { color:#1f2937 !important; }
+.nav-item.open > a, .nav-item.open .nav-arrow { color:#000000 !important; }
+.dropdown { background:#ffffff !important; border:1px solid #e5e7eb !important; border-top:2px solid #14b8a6 !important; box-shadow:0 20px 50px rgba(15,23,42,0.12); }
+.dropdown-item { border-bottom:1px solid #f1f5f9 !important; }
+.dropdown-item:hover { background:#f8fafc !important; }
+.dropdown-item-label { color:#0f172a !important; }
+.dropdown-item-desc { color:#6b7280 !important; }
+#hamburger span { background:#0f172a !important; }
+
+/* Buttons -> dark slate pills (text white) */
+.btn-primary, .nav-cta, .mobile-book-call, .btn-teal, .send-btn, .btn-submit, .btn-calendly { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; border:none !important; }
+.btn-primary *, .nav-cta *, .mobile-book-call *, .btn-teal *, .send-btn *, .btn-submit *, .btn-calendly * { color:#ffffff !important; }
+.btn-outline { background:transparent !important; color:#111827 !important; border:1px solid #111827 !important; border-radius:40px !important; }
+.btn-primary:hover, .nav-cta:hover, .btn-teal:hover, .send-btn:hover, .btn-submit:hover, .btn-calendly:hover { background:#1f2937 !important; box-shadow:0 12px 30px rgba(17,24,39,0.18) !important; }
+.nav-book-call { color:#111827 !important; border:1px solid #111827 !important; border-radius:40px !important; }
+.nav-book-call:hover { background:#f3f4f6 !important; }
+.nav-links a.nav-demo { color:#ffffff !important; border:1px solid #111827 !important; background:#111827 !important; border-radius:40px !important; font-size:13px !important; position:relative !important; overflow:hidden !important; animation:none !important; }
+.nav-links a.nav-demo::before { color:#2dd4bf; }
+.nav-links a.nav-demo::after { content:''; position:absolute; top:0; left:-80%; width:55%; height:100%; background:linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%); transform:skewX(-20deg); animation:demoShine 3.6s ease-in-out infinite; pointer-events:none; }
+@keyframes demoShine { 0% { left:-80%; } 40% { left:130%; } 100% { left:130%; } }
+.nav-links a.nav-demo:hover { color:#ffffff !important; background:#1f2937 !important; border-color:#2dd4bf !important; box-shadow:0 4px 16px rgba(19,196,176,0.35) !important; }
+.btn-ghost { color:#475569 !important; border-bottom:1px solid #cbd5e1 !important; }
+.btn-ghost:hover { color:#0f172a !important; border-color:#0f172a !important; }
+
+/* Dark SECTION BACKGROUNDS -> light (text dark; eyebrows/accents keep color) */
+.demo-section, .cta-section, .stats-band, .why-section, .how-section, .journey-section, .timeline-section, .process-section, .models-section, .ai-section, .countries-section, .verdict-section, .blog-section, .smart, .cap-section, .overview-strip, .article-hero, .page-hero { background:#ffffff !important; }
+.cta-section, .stats-band, .overview-strip, .cap-section { background:#f8fafc !important; }
+.demo-section h2, .cta-section h2, .stats-band h2, .why-section h2, .how-section h2, .journey-section h2, .timeline-section h2, .process-section h2, .models-section h2, .ai-section h2, .countries-section h2, .verdict-section h2, .blog-section h2, .smart h2, .cap-section h2, .overview-strip h2, .article-hero h2, .page-hero h2, .demo-section h3, .cta-section h3, .stats-band h3, .why-section h3, .how-section h3, .journey-section h3, .timeline-section h3, .process-section h3, .models-section h3, .ai-section h3, .countries-section h3, .verdict-section h3, .blog-section h3, .smart h3, .cap-section h3, .overview-strip h3, .article-hero h3, .page-hero h3, .demo-section h4, .cta-section h4, .stats-band h4, .why-section h4, .how-section h4, .journey-section h4, .timeline-section h4, .process-section h4, .models-section h4, .ai-section h4, .countries-section h4, .verdict-section h4, .blog-section h4, .smart h4, .cap-section h4, .overview-strip h4, .article-hero h4, .page-hero h4 { color:#0f172a !important; }
+
+/* Cards on former-dark sections -> white panels (headings/body dark; accent spans keep color) */
+.blog-card, .stat-box, .stat-card, .how-item, .cap-item, .ai-point, .prereq-item, .tl-content, .country-card, .band-stat, .model-card, .step-card, .feature-card, .pc-box, .week-block, .callout, .af-box, .verdict-card, .agent-card, .vs-card, .calendly-block, .article-cta, .inline-cta, .service-card { background:#ffffff !important; border:1px solid #e5e7eb !important; }
+.blog-card h2, .blog-card h3, .blog-card h4, .blog-card p, .blog-card li, .stat-box h2, .stat-box h3, .stat-box h4, .stat-box p, .stat-box li, .stat-card h2, .stat-card h3, .stat-card h4, .stat-card p, .stat-card li, .how-item h2, .how-item h3, .how-item h4, .how-item p, .how-item li, .cap-item h2, .cap-item h3, .cap-item h4, .cap-item p, .cap-item li, .ai-point h2, .ai-point h3, .ai-point h4, .ai-point p, .ai-point li, .prereq-item h2, .prereq-item h3, .prereq-item h4, .prereq-item p, .prereq-item li, .tl-content h2, .tl-content h3, .tl-content h4, .tl-content p, .tl-content li, .country-card h2, .country-card h3, .country-card h4, .country-card p, .country-card li, .band-stat h2, .band-stat h3, .band-stat h4, .band-stat p, .band-stat li, .model-card h2, .model-card h3, .model-card h4, .model-card p, .model-card li, .step-card h2, .step-card h3, .step-card h4, .step-card p, .step-card li, .feature-card h2, .feature-card h3, .feature-card h4, .feature-card p, .feature-card li, .pc-box h2, .pc-box h3, .pc-box h4, .pc-box p, .pc-box li, .week-block h2, .week-block h3, .week-block h4, .week-block p, .week-block li, .callout h2, .callout h3, .callout h4, .callout p, .callout li, .af-box h2, .af-box h3, .af-box h4, .af-box p, .af-box li, .verdict-card h2, .verdict-card h3, .verdict-card h4, .verdict-card p, .verdict-card li, .agent-card h2, .agent-card h3, .agent-card h4, .agent-card p, .agent-card li, .vs-card h2, .vs-card h3, .vs-card h4, .vs-card p, .vs-card li, .calendly-block h2, .calendly-block h3, .calendly-block h4, .calendly-block p, .calendly-block li, .article-cta h2, .article-cta h3, .article-cta h4, .article-cta p, .article-cta li, .inline-cta h2, .inline-cta h3, .inline-cta h4, .inline-cta p, .inline-cta li, .service-card h2, .service-card h3, .service-card h4, .service-card p, .service-card li { color:#0f172a !important; }
+.blog-card { box-shadow:0 8px 28px rgba(15,23,42,0.06) !important; }
+
+/* Footer -> light */
+footer { background:#f8fafc !important; border-top:1px solid #e5e7eb !important; }
+.footer-logo { color:#0f172a !important; }
+footer p { color:#6b7280 !important; }
+
+/* Keep DARK heroes - light base text; colored accent spans stay colored */
+.hero, .hero-backdrop { color:#ffffff !important; }
+.hero h1, .hero h2, .hero h3, .hero h4, .hero li, .hero strong, .hero-backdrop h1, .hero-backdrop h2, .hero-backdrop h3, .hero-backdrop h4, .hero-backdrop li, .hero-backdrop strong { color:#ffffff !important; }
+.hero-sub { color:rgba(255,255,255,0.82) !important; }
+.hero .btn-primary, .hero .btn-gold { background:#ffffff !important; color:#111827 !important; }
+.hero .btn-primary:hover, .hero .btn-gold:hover { background:#e9eef5 !important; }
+.hero .btn-ghost { color:rgba(255,255,255,0.85) !important; border-bottom-color:rgba(255,255,255,0.45) !important; }
+.hero-badges .badge { color:rgba(255,255,255,0.85) !important; border-color:rgba(255,255,255,0.22) !important; background:rgba(255,255,255,0.05) !important; }
+.btn-gold { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; border:none !important; }
+
+/* Product mockups stay dark, light text */
+.chat-panel, .chat-header, .chat-input-row, .map-panel, .map-header, .platform-header, .shipment-info-card, .thumb-tms, .ai-visual { color:rgba(255,255,255,0.92) !important; }
+.chat-panel *, .chat-header *, .chat-input-row *, .map-panel *, .map-header *, .platform-header *, .shipment-info-card *, .thumb-tms *, .ai-visual * { color:rgba(255,255,255,0.9) !important; }
+
+/* small tag/chips: light text on their (colored/dark) pill */
+/* dark-pill overlays keep white text */
+.coming-label, .map-legend, .rank-badge, .coming-label *, .map-legend *, .rank-badge * { color:#ffffff !important; }
+/* light tinted chips on white pages need dark teal text */
+.agent-tag, .article-tag, .blog-tag, .tag, .chip, .agent-tag *, .article-tag *, .blog-tag *, .tag *, .chip * { color:#0f766e !important; }
+.tag { background:rgba(14,159,142,0.08) !important; border-color:rgba(14,159,142,0.30) !important; }
+/* hero-badge sits on a light page-hero -> light pill, keep colored label */
+.hero-badge { background:#f1f5f9 !important; border:1px solid #e5e7eb !important; }
+
+/* Logo strip stays dark (white client logos); marquee keeps its colored band */
+.hero-trust { background:#0f172a !important; border-top:1px solid rgba(255,255,255,0.08) !important; }
+.hero-trust-label { color:rgba(255,255,255,0.45) !important; }
+.trust-badge { border-right:1px solid rgba(255,255,255,0.08) !important; }
+.marquee-item { color:rgba(255,255,255,0.95) !important; }
+.marquee-item span { color:rgba(255,255,255,0.6) !important; }
+
+/* Per-feature MULTI-COLOR accents */
+.services-grid > *:nth-child(4n+1) .service-num, .services-grid > *:nth-child(4n+1) .agent-icon, .services-grid > *:nth-child(4n+1) .cap-icon, .services-grid > *:nth-child(4n+1) .feature-icon, .services-grid > *:nth-child(4n+1) .overview-icon, .services-grid > *:nth-child(4n+1) .how-icon, .services-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.services-grid > *:nth-child(4n+2) .service-num, .services-grid > *:nth-child(4n+2) .agent-icon, .services-grid > *:nth-child(4n+2) .cap-icon, .services-grid > *:nth-child(4n+2) .feature-icon, .services-grid > *:nth-child(4n+2) .overview-icon, .services-grid > *:nth-child(4n+2) .how-icon, .services-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.services-grid > *:nth-child(4n+3) .service-num, .services-grid > *:nth-child(4n+3) .agent-icon, .services-grid > *:nth-child(4n+3) .cap-icon, .services-grid > *:nth-child(4n+3) .feature-icon, .services-grid > *:nth-child(4n+3) .overview-icon, .services-grid > *:nth-child(4n+3) .how-icon, .services-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.services-grid > *:nth-child(4n+4) .service-num, .services-grid > *:nth-child(4n+4) .agent-icon, .services-grid > *:nth-child(4n+4) .cap-icon, .services-grid > *:nth-child(4n+4) .feature-icon, .services-grid > *:nth-child(4n+4) .overview-icon, .services-grid > *:nth-child(4n+4) .how-icon, .services-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.agents-grid > *:nth-child(4n+1) .service-num, .agents-grid > *:nth-child(4n+1) .agent-icon, .agents-grid > *:nth-child(4n+1) .cap-icon, .agents-grid > *:nth-child(4n+1) .feature-icon, .agents-grid > *:nth-child(4n+1) .overview-icon, .agents-grid > *:nth-child(4n+1) .how-icon, .agents-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.agents-grid > *:nth-child(4n+2) .service-num, .agents-grid > *:nth-child(4n+2) .agent-icon, .agents-grid > *:nth-child(4n+2) .cap-icon, .agents-grid > *:nth-child(4n+2) .feature-icon, .agents-grid > *:nth-child(4n+2) .overview-icon, .agents-grid > *:nth-child(4n+2) .how-icon, .agents-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.agents-grid > *:nth-child(4n+3) .service-num, .agents-grid > *:nth-child(4n+3) .agent-icon, .agents-grid > *:nth-child(4n+3) .cap-icon, .agents-grid > *:nth-child(4n+3) .feature-icon, .agents-grid > *:nth-child(4n+3) .overview-icon, .agents-grid > *:nth-child(4n+3) .how-icon, .agents-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.agents-grid > *:nth-child(4n+4) .service-num, .agents-grid > *:nth-child(4n+4) .agent-icon, .agents-grid > *:nth-child(4n+4) .cap-icon, .agents-grid > *:nth-child(4n+4) .feature-icon, .agents-grid > *:nth-child(4n+4) .overview-icon, .agents-grid > *:nth-child(4n+4) .how-icon, .agents-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.caps-grid > *:nth-child(4n+1) .service-num, .caps-grid > *:nth-child(4n+1) .agent-icon, .caps-grid > *:nth-child(4n+1) .cap-icon, .caps-grid > *:nth-child(4n+1) .feature-icon, .caps-grid > *:nth-child(4n+1) .overview-icon, .caps-grid > *:nth-child(4n+1) .how-icon, .caps-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.caps-grid > *:nth-child(4n+2) .service-num, .caps-grid > *:nth-child(4n+2) .agent-icon, .caps-grid > *:nth-child(4n+2) .cap-icon, .caps-grid > *:nth-child(4n+2) .feature-icon, .caps-grid > *:nth-child(4n+2) .overview-icon, .caps-grid > *:nth-child(4n+2) .how-icon, .caps-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.caps-grid > *:nth-child(4n+3) .service-num, .caps-grid > *:nth-child(4n+3) .agent-icon, .caps-grid > *:nth-child(4n+3) .cap-icon, .caps-grid > *:nth-child(4n+3) .feature-icon, .caps-grid > *:nth-child(4n+3) .overview-icon, .caps-grid > *:nth-child(4n+3) .how-icon, .caps-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.caps-grid > *:nth-child(4n+4) .service-num, .caps-grid > *:nth-child(4n+4) .agent-icon, .caps-grid > *:nth-child(4n+4) .cap-icon, .caps-grid > *:nth-child(4n+4) .feature-icon, .caps-grid > *:nth-child(4n+4) .overview-icon, .caps-grid > *:nth-child(4n+4) .how-icon, .caps-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.features-grid > *:nth-child(4n+1) .service-num, .features-grid > *:nth-child(4n+1) .agent-icon, .features-grid > *:nth-child(4n+1) .cap-icon, .features-grid > *:nth-child(4n+1) .feature-icon, .features-grid > *:nth-child(4n+1) .overview-icon, .features-grid > *:nth-child(4n+1) .how-icon, .features-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.features-grid > *:nth-child(4n+2) .service-num, .features-grid > *:nth-child(4n+2) .agent-icon, .features-grid > *:nth-child(4n+2) .cap-icon, .features-grid > *:nth-child(4n+2) .feature-icon, .features-grid > *:nth-child(4n+2) .overview-icon, .features-grid > *:nth-child(4n+2) .how-icon, .features-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.features-grid > *:nth-child(4n+3) .service-num, .features-grid > *:nth-child(4n+3) .agent-icon, .features-grid > *:nth-child(4n+3) .cap-icon, .features-grid > *:nth-child(4n+3) .feature-icon, .features-grid > *:nth-child(4n+3) .overview-icon, .features-grid > *:nth-child(4n+3) .how-icon, .features-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.features-grid > *:nth-child(4n+4) .service-num, .features-grid > *:nth-child(4n+4) .agent-icon, .features-grid > *:nth-child(4n+4) .cap-icon, .features-grid > *:nth-child(4n+4) .feature-icon, .features-grid > *:nth-child(4n+4) .overview-icon, .features-grid > *:nth-child(4n+4) .how-icon, .features-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.overview-grid > *:nth-child(4n+1) .service-num, .overview-grid > *:nth-child(4n+1) .agent-icon, .overview-grid > *:nth-child(4n+1) .cap-icon, .overview-grid > *:nth-child(4n+1) .feature-icon, .overview-grid > *:nth-child(4n+1) .overview-icon, .overview-grid > *:nth-child(4n+1) .how-icon, .overview-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.overview-grid > *:nth-child(4n+2) .service-num, .overview-grid > *:nth-child(4n+2) .agent-icon, .overview-grid > *:nth-child(4n+2) .cap-icon, .overview-grid > *:nth-child(4n+2) .feature-icon, .overview-grid > *:nth-child(4n+2) .overview-icon, .overview-grid > *:nth-child(4n+2) .how-icon, .overview-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.overview-grid > *:nth-child(4n+3) .service-num, .overview-grid > *:nth-child(4n+3) .agent-icon, .overview-grid > *:nth-child(4n+3) .cap-icon, .overview-grid > *:nth-child(4n+3) .feature-icon, .overview-grid > *:nth-child(4n+3) .overview-icon, .overview-grid > *:nth-child(4n+3) .how-icon, .overview-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.overview-grid > *:nth-child(4n+4) .service-num, .overview-grid > *:nth-child(4n+4) .agent-icon, .overview-grid > *:nth-child(4n+4) .cap-icon, .overview-grid > *:nth-child(4n+4) .feature-icon, .overview-grid > *:nth-child(4n+4) .overview-icon, .overview-grid > *:nth-child(4n+4) .how-icon, .overview-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+
+@media (max-width: 768px) {
+  .nav-links { background:rgba(255,255,255,0.98) !important; border-bottom:1px solid #e5e7eb !important; }
+  .nav-links li { border-bottom:1px solid #f1f5f9 !important; }
+  .nav-links a { color:#1f2937 !important; }
+  .dropdown { background:#f8fafc !important; box-shadow:none; }
+  .nav-links a.mobile-book-call { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; }
+}
+
+  </style>
+</head>
+<body>
+<nav>
+  <a href="index.html" class="logo" style="text-decoration:none;display:inline-flex;align-items:center;gap:11px;">
+  <svg width="36" height="36" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+    <defs><linearGradient id="znav3" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+    <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#znav3)" stroke-width="1.8"/>
+    <line x1="15" y1="18" x2="47" y2="18" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="47" y1="18" x2="15" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="15" y1="44" x2="47" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
+  </svg>
+  <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#38BDF8,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">zoree</span>
+</a>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="index.html#about">About</a></li>
+    <li class="nav-item">
+      <a href="index.html#services">Services <span class="nav-arrow">&#9660;</span></a>
+      <div class="dropdown">
+        <a class="dropdown-item" href="zoree-smart-tms.html"><span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="24" height="16" rx="3" stroke="#13c4b0" stroke-width="1.8"/><circle cx="16" cy="16" r="4" stroke="#13c4b0" stroke-width="1.8"/><line x1="16" y1="4" x2="16" y2="8" stroke="#13c4b0" stroke-width="1.8" stroke-linecap="round"/><line x1="16" y1="24" x2="16" y2="28" stroke="#13c4b0" stroke-width="1.8" stroke-linecap="round"/><line x1="4" y1="16" x2="8" y2="16" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/><line x1="24" y1="16" x2="28" y2="16" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="16" r="1.5" fill="#13c4b0"/></svg></span><div class="dropdown-item-label">Smart TMS</div><div class="dropdown-item-desc">AI-powered TMS in 12-16 weeks</div></a>
+        <a class="dropdown-item" href="zoree-tms-implementation.html"><span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="16" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><circle cx="24" cy="8" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><circle cx="24" cy="24" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><line x1="11.5" y1="14.5" x2="20.5" y2="9.5" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/><line x1="11.5" y1="17.5" x2="20.5" y2="22.5" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/></svg></span><div class="dropdown-item-label">TMS Implementation Services</div><div class="dropdown-item-desc">Oracle Transportation Management end-to-end</div></a>
+        <a class="dropdown-item" href="zoree-nearshore.html" style="background:rgba(232,160,32,0.04);"><span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="11" stroke="#13c4b0" stroke-width="1.8"/><ellipse cx="16" cy="16" rx="5" ry="11" stroke="#13c4b0" stroke-width="1.6"/><line x1="5" y1="16" x2="27" y2="16" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/><path d="M7 10.5 Q16 13 25 10.5" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round" fill="none"/><path d="M7 21.5 Q16 19 25 21.5" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg></span><div class="dropdown-item-label">Nearshore Delivery</div><div class="dropdown-item-desc">LATAM AI implementation teams — 40–60% cost savings</div></a>
+      </div>
+    </li>
+    <li><a href="zoree-demo.html#demo-video" class="nav-demo">Demo</a></li>
+    <li><a href="zoree-blog.html" class="active">Blog</a></li>
+    <li><a href="zoree-contact.html">Contact</a></li>
+    <li class="mobile-book-call-li" style="display:none"><a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" style="display:block;margin:16px 0 0;text-align:center;padding:13px;background:var(--teal);color: #0f172a;font-family:'Inter Tight',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-decoration:none;text-transform:uppercase;border-radius:4px;">Book a Call</a></li>
+  </ul>
+  <a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" class="nav-cta">Book a Call</a>
+    <button id="hamburger" aria-label="Open menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </nav>
+
+<div class="article-hero">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="article-hero-inner">
+    <p class="breadcrumb"><a href="zoree-blog.html">Blog</a> &nbsp;/&nbsp; TMS Comparison</p>
+    <div class="article-tag">&#127942; Deep Dive &middot; TMS Comparison</div>
+    <h1>Oracle OTM vs Blue Yonder vs SAP TM<br/>vs Zoree Smart TMS: The <em>2026 Ranking</em></h1>
+    <div class="article-meta">
+      <span>&#128197; February 2026</span>
+      <span>&#9201; 12 min read</span>
+      <span>&#9997;&#65039; Zoree Research</span>
+    </div>
+    <div class="verdict-banner">
+      <div class="verdict-card rank-1">
+        <span class="rank-badge">&#127942;</span>
+        <div class="verdict-rank">#1</div>
+        <div class="verdict-name">Oracle OTM</div>
+        <div class="verdict-sub">Best Overall &middot; Global Logistics Leader</div>
+      </div>
+      <div class="verdict-card rank-2">
+        <span class="rank-badge">&#129352;</span>
+        <div class="verdict-rank">#2</div>
+        <div class="verdict-name">Blue Yonder TMS</div>
+        <div class="verdict-sub">Best AI &amp; Retail &middot; Supply Chain Suite</div>
+      </div>
+      <div class="verdict-card rank-3">
+        <span class="rank-badge">&#129353;</span>
+        <div class="verdict-rank">#3</div>
+        <div class="verdict-name">SAP TM</div>
+        <div class="verdict-sub">Best for SAP Shops &middot; Ecosystem Play</div>
+      </div>
+      <div class="verdict-card rank-z">
+        <span class="rank-badge">&#9889;</span>
+        <div class="verdict-rank">&#9889;</div>
+        <div class="verdict-name">Zoree Smart TMS</div>
+        <div class="verdict-sub">Best Value &middot; Fastest to Deploy &amp; Most Customizable</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="article-body">
+
+  <p class="article-lead">Three platforms dominate enterprise transportation management. Oracle OTM, Blue Yonder TMS, and SAP Transportation Management collectively handle the logistics of hundreds of Fortune 500 companies. But they are not interchangeable &mdash; choosing the wrong one can mean a multi-year, multi-million dollar misalignment. We&rsquo;ve ranked them, scored them, and delivered the unfiltered verdict &mdash; and added a fourth contender, <strong>Zoree Smart TMS</strong>, the agile alternative built to beat the incumbents on the two things they struggle with most: cost of implementation and ease of customization.</p>
+
+  <h2>How We Evaluated</h2>
+  <p>This comparison draws on ARC Advisory Group research, Gartner Peer Insights, SelectHub&rsquo;s 400-point TMS analysis, verified G2 user reviews, and Zoree&rsquo;s hands-on OTM implementation experience. We scored each platform across seven dimensions: Functionality Depth, Real-Time Visibility, AI Capabilities, Ease of Implementation, ERP Integration, Multi-Modal Support, and Global Trade Management.</p>
+
+  <div class="callout">
+    <div class="callout-label">&#128161; Key Insight</div>
+    <p>All three platforms are enterprise-grade and battle-tested. The differences are not about raw capability &mdash; they&rsquo;re about where each platform shines, who it&rsquo;s built for, and what it truly costs to get value from it.</p>
+  </div>
+
+  <h2>At a Glance: Score Comparison</h2>
+  <table class="comparison-table">
+    <thead>
+      <tr><th>Category</th><th>Oracle OTM</th><th>Blue Yonder</th><th>SAP TM</th><th>Zoree Smart TMS</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Functionality Depth</td><td>98 / 100 &#11088;</td><td>94 / 100 &#11088;</td><td>88 / 100 &#11088;</td><td>97 / 100 &#11088;</td></tr>
+      <tr><td>Real-Time Visibility</td><td>100 / 100 &#11088;</td><td>85 / 100 &#11088;</td><td>60 / 100</td><td>99 / 100 &#11088;</td></tr>
+      <tr><td>AI &amp; Predictive Analytics</td><td>82 / 100</td><td>95 / 100 &#11088;</td><td>70 / 100</td><td>98 / 100 &#11088;</td></tr>
+      <tr><td>Ease of Implementation</td><td>44 / 100</td><td>48 / 100</td><td>55 / 100</td><td>96 / 100 &#11088;</td></tr>
+      <tr><td>Cost of Implementation (TCO)</td><td>48 / 100</td><td>45 / 100</td><td>58 / 100</td><td>97 / 100 &#11088;</td></tr>
+      <tr><td>Ease of Customization</td><td>55 / 100</td><td>50 / 100</td><td>52 / 100</td><td>98 / 100 &#11088;</td></tr>
+      <tr><td>ERP Integration</td><td>96 / 100 &#11088;</td><td>80 / 100</td><td>98 / 100 &#11088;</td><td>96 / 100 &#11088;</td></tr>
+      <tr><td>Multi-Modal Support</td><td>100 / 100 &#11088;</td><td>96 / 100 &#11088;</td><td>88 / 100</td><td>97 / 100 &#11088;</td></tr>
+      <tr><td>Global Trade Management</td><td>100 / 100 &#11088;</td><td>72 / 100</td><td>84 / 100</td><td>95 / 100 &#11088;</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12px;color: #475569;margin-top:-32px;font-family:'Inter Tight',sans-serif;">For <strong style="color: #475569;">Cost of Implementation</strong> and <strong style="color: #475569;">Ease of Customization</strong>, a higher score means lower total cost and greater configurability &mdash; the two dimensions where modern, purpose-built platforms most clearly separate from the legacy enterprise suites.</p>
+
+  <h2>The Platforms, Ranked</h2>
+
+  <div class="platform-header otm">
+    <div class="ph-rank">#1</div>
+    <div style="flex:1;">
+      <div class="ph-name">Oracle Transportation Management (OTM)</div>
+      <div class="ph-tagline">Best Overall &middot; Gold Standard for Global Logistics</div>
+    </div>
+    <span style="font-size:32px;">&#127942;</span>
+  </div>
+
+  <p>Oracle OTM is the undisputed heavyweight of enterprise TMS. Built for organizations moving thousands of shipments daily across continents, it is what Fortune 500 companies deploy when logistics complexity demands industrial-grade orchestration. OTM earned a <strong>perfect score of 100 in both real-time visibility and multi-modal support</strong> &mdash; metrics that directly translate to freight savings and on-time delivery performance.</p>
+
+  <p>What sets OTM apart is its sheer breadth and depth. Route optimization, global trade management, freight procurement, freight audit and payment, fleet management, carrier collaboration, and 3D load configuration &mdash; all in one platform. Its machine learning engine predicts delivery ETAs with industry-leading accuracy, and its carrier sourcing module optimizes bids across cost, transit time, and carbon emissions simultaneously.</p>
+
+  <p>OTM stands alone in one critical category: <strong>Global Trade Management is native</strong>. For companies managing cross-border logistics &mdash; customs compliance, import/export documentation, trade regulations &mdash; OTM is the only platform where GTM and TMS share a single data model. Blue Yonder and SAP TM require third-party integrations or separate modules for this capability.</p>
+
+  <h3>Pros &amp; Cons</h3>
+  <div class="pros-cons">
+    <div class="pc-box pros">
+      <div class="pc-title">&#10003; Strengths</div>
+      <div class="pc-item"><span class="pc-dot"></span>#1 in real-time visibility and tracking &mdash; perfect score of 100/100</div>
+      <div class="pc-item"><span class="pc-dot"></span>Native Global Trade Management (GTM) &mdash; no separate vendor needed</div>
+      <div class="pc-item"><span class="pc-dot"></span>Best-in-class multi-modal: road, rail, ocean, air, parcel, LTL, intermodal</div>
+      <div class="pc-item"><span class="pc-dot"></span>ML-powered delivery ETA prediction &mdash; perfect accuracy score of 100/100</div>
+      <div class="pc-item"><span class="pc-dot"></span>Sold standalone &mdash; no Oracle ERP required, true best-of-breed option</div>
+      <div class="pc-item"><span class="pc-dot"></span>3D load optimization, re-drive technology, cross-docking, and more</div>
+    </div>
+    <div class="pc-box cons">
+      <div class="pc-title">&#10007; Weaknesses</div>
+      <div class="pc-item"><span class="pc-dot"></span>UI described by users as &ldquo;not just unfriendly &mdash; user hostile&rdquo;; steep learning curve</div>
+      <div class="pc-item"><span class="pc-dot"></span>Rigid and process-heavy &mdash; demands enterprise-scale workflows, resists agility</div>
+      <div class="pc-item"><span class="pc-dot"></span>Complex, expensive implementations &mdash; 12&ndash;18+ months without specialist support</div>
+      <div class="pc-item"><span class="pc-dot"></span>Custom API integrations require Oracle specialist expertise</div>
+      <div class="pc-item"><span class="pc-dot"></span>Standard reporting is limited &mdash; most enterprises need custom BI tooling on top</div>
+      <div class="pc-item"><span class="pc-dot"></span>Not cost-effective for small or mid-market operations</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">&#127919; Best For</div>
+    <p>Large global shippers with complex multi-modal, cross-border operations. Companies that need GTM alongside TMS in a unified platform. Organizations willing to invest in a 12&ndash;18 month implementation for long-term best-in-class performance. Any business already on Oracle ERP or Oracle WMS.</p>
+  </div>
+
+  <div class="platform-header by">
+    <div class="ph-rank">#2</div>
+    <div style="flex:1;">
+      <div class="ph-name">Blue Yonder TMS (formerly JDA Software)</div>
+      <div class="ph-tagline">Best AI Capabilities &middot; Supply Chain Suite Leader</div>
+    </div>
+    <span style="font-size:32px;">&#129352;</span>
+  </div>
+
+  <p>Blue Yonder earns #2 by doing something no other TMS does as well: <strong>integrating transportation into a holistic supply chain intelligence layer</strong>. Where OTM is a standalone TMS that connects outward, Blue Yonder&rsquo;s TMS is the logistics execution arm of a platform that simultaneously manages demand forecasting, warehouse operations, inventory, and order management &mdash; all on one data model.</p>
+
+  <p>The standout differentiator is its <strong>Luminate AI engine</strong>. Blue Yonder uses machine learning to anticipate supply chain disruptions before they occur, dynamically adjust routing in real-time, and optimize carrier selection proactively. For retail and CPG companies where demand volatility is constant, this forward-looking intelligence is a competitive advantage that rule-based TMS platforms simply cannot replicate.</p>
+
+  <p>Blue Yonder is also the clear leader for companies running its WMS. The <strong>WMS-TMS unified execution layer</strong> eliminates the data latency and integration complexity that haunts every other warehouse-plus-transport implementation.</p>
+
+  <h3>Pros &amp; Cons</h3>
+  <div class="pros-cons">
+    <div class="pc-box pros">
+      <div class="pc-title">&#10003; Strengths</div>
+      <div class="pc-item"><span class="pc-dot"></span>Best AI and predictive analytics &mdash; disruption anticipation, not just reaction</div>
+      <div class="pc-item"><span class="pc-dot"></span>Seamless WMS-TMS integration within Blue Yonder suite &mdash; unified execution</div>
+      <div class="pc-item"><span class="pc-dot"></span>Demand-driven transportation planning aligned with inventory and forecasting</div>
+      <div class="pc-item"><span class="pc-dot"></span>Purpose-built for retail, e-commerce, and CPG demand variability</div>
+      <div class="pc-item"><span class="pc-dot"></span>Network modeling tools for strategic transportation design and cost simulation</div>
+      <div class="pc-item"><span class="pc-dot"></span>Full multi-modal coverage: road, ocean, air, rail, parcel, fleet management</div>
+    </div>
+    <div class="pc-box cons">
+      <div class="pc-title">&#10007; Weaknesses</div>
+      <div class="pc-item"><span class="pc-dot"></span>Among the most expensive TMS platforms &mdash; licensing often reaches six figures annually</div>
+      <div class="pc-item"><span class="pc-dot"></span>Some users report sluggish system performance under peak load</div>
+      <div class="pc-item"><span class="pc-dot"></span>Limited UI customization &mdash; configuration-heavy for non-standard workflows</div>
+      <div class="pc-item"><span class="pc-dot"></span>Integration with non-Blue Yonder systems requires significant custom development</div>
+      <div class="pc-item"><span class="pc-dot"></span>Less suited for pure global trade / cross-border compliance scenarios</div>
+      <div class="pc-item"><span class="pc-dot"></span>Full value only unlocked when deployed with the broader Blue Yonder platform</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">&#127919; Best For</div>
+    <p>Retailers, e-commerce, and CPG manufacturers with high demand variability who need AI-driven transportation planning. Companies already running Blue Yonder WMS. Enterprises prioritizing predictive disruption management and supply chain convergence over raw standalone TMS functionality.</p>
+  </div>
+
+  <div class="platform-header sap">
+    <div class="ph-rank">#3</div>
+    <div style="flex:1;">
+      <div class="ph-name">SAP Transportation Management (SAP TM)</div>
+      <div class="ph-tagline">Best ERP Integration &middot; Logical Choice for SAP Ecosystems</div>
+    </div>
+    <span style="font-size:32px;">&#129353;</span>
+  </div>
+
+  <p>SAP TM takes third place not because it is a weak platform &mdash; it isn&rsquo;t &mdash; but because its primary value is conditional: <strong>it is best when you are already running SAP</strong>. For companies with SAP S/4HANA or SAP ECC at the core of their operations, SAP TM delivers out-of-the-box integration that no other TMS can match. Order data flows from ERP into TMS without transformation. Financial postings reconcile natively. Event management, trade services, and warehouse management all share one architecture.</p>
+
+  <p>The platform covers all major transportation scenarios &mdash; domestic and international, inbound and outbound, all modes &mdash; with solid freight procurement, route optimization, carrier management, and <strong>particularly strong freight audit and invoice verification</strong> powered by native ERP financial integration.</p>
+
+  <p>Where SAP TM falls behind: its real-time visibility score is the lowest of the three (60/100 vs OTM&rsquo;s perfect 100). Its AI capabilities lag behind Blue Yonder&rsquo;s Luminate. And its UI, while improved in S/4HANA, still reflects ERP-first design. <strong>For organizations not already on SAP, the integration advantage reverses into a significant liability.</strong></p>
+
+  <h3>Pros &amp; Cons</h3>
+  <div class="pros-cons">
+    <div class="pc-box pros">
+      <div class="pc-title">&#10003; Strengths</div>
+      <div class="pc-item"><span class="pc-dot"></span>Native SAP ERP integration &mdash; seamless data flow, no middleware, no transformation</div>
+      <div class="pc-item"><span class="pc-dot"></span>Comprehensive domestic and international transportation scenario coverage</div>
+      <div class="pc-item"><span class="pc-dot"></span>Strong freight audit, invoice verification, and financial settlement natively</div>
+      <div class="pc-item"><span class="pc-dot"></span>AI-driven risk insights and interactive freight bidding built in</div>
+      <div class="pc-item"><span class="pc-dot"></span>Single vendor relationship for ERP + TMS &mdash; simplified support and contracts</div>
+      <div class="pc-item"><span class="pc-dot"></span>Logical, low-risk path for SAP customers already familiar with the ecosystem</div>
+    </div>
+    <div class="pc-box cons">
+      <div class="pc-title">&#10007; Weaknesses</div>
+      <div class="pc-item"><span class="pc-dot"></span>Lowest real-time visibility of the three &mdash; 60/100 vs OTM&rsquo;s perfect 100</div>
+      <div class="pc-item"><span class="pc-dot"></span>Limited flexibility for businesses with unique or non-standard transportation workflows</div>
+      <div class="pc-item"><span class="pc-dot"></span>Integration with non-SAP systems requires significant technical effort and cost</div>
+      <div class="pc-item"><span class="pc-dot"></span>AI capabilities less mature than Blue Yonder&rsquo;s Luminate platform</div>
+      <div class="pc-item"><span class="pc-dot"></span>SAP&rsquo;s scale is &ldquo;also a drawback when it comes to agility and service&rdquo;</div>
+      <div class="pc-item"><span class="pc-dot"></span>Value proposition largely disappears without existing SAP ERP investment</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">&#127919; Best For</div>
+    <p>Companies already running SAP ERP (especially S/4HANA) who want a TMS that integrates natively without middleware. Organizations prioritizing a single-vendor enterprise ecosystem. Businesses with standard transportation scenarios that don&rsquo;t require deep customization or the most advanced AI capabilities.</p>
+  </div>
+
+  <div class="platform-header zoree">
+    <div class="ph-rank">&#9889;</div>
+    <div style="flex:1;">
+      <div class="ph-name">Zoree Smart TMS</div>
+      <div class="ph-tagline">The Agile Challenger &middot; Best Value, Fastest Deployment, Most Customizable</div>
+    </div>
+    <span style="font-size:32px;">&#9889;</span>
+  </div>
+
+  <p>The three platforms above are the heavyweights &mdash; but they share the same Achilles&rsquo; heel: they are <strong>expensive, slow, and rigid to implement</strong>. Multi-year timelines, seven-figure budgets, and specialist-only customization are the price of admission. <strong>Zoree Smart TMS delivers the full depth a global enterprise demands &mdash; without that price.</strong> It is an AI-powered, cloud-native TMS that matches the incumbents on functionality, visibility, and multi-modal scale while decisively beating them on the two dimensions where they are weakest: cost of implementation and ease of customization.</p>
+
+    <p>Where Oracle OTM and SAP TM measure go-live in 12&ndash;18+ months, Zoree Smart TMS deploys in <strong>12&ndash;16 weeks</strong> &mdash; even for complex, high-volume, cross-border operations. It carries the full enterprise capability set: real-time tracking, predictive AI ETAs, route and load optimization, freight procurement, native global trade management, and deep multi-modal coverage &mdash; without the integration tax. And because Zoree pairs the platform with <strong>nearshore LATAM delivery teams</strong>, the total cost of ownership lands <strong>40&ndash;60% below</strong> a comparable big-vendor build.</p>
+
+  <p>The differentiator is <strong>configurability</strong>. Rather than forcing your operation into a rigid, process-heavy template, Zoree Smart TMS is built to be shaped around your workflows &mdash; custom rules, screens, and integrations are configuration tasks, not multi-quarter Oracle or SAP specialist engagements. From mid-market shippers to the largest global enterprises, that flexibility is the difference between a TMS that fits and one you spend years fighting.</p>
+
+  <h3>Pros &amp; Cons</h3>
+  <div class="pros-cons">
+    <div class="pc-box pros">
+      <div class="pc-title">&#10003; Strengths</div>
+      <div class="pc-item"><span class="pc-dot"></span>Fastest implementation in the comparison &mdash; live in 12&ndash;16 weeks, not 12&ndash;18 months</div>
+      <div class="pc-item"><span class="pc-dot"></span>Lowest total cost of ownership &mdash; 40&ndash;60% below comparable big-vendor builds</div>
+      <div class="pc-item"><span class="pc-dot"></span>Highly customizable &mdash; workflows, rules, and screens configured, not hard-coded</div>
+      <div class="pc-item"><span class="pc-dot"></span>Enterprise-grade scale &mdash; high-volume, multi-modal, cross-border operations fully supported</div>
+      <div class="pc-item"><span class="pc-dot"></span>Best-in-class AI planning and real-time visibility built in from day one</div>
+      <div class="pc-item"><span class="pc-dot"></span>Native global trade management for customs, compliance, and cross-border logistics</div>
+      <div class="pc-item"><span class="pc-dot"></span>Cloud-native, API-first architecture &mdash; integrates cleanly with existing ERP/WMS</div>
+      <div class="pc-item"><span class="pc-dot"></span>Nearshore LATAM delivery teams &mdash; aligned time zones, faster iteration</div>
+    </div>
+    <div class="pc-box cons">
+      <div class="pc-title">&#10007; Considerations</div>
+      <div class="pc-item"><span class="pc-dot"></span>A newer platform than the decades-old incumbents &mdash; though already proven in large-enterprise deployments</div>
+      <div class="pc-item"><span class="pc-dot"></span>Full value is realized in partnership with Zoree&rsquo;s implementation and nearshore teams, not pure self-serve</div>
+      <div class="pc-item"><span class="pc-dot"></span>Greatest impact when replacing or modernizing a legacy TMS rather than bolting onto fragmented point tools</div>
+      <div class="pc-item"><span class="pc-dot"></span>Rapid time-to-value means change management must keep pace with deployment speed</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">&#127919; Best For</div>
+    <p>Any organization &mdash; from mid-market shippers to the largest global enterprises &mdash; that wants full-depth, AI-driven transportation management without a multi-year, multi-million-dollar implementation. Companies that refuse to choose between enterprise capability and speed, cost, or flexibility. Teams seeking the lowest total cost of ownership and a TMS shaped around their workflows rather than the reverse.</p>
+  </div>
+
+  <h2>The Verdict: Final Rankings</h2>
+  <div class="verdict-section">
+    <h3>Overall Rankings &mdash; 2026</h3>
+    <div class="verdict-row">
+      <div class="vr-num c1">#1</div>
+      <div class="vr-body">
+        <strong>Oracle OTM &mdash; Best Overall TMS</strong>
+        <p>The most feature-complete, highest-visibility, most globally capable TMS on the market. Its perfect scores in tracking, multi-modal support, and delivery ETA accuracy are backed by real-world enterprise deployments at enormous scale. Implementation complexity and cost are real challenges &mdash; but for global logistics operations, no platform delivers more. This is Zoree&rsquo;s core implementation specialty.</p>
+      </div>
+    </div>
+      <!-- NOTE: original file was truncated here; rankings #2 onward were lost and need to be restored from a backup. -->
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-logo" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:12px;">
+  <svg width="30" height="30" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+    <defs><linearGradient id="zftr0" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+    <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#zftr0)" stroke-width="1.8"/>
+    <line x1="15" y1="18" x2="47" y2="18" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="47" y1="18" x2="15" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="15" y1="44" x2="47" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
+  </svg>
+  <span style="font-size:18px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#38BDF8,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">zoree</span>
+</div>
+    <p>© 2026 Zoree — AI &amp; Transportation</p>
+    <p style="margin-top:10px;"><a href="mailto:contact@zoree.io" style="color:var(--teal);text-decoration:none;">contact@zoree.io</a></p>
+    <p style="margin-top:8px;"><a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" style="color:var(--teal,#0e9f8e);text-decoration:none;letter-spacing:0.05em;">📅 Book a 30-Min Call</a></p>
+  <p style="margin-top:8px;color: #475569;font-size:12px;letter-spacing:0.05em;">1309 Coffeen Ave, Ste 3336 &nbsp;·&nbsp; Sheridan, WY 82801</p>
+  </footer>
+
+  <script>
+    // ── DROPDOWN NAV ──
+    (function () {
+      function initDropdowns() {
+        document.querySelectorAll('.nav-item').forEach(function (item) {
+          var dropdown = item.querySelector('.dropdown');
+          if (!dropdown) return;
+          var timer = null;
+          function openMenu() { clearTimeout(timer); item.classList.add('open'); }
+          function closeMenu() { timer = setTimeout(function () { item.classList.remove('open'); }, 150); }
+          item.addEventListener('mouseenter', openMenu);
+          item.addEventListener('mouseleave', closeMenu);
+          dropdown.addEventListener('mouseenter', openMenu);
+          dropdown.addEventListener('mouseleave', closeMenu);
+          var topLink = item.querySelector(':scope > a');
+          if (topLink) topLink.addEventListener('click', function (e) { e.preventDefault(); item.classList.toggle('open'); });
+          dropdown.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', function (e) { e.stopPropagation(); });
+          });
+        });
+        document.addEventListener('click', function (e) {
+          if (!e.target.closest('.nav-item')) {
+            document.querySelectorAll('.nav-item').forEach(function (i) { i.classList.remove('open'); });
+          }
+        });
+      }
+      document.readyState === 'loading'
+        ? document.addEventListener('DOMContentLoaded', initDropdowns)
+        : initDropdowns();
+    })();
+    (function () {
+      var hamburger = document.getElementById('hamburger');
+      var navLinks = document.getElementById('navLinks');
+      if (hamburger && navLinks) {
+        hamburger.addEventListener('click', function (e) { e.stopPropagation(); hamburger.classList.toggle('open'); navLinks.classList.toggle('mobile-open'); });
+        document.addEventListener('click', function (e) { if (!e.target.closest('nav')) { hamburger.classList.remove('open'); navLinks.classList.remove('mobile-open'); } });
+      }
+    })();
+    (function () {
+      var els = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) { els.forEach(function (el){ el.classList.add('visible'); }); return; }
+      var io = new IntersectionObserver(function (entries) { entries.forEach(function (e){ if (e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target);} }); }, { threshold: 0.12 });
+      els.forEach(function (el){ io.observe(el); });
+    })();
+  </script>
+</body>
+</html>

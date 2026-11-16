@@ -1,0 +1,17 @@
+{
+  "name": "zoree-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZoreeTMS remote MCP server — lets Claude read orders, shipments, carriers and LTL quotes through the ZoreeTMS API",
+  "main": "src/index.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "express": "^4.21.2",
+    "zod": "^3.25.76"
+  }
+}

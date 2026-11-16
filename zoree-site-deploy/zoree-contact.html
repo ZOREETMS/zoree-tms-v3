@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="favicon-32.png"/>
+  <link rel="shortcut icon" href="favicon.ico"/>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+  <title>Contact | Zoree — AI & Transportation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:       #0a1628;
+      --navy-mid:   #0f2040;
+      --navy-light: #163055;
+      --teal:       #0e9f8e;
+      --teal-light: #13c4b0;
+      --teal-pale:  #e6f9f7;
+      --white:      #ffffff;
+      --off-white: #f8fafc;
+      --gray: #e5e7eb;
+      --text-dark:  #0a1628;
+      --text-mid:   #3d5278;
+      --text-light: #475569;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; overflow-x: hidden; background: var(--off-white); }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999; overflow: visible;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 22px 60px;
+      background: rgba(10,22,40,0.94);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .logo { font-size: 22px; font-weight: 800; color: #0f172a; text-decoration: none; letter-spacing: -0.5px; }
+    .nav-links { display: flex; gap: 40px; list-style: none; overflow: visible; }
+    .nav-links a {
+      font-family: 'Inter Tight', sans-serif; font-size: 12px; letter-spacing: 0.08em;
+      color: var(--text-light); text-decoration: none; text-transform: uppercase; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: #0f172a; }
+    .nav-links a.active { color: #0f172a; }
+
+    .nav-item { position: relative; }
+    .nav-item .nav-arrow { display: inline-block; margin-left: 4px; font-size: 9px; transition: transform 0.25s ease; vertical-align: middle; color: var(--text-light); }
+    .nav-item.open .nav-arrow { transform: rotate(180deg); color: #0f172a; }
+    .nav-item.open > a { color: #0f172a; }
+
+    .dropdown {
+      position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%) translateY(0);
+      background: #0d1e38; border: 1px solid rgba(255,255,255,0.1);
+      border-top: 2px solid var(--teal); min-width: 260px;
+      opacity: 0; visibility: hidden; pointer-events: none;
+      transition: opacity 0.2s ease, visibility 0.2s ease; z-index: 99999; margin-top: 0;
+    }
+    .dropdown::before { content: ''; position: absolute; top: -20px; left: 0; right: 0; height: 20px; pointer-events: none; }
+    .nav-item.open .dropdown { opacity: 1; visibility: visible; pointer-events: all; }
+    .dropdown-item { display: block; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); text-decoration: none; transition: background 0.15s; }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: rgba(14,159,142,0.12); }
+    .dropdown-item-label { font-family: 'Inter Tight', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #0f172a; text-transform:uppercase; margin-bottom: 4px; }
+    .dropdown-item-desc { font-family: 'Inter Tight', sans-serif; font-size: 11px; color: #475569; line-height: 1.5;  text-transform:none;}
+    .dropdown-item .di-icon { display: block; width: 28px; height: 28px; margin-bottom: 8px; }
+    .di-icon svg { width: 28px; height: 28px; display: block; }
+
+    .nav-cta {
+      font-family: 'Inter Tight', sans-serif; font-size: 12px; letter-spacing: 0.08em;
+      color: #0f172a; background: var(--teal); border: none; padding: 10px 26px;
+      text-transform: uppercase; text-decoration: none; transition: background 0.2s, transform 0.2s;
+    }
+    .nav-cta:hover { background: var(--teal-light); transform: translateY(-1px); }
+
+    /* ── HAMBURGER ── */
+    .nav-hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 4px; z-index: 1100; }
+    .nav-hamburger span { display: block; width: 24px; height: 2px; background: #fff; transition: all 0.3s ease; }
+    .nav-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .nav-hamburger.open span:nth-child(2) { opacity: 0; }
+    .nav-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* ── PAGE HERO ── */
+    .page-hero {
+      background: var(--navy);
+      padding: 160px 60px 80px;
+      position: relative; overflow: hidden;
+    }
+    .page-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 80% at 80% 50%, rgba(14,159,142,0.12) 0%, transparent 70%);
+    }
+    .page-hero-inner { position: relative; z-index: 1; }
+    .breadcrumb {
+      font-family: 'Inter Tight', sans-serif; font-size: 11px; letter-spacing: 0.18em;
+      color: var(--teal-light); text-transform: uppercase; margin-bottom: 20px;
+    }
+    .page-hero h1 {
+      font-size: clamp(40px, 6vw, 72px); font-weight: 800;
+      line-height: 0.96; letter-spacing: -2px; color: #0f172a; max-width: 600px;
+    }
+    .page-hero h1 em { font-style: normal; color: var(--teal-light); }
+    .page-hero-sub {
+      margin-top: 24px; max-width: 500px;
+      font-family: 'Inter Tight', sans-serif; font-size: 15px;
+      line-height: 1.8; color: var(--text-light);
+    }
+
+    /* ── CONTACT LAYOUT ── */
+    .contact-section {
+      padding: 80px 60px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ── FORM ── */
+    .form-card {
+      background: #fff;
+      padding: 52px;
+      box-shadow: 0 4px 40px rgba(10,22,40,0.08);
+    }
+    .form-card h2 {
+      font-size: 22px; font-weight: 700; color: var(--navy);
+      letter-spacing: -0.5px; margin-bottom: 8px;
+    }
+    .form-card p {
+      font-family: 'Inter Tight', sans-serif; font-size: 13px;
+      color: var(--text-mid); line-height: 1.7; margin-bottom: 36px;
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; margin-bottom: 20px; }
+    .form-group label {
+      font-family: 'Inter Tight', sans-serif; font-size: 11px;
+      letter-spacing: 0.1em; color: var(--text-mid);
+      text-transform: uppercase; font-weight: 600; margin-bottom: 8px;
+    }
+    .form-group label span { color: var(--teal); }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      font-family: 'Inter Tight', sans-serif; font-size: 14px;
+      color: var(--text-dark); background: var(--off-white);
+      border: 1px solid var(--gray); padding: 13px 16px;
+      outline: none; transition: border-color 0.2s, background 0.2s;
+      appearance: none; -webkit-appearance: none;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--teal); background: #fff;
+      box-shadow: 0 0 0 3px rgba(14,159,142,0.1);
+    }
+    .form-group textarea { resize: vertical; min-height: 130px; }
+
+    .form-group select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233d5278' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+      cursor: pointer;
+    }
+
+    .form-submit {
+      margin-top: 8px;
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .btn-submit {
+      font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px;
+      letter-spacing: 0.04em; color: #0f172a; background: var(--teal);
+      border: none; padding: 16px 44px; cursor: pointer;
+      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+      text-transform: uppercase;
+    }
+    .btn-submit:hover { background: var(--teal-light); transform: translateY(-2px); box-shadow: 0 12px 36px rgba(14,159,142,0.35); }
+    .btn-submit:active { transform: translateY(0); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .form-note {
+      font-family: 'Inter Tight', sans-serif; font-size: 11px;
+      color: var(--text-mid); line-height: 1.6;
+    }
+
+    /* Success / error states */
+    .form-success {
+      display: none;
+      background: rgba(14,159,142,0.08);
+      border: 1px solid rgba(14,159,142,0.3);
+      padding: 20px 24px; margin-top: 24px;
+      font-family: 'Inter Tight', sans-serif; font-size: 14px;
+      color: var(--teal); line-height: 1.6;
+    }
+    .form-error {
+      display: none;
+      background: rgba(220,38,38,0.06);
+      border: 1px solid rgba(220,38,38,0.25);
+      padding: 16px 20px; margin-top: 16px;
+      font-family: 'Inter Tight', sans-serif; font-size: 13px;
+      color: #dc2626; line-height: 1.6;
+    }
+
+    /* ── CONTACT INFO SIDEBAR ── */
+    .contact-info { display: flex; flex-direction: column; gap: 0; padding-top: 8px; }
+
+    .info-block {
+      padding: 32px 0;
+      border-bottom: 1px solid var(--gray);
+      display: flex; gap: 24px; align-items: flex-start;
+    }
+    .info-block:first-child { padding-top: 0; }
+    .info-block:last-child { border-bottom: none; }
+
+    .info-icon {
+      width: 48px; height: 48px; flex-shrink: 0;
+      background: var(--navy); display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .info-content {}
+    .info-label {
+      font-family: 'Inter Tight', sans-serif; font-size: 10px;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--teal); font-weight: 700; margin-bottom: 8px;
+    }
+    .info-value {
+      font-size: 16px; font-weight: 600; color: var(--navy);
+      line-height: 1.5; letter-spacing: -0.2px;
+    }
+    .info-value a { color: var(--navy); text-decoration: none; transition: color 0.2s; }
+    .info-value a:hover { color: var(--teal); }
+    .info-sub {
+      font-family: 'Inter Tight', sans-serif; font-size: 13px;
+      color: var(--text-mid); margin-top: 4px; line-height: 1.6;
+    }
+
+    /* Calendly CTA block */
+    .calendly-block {
+      margin-top: 40px;
+      background: var(--navy);
+      padding: 36px 32px;
+      position: relative; overflow: hidden;
+    }
+    .calendly-block::before {
+      content: '';
+      position: absolute; top: -40px; right: -40px;
+      width: 140px; height: 140px;
+      background: radial-gradient(circle, rgba(14,159,142,0.25) 0%, transparent 70%);
+    }
+    .calendly-block h3 {
+      font-size: 18px; font-weight: 700; color: #0f172a;
+      letter-spacing: -0.3px; margin-bottom: 10px; position: relative;
+    }
+    .calendly-block p {
+      font-family: 'Inter Tight', sans-serif; font-size: 13px;
+      color: var(--text-light); line-height: 1.7; margin-bottom: 24px; position: relative;
+    }
+    .btn-calendly {
+      display: inline-block;
+      font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 13px;
+      letter-spacing: 0.05em; color: var(--navy); background: var(--teal-light);
+      padding: 14px 32px; text-decoration: none; text-transform: uppercase;
+      transition: background 0.2s, transform 0.2s; position: relative;
+    }
+    .btn-calendly:hover { background: #fff; transform: translateY(-1px); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--navy); border-top: 1px solid rgba(255,255,255,0.07);
+      padding: 40px 60px; text-align: center;
+    }
+    .footer-logo { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 18px; color: #0f172a; margin-bottom: 12px; }
+    footer p { font-family: 'Inter Tight', sans-serif; font-size: 11px; letter-spacing: 0.1em; color: var(--text-light); text-transform: uppercase; line-height: 1.8; }
+
+    /* ── REVEAL ── */
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s ease, transform 0.8s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── MOBILE ── */
+    @media (max-width: 900px) {
+      .contact-section { grid-template-columns: 1fr; gap: 48px; padding: 60px 32px; }
+    }
+    @media (max-width: 768px) {
+      .page-hero { padding: 120px 24px 60px; }
+      .form-card { padding: 32px 24px; }
+      .form-row { grid-template-columns: 1fr; }
+      footer { padding: 40px 24px; flex-direction: column !important; align-items: flex-start !important; gap: 4px; padding-top: 32px !important; padding-bottom: 32px !important; }
+      footer p { margin-top: 4px !important; }
+    }
+    @media (max-width: 480px) {
+      .contact-section { padding: 48px 20px; }
+    }
+
+    .mobile-book-call-li { display: none; }
+    /* Hide old hamburger class — using #hamburger instead */
+    .nav-hamburger { display: none !important; }
+
+    /* ── HAMBURGER MENU ── */
+    #hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 28px;
+      height: 20px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      z-index: 1001;
+      flex-shrink: 0;
+    }
+    #hamburger span {
+      display: block;
+      width: 100%;
+      height: 2px;
+      background: #fff;
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+    #hamburger.open span:nth-child(1) { transform: translateY(9px) rotate(45deg); }
+    #hamburger.open span:nth-child(2) { opacity: 0; }
+    #hamburger.open span:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      .nav-cta { display: none; }
+      .mobile-book-call-li { display: list-item; }
+      #hamburger { display: flex !important; }
+      .nav-links {
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 61px;
+        left: 0; right: 0;
+        background: rgba(10,22,40,0.98);
+        backdrop-filter: blur(20px);
+        padding: 20px 24px 32px;
+        gap: 0;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        z-index: 999;
+      }
+      .nav-links.mobile-open { display: flex; }
+      .nav-links li { border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .nav-links li:last-child { border-bottom: none; }
+      .nav-links a {
+        display: block;
+        padding: 14px 0;
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        color: #475569;
+      }
+      .nav-links a:hover { color: #0f172a; }
+      /* Mobile dropdown */
+      .dropdown {
+        position: static;
+        transform: none;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: all !important;
+        background: rgba(255,255,255,0.04);
+        border: none;
+        border-top: none;
+        min-width: unset;
+        width: 100%;
+        margin-top: 0;
+        display: none;
+      }
+      .nav-item.open .dropdown { display: block; }
+      .dropdown-item { padding: 12px 16px; }
+      .dropdown-item .di-icon { display: block; width: 28px; height: 28px; margin-bottom: 8px; }
+    .di-icon svg { width: 28px; height: 28px; display: block; }
+      .dropdown-item-label { display: inline; font-size: 12px; }
+      .dropdown-item-desc { margin-top: 4px;  text-transform:none;}
+      /* Mobile Book a Call link */
+      .mobile-book-call {
+        display: block;
+        margin-top: 20px;
+        text-align: center;
+        padding: 12px;
+        background: var(--teal);
+        color: #0f172a;
+        font-family: 'Inter Tight', sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+    }
+      /* Highlighted Demo link */
+    .nav-links a.nav-demo {
+      color: var(--teal-light); border: 1px solid rgba(19,196,176,0.55);
+      background: rgba(19,196,176,0.12); border-radius: 5px; padding: 7px 16px;
+      display: inline-flex; align-items: center; gap: 7px;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
+      animation: demoPulse 2.4s ease-out infinite;
+    }
+    .nav-links a.nav-demo::before { content: '▶'; font-size: 8px; }
+    .nav-links a.nav-demo:hover {
+      color: #0f172a; background: var(--teal);
+      box-shadow: 0 6px 20px rgba(19,196,176,0.4); transform: translateY(-1px);
+      animation: none;
+    }
+    @keyframes demoPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(19,196,176,0.45); }
+      50%      { box-shadow: 0 0 0 6px rgba(19,196,176,0); }
+    }
+  
+/* === LIGHT REDESIGN OVERRIDE v3 === */
+html, body { background:#ffffff; }
+h1 { font-weight:600; letter-spacing:-0.03em; }
+h2 { font-weight:600; letter-spacing:-0.02em; }
+h3 { font-weight:600; letter-spacing:-0.01em; }
+
+/* NAV: dark, normal-case, medium weight (dtskill-style) */
+nav { background:rgba(255,255,255,0.9) !important; backdrop-filter:blur(20px); border-bottom:1px solid #e5e7eb !important; }
+.logo { color:#0f172a !important; }
+.nav-links a { color:#1f2937 !important; text-transform:none !important; font-size:15px !important; letter-spacing:0 !important; font-weight:500 !important; font-family:'Plus Jakarta Sans',sans-serif !important; }
+.nav-links a:hover { color:#000000 !important; }
+.nav-item .nav-arrow { color:#1f2937 !important; }
+.nav-item.open > a, .nav-item.open .nav-arrow { color:#000000 !important; }
+.dropdown { background:#ffffff !important; border:1px solid #e5e7eb !important; border-top:2px solid #14b8a6 !important; box-shadow:0 20px 50px rgba(15,23,42,0.12); }
+.dropdown-item { border-bottom:1px solid #f1f5f9 !important; }
+.dropdown-item:hover { background:#f8fafc !important; }
+.dropdown-item-label { color:#0f172a !important; }
+.dropdown-item-desc { color:#6b7280 !important; }
+#hamburger span { background:#0f172a !important; }
+
+/* Buttons -> dark slate pills (text white) */
+.btn-primary, .nav-cta, .mobile-book-call, .btn-teal, .send-btn, .btn-submit, .btn-calendly { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; border:none !important; }
+.btn-primary *, .nav-cta *, .mobile-book-call *, .btn-teal *, .send-btn *, .btn-submit *, .btn-calendly * { color:#ffffff !important; }
+.btn-outline { background:transparent !important; color:#111827 !important; border:1px solid #111827 !important; border-radius:40px !important; }
+.btn-primary:hover, .nav-cta:hover, .btn-teal:hover, .send-btn:hover, .btn-submit:hover, .btn-calendly:hover { background:#1f2937 !important; box-shadow:0 12px 30px rgba(17,24,39,0.18) !important; }
+.nav-book-call { color:#111827 !important; border:1px solid #111827 !important; border-radius:40px !important; }
+.nav-book-call:hover { background:#f3f4f6 !important; }
+.nav-links a.nav-demo { color:#ffffff !important; border:1px solid #111827 !important; background:#111827 !important; border-radius:40px !important; font-size:13px !important; position:relative !important; overflow:hidden !important; animation:none !important; }
+.nav-links a.nav-demo::before { color:#2dd4bf; }
+.nav-links a.nav-demo::after { content:''; position:absolute; top:0; left:-80%; width:55%; height:100%; background:linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%); transform:skewX(-20deg); animation:demoShine 3.6s ease-in-out infinite; pointer-events:none; }
+@keyframes demoShine { 0% { left:-80%; } 40% { left:130%; } 100% { left:130%; } }
+.nav-links a.nav-demo:hover { color:#ffffff !important; background:#1f2937 !important; border-color:#2dd4bf !important; box-shadow:0 4px 16px rgba(19,196,176,0.35) !important; }
+.btn-ghost { color:#475569 !important; border-bottom:1px solid #cbd5e1 !important; }
+.btn-ghost:hover { color:#0f172a !important; border-color:#0f172a !important; }
+
+/* Dark SECTION BACKGROUNDS -> light (text dark; eyebrows/accents keep color) */
+.demo-section, .cta-section, .stats-band, .why-section, .how-section, .journey-section, .timeline-section, .process-section, .models-section, .ai-section, .countries-section, .verdict-section, .blog-section, .smart, .cap-section, .overview-strip, .article-hero, .page-hero { background:#ffffff !important; }
+.cta-section, .stats-band, .overview-strip, .cap-section { background:#f8fafc !important; }
+.demo-section h2, .cta-section h2, .stats-band h2, .why-section h2, .how-section h2, .journey-section h2, .timeline-section h2, .process-section h2, .models-section h2, .ai-section h2, .countries-section h2, .verdict-section h2, .blog-section h2, .smart h2, .cap-section h2, .overview-strip h2, .article-hero h2, .page-hero h2, .demo-section h3, .cta-section h3, .stats-band h3, .why-section h3, .how-section h3, .journey-section h3, .timeline-section h3, .process-section h3, .models-section h3, .ai-section h3, .countries-section h3, .verdict-section h3, .blog-section h3, .smart h3, .cap-section h3, .overview-strip h3, .article-hero h3, .page-hero h3, .demo-section h4, .cta-section h4, .stats-band h4, .why-section h4, .how-section h4, .journey-section h4, .timeline-section h4, .process-section h4, .models-section h4, .ai-section h4, .countries-section h4, .verdict-section h4, .blog-section h4, .smart h4, .cap-section h4, .overview-strip h4, .article-hero h4, .page-hero h4 { color:#0f172a !important; }
+
+/* Cards on former-dark sections -> white panels (headings/body dark; accent spans keep color) */
+.blog-card, .stat-box, .stat-card, .how-item, .cap-item, .ai-point, .prereq-item, .tl-content, .country-card, .band-stat, .model-card, .step-card, .feature-card, .pc-box, .week-block, .callout, .af-box, .verdict-card, .agent-card, .vs-card, .calendly-block, .article-cta, .inline-cta, .service-card { background:#ffffff !important; border:1px solid #e5e7eb !important; }
+.blog-card h2, .blog-card h3, .blog-card h4, .blog-card p, .blog-card li, .stat-box h2, .stat-box h3, .stat-box h4, .stat-box p, .stat-box li, .stat-card h2, .stat-card h3, .stat-card h4, .stat-card p, .stat-card li, .how-item h2, .how-item h3, .how-item h4, .how-item p, .how-item li, .cap-item h2, .cap-item h3, .cap-item h4, .cap-item p, .cap-item li, .ai-point h2, .ai-point h3, .ai-point h4, .ai-point p, .ai-point li, .prereq-item h2, .prereq-item h3, .prereq-item h4, .prereq-item p, .prereq-item li, .tl-content h2, .tl-content h3, .tl-content h4, .tl-content p, .tl-content li, .country-card h2, .country-card h3, .country-card h4, .country-card p, .country-card li, .band-stat h2, .band-stat h3, .band-stat h4, .band-stat p, .band-stat li, .model-card h2, .model-card h3, .model-card h4, .model-card p, .model-card li, .step-card h2, .step-card h3, .step-card h4, .step-card p, .step-card li, .feature-card h2, .feature-card h3, .feature-card h4, .feature-card p, .feature-card li, .pc-box h2, .pc-box h3, .pc-box h4, .pc-box p, .pc-box li, .week-block h2, .week-block h3, .week-block h4, .week-block p, .week-block li, .callout h2, .callout h3, .callout h4, .callout p, .callout li, .af-box h2, .af-box h3, .af-box h4, .af-box p, .af-box li, .verdict-card h2, .verdict-card h3, .verdict-card h4, .verdict-card p, .verdict-card li, .agent-card h2, .agent-card h3, .agent-card h4, .agent-card p, .agent-card li, .vs-card h2, .vs-card h3, .vs-card h4, .vs-card p, .vs-card li, .calendly-block h2, .calendly-block h3, .calendly-block h4, .calendly-block p, .calendly-block li, .article-cta h2, .article-cta h3, .article-cta h4, .article-cta p, .article-cta li, .inline-cta h2, .inline-cta h3, .inline-cta h4, .inline-cta p, .inline-cta li, .service-card h2, .service-card h3, .service-card h4, .service-card p, .service-card li { color:#0f172a !important; }
+.blog-card { box-shadow:0 8px 28px rgba(15,23,42,0.06) !important; }
+
+/* Footer -> light */
+footer { background:#f8fafc !important; border-top:1px solid #e5e7eb !important; }
+.footer-logo { color:#0f172a !important; }
+footer p { color:#6b7280 !important; }
+
+/* Keep DARK heroes - light base text; colored accent spans stay colored */
+.hero, .hero-backdrop { color:#ffffff !important; }
+.hero h1, .hero h2, .hero h3, .hero h4, .hero li, .hero strong, .hero-backdrop h1, .hero-backdrop h2, .hero-backdrop h3, .hero-backdrop h4, .hero-backdrop li, .hero-backdrop strong { color:#ffffff !important; }
+.hero-sub { color:rgba(255,255,255,0.82) !important; }
+.hero .btn-primary, .hero .btn-gold { background:#ffffff !important; color:#111827 !important; }
+.hero .btn-primary:hover, .hero .btn-gold:hover { background:#e9eef5 !important; }
+.hero .btn-ghost { color:rgba(255,255,255,0.85) !important; border-bottom-color:rgba(255,255,255,0.45) !important; }
+.hero-badges .badge { color:rgba(255,255,255,0.85) !important; border-color:rgba(255,255,255,0.22) !important; background:rgba(255,255,255,0.05) !important; }
+.btn-gold { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; border:none !important; }
+
+/* Product mockups stay dark, light text */
+.chat-panel, .chat-header, .chat-input-row, .map-panel, .map-header, .platform-header, .shipment-info-card, .thumb-tms, .ai-visual { color:rgba(255,255,255,0.92) !important; }
+.chat-panel *, .chat-header *, .chat-input-row *, .map-panel *, .map-header *, .platform-header *, .shipment-info-card *, .thumb-tms *, .ai-visual * { color:rgba(255,255,255,0.9) !important; }
+
+/* small tag/chips: light text on their (colored/dark) pill */
+/* dark-pill overlays keep white text */
+.coming-label, .map-legend, .rank-badge, .coming-label *, .map-legend *, .rank-badge * { color:#ffffff !important; }
+/* light tinted chips on white pages need dark teal text */
+.agent-tag, .article-tag, .blog-tag, .tag, .chip, .agent-tag *, .article-tag *, .blog-tag *, .tag *, .chip * { color:#0f766e !important; }
+.tag { background:rgba(14,159,142,0.08) !important; border-color:rgba(14,159,142,0.30) !important; }
+/* hero-badge sits on a light page-hero -> light pill, keep colored label */
+.hero-badge { background:#f1f5f9 !important; border:1px solid #e5e7eb !important; }
+
+/* Logo strip stays dark (white client logos); marquee keeps its colored band */
+.hero-trust { background:#0f172a !important; border-top:1px solid rgba(255,255,255,0.08) !important; }
+.hero-trust-label { color:rgba(255,255,255,0.45) !important; }
+.trust-badge { border-right:1px solid rgba(255,255,255,0.08) !important; }
+.marquee-item { color:rgba(255,255,255,0.95) !important; }
+.marquee-item span { color:rgba(255,255,255,0.6) !important; }
+
+/* Per-feature MULTI-COLOR accents */
+.services-grid > *:nth-child(4n+1) .service-num, .services-grid > *:nth-child(4n+1) .agent-icon, .services-grid > *:nth-child(4n+1) .cap-icon, .services-grid > *:nth-child(4n+1) .feature-icon, .services-grid > *:nth-child(4n+1) .overview-icon, .services-grid > *:nth-child(4n+1) .how-icon, .services-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.services-grid > *:nth-child(4n+2) .service-num, .services-grid > *:nth-child(4n+2) .agent-icon, .services-grid > *:nth-child(4n+2) .cap-icon, .services-grid > *:nth-child(4n+2) .feature-icon, .services-grid > *:nth-child(4n+2) .overview-icon, .services-grid > *:nth-child(4n+2) .how-icon, .services-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.services-grid > *:nth-child(4n+3) .service-num, .services-grid > *:nth-child(4n+3) .agent-icon, .services-grid > *:nth-child(4n+3) .cap-icon, .services-grid > *:nth-child(4n+3) .feature-icon, .services-grid > *:nth-child(4n+3) .overview-icon, .services-grid > *:nth-child(4n+3) .how-icon, .services-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.services-grid > *:nth-child(4n+4) .service-num, .services-grid > *:nth-child(4n+4) .agent-icon, .services-grid > *:nth-child(4n+4) .cap-icon, .services-grid > *:nth-child(4n+4) .feature-icon, .services-grid > *:nth-child(4n+4) .overview-icon, .services-grid > *:nth-child(4n+4) .how-icon, .services-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.agents-grid > *:nth-child(4n+1) .service-num, .agents-grid > *:nth-child(4n+1) .agent-icon, .agents-grid > *:nth-child(4n+1) .cap-icon, .agents-grid > *:nth-child(4n+1) .feature-icon, .agents-grid > *:nth-child(4n+1) .overview-icon, .agents-grid > *:nth-child(4n+1) .how-icon, .agents-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.agents-grid > *:nth-child(4n+2) .service-num, .agents-grid > *:nth-child(4n+2) .agent-icon, .agents-grid > *:nth-child(4n+2) .cap-icon, .agents-grid > *:nth-child(4n+2) .feature-icon, .agents-grid > *:nth-child(4n+2) .overview-icon, .agents-grid > *:nth-child(4n+2) .how-icon, .agents-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.agents-grid > *:nth-child(4n+3) .service-num, .agents-grid > *:nth-child(4n+3) .agent-icon, .agents-grid > *:nth-child(4n+3) .cap-icon, .agents-grid > *:nth-child(4n+3) .feature-icon, .agents-grid > *:nth-child(4n+3) .overview-icon, .agents-grid > *:nth-child(4n+3) .how-icon, .agents-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.agents-grid > *:nth-child(4n+4) .service-num, .agents-grid > *:nth-child(4n+4) .agent-icon, .agents-grid > *:nth-child(4n+4) .cap-icon, .agents-grid > *:nth-child(4n+4) .feature-icon, .agents-grid > *:nth-child(4n+4) .overview-icon, .agents-grid > *:nth-child(4n+4) .how-icon, .agents-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.caps-grid > *:nth-child(4n+1) .service-num, .caps-grid > *:nth-child(4n+1) .agent-icon, .caps-grid > *:nth-child(4n+1) .cap-icon, .caps-grid > *:nth-child(4n+1) .feature-icon, .caps-grid > *:nth-child(4n+1) .overview-icon, .caps-grid > *:nth-child(4n+1) .how-icon, .caps-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.caps-grid > *:nth-child(4n+2) .service-num, .caps-grid > *:nth-child(4n+2) .agent-icon, .caps-grid > *:nth-child(4n+2) .cap-icon, .caps-grid > *:nth-child(4n+2) .feature-icon, .caps-grid > *:nth-child(4n+2) .overview-icon, .caps-grid > *:nth-child(4n+2) .how-icon, .caps-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.caps-grid > *:nth-child(4n+3) .service-num, .caps-grid > *:nth-child(4n+3) .agent-icon, .caps-grid > *:nth-child(4n+3) .cap-icon, .caps-grid > *:nth-child(4n+3) .feature-icon, .caps-grid > *:nth-child(4n+3) .overview-icon, .caps-grid > *:nth-child(4n+3) .how-icon, .caps-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.caps-grid > *:nth-child(4n+4) .service-num, .caps-grid > *:nth-child(4n+4) .agent-icon, .caps-grid > *:nth-child(4n+4) .cap-icon, .caps-grid > *:nth-child(4n+4) .feature-icon, .caps-grid > *:nth-child(4n+4) .overview-icon, .caps-grid > *:nth-child(4n+4) .how-icon, .caps-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.features-grid > *:nth-child(4n+1) .service-num, .features-grid > *:nth-child(4n+1) .agent-icon, .features-grid > *:nth-child(4n+1) .cap-icon, .features-grid > *:nth-child(4n+1) .feature-icon, .features-grid > *:nth-child(4n+1) .overview-icon, .features-grid > *:nth-child(4n+1) .how-icon, .features-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.features-grid > *:nth-child(4n+2) .service-num, .features-grid > *:nth-child(4n+2) .agent-icon, .features-grid > *:nth-child(4n+2) .cap-icon, .features-grid > *:nth-child(4n+2) .feature-icon, .features-grid > *:nth-child(4n+2) .overview-icon, .features-grid > *:nth-child(4n+2) .how-icon, .features-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.features-grid > *:nth-child(4n+3) .service-num, .features-grid > *:nth-child(4n+3) .agent-icon, .features-grid > *:nth-child(4n+3) .cap-icon, .features-grid > *:nth-child(4n+3) .feature-icon, .features-grid > *:nth-child(4n+3) .overview-icon, .features-grid > *:nth-child(4n+3) .how-icon, .features-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.features-grid > *:nth-child(4n+4) .service-num, .features-grid > *:nth-child(4n+4) .agent-icon, .features-grid > *:nth-child(4n+4) .cap-icon, .features-grid > *:nth-child(4n+4) .feature-icon, .features-grid > *:nth-child(4n+4) .overview-icon, .features-grid > *:nth-child(4n+4) .how-icon, .features-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+.overview-grid > *:nth-child(4n+1) .service-num, .overview-grid > *:nth-child(4n+1) .agent-icon, .overview-grid > *:nth-child(4n+1) .cap-icon, .overview-grid > *:nth-child(4n+1) .feature-icon, .overview-grid > *:nth-child(4n+1) .overview-icon, .overview-grid > *:nth-child(4n+1) .how-icon, .overview-grid > *:nth-child(4n+1) .service-card h3 { color:#14b8a6 !important; }
+.overview-grid > *:nth-child(4n+2) .service-num, .overview-grid > *:nth-child(4n+2) .agent-icon, .overview-grid > *:nth-child(4n+2) .cap-icon, .overview-grid > *:nth-child(4n+2) .feature-icon, .overview-grid > *:nth-child(4n+2) .overview-icon, .overview-grid > *:nth-child(4n+2) .how-icon, .overview-grid > *:nth-child(4n+2) .service-card h3 { color:#3b82f6 !important; }
+.overview-grid > *:nth-child(4n+3) .service-num, .overview-grid > *:nth-child(4n+3) .agent-icon, .overview-grid > *:nth-child(4n+3) .cap-icon, .overview-grid > *:nth-child(4n+3) .feature-icon, .overview-grid > *:nth-child(4n+3) .overview-icon, .overview-grid > *:nth-child(4n+3) .how-icon, .overview-grid > *:nth-child(4n+3) .service-card h3 { color:#8b5cf6 !important; }
+.overview-grid > *:nth-child(4n+4) .service-num, .overview-grid > *:nth-child(4n+4) .agent-icon, .overview-grid > *:nth-child(4n+4) .cap-icon, .overview-grid > *:nth-child(4n+4) .feature-icon, .overview-grid > *:nth-child(4n+4) .overview-icon, .overview-grid > *:nth-child(4n+4) .how-icon, .overview-grid > *:nth-child(4n+4) .service-card h3 { color:#ec4899 !important; }
+
+@media (max-width: 768px) {
+  .nav-links { background:rgba(255,255,255,0.98) !important; border-bottom:1px solid #e5e7eb !important; }
+  .nav-links li { border-bottom:1px solid #f1f5f9 !important; }
+  .nav-links a { color:#1f2937 !important; }
+  .dropdown { background:#f8fafc !important; box-shadow:none; }
+  .nav-links a.mobile-book-call { background:#111827 !important; color:#ffffff !important; border-radius:40px !important; }
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="logo" style="text-decoration:none;display:inline-flex;align-items:center;gap:11px;">
+  <svg width="36" height="36" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+    <defs><linearGradient id="znav8" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+    <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#znav8)" stroke-width="1.8"/>
+    <line x1="15" y1="18" x2="47" y2="18" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="47" y1="18" x2="15" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="15" y1="44" x2="47" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
+  </svg>
+  <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#38BDF8,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">zoree</span>
+</a>
+    <button type="button" class="nav-hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="index.html#about">About</a></li>
+      <li class="nav-item">
+        <a href="index.html#services">Services <span class="nav-arrow">▼</span></a>
+        <div class="dropdown">
+          <a class="dropdown-item" href="zoree-smart-tms.html">
+            <span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="24" height="16" rx="3" stroke="#13c4b0" stroke-width="1.8"/><circle cx="16" cy="16" r="4" stroke="#13c4b0" stroke-width="1.8"/><line x1="16" y1="4" x2="16" y2="8" stroke="#13c4b0" stroke-width="1.8" stroke-linecap="round"/><line x1="16" y1="24" x2="16" y2="28" stroke="#13c4b0" stroke-width="1.8" stroke-linecap="round"/><line x1="4" y1="16" x2="8" y2="16" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/><line x1="24" y1="16" x2="28" y2="16" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="16" r="1.5" fill="#13c4b0"/></svg></span>
+            <div class="dropdown-item-label">Smart TMS</div>
+            <div class="dropdown-item-desc">Custom AI-powered TMS built for your needs in 12–16 weeks</div>
+          </a>
+          <a class="dropdown-item" href="zoree-tms-implementation.html">
+            <span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="16" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><circle cx="24" cy="8" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><circle cx="24" cy="24" r="3.5" stroke="#13c4b0" stroke-width="1.8"/><line x1="11.5" y1="14.5" x2="20.5" y2="9.5" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/><line x1="11.5" y1="17.5" x2="20.5" y2="22.5" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <div class="dropdown-item-label">TMS Implementation Services</div>
+            <div class="dropdown-item-desc">Implement &amp; integrate any commercial TMS — Oracle, SAP, Blue Yonder &amp; more</div>
+          </a>
+          <a class="dropdown-item" href="zoree-nearshore.html" style="background:rgba(232,160,32,0.04);">
+            <span class="di-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="11" stroke="#13c4b0" stroke-width="1.8"/><ellipse cx="16" cy="16" rx="5" ry="11" stroke="#13c4b0" stroke-width="1.6"/><line x1="5" y1="16" x2="27" y2="16" stroke="#13c4b0" stroke-width="1.6" stroke-linecap="round"/><path d="M7 10.5 Q16 13 25 10.5" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round" fill="none"/><path d="M7 21.5 Q16 19 25 21.5" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg></span>
+            <div class="dropdown-item-label">Nearshore Delivery</div>
+            <div class="dropdown-item-desc">LATAM AI implementation teams — 40–60% cost savings</div>
+          </a>
+        </div>
+      </li>
+      <li><a href="zoree-demo.html#demo-video" class="nav-demo">Demo</a></li>
+      <li><a href="zoree-blog.html">Blog</a></li>
+      <li><a href="zoree-contact.html" class="active">Contact</a></li>
+      <li class="mobile-book-call-li"><a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" class="mobile-book-call">Book a Call</a></li>
+    </ul>
+    <a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" class="nav-cta">Book a Call</a>
+  </nav>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div class="breadcrumb">Zoree — Contact</div>
+      <h1>Let's talk<br/><em>transportation.</em></h1>
+      <p class="page-hero-sub">Tell us about your freight operations and we'll respond within one business day.</p>
+    </div>
+  </div>
+
+  <!-- CONTACT SECTION -->
+  <div class="contact-section">
+
+    <!-- FORM -->
+    <div class="form-card reveal">
+      <h2>Send us a message</h2>
+      <p>Fill in your details and we'll get back to you within 24 hours.</p>
+
+      <!-- Formspree form — replace YOUR_FORM_ID with your actual Formspree ID -->
+      <form id="contactForm" action="https://api.web3forms.com/submit" method="POST">
+        <input type="hidden" name="access_key" value="377e120b-d503-4d1d-961e-9c52b67ba189"/>
+        <input type="hidden" name="subject" value="New Inquiry from zoree.io"/>
+        <input type="hidden" name="from_name" value="Zoree Website"/>
+        <input type="hidden" name="redirect" value="false"/>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>First name <span>*</span></label>
+            <input type="text" name="first_name" required placeholder="Jane"/>
+          </div>
+          <div class="form-group">
+            <label>Last name <span>*</span></label>
+            <input type="text" name="last_name" required placeholder="Smith"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Company name <span>*</span></label>
+          <input type="text" name="company" required placeholder="Acme Logistics"/>
+        </div>
+
+        <div class="form-group">
+          <label>Work email <span>*</span></label>
+          <input type="email" name="email" required placeholder="jane@company.com"/>
+        </div>
+
+        <div class="form-group">
+          <label>I'm interested in</label>
+          <select name="service">
+            <option value="" disabled selected>Select a service…</option>
+            <option value="Zoree TMS Demo">Zoree TMS Demo</option>
+            <option value="TMS Implementation">TMS Implementation</option>
+            <option value="Nearshore Delivery">Nearshore Delivery</option>
+            <option value="General Inquiry">General Inquiry</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Message</label>
+          <textarea name="message" placeholder="Tell us about your current TMS setup, freight volume, and what you're looking to improve…"></textarea>
+        </div>
+
+        <!-- Hidden field so replies go to <span class="email-text"></span> -->
+        <div class="form-submit">
+          <button type="submit" class="btn-submit" id="submitBtn">Send Message</button>
+          <p class="form-note">We typically reply within<br/>one business day.</p>
+        </div>
+
+        <div class="form-success" id="formSuccess">✓ &nbsp;Message sent! We'll get back to you within one business day.</div>
+      </form>
+    </div>
+
+    <!-- INFO SIDEBAR -->
+    <div class="contact-info reveal" style="transition-delay:0.15s;">
+
+      <div class="info-block">
+        <div class="info-icon">📧</div>
+        <div class="info-content">
+          <div class="info-label">Email</div>
+          <div class="info-value"><a href="#" class="email-link" data-e="contact" data-d="zoree.io"></a></div>
+          <div class="info-sub">For general inquiries and project discussions.</div>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <div class="info-icon">🏢</div>
+        <div class="info-content">
+          <div class="info-label">US Office</div>
+          <div class="info-value">1309 Coffeen Ave, Ste 3336</div>
+          <div class="info-sub">Sheridan, WY 82801, United States</div>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <div class="info-icon">⏱</div>
+        <div class="info-content">
+          <div class="info-label">Response Time</div>
+          <div class="info-value">Within 1 business day</div>
+          <div class="info-sub">We're available Monday–Friday, 9am–6pm CT.</div>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <div class="info-icon">🌎</div>
+        <div class="info-content">
+          <div class="info-label">Nearshore Teams</div>
+          <div class="info-value">Mexico · Colombia · Brazil</div>
+          <div class="info-sub">LATAM delivery teams in your timezone, at 40–60% lower cost.</div>
+        </div>
+      </div>
+
+      <!-- Calendly CTA -->
+      <div class="calendly-block reveal" style="transition-delay:0.3s;">
+        <h3>Prefer to talk live?</h3>
+        <p>Book a free 30-minute call with our team. We'll scope your project and give you a clear picture of timeline and cost.</p>
+        <a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" class="btn-calendly">📅 Book a 30-Min Call</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:12px;">
+  <svg width="30" height="30" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+    <defs><linearGradient id="zftr8" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+    <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#zftr8)" stroke-width="1.8"/>
+    <line x1="15" y1="18" x2="47" y2="18" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="47" y1="18" x2="15" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="15" y1="44" x2="47" y2="44" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
+  </svg>
+  <span style="font-size:18px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#38BDF8,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">zoree</span>
+</div>
+    <p>© 2026 Zoree — AI &amp; Transportation</p>
+    <p style="margin-top:10px;">
+      <a href="#" class="email-link" data-e="contact" data-d="zoree.io" style="color:var(--teal);text-decoration:none;letter-spacing:0.05em;"></a>
+    </p>
+    <p style="margin-top:8px;">
+      <a href="https://calendly.com/contact-zoree/30min" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none;letter-spacing:0.05em;">📅 Book a 30-Min Call</a>
+    </p>
+    <p style="margin-top:8px;line-height:1.8;">
+      1309 Coffeen Ave, Ste 3336<br/>
+      Sheridan, WY 82801
+    </p>
+  </footer>
+
+  <script>
+    // ── DROPDOWN NAV ──
+    (function () {
+      function initDropdowns() {
+        document.querySelectorAll('.nav-item').forEach(function (item) {
+          var dropdown = item.querySelector('.dropdown');
+          if (!dropdown) return;
+          var timer = null;
+          function openMenu() { clearTimeout(timer); item.classList.add('open'); }
+          function closeMenu() { timer = setTimeout(function () { item.classList.remove('open'); }, 150); }
+          item.addEventListener('mouseenter', openMenu);
+          item.addEventListener('mouseleave', closeMenu);
+          dropdown.addEventListener('mouseenter', openMenu);
+          dropdown.addEventListener('mouseleave', closeMenu);
+          var topLink = item.querySelector(':scope > a');
+          if (topLink) topLink.addEventListener('click', function (e) { e.preventDefault(); item.classList.toggle('open'); });
+          dropdown.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', function (e) { e.stopPropagation(); });
+          });
+        });
+        document.addEventListener('click', function (e) {
+          if (!e.target.closest('.nav-item')) {
+            document.querySelectorAll('.nav-item').forEach(function (i) { i.classList.remove('open'); });
+          }
+        });
+      }
+      document.readyState === 'loading'
+        ? document.addEventListener('DOMContentLoaded', initDropdowns)
+        : initDropdowns();
+    })();
+
+    // ── HAMBURGER MENU (mobile) ──
+    (function () {
+      var hamburger = document.getElementById('hamburger');
+      var navLinks = document.getElementById('navLinks');
+      if (hamburger && navLinks) {
+        hamburger.addEventListener('click', function (e) {
+          e.stopPropagation();
+          hamburger.classList.toggle('open');
+          navLinks.classList.toggle('mobile-open');
+        });
+        document.addEventListener('click', function (e) {
+          if (!e.target.closest('nav')) {
+            hamburger.classList.remove('open');
+            navLinks.classList.remove('mobile-open');
+          }
+        });
+      }
+    })();
+
+    // ── SCROLL REVEAL ──
+    (function () {
+      var els = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) {
+        els.forEach(function (el) { el.classList.add('visible'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.12 });
+      els.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</

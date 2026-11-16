@@ -2,7 +2,7 @@
 name: marketing
 description: Generate marketing materials for Zoree TMS — social posts, emails, blog outlines, feature highlights, and more.
 user_invocable: true
-argument: type of content to generate (e.g., linkedin, twitter, email, blog, one-pager, comparison)
+argument: type of content to generate (e.g., linkedin, article, twitter, email, blog, one-pager, comparison)
 ---
 
 # Zoree TMS Marketing Content Generator
@@ -30,11 +30,18 @@ Zoree TMS is a 3-Tier Transportation Management System combining order managemen
 - Real-time visibility with live map tracking
 - Intelligent rate shopping across TL, LTL, and Partial TL
 - Built-in AI assistant (Zoree AI) with voice support
-- Carrier Portal for seamless carrier engagement
+- Carrier Portal where carriers accept tenders and send status updates
 - Automatic dock scheduling during planning
 - Professional document generation (BOL, POD, Hazmat)
 - Multi-tenant, enterprise-grade security
 - Modern React + Node.js stack, cloud-native architecture
+
+## Approved claims (use exactly these)
+
+- Team experience: "40+ years of combined TMS experience" (never just one person's 10+ years)
+- Deployment: "weeks, not months" (never "days")
+- Carrier integrations: "completed within hours, not days"
+- Never cite the 82.8% optimizer savings figure or any vendor benchmark not verified in Zoree's own runs
 
 ## Content Generation Instructions
 
@@ -44,8 +51,15 @@ Based on the user's argument, generate the appropriate content type:
 - Professional tone, 150-250 words
 - Hook in the first line
 - 2-3 key value points
-- End with a CTA and 3-5 relevant hashtags (#logistics #TMS #supplychain #freight #transportation)
+- Short paragraphs: 1-3 sentences each, never a big block
+- End with a Zoree TMS pitch and CTA (see Closing rule), then 3-5 relevant hashtags (#logistics #TMS #supplychain #freight #transportation)
 - Generate 3 post variations focusing on different features
+
+### `article` — LinkedIn Article
+- Title that states the argument, not a teaser
+- Built around one concrete run, screen or number from the product
+- Short paragraphs; simple section headers
+- Ends with the Closing rule pitch
 
 ### `twitter` or `x` — Twitter/X Posts
 - Generate 5 tweets, each under 280 characters
@@ -89,10 +103,39 @@ Based on the user's argument, generate the appropriate content type:
 
 If no argument is provided, ask the user what type of content they need and list the available options.
 
+## Closing rule (every post and article)
+
+End with a pitch for Zoree TMS, not a generic networking ask:
+- One or two sentences on what Zoree TMS is and does, tied to what the post just showed
+- A concrete CTA: message Sridhar, or book a demo at zoree.io
+- Never end with an open-ended invitation to chat, swap ideas or "compare notes"
+
+## Banned phrases (AI slop — never use)
+
+- "compare notes"
+- "to be direct", "to be honest", "let's be real"
+- "let's connect", "happy to chat", "would love to hear your thoughts", "drop a comment"
+- "excited to share", "thrilled to announce", "humbled"
+- "in today's fast-paced world", "in an ever-evolving landscape", "navigate the landscape"
+- "revolutionize", "game-changing", "game changer", "unlock", "supercharge", "leverage", "seamless", "delve", "cutting-edge", "next-level"
+- "it's not just X, it's Y" constructions
+
+Before returning any draft, scan it for these phrases and rewrite any sentence that contains one.
+
+## Screenshots and data in public content
+
+- Before a screenshot is used publicly, check it for real customer names (e.g., a customer column), real carrier names shown with rates or performance stats, and test data that looks wrong to a freight reader (pieces vs. weight). Flag these to Sridhar in chat.
+- Label synthetic or test data as such; never present it as customer data.
+
+## Delivery format
+
+- Give anything Sridhar will paste (LinkedIn, email) as plain text in a code block, never Markdown blockquotes.
+- Always give the full Windows folder path for every file saved or delivered (e.g. C:\Zoree\zoree-tms-v3\zoree-tms-v3\marketing-assets\jevathon\jev-load-planning-video.mp4), never a short or relative name like "your marketing-assets folder".
+
 ## Tone Guidelines
 - **Professional** but not stiff — approachable expertise
 - **Confident** without being aggressive — let the product speak
 - **Action-oriented** — always include a clear next step
 - **Industry-aware** — use logistics/supply chain terminology naturally
 - Avoid jargon overload — explain complex concepts simply
-- Never use "revolutionize" or "game-changing" — be specific about benefits
+- Be specific about benefits: numbers, screens, outcomes

@@ -1,0 +1,71 @@
+1
+00:00:01,500 --> 00:00:09,500
+Meet Zoree Smart TMS — the AI-powered platform that helps you plan, optimize, execute, and track every shipment.
+
+2
+00:00:09,800 --> 00:00:19,500
+Let's follow one shipment from order to delivery — and watch Zoree Smart TMS handle every step.
+
+3
+00:00:19,500 --> 00:00:25,250
+Everything your team needs — planning, rating, and execution — under one roof.
+
+4
+00:00:25,250 --> 00:00:31,750
+Start in Orders. Pick an order, hit Plan, and Zoree shops every carrier for you.
+
+5
+00:00:31,750 --> 00:00:41,500
+Live rates, side by side. LTL pricing comes straight from CzarLite — grab the cheapest, or pick whoever you trust.
+
+6
+00:00:41,500 --> 00:00:48,000
+Headed the same way on the same days? Zoree quietly combines them into one truck.
+
+7
+00:00:48,000 --> 00:00:52,000
+Two orders, one truckload, ready to roll.
+
+8
+00:00:52,000 --> 00:01:02,000
+Here's the whole load at a glance — then tender it to the carrier in a single click.
+
+9
+00:01:02,000 --> 00:01:06,500
+Tender sent — the load's on its way to the carrier.
+
+10
+00:01:06,500 --> 00:01:15,250
+Their tender lands instantly by email or EDI, with pickup, delivery, dock, and item details.
+
+11
+00:01:15,250 --> 00:01:20,750
+Carriers say yes or no right inside their own portal.
+
+12
+00:01:20,750 --> 00:01:27,250
+When they accept, they confirm capacity and drop in details like the PRO number.
+
+13
+00:01:27,250 --> 00:01:33,000
+And your TMS instantly flips it to Tender Accepted.
+
+14
+00:01:33,000 --> 00:01:38,500
+Once it ships in your OMS, the status rolls over to In Transit.
+
+15
+00:01:38,500 --> 00:01:44,500
+Every milestone is captured along the way — automatically, or added by hand.
+
+16
+00:01:44,500 --> 00:01:51,750
+The moment it's delivered, that update flows back to your OMS, ready to invoice.
+
+17
+00:01:51,750 --> 00:01:57,500
+Delivered, wrapped up, and ready to bill — no loose ends.
+
+18
+00:01:57,500 --> 00:02:03,500
+Or skip the clicks — just ask Zoree AI to plan and tender for you.

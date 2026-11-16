@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Zoree TMS — Results Poster</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800;900&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --navy:#0a1628; --navy-mid:#0f2040; --teal:#0e9f8e; --teal-light:#13c4b0;
+    --peri:#a5b4fc; --indigo:#6366f1; --ink:#0f172a; --red:#ef4444; --green:#22c55e;
+  }
+  body { width:1080px; height:1350px; overflow:hidden; background:#f4f6f9;
+         font-family:'Inter Tight','Segoe UI',sans-serif; color:var(--ink); }
+  .poster { width:1080px; height:1350px; display:flex; flex-direction:column; }
+  h1,h2,h3 { font-family:'Plus Jakarta Sans','Segoe UI',sans-serif; }
+
+  /* ── HEADER ── */
+  .head { text-align:center; padding:44px 60px 26px; }
+  .head h1 { font-size:47px; font-weight:900; letter-spacing:-1px; line-height:1.12; text-transform:uppercase; color:var(--ink); }
+  .head h1 .l2 { color:#1d4ed8; }
+  .head .rule { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:14px; }
+  .head .rule .ln { width:150px; height:1.5px; background:#94a3b8; }
+  .head .rule .rt { font-family:'Plus Jakarta Sans',sans-serif; font-size:21px; font-weight:800; letter-spacing:0.06em; color:var(--teal); text-transform:uppercase; }
+
+  /* ── TOP CARDS ── */
+  .topcards { display:flex; gap:20px; padding:6px 44px 0; }
+  .tcard { flex:1; border-radius:14px; padding:0 0 6px; overflow:hidden; }
+  .tcard.bad  { background:#2b3442; }
+  .tcard.good { background:#123a6b; }
+  .tcard .tc-head { display:flex; align-items:center; gap:12px; padding:16px 20px 12px; color:#fff;
+                    font-family:'Plus Jakarta Sans',sans-serif; font-size:19px; font-weight:800; text-transform:uppercase; letter-spacing:0.02em; line-height:1.25; }
+  .tc-head .mark { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+                   font-size:19px; font-weight:900; color:#fff; flex-shrink:0; }
+  .bad  .mark { background:var(--red); }
+  .good .mark { background:var(--green); }
+  .tc-grid { display:flex; gap:2px; margin:2px 14px 10px; }
+  .tc-tile { flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.09);
+             text-align:center; padding:14px 6px 12px; }
+  .tc-tile .em { font-size:26px; }
+  .tc-tile .tx { margin-top:8px; font-size:10.5px; font-weight:700; letter-spacing:0.06em; color:#e2e8f0; text-transform:uppercase; line-height:1.45; }
+
+  /* ── VS SPLIT ── */
+  .split { display:flex; margin:20px 44px 0; border-radius:14px; overflow:hidden; position:relative; flex:1; }
+  .side { flex:1; position:relative; padding:30px 26px; }
+  .side::before { content:''; position:absolute; inset:0; pointer-events:none; }
+  .side.left::before { background: repeating-linear-gradient(45deg, rgba(255,255,255,0.032) 0 2px, transparent 2px 28px), repeating-linear-gradient(-45deg, rgba(255,255,255,0.028) 0 2px, transparent 2px 28px); }
+  .side.right::before { background: radial-gradient(ellipse 62% 42% at 50% 64%, rgba(34,197,94,0.16) 0%, transparent 72%), linear-gradient(to top, rgba(255,255,255,0.05) 0%, transparent 45%); }
+  .wm { position:absolute; left:50%; transform:translateX(-50%); bottom:130px; font-size:130px; opacity:0.14; filter:grayscale(0.4); pointer-events:none; }
+  .side.left  { background:linear-gradient(160deg,#3a4352 0%,#252d3a 55%,#1a2029 100%); }
+  .side.right { background:linear-gradient(160deg,#0d2b4e 0%,#0a3550 45%,#0e5c54 100%); }
+  .vs { position:absolute; left:50%; top:47%; transform:translate(-50%,-50%); width:78px; height:78px; border-radius:50%;
+        background:#0b0f16; border:4px solid #f4f6f9; color:#fff; display:flex; align-items:center; justify-content:center;
+        font-family:'Plus Jakarta Sans',sans-serif; font-size:25px; font-weight:900; z-index:5; }
+  .signs { display:flex; flex-direction:column; gap:22px; margin-top:14px; }
+  .sign { display:flex; align-items:center; gap:12px; background:rgba(11,15,22,0.78); border:1px solid rgba(255,255,255,0.14);
+          border-radius:6px; padding:12px 16px; width:fit-content; }
+  .sign .x { width:26px; height:26px; border-radius:50%; background:var(--red); color:#fff; font-weight:900;
+             display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .sign .s { color:#f1f5f9; font-family:'Plus Jakarta Sans',sans-serif; font-size:16.5px; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; }
+  .roadsign { background:#15803d; border:3px solid #fff; border-radius:10px; color:#fff; text-align:center;
+              font-family:'Plus Jakarta Sans',sans-serif; font-size:20px; font-weight:900; letter-spacing:0.04em;
+              text-transform:uppercase; padding:16px 18px; margin:4px auto 20px; width:88%; line-height:1.35;
+              box-shadow:0 10px 24px rgba(0,0,0,0.35); }
+  .checks { display:flex; flex-direction:column; gap:17px; }
+  .check { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.16);
+           border-radius:6px; padding:11px 15px; }
+  .check .c { width:26px; height:26px; border-radius:6px; background:rgba(34,197,94,0.9); color:#fff;
+              display:flex; align-items:center; justify-content:center; font-weight:900; font-size:14px; flex-shrink:0; }
+  .check .s { color:#ffffff; font-size:15.5px; font-weight:700; letter-spacing:0.02em; }
+  .verdict { position:absolute; left:26px; right:26px; bottom:22px; background:rgba(244,246,249,0.95);
+             border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:13px; }
+  .verdict .vi { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
+  .left  .verdict .vi { background:#e2e8f0; }
+  .right .verdict .vi { background:#dbeafe; }
+  .verdict .vt { font-family:'Plus Jakarta Sans',sans-serif; font-size:16px; font-weight:800; line-height:1.3; color:var(--ink); }
+  .verdict .vt .hl-bad  { color:var(--red); }
+  .verdict .vt .hl-good { color:var(--teal); }
+
+  /* ── FOOTER ── */
+  .foot { margin-top:22px; background:#0b0f16; padding:24px 44px; display:flex; align-items:center; gap:26px; }
+  .foot .tgt { width:52px; height:52px; border-radius:50%; background:rgba(19,196,176,0.12); border:1px solid rgba(19,196,176,0.4);
+               display:flex; align-items:center; justify-content:center; font-size:25px; flex-shrink:0; }
+  .foot .msg { flex:1; color:#e2e8f0; font-size:16.5px; line-height:1.5; font-weight:500; border-right:1px solid rgba(255,255,255,0.15); padding-right:26px; }
+  .foot .msg b { color:var(--teal-light); }
+  .foot .brand { display:flex; align-items:center; gap:12px; }
+  .foot .brand img { width:46px; height:46px; }
+  .foot .brand .bt .n { font-family:'Plus Jakarta Sans',sans-serif; font-size:27px; font-weight:800; color:#a5b4fc; letter-spacing:-0.5px; }
+  .foot .brand .bt .s { font-size:11.5px; letter-spacing:0.14em; color:#94a3b8; text-transform:uppercase; margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="poster">
+
+  <div class="head">
+    <h1>The right TMS delivers<br><span class="l2">more than dashboards.</span></h1>
+    <div class="rule"><span class="ln"></span><span class="rt">· It delivers results ·</span><span class="ln"></span></div>
+  </div>
+
+  <div class="topcards">
+    <div class="tcard bad">
+      <div class="tc-head"><span class="mark">✕</span> What legacy TMS<br>gives you</div>
+      <div class="tc-grid">
+        <div class="tc-tile"><div class="em">🖥️</div><div class="tx">Static<br>Dashboards</div></div>
+        <div class="tc-tile"><div class="em">🧩</div><div class="tx">Siloed<br>Point Tools</div></div>
+        <div class="tc-tile"><div class="em">📋</div><div class="tx">Manual<br>Planning</div></div>
+      </div>
+    </div>
+    <div class="tcard good">
+      <div class="tc-head"><span class="mark">✓</span> What truly drives<br>results</div>
+      <div class="tc-grid">
+        <div class="tc-tile"><div class="em">🗄️</div><div class="tx">One Unified<br>Platform</div></div>
+        <div class="tc-tile"><div class="em">🤖</div><div class="tx">AI That<br>Acts</div></div>
+        <div class="tc-tile"><div class="em">📍</div><div class="tx">Real-Time<br>Visibility</div></div>
+        <div class="tc-tile"><div class="em">📈</div><div class="tx">Measurable<br>Outcomes</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="side left">
+      <div class="signs">
+        <div class="sign"><span class="x">✕</span><span class="s">Stale rates &amp; blind quotes</span></div>
+        <div class="sign"><span class="x">✕</span><span class="s">Blind spots in transit</span></div>
+        <div class="sign"><span class="x">✕</span><span class="s">Spreadsheet planning</span></div>
+        <div class="sign"><span class="x">✕</span><span class="s">Slow exception handling</span></div>
+        <div class="sign"><span class="x">✕</span><span class="s">After-the-fact reporting</span></div>
+      </div>
+      <div class="wm">🚧</div>
+      <div class="verdict">
+        <span class="vi">👤</span>
+        <span class="vt">Users adapt to the system.<br><span class="hl-bad">ROI suffers.</span></span>
+      </div>
+    </div>
+    <div class="side right">
+      <div class="roadsign">One Platform · Live Visibility<br>Maximum ROI ⬆</div>
+      <div class="checks">
+        <div class="check"><span class="c">✓</span><span class="s">Zoree AI plans, rates &amp; flags exceptions</span></div>
+        <div class="check"><span class="c">✓</span><span class="s">Live map tracking with reliable ETAs</span></div>
+        <div class="check"><span class="c">✓</span><span class="s">Rate shopping across TL · LTL · Partial</span></div>
+        <div class="check"><span class="c">✓</span><span class="s">Right information, right time</span></div>
+        <div class="check"><span class="c">✓</span><span class="s">Better decisions, better results</span></div>
+      </div>
+      <div class="wm">🚛</div>
+      <div class="verdict">
+        <span class="vi">👥</span>
+        <span class="vt">The system enables the business.<br><span class="hl-good">ROI realized.</span></span>
+      </div>
+    </div>
+    <div class="vs">VS.</div>
+  </div>
+
+  <div class="foot">
+    <div class="tgt">🎯</div>
+    <div class="msg">Choose a TMS that combines <b>one unified platform</b>, <b>live visibility</b>, and <b>AI-powered operations</b> to deliver <b>true ROI</b> — from order to invoice.</div>
+    <div class="brand">
+      <img src="zoree-logo-400.png" alt="">
+      <div class="bt">
+        <div class="n">zoree</div>
+        <div class="s">Powering Modern Logistics</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
