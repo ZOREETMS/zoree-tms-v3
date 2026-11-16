@@ -48,6 +48,12 @@ function auditInvoice({ invoice, lines, shipments, siblings, expected, approvals
   }
   passed.push(`Shipment ${shipments.map((s) => s.id).join(', ')} found`);
 
+  // No contract rate on the shipment: never read a missing rate as $0 or a clean match.
+  const unrated = shipments.filter((s) => s.rate == null || s.rate === '' || !(Number(s.rate) > 0));
+  if (unrated.length) {
+    return { issues: [{ code: 'no_contract_rate', severity: 'high', amount: 0, detail: `${unrated.map((s) => s.id).join(', ')} has no contract rate in the TMS, so there is nothing to check the charges against. Hold it until the rate is on file.` }], passed, recoverable: 0, payAmount: 0, verdict: 'needs_data', toPerson: true };
+  }
+
   const mismatched = carrierMismatch(invoice.carrier, shipments);
   if (mismatched.length) {
     issues.push({ code: 'carrier_mismatch', severity: 'high', amount: 0, detail: `Invoice is from ${invoice.carrier} but ${mismatched.map((s) => `${s.id} moved with ${s.carrier}`).join(', ')}. Confirm which carrier hauled it before paying.` });
@@ -133,7 +139,8 @@ function checkAccessorials({ lines, expected, approvals, issues, passed }) {
 
   if (legacy.length) {
     const acc = r2(legacy.reduce((s, l) => s + (Number(l.invoice_cost) || 0), 0));
-    if (acc - expected.accessorial > TOLERANCE_USD) {
+    // The rounding tolerance never covers an extra with no approval at all.
+    if ((expected.accessorial <= 0 && acc > 0) || acc - expected.accessorial > TOLERANCE_USD) {
       const names = legacy.map((l) => `${l.description || 'accessorial'} ${money(l.invoice_cost)}`).join(', ');
       issues.push({ code: 'accessorial_unapproved', severity: 'medium', amount: r2(acc - expected.accessorial), detail: `Extra charges billed ${money(acc)} (${names}) but only ${money(expected.accessorial)} is approved on the shipment in the TMS. Extras need an approval before they are paid, so dispute it or get the approval and supporting receipts.` });
     } else passed.push(`Accessorials ${money(acc)} within ${money(expected.accessorial)} approved on the shipment`);

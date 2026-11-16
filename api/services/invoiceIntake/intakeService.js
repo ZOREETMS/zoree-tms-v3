@@ -49,6 +49,10 @@ const invoiceKey = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''
 // for AP; the disputed original closes only when AP approves the copy
 // (invoiceAudit.manualDecide). A Rejected original stays final.
 const REPLACEABLE = new Set(['Disputed']);
+// Decisions the agent makes are recorded as the agent, never as the person who
+// uploaded the PDF or pressed the button (they stay on the intake as created_by).
+// Otherwise an agent approval would look like a person's and change the release path.
+const AGENT_USER = Object.freeze({ email: 'invoice-intake-agent', role: 'system' });
 
 /** Open invoices from the same carrier with the same invoice number (normalized). */
 async function sameNumberInvoices(invoiceNumber, carrier) {
@@ -163,7 +167,8 @@ async function settle({ invoice, decision, audit, user, sender = null, policy = 
   }
   // The agent never rejects a carrier's invoice. Anything that is not
   // clean is held with the reason, and a person in AP decides.
-  const why = [decision.reason, ...reasons].filter(Boolean).join(' ');
+  // Missing data (no shipment, no contract rate): lead with what is missing, not a variance against nothing.
+  const why = (a.verdict === 'needs_data' ? reasons : [decision.reason, ...reasons]).filter(Boolean).join(' ');
   if (decision.status !== 'On Hold') {
     await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} Needs AP review: ${why}`.slice(0, 1000), user });
   }
@@ -261,7 +266,7 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
       sender: senderResult.sender, sender_verification: senderResult.status, sender_detail: senderResult.detail, sender_auth: senderResult.auth,
       ...(shipmentRef !== f.shipmentRef ? { printed_shipment_ref: f.shipmentRef } : {}),
       ...(replaced.length ? { replaces: replaced.map((r) => ({ id: r.id, number: r.invoice_number, status: r.status })) } : {}) } },
-    user, deferApSend: true,
+    user: AGENT_USER, deferApSend: true,
   });
   const invoice = sub.invoice;
 
@@ -272,7 +277,7 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
     await costLines.replaceForInvoice({ invoiceId: invoice.id, lines: chk.lines, tenantId: invoice.tenant_id || base.tenant_id });
     const drafts = await shipmentDrafts(shipmentRef, invoice.id);
     const audit = await freightAudit.auditOne(invoice);
-    const outcome = await settle({ invoice, decision: sub.decision, audit, user, sender: senderResult, replaces: replaced });
+    const outcome = await settle({ invoice, decision: sub.decision, audit, user: AGENT_USER, sender: senderResult, replaces: replaced });
     // Only now — the carrier's invoice exists and is audited — retire the drafts it supersedes.
     const draftNote = await closeDrafts({ invoice, drafts, user });
     const intake = await keep({ ...base, ...cols, status: 'created', invoice_id: invoice.id, outcome_reason: `${outcome.summary}${draftNote}` });

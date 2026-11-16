@@ -149,3 +149,31 @@ test('ready-to-post list: clean at billed, short-pays at the pay amount, holds l
   const list = readyToPost([mk('A', 'approve', 510.88, 510.88), mk('B', 'dispute', 1561.6, 1439.6, 122), mk('C', 'needs_data', 1439.6, 0), mk('D', 'dispute', 510.88, 0, 510.88)]);
   assert.deepEqual(list.map((x) => [x.number, x.payAmount]), [['A', 510.88], ['B', 1439.6]]);
 });
+
+// ── Policy edge cases (panel review, Nov 16) ─────────────────────────
+test('a shipment with no contract rate is held, never read as a $0 clean match', () => {
+  const ship = { id: 'KB-TEST', carrier: 'RIDGELINE FREIGHT', status: 'Delivered', rate: null, fuel_surcharge: 0, accessorials: 0, total_cost: 0 };
+  const r = auditInvoice({ invoice: { invoice_number: 'T-1', carrier: 'RIDGELINE FREIGHT', invoiced_amount: 412 }, lines: [{ cost_type: 'base', invoice_cost: 412 }],
+    shipments: [ship], siblings: [], expected: expectedCharges([ship]), policy: { approvalLimitUsd: 2500 } });
+  assert.strictEqual(r.verdict, 'needs_data');
+  assert.ok(r.issues.some((i) => i.code === 'no_contract_rate'));
+});
+
+test('the $1 rounding tolerance never lets an unapproved extra through', () => {
+  const ship = { id: 'KB-TEST', carrier: 'RIDGELINE FREIGHT', status: 'Delivered', rate: 412, fuel_surcharge: 98.88, accessorials: 0, total_cost: 510.88 };
+  const r = auditInvoice({ invoice: { invoice_number: 'T-2', carrier: 'RIDGELINE FREIGHT', invoiced_amount: 511.38 },
+    lines: [{ cost_type: 'base', invoice_cost: 412 }, { cost_type: 'fuel_surcharge', invoice_cost: 98.88 }, { cost_type: 'accessorial', invoice_cost: 0.5, description: 'Admin fee' }],
+    shipments: [ship], siblings: [], expected: expectedCharges([ship]), policy: { approvalLimitUsd: 2500 } });
+  assert.ok(r.issues.some((i) => i.code === 'accessorial_unapproved'));
+  assert.notStrictEqual(r.verdict, 'approve');
+});
+
+test('a clean invoice over $2,500 goes to a person', () => {
+  const ship = { id: 'KB-TEST', carrier: 'BLUEWATER CARRIERS', status: 'Delivered', rate: 2049.19, fuel_surcharge: 450.82, accessorials: 0, total_cost: 2500.01 };
+  const r = auditInvoice({ invoice: { invoice_number: 'T-3', carrier: 'BLUEWATER CARRIERS', invoiced_amount: 2500.01 },
+    lines: [{ cost_type: 'base', invoice_cost: 2049.19 }, { cost_type: 'fuel_surcharge', invoice_cost: 450.82 }],
+    shipments: [ship], siblings: [], expected: expectedCharges([ship]), policy: { approvalLimitUsd: 2500 } });
+  assert.strictEqual(r.verdict, 'review');
+  assert.ok(r.toPerson);
+});
+

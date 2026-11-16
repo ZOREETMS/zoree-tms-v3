@@ -110,7 +110,7 @@ function classify({ invoice, release = null, exportItem = null, takenBillKeys = 
     if (!exceptionApprovedBy) {
       // The agent approved it earlier but the live data no longer matches.
       return { state: 'blocked', path: null, needsOverride: false, exceptionApprovedBy,
-        blockers: [`Revalidation failed — ${why[0] || 'the 3-way match no longer passes'}. Put it On Hold and review it.`] };
+        blockers: [`Revalidation failed — ${String(why[0] || 'the 3-way match no longer passes').replace(/\.+$/, '')}. Put it On Hold and review it.`] };
     }
     return { state: 'awaiting_release', path: 'authorized_override', needsOverride: true, exceptionApprovedBy,
       blockers: [`Revalidation still fails — ${String(why[0] || 'the 3-way match does not pass').replace(/\.+$/, '')}. Only an authorized override can release it.`] };

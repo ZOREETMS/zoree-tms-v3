@@ -1,0 +1,10 @@
+Policy tests — 2026-11-16T21:25:53.925Z
+T1 clean, $2,500.01 (over limit) -> created / invoice On Hold — Needs AP review: Every line matches, but $2,500.01 is over the $2,500.00 auto-approve limit, so a person approves it.
+T2a AP disputes BW-5521 -> Disputed
+T2b corrected BW-5521 arrives (matches contract) -> created / invoice On Hold — Needs AP review: Corrected copy of disputed BW-5521: every line now matches the contract. Approve it to close the dispute — the disputed original is then cancelled.
+T3 unreadable shipment reference -> needs_manual — Not saved — a person should key this invoice. The agent does not audit numbers it could not read reliably.
+T4a same RF-88213 file again after export -> duplicate — Invoice RF-88213 from RIDGELINE FREIGHT is already in Zoree (Approved). Pay once — nothing created.
+T4b byte-identical original file again -> duplicate — This exact PDF was already received as 01_RF-88213.pdf. Nothing created.
+T5a clean when read -> created / invoice Approved — Ready to post — matches the contract rate and approved extras ($510.88).
+T5b shipment cancelled, then release -> refused: Revalidation failed — KB-SH-T9005 is Cancelled — a cancelled shipment should not be billed. Ask the carrier to void this invoice.. Put it On Hold and review it.
+T6 shipment has no contract rate -> created / invoice On Hold — Needs AP review: KB-SH-T9006 has no contract rate in the TMS, so there is nothing to check the charges against. Hold it until the rate is on file.

@@ -244,7 +244,17 @@ export default function InvoiceIntakeDrawer({ intakeId, canDecide, onClose, onCh
 
       <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
         {error && <div style={{ color: "var(--red)", fontSize: 13, marginBottom: 10 }}>{error}</div>}
-        {d && d.entry.outcome !== "ready_to_post" && d.entry.reason && (
+        {d && d.recheck && (
+          <div style={{ padding: 12, borderRadius: 8, marginBottom: 14, fontSize: 12.5, background: TONE.ok.bg, color: TONE.ok.fg, border: `1px solid ${TONE.ok.line}` }}>
+            <b>Now passes.</b> {d.recheck.note}
+            {d.entry.reason && (
+              <div style={{ marginTop: 6, color: "var(--text3)" }}>
+                <b>Original finding:</b> {d.entry.reason.replace(/^Needs AP review:\s*/i, "")}
+              </div>
+            )}
+          </div>
+        )}
+        {d && !d.recheck && d.entry.outcome !== "ready_to_post" && d.entry.reason && (
           <div style={{ padding: 12, borderRadius: 8, marginBottom: 14, fontSize: 12.5, background: TONE[meta.tone].bg, color: TONE[meta.tone].fg, border: `1px solid ${TONE[meta.tone].line}` }}>
             <b>{meta.label}.</b> {d.entry.reason.replace(/^Needs AP review:\s*/i, "")}
             {d.warnings.length > 0 && <div style={{ marginTop: 4 }}>{d.warnings.join(" ")}</div>}

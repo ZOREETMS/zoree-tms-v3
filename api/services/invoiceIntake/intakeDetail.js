@@ -98,6 +98,30 @@ function activityText(c) {
   return `${c.field || c.action}: ${c.old_value || '—'} → ${c.new_value || '—'}${reason ? `. Reason: ${reason}` : ''}`;
 }
 
+// Statuses a person still has to act on. The live re-check can clear the
+// numbers, but never the hold itself: only a person approves.
+const HELD = new Set(['On Hold', 'Rejected', 'Pending', 'Needs Review']);
+const PASSES = new Set(['approve', 'review']);
+
+/**
+ * Pure: when the agent's original finding no longer matches today's data
+ * (e.g. the missing accessorial approval was added to the shipment), say
+ * so, so the drawer never shows a stale explanation as if it were current.
+ * The original finding stays in the activity history.
+ * @returns {null | { passes: true, note: string, originalFinding: string|null }}
+ */
+function recheckOf({ invoice, audit }) {
+  if (!invoice || !audit || !HELD.has(invoice.status) || !PASSES.has(audit.verdict)) return null;
+  const overLimit = audit.verdict === 'review';
+  return {
+    passes: true,
+    note: overLimit
+      ? 'Checked again just now: every charge matches the shipment and contract, but the total is over the auto-approve limit. A person still has to approve it.'
+      : 'Checked again just now: every charge now matches the shipment and contract. It stays on hold until a person approves it.',
+    originalFinding: invoice.decision_reason ? String(invoice.decision_reason).replace(/^\[Zoree AI[^\]]*\]\s*/, '').trim() : null,
+  };
+}
+
 async function get(id) {
   const row = await repo.getById(id);
   if (!row) { const e = new Error('Document not found in this domain'); e.status = 404; throw e; }
@@ -137,8 +161,9 @@ async function get(id) {
     warnings: [...(row.read_warnings || []), ...(row.problems || [])],
     lines,
     audit,
+    recheck: recheckOf({ invoice: own, audit }),
     activity,
   };
 }
 
-module.exports = { get, compareLines, fieldsOf, activityText };
+module.exports = { get, compareLines, fieldsOf, activityText, recheckOf };
