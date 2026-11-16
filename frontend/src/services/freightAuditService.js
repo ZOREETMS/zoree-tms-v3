@@ -1,15 +1,7 @@
 import { AUDIT_STATUS, PAY_STATUS } from "../types/freightAudit";
-
-export const SEED_AUDIT_DATA = [
-  { inv: "INV-84421", carrier: "Swift Transport",    ship: "SHP-2024-1840", agreed: 3240, billed: 3240, issue: "",                          auditStatus: AUDIT_STATUS.MATCHED,     payStatus: PAY_STATUS.APPROVED },
-  { inv: "INV-84422", carrier: "Old Dominion",       ship: "SHP-2024-1841", agreed: 980,  billed: 980,  issue: "",                          auditStatus: AUDIT_STATUS.MATCHED,     payStatus: PAY_STATUS.APPROVED },
-  { inv: "INV-84423", carrier: "JB Hunt",            ship: "SHP-2024-1851", agreed: 2750, billed: 3070, issue: "Fuel surcharge overage",    auditStatus: AUDIT_STATUS.DISCREPANCY, payStatus: PAY_STATUS.ON_HOLD },
-  { inv: "INV-84424", carrier: "Werner Enterprises", ship: "SHP-2024-1844", agreed: 2600, billed: 2600, issue: "",                          auditStatus: AUDIT_STATUS.MATCHED,     payStatus: PAY_STATUS.PENDING },
-  { inv: "INV-84425", carrier: "XPO Logistics",      ship: "SHP-2024-1848", agreed: 1850, billed: 2100, issue: "Accessorial not agreed",    auditStatus: AUDIT_STATUS.DISCREPANCY, payStatus: PAY_STATUS.DISPUTED },
-  { inv: "INV-84426", carrier: "Schneider National",  ship: "SHP-2024-1845", agreed: 4100, billed: 3980, issue: "Rate applied incorrectly", auditStatus: AUDIT_STATUS.DISCREPANCY, payStatus: PAY_STATUS.ON_HOLD },
-  { inv: "INV-84427", carrier: "Swift Transport",    ship: "SHP-2024-1849", agreed: 2200, billed: 2200, issue: "",                          auditStatus: AUDIT_STATUS.MATCHED,     payStatus: PAY_STATUS.PENDING },
-  { inv: "INV-84428", carrier: "FedEx Freight",      ship: "SHP-2024-1843", agreed: 1420, billed: 1420, issue: "",                          auditStatus: AUDIT_STATUS.MATCHED,     payStatus: PAY_STATUS.APPROVED },
-];
+import { InvoicesApi } from "../lib/api";
+import { mapDbInvoice, manualApprove } from "./invoiceActionsService";
+import { runAgent } from "./agentsService";
 
 export function computeAuditKpis(records) {
   const total = records.length;
@@ -32,4 +24,69 @@ export function formatVariance(variance) {
   if (variance === 0) return "$0";
   const prefix = variance > 0 ? "+$" : "-$";
   return prefix + Math.abs(variance).toLocaleString();
+}
+
+// ── Real data (no sample rows) ──────────────────────────────────────
+// The audit queue is the invoices of the active domain. Agreed = the
+// rated shipment cost, billed = what the carrier invoiced.
+
+const HELD = new Set(["On Hold", "Rejected", "Disputed", "Cancelled"]);
+const PAY_BY_STATUS = {
+  Approved: PAY_STATUS.APPROVED, Paid: PAY_STATUS.APPROVED,
+  "On Hold": PAY_STATUS.ON_HOLD,
+  Disputed: PAY_STATUS.DISPUTED, Rejected: PAY_STATUS.DISPUTED, Cancelled: PAY_STATUS.DISPUTED,
+};
+
+/** One invoice (already through mapDbInvoice) → one audit queue row. */
+export function toAuditRecord(inv) {
+  const agreed = Number(inv.agreed) || 0;
+  const billed = Number(inv.amount) || 0;
+  const hasVariance = Math.abs(billed - agreed) >= 0.01;
+  const auditStatus = !agreed && !HELD.has(inv.status) ? AUDIT_STATUS.PENDING
+    : (hasVariance || HELD.has(inv.status)) ? AUDIT_STATUS.DISCREPANCY
+    : AUDIT_STATUS.MATCHED;
+  return {
+    id: inv.id,
+    inv: inv.num || inv.id,
+    carrier: inv.carrier,
+    ship: (inv.shipIds && inv.shipIds.length ? inv.shipIds : [inv.shipId]).filter(Boolean).join(", "),
+    agreed,
+    billed,
+    issue: auditStatus === AUDIT_STATUS.DISCREPANCY ? (inv.decisionReason || "") : "",
+    auditStatus,
+    payStatus: PAY_BY_STATUS[inv.status] || PAY_STATUS.PENDING,
+    invoice: inv,
+  };
+}
+
+export async function loadAuditRecords() {
+  const data = await InvoicesApi.list();
+  const rows = Array.isArray(data?.invoices) ? data.invoices : Array.isArray(data) ? data : [];
+  return rows.map(mapDbInvoice).filter(Boolean).map(toAuditRecord);
+}
+
+const done = (row, text, type) => ({ ok: true, record: toAuditRecord(row), toast: { text, type } });
+const failed = (text) => ({ ok: false, record: null, toast: { text, type: "warning" } });
+
+export async function approveRecord(record) {
+  const r = await manualApprove({ invoice: record.invoice, reason: "Approved in Freight Audit" });
+  return r.ok ? done(r.row, `${record.inv} approved for payment`, "success") : failed(r.toast.text);
+}
+
+async function setStatus(record, status, text, type) {
+  try {
+    const row = mapDbInvoice(await InvoicesApi.update(record.id, { status }));
+    return done(row, text, type);
+  } catch (e) {
+    return failed(`${record.inv}: ${e?.message || "update failed"}`);
+  }
+}
+
+export const disputeRecord = (record) => setStatus(record, "Disputed", `${record.inv} marked as disputed`, "warning");
+export const releaseRecord = (record) => setStatus(record, "Pending", `${record.inv} released — pending approval`, "info");
+
+/** Line-level audit of held invoices by the Freight Audit agent. Its proposed actions wait for a person in AI Agents. */
+export async function runAutoAudit() {
+  const run = await runAgent("freight_audit", { scan: true, limit: 25 });
+  return run?.summary || "Audit complete.";
 }

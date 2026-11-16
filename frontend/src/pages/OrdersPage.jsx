@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
+import { jevBulkPlanPath } from "../services/jevTriageService";
 import { OrdersApi, BulkPlanApi } from "../lib/api";
 import OrderLinesEditor from "../components/OrderLinesEditor";
 import { STATUS_BADGES, STATUS_ROW_COLORS, SPOT_ROW_STYLE, EQUIPMENT_TYPES, DEFAULT_EQUIP, DEMO_USERS } from "../constants/orders";
@@ -15,6 +16,7 @@ import { getDockConfigForWarehouse } from "../services/dockScheduleService";
 import { useRealtimeOrders } from "../hooks/useRealtimeOrders";
 import { useOrdersPollingFallback } from "../hooks/useOrdersPollingFallback";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
+import PlanningProgressModal from "../components/orders/PlanningProgressModal";
 import PlanConfirmationModal from "../components/orders/PlanConfirmationModal";
 import NewOrderModal from "../components/orders/NewOrderModal";
 import OrderImportModal from "../components/orders/OrderImportModal";
@@ -31,6 +33,10 @@ import Toast from "../components/ui/Toast";
 import useToast from "../hooks/useToast";
 import { TOAST_DURATIONS } from "../constants/toast";
 import BulkPlanResultsPanel from "../components/bulk-plan/BulkPlanResultsPanel";
+import { useBulkUnplan } from "../hooks/useBulkUnplan";
+import { usePlanProgress } from "../hooks/usePlanProgress";
+import PlanTimerBadge from "../components/orders/PlanTimerBadge";
+import { formatElapsed } from "../utils/formatters";
 import SchedulerMetrics from "../components/bulk-plan/SchedulerMetrics";
 import OrderRowActions from "../components/orders/OrderRowActions";
 import { buildBulkPlanResults } from "../services/bulkPlanResultsService";
@@ -93,6 +99,7 @@ export default function OrdersPage() {
   const [detailTab, setDetailTab] = useState("view");
   const [editForm, setEditForm] = useState({});
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // Auto-open order detail from URL ?id=ORD-xxxx
   useEffect(() => {
@@ -268,6 +275,7 @@ export default function OrdersPage() {
   /* ── Plan Confirmation Modal state ── */
   const [planModal, setPlanModal] = useState(null);
   const [planSummary, setPlanSummary] = useState(null); // after shipment creation
+  const { progress: planProgress, start: startPlanProgress, onProgress: onPlanProgress, clear: clearPlanProgress } = usePlanProgress();
   // TMS bug #3: Cross-Dock modal — null when closed, holds { lane, siblings }
   // when open. Opened from the Cross-Dock button on PlanConfirmationModal.
   const [crossDockModal, setCrossDockModal] = useState(null);
@@ -757,17 +765,22 @@ export default function OrdersPage() {
   async function planSelected() {
     const selected = orders.filter((o) => selectedOrders.has(o.id) && isPlannable(o));
     if (!selected.length) { toast("No unplanned orders selected", "warning"); return; }
+    if (busyId === "plan-selected") return; // already running
+    setBusyId("plan-selected");
+
+    // Dialog goes up immediately so the screen is never blank while planning.
+    startPlanProgress(selected.length);
+    const onProgress = onPlanProgress;
 
     // Fail orders with past due dates
     const { failed: pastDue, valid: plannable } = await validateAndFailPastDueOrders(selected);
     if (pastDue.length > 0) {
       toast(`${pastDue.length} order(s) failed planning — due date is in the past`, "error");
       await refreshData();
-      if (!plannable.length) { setSelectedOrders(new Set()); return; }
+      if (!plannable.length) { clearPlanProgress(); setBusyId(""); setSelectedOrders(new Set()); return; }
     }
 
     const normalize = (s) => (s || "").trim().toLowerCase().split(",")[0].trim();
-    setBusyId("plan-selected");
     setPlanResults(null); // REQ-28: clear any previous pass/fail panel
     const planStartTime = Date.now();
     try {
@@ -780,6 +793,7 @@ export default function OrdersPage() {
       let routePlanned = [];
       let multiStopSummary = null;
       if (routeMatch) {
+        onProgress("creating", { shipments: 1 });
         multiStopSummary = await handleCreateShipmentsFromRoute(routeMatch.route, routeMatch.matchedOrders, true);
         if (multiStopSummary) routePlanned = routeMatch.matchedOrders;
       }
@@ -789,7 +803,7 @@ export default function OrdersPage() {
       let bulkResult = null;
       if (remaining.length > 0) {
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
-        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs);
+        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs, { onProgress });
 
         // REQ-28: stop showing a generic "0 shipments / no quotes" message
         // when we have a specific per-order reason. If a single order
@@ -830,7 +844,8 @@ export default function OrdersPage() {
       const routeCost = routeMatch ? (parseFloat(routeMatch.route.cost_override) || 0) : 0;
       const bulkCost = bulkResult?.cost || 0;
 
-      // Build unified summary
+      // Build unified summary (progress dialog hands over to it)
+      clearPlanProgress();
       setPlanSummary({
         isCombined: true,
         multiStop: multiStopSummary,
@@ -850,6 +865,7 @@ export default function OrdersPage() {
     } catch (err) {
       toast(`Plan failed: ${err.message}`, "error");
     } finally {
+      clearPlanProgress();
       setBusyId("");
     }
   }
@@ -1191,6 +1207,22 @@ export default function OrdersPage() {
     }
   }
 
+  /* ── Unassign Selected / Unplan All (hooks/useBulkUnplan) ──
+   * Reversible inverse of "Plan Selected": orders go back to Unplanned and
+   * emptied shipments are removed. Tendered and later are never touched. */
+  const appendSchedLog = useCallback((line) => setSchedLog((p) => [...p, line]), []);
+  const {
+    unassignableSelected, unplannableCount, unassignBusy, unplanBusy, runUnassignSelected, runUnplanAll,
+  } = useBulkUnplan({
+    orders, shipments, selectedOrders, refreshData, toast, log: appendSchedLog,
+    clearSelection: () => setSelectedOrders(new Set()),
+  });
+
+  // Plan-run timing. `last` is the most recent Run Now; `total` accumulates
+  // across runs so a scheduler left running shows cumulative cost in time.
+  const [lastPlanElapsedMs, setLastPlanElapsedMs] = useState(null);
+  const [totalPlanElapsedMs, setTotalPlanElapsedMs] = useState(0);
+
   /* ── Bulk Plan Scheduler (uses service) ── */
   const runBulk = useCallback(async () => {
     const unplanned = orders.filter((o) => isPlannable(o));
@@ -1198,22 +1230,31 @@ export default function OrdersPage() {
       setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No unplanned orders.`]);
       return;
     }
+    // Wall-clock for the whole run: rating + shipment creation + order
+    // updates, i.e. what the operator actually waits through. Started
+    // before the first await so nothing in the run escapes the measure.
+    const bulkStart = Date.now();
+    const fmtElapsed = formatElapsed;
     setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] Rating ${unplanned.length} orders...`]);
     try {
       const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
       const result = await bulkPlanOrders(unplanned, shipments, dockOn, warehouseDockConfigs);
       if (result.noQuotes) {
-        setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No quotes returned.`]);
+        setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] No quotes returned after ${fmtElapsed(Date.now() - bulkStart)}.`]);
         setSchedRuns((r) => r + 1);
         return;
       }
+      const elapsedMs = Date.now() - bulkStart;
       setSchedRuns((r) => r + 1);
       setSchedPlanned((p) => p + result.updated);
       setSchedSaved((p) => p + result.cost);
-      setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ✅ ${result.created} shipment(s), ${result.updated} order(s) planned. Cost: ${fmt$(result.cost)}`]);
+      setLastPlanElapsedMs(elapsedMs);
+      setTotalPlanElapsedMs((t) => t + elapsedMs);
+      const perOrder = result.updated ? ` · ${Math.round(elapsedMs / result.updated)}ms/order` : "";
+      setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ✅ ${result.created} shipment(s), ${result.updated} order(s) planned in ${fmtElapsed(elapsedMs)}${perOrder}. Cost: ${fmt$(result.cost)}`]);
       await refreshData();
     } catch (err) {
-      setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ❌ ${err.message}`]);
+      setSchedLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ❌ ${err.message} (after ${fmtElapsed(Date.now() - bulkStart)})`]);
       setSchedRuns((r) => r + 1);
     }
   }, [orders, refreshData]);
@@ -1272,6 +1313,13 @@ export default function OrdersPage() {
     return { count: sel.length, unplannedCount: unplanned.length, weight, pieces, util };
   }, [orders, selectedOrders]);
 
+  /* ── Plan with Jev: open the Jev bulk-plan page with the selected plannable
+        orders. Recommendation only — the Jev page never creates shipments. ── */
+  const planWithJev = () => {
+    const ids = orders.filter((o) => selectedOrders.has(o.id) && isPlannable(o)).map((o) => o.id);
+    if (ids.length) navigate(jevBulkPlanPath(ids));
+  };
+
   const SortIcon = ({ col }) => (
     <span style={{ opacity: sortCol === col ? 1 : 0.3, marginLeft: 4 }}>
       {sortCol === col ? (sortAsc ? "▲" : "▼") : "⇅"}
@@ -1322,6 +1370,17 @@ export default function OrdersPage() {
             📥 Import Orders
           </button>
           <button
+            className="btn btn-secondary btn-sm"
+            onClick={runUnplanAll}
+            disabled={unplanBusy || !canEditOrders}
+            title={canEditOrders
+              ? "Send every planned order back to Unplanned and remove the emptied shipments. Tendered and later are not touched."
+              : noEditOrdersTitle}
+            style={{ color: "#b45309", borderColor: "rgba(180,83,9,.35)" }}
+          >
+            {unplanBusy ? "↩ Unplanning..." : `↩ Unplan All${unplannableCount ? ` (${unplannableCount})` : ""}`}
+          </button>
+          <button
             className="btn btn-primary btn-sm"
             onClick={() => setShowNewOrder(true)}
             disabled={!canEditOrders}
@@ -1348,6 +1407,7 @@ export default function OrdersPage() {
               {schedRunning && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#059669", marginRight: 5, animation: "pulse 1s infinite" }} />}
               {schedRunning ? "Running" : "Stopped"}
             </span>
+            <PlanTimerBadge lastMs={lastPlanElapsedMs} totalMs={totalPlanElapsedMs} runs={schedRuns} />
             {!schedRunning ? (
               <>
                 <button className="btn btn-primary btn-sm" onClick={startSched}>▶ Start</button>
@@ -1469,9 +1529,28 @@ export default function OrdersPage() {
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button onClick={() => setSelectedOrders(new Set())} style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.4)", background: "rgba(255,255,255,.15)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✕ Clear</button>
             {selectedStats.unplannedCount > 0 && (
-              <button onClick={planSelected}
-                style={{ padding: "5px 14px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                ⚡ Plan Selected
+              <button onClick={planSelected} disabled={busyId === "plan-selected"}
+                style={{ padding: "5px 14px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontSize: 12, fontWeight: 700, cursor: busyId === "plan-selected" ? "wait" : "pointer", opacity: busyId === "plan-selected" ? 0.6 : 1, fontFamily: "inherit" }}>
+                {busyId === "plan-selected" ? "Planning…" : "⚡ Plan Selected"}
+              </button>
+            )}
+            {selectedStats.unplannedCount > 0 && (
+              <button onClick={planWithJev}
+                title="Open the Jev bulk plan for the selected unplanned orders. Jev recommends a plan; nothing is planned or tendered."
+                style={{ padding: "5px 14px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                🧠 Plan with Jev ({selectedStats.unplannedCount})
+              </button>
+            )}
+            {unassignableSelected.length > 0 && (
+              <button
+                onClick={runUnassignSelected}
+                disabled={unassignBusy || !canEditOrders}
+                title={canEditOrders
+                  ? "Send the selected orders back to Unplanned and remove any shipment left empty. Tendered and later are skipped."
+                  : noEditOrdersTitle}
+                style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,.35)", background: "rgba(245,158,11,.95)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: unassignBusy ? "wait" : "pointer", fontFamily: "inherit", opacity: unassignBusy ? 0.6 : 1 }}
+              >
+                {unassignBusy ? "↩️ Unassigning..." : `↩️ Unassign (${unassignableSelected.length})`}
               </button>
             )}
           </div>
@@ -1738,6 +1817,7 @@ export default function OrdersPage() {
       />
 
       <PlanSummaryModal summary={planSummary} onClose={() => setPlanSummary(null)} />
+      <PlanningProgressModal progress={planProgress} />
 
       <NewOrderModal show={showNewOrder} form={newOrderForm} onFormChange={setNewOrderForm}
         lines={newOrderLines} onLinesChange={setNewOrderLines} onSubmit={createOrder}

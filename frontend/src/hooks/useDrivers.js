@@ -32,10 +32,7 @@ export function useDrivers(initialDrivers = []) {
   const [statusFilter, setStatusFilter] = useState("");
 
   // Bug #170: hydrate from the real `drivers` DB table on mount so
-  // Fleet Management and DB Explorer agree. SEED_DRIVERS stays as the
-  // initial frame to keep the page interactive while the request is
-  // in flight; once the API returns, it wins. Failures fall back to
-  // the seed so the page is never empty in offline / dev sessions.
+  // Fleet Management and DB Explorer agree. No sample rows.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -45,9 +42,9 @@ export function useDrivers(initialDrivers = []) {
                    : Array.isArray(resp?.drivers) ? resp.drivers
                    : Array.isArray(resp?.rows) ? resp.rows
                    : [];
-        if (!cancelled && rows.length) setDrivers(rows.map(dbToDriver));
+        if (!cancelled) setDrivers(rows.map(dbToDriver));
       } catch (_e) {
-        // Swallow — initialDrivers is already populated.
+        // Leave the list empty when the read fails.
       }
     })();
     return () => { cancelled = true; };

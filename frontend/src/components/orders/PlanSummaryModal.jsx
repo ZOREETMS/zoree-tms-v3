@@ -38,9 +38,26 @@ function ShipmentCountKPI({ count, shipmentIds, onClose }) {
   );
 }
 
+/**
+ * Per-order pace alongside the wall clock. On a 12-order run the total is
+ * what you want; on a 500-order run the total says little and ms/order is
+ * what tells you whether planning scales, so both are shown once the run
+ * is big enough for the average to mean anything.
+ */
+function formatPace(ms, orderCount) {
+  if (!ms || !orderCount || orderCount < 2) return null;
+  const per = ms / orderCount;
+  return per < 1000 ? `${Math.round(per)}ms/order` : `${(per / 1000).toFixed(1)}s/order`;
+}
+
 function formatElapsed(ms) {
   if (!ms) return null;
   if (ms < 1000) return `${ms}ms`;
+  if (ms >= 60000) {
+    const m = Math.floor(ms / 60000);
+    const s = Math.round((ms % 60000) / 1000);
+    return `${m}m ${s}s`;
+  }
   const secs = (ms / 1000).toFixed(1);
   return `${secs}s`;
 }
@@ -49,6 +66,13 @@ function PlanSummaryModal({ summary, onClose }) {
   if (!summary) return null;
   const allShipmentIds = collectShipmentIds(summary);
   const elapsed = formatElapsed(summary.elapsedMs);
+  // ordersUpdated is set on every branch; fall back to the selected set so
+  // the pace still appears when a branch reports only shipments.
+  const plannedCount = summary.ordersUpdated
+    || (summary.siblings ? summary.siblings.length : 0)
+    || (summary.orders ? summary.orders.length : 0);
+  const pace = formatPace(summary.elapsedMs, plannedCount);
+  const timing = [elapsed, pace].filter(Boolean).join(" \u00b7 ");
 
   // Combined summary (multi-stop + bulk direct shipments)
   if (summary.isCombined) {
@@ -58,7 +82,7 @@ function PlanSummaryModal({ summary, onClose }) {
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-card" style={{ width: 660, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
           <div style={{ background: "linear-gradient(135deg,#059669,#10b981)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{elapsed ? ` \u00b7 ${elapsed}` : ""}</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{timing ? ` \u00b7 ${timing}` : ""}</div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>{totalShipments} Shipment{totalShipments !== 1 ? "s" : ""} Created</div>
           </div>
           <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
@@ -151,7 +175,7 @@ function PlanSummaryModal({ summary, onClose }) {
       <div className="modal-overlay" onClick={() => onClose()}>
         <div className="modal-card" style={{ width: 640, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
           <div style={{ background: "linear-gradient(135deg,#1e40af,#6366f1)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{elapsed ? ` \u00b7 ${elapsed}` : ""}</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{timing ? ` \u00b7 ${timing}` : ""}</div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>Multi-Stop Shipment Created</div>
           </div>
           <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>
@@ -222,7 +246,7 @@ function PlanSummaryModal({ summary, onClose }) {
     <div className="modal-overlay" onClick={() => onClose()}>
       <div className="modal-card" style={{ width: 580, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ background: "linear-gradient(135deg,#059669,#10b981)", borderRadius: "16px 16px 0 0", padding: "18px 24px", color: "#fff" }}>
-          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete</div>
+          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.8, marginBottom: 4 }}>Planning Complete{timing ? ` \u00b7 ${timing}` : ""}</div>
           <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18 }}>{shipmentCount} Shipment{shipmentCount !== 1 ? "s" : ""} Created Successfully</div>
         </div>
         <div className="modal-body" style={{ flex: 1, overflowY: "auto" }}>

@@ -1,0 +1,82 @@
+[
+  {
+    "id": "KB-SH-40117",
+    "carrier": "Ridgeline Freight",
+    "origin": "Reno, NV",
+    "destination": "Phoenix, AZ",
+    "shipDate": "2026-10-02",
+    "status": "Delivered",
+    "approvedExtras": []
+  },
+  {
+    "id": "KB-SH-40122",
+    "carrier": "Ridgeline Freight",
+    "origin": "Reno, NV",
+    "destination": "Phoenix, AZ",
+    "shipDate": "2026-10-03",
+    "status": "Delivered",
+    "approvedExtras": []
+  },
+  {
+    "id": "KB-SH-40126",
+    "carrier": "Ridgeline Freight",
+    "origin": "Reno, NV",
+    "destination": "Phoenix, AZ",
+    "shipDate": "2026-10-05",
+    "status": "Delivered",
+    "approvedExtras": []
+  },
+  {
+    "id": "KB-SH-40130",
+    "carrier": "Bluewater Carriers",
+    "origin": "Ontario, CA",
+    "destination": "Las Vegas, NV",
+    "shipDate": "2026-10-03",
+    "status": "Delivered",
+    "approvedExtras": []
+  },
+  {
+    "id": "KB-SH-40141",
+    "carrier": "Pioneer Express",
+    "origin": "Dallas, TX",
+    "destination": "Houston, TX",
+    "shipDate": "2026-10-06",
+    "status": "Delivered",
+    "approvedExtras": [
+      {
+        "type": "detention",
+        "maxHours": 2,
+        "ratePerHour": 75.0
+      }
+    ]
+  },
+  {
+    "id": "KB-SH-40155",
+    "carrier": "Ridgeline Freight",
+    "origin": "Reno, NV",
+    "destination": "Phoenix, AZ",
+    "shipDate": "2026-10-07",
+    "status": "Cancelled",
+    "approvedExtras": []
+  },
+  {
+    "id": "KB-SH-40160",
+    "carrier": "Pioneer Express",
+    "origin": "Dallas, TX",
+    "destination": "Houston, TX",
+    "shipDate": "2026-10-09",
+    "status": "Delivered",
+    "approvedExtras": [],
+    "addedForDemo": true
+  },
+  {
+    "id": "KB-SH-40163",
+    "carrier": "Ridgeline Freight",
+    "origin": "Reno, NV",
+    "destination": "Phoenix, AZ",
+    "shipDate": "2026-10-10",
+    "status": "Delivered",
+    "approvedExtras": [],
+    "addedForDemo": true
+  }
+]

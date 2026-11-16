@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 import { useCarrierBids } from "../hooks/useCarrierBids";
-import { SEED_BIDS } from "../services/carrierBidsService";
 import { useEditGate } from "../hooks/useEditGate";
 import BidsStatGrid from "../components/carrier-bids/BidsStatGrid";
 import RfqTable from "../components/carrier-bids/RfqTable";
@@ -8,7 +7,7 @@ import BidDetailModal from "../components/carrier-bids/BidDetailModal";
 import CreateRfqModal from "../components/carrier-bids/CreateRfqModal";
 
 export default function CarrierBidsPage() {
-  const { bids, stats, awardBid, addRfq } = useCarrierBids(SEED_BIDS);
+  const { bids, stats, awardBid, addRfq } = useCarrierBids();
 
   // QA #148 / QA #149: Carrier Bid Management writes (Create RFQ + Award)
   // must obey the Finance matrix. Both Finance role and Viewer were able

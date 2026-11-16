@@ -12,15 +12,6 @@ export const VISIBILITY_LEVELS = {
   ETA_ONLY: "ETA Only",
 };
 
-export const CUSTOMERS_WITH_ACCESS = [
-  "Cisco Systems",
-  "AT&T",
-  "Meta",
-  "Google",
-  "Seagate",
-  "XPO Logistics",
-];
-
 export function emptyCustomerInvite() {
   return {
     name: "",

@@ -215,6 +215,9 @@ async function submitInvoice({
   bolId, bolIds,                                    // REQ-187 (additive)
   invoicedAmount, invoiceDate, paymentTerms = 'NET30',
   notes, metadata, user,
+  // PDF intake: an Approved-by-tolerance invoice is only sent to AP after
+  // the line-level audit also passes (the intake calls sendToAp itself).
+  deferApSend = false,
 }) {
   if (!invoiceNumber) { const e = new Error('invoiceNumber is required'); e.status = 400; throw e; }
   const amount = num(invoicedAmount, null);
@@ -323,8 +326,8 @@ async function submitInvoice({
     decision_reason: decision.reason,
     decided_at: nowIso,
     decided_by: user?.email || 'system',
-    sent_to_ap_at: decision.status === 'Approved' ? nowIso : null,
-    sent_to_ap_by: decision.status === 'Approved' ? (user?.email || 'system') : null,
+    sent_to_ap_at: decision.status === 'Approved' && !deferApSend ? nowIso : null,
+    sent_to_ap_by: decision.status === 'Approved' && !deferApSend ? (user?.email || 'system') : null,
     payment_terms: paymentTerms,
     notes: notes || null,
     metadata: {
@@ -466,6 +469,16 @@ async function decideInvoice({ invoiceId, user }) {
   const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
   if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
 
+  // Invoices read by the AP agent were already audited against the contract
+  // rate, approved extras, duplicates and the sender. The tolerance-only
+  // re-decide below ignores all of that and could approve a held resend, so
+  // AP must approve or dispute those explicitly.
+  if (before.metadata && before.metadata.intake) {
+    const e = new Error('This invoice was audited by the AP agent. Review its reason, then use Approve or Dispute.');
+    e.status = 409;
+    throw e;
+  }
+
   // Pull cost lines (require()'d here to avoid a circular import at
   // module-load — invoiceCostLines.js doesn't depend back on this file
   // but keeping the require local makes the dependency direction
@@ -597,6 +610,27 @@ async function manualDecide({ invoiceId, decision, reason, user }) {
   const rows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
   const before = Array.isArray(rows) && rows.length ? rows[0] : null;
   if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+
+  if (before.status === 'Paid' && decision !== 'Paid') {
+    const e = new Error(`${before.invoice_number || invoiceId} is Paid and closed. Its status can't change.`); e.status = 409; throw e;
+  }
+
+  // A corrected copy (PDF intake) closes the dispute it answers. Check and
+  // close the originals BEFORE approving the copy: if an original was paid
+  // or approved meanwhile, approve nothing (pay once).
+  const replaces = (before.metadata && before.metadata.intake && before.metadata.intake.replaces) || [];
+  if (decision === 'Approved' && replaces.length) {
+    const originals = await db.dbSelect('invoices', { select: 'id,invoice_number,status', filters: [['id', 'in', replaces.map((r) => r.id)]], limit: replaces.length });
+    const paidOut = originals.filter((o) => o.status === 'Approved' || o.status === 'Paid');
+    if (paidOut.length) {
+      const e = new Error(`The original ${paidOut.map((o) => `${o.invoice_number} (${o.status})`).join(', ')} is already approved — pay once. Reject this corrected copy instead.`);
+      e.status = 409; throw e;
+    }
+    for (const o of originals.filter((x) => x.status === 'Disputed')) {
+      await manualDecide({ invoiceId: o.id, decision: 'Cancelled', user,
+        reason: `Dispute closed: replaced by the corrected copy ${before.invoice_number || invoiceId} (${invoiceId}), approved by ${user?.email || 'AP'}.` });
+    }
+  }
 
   const nowIso = new Date().toISOString();
   const patch = {
@@ -747,6 +781,46 @@ function buildInvoicePatch(rawPatch) {
   return patch;
 }
 
+// Payment integrity (Nov 2026). An approved invoice is what AP pays, so:
+//  - the edit form cannot approve; the Approve button records who and why
+//  - amount, shipment, carrier and number are locked while Approved/Paid;
+//    put the invoice On Hold (same save is fine), then change them
+//  - Paid is reachable only from Approved, and is final
+const APPROVED_LIKE = new Set(['Approved', 'Paid']);
+const LOCKED_WHEN_APPROVED = ['invoice_number', 'carrier', 'carrier_id', 'shipment_id', 'shipment_ids', 'bol_ids', 'agreed_cost', 'invoiced_amount'];
+const LOCK_LABEL = { invoice_number: 'invoice number', carrier: 'carrier', carrier_id: 'carrier', shipment_id: 'shipment', shipment_ids: 'shipments', bol_ids: 'BOLs', agreed_cost: 'agreed rate', invoiced_amount: 'invoiced amount' };
+
+function sameValue(a, b) {
+  const norm = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    if (Array.isArray(v)) return v.length ? v.map(String).sort().join(',') : null;
+    if (typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()))) return Math.round(Number(v) * 100) / 100;
+    return String(v).trim();
+  };
+  return norm(a) === norm(b);
+}
+
+function locked(message) { const e = new Error(message); e.status = 409; return e; }
+
+function assertEditAllowed(before, patch) {
+  const label = before.invoice_number || before.id;
+  const to = 'status' in patch ? patch.status : before.status;
+  if (before.status === 'Paid' && to !== 'Paid') throw locked(`${label} is Paid and closed. Its status can't change.`);
+  if (to !== before.status && to === 'Approved') throw locked('Status can\'t be set to Approved from the edit form. Use Approve so the decision and the reason are recorded.');
+  if (to !== before.status && to === 'Paid' && before.status !== 'Approved') throw locked(`Only an Approved invoice can be marked Paid; ${label} is ${before.status}.`);
+  const changed = LOCKED_WHEN_APPROVED.filter((c) => c in patch && !sameValue(patch[c], before[c]));
+  if (!changed.length) return;
+  const what = [...new Set(changed.map((c) => LOCK_LABEL[c]))].join(', ');
+  // Once sent to AP the invoice may already be in the ERP: moving it On Hold
+  // here does not unsend it, so its money fields stay as sent.
+  if (before.sent_to_ap_at) {
+    throw locked(`${label} was sent to AP on ${String(before.sent_to_ap_at).slice(0, 10)}, so its ${what} can't change. Reject it and ask the carrier for a corrected invoice.`);
+  }
+  if (APPROVED_LIKE.has(to)) {
+    throw locked(`${label} is ${before.status}, so its ${what} can't change. Set the status to On Hold (in the same save is fine), then edit — the change goes back through review.`);
+  }
+}
+
 async function editInvoice({ invoiceId, patch: rawPatch, user }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
   const patch = buildInvoicePatch(rawPatch);
@@ -758,6 +832,8 @@ async function editInvoice({ invoiceId, patch: rawPatch, user }) {
   const beforeRows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
   const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
   if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+
+  assertEditAllowed(before, patch);
 
   patch.updated_at = new Date().toISOString();
   const updated = await db.dbUpdate('invoices', invoiceId, patch);
@@ -820,6 +896,21 @@ async function deleteInvoice({ invoiceId, reason, user }) {
   const rows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
   const before = Array.isArray(rows) && rows.length ? rows[0] : null;
   if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+
+  // Deleting an approved invoice would let a resend of it be paid again.
+  // Released history, not current status: an invoice once sent to AP keeps
+  // its record even after it is moved On Hold or rejected.
+  if (APPROVED_LIKE.has(before.status) || before.sent_to_ap_at) {
+    const why = before.sent_to_ap_at ? `was sent to AP on ${String(before.sent_to_ap_at).slice(0, 10)}` : `is ${before.status}`;
+    throw locked(`${before.invoice_number || invoiceId} ${why} and can't be deleted — a resend of it could then be paid twice. Reject it instead; the record stays.`);
+  }
+  // Migration 054: a released or exported invoice is AP's record of what left Zoree.
+  const [apRelease, apExport] = await Promise.all([
+    db.dbSelect('invoice_ap_releases', { select: 'invoice_id', filters: [['invoice_id', 'eq', invoiceId]], limit: 1 }).catch(() => []),
+    db.dbSelect('ap_export_batch_items', { select: 'batch_id', filters: [['invoice_id', 'eq', invoiceId]], limit: 1 }).catch(() => []),
+  ]);
+  if (apExport.length) throw locked(`${before.invoice_number || invoiceId} was exported to NetSuite in ${apExport[0].batch_id} and can't be deleted.`);
+  if (apRelease.length) throw locked(`${before.invoice_number || invoiceId} was released by AP for export and can't be deleted.`);
 
   const finalReason = reason || `Deleted by ${user?.email || 'admin'}.`;
   const shipmentIdsForHistory = Array.isArray(before.shipment_ids) && before.shipment_ids.length
@@ -918,5 +1009,5 @@ module.exports = {
   editInvoice,
   deleteInvoice,     // REQ-192
   // Exposed for unit testing of the field mapper / alias coverage.
-  _internals: { buildInvoicePatch, EDIT_FIELD_MAP, EDIT_LEGACY_ALIASES },
+  _internals: { buildInvoicePatch, EDIT_FIELD_MAP, EDIT_LEGACY_ALIASES, assertEditAllowed, sameValue },
 };

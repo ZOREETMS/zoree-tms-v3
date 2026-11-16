@@ -17,12 +17,14 @@ export default function CarrierCertsCard({ certRecords }) {
                 ☢️ Hazmat Cert
               </span>
             )}
-            <span style={{
-              marginLeft: "auto", fontSize: 10, color: "var(--green)", background: "var(--green-dim)",
-              border: "1px solid rgba(16,185,129,.2)", padding: "2px 9px", borderRadius: 10, fontWeight: 600,
-            }}>
-              ✓ Active
-            </span>
+            {car.status && (
+              <span style={{
+                marginLeft: "auto", fontSize: 10, color: "var(--text2)", background: "var(--bg2, #f8faff)",
+                border: "1px solid var(--border)", padding: "2px 9px", borderRadius: 10, fontWeight: 600,
+              }}>
+                {car.status}
+              </span>
+            )}
           </div>
         ))}
       </div>

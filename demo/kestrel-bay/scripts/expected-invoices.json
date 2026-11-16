@@ -1,0 +1,185 @@
+[
+  {
+    "seq": 1,
+    "invoiceNumber": "RF-88213",
+    "carrier": "Ridgeline Freight",
+    "shipmentId": "KB-SH-40117",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 412.0
+      },
+      {
+        "type": "fuel",
+        "amount": 98.88
+      }
+    ],
+    "total": 510.88
+  },
+  {
+    "seq": 2,
+    "invoiceNumber": "RF-88214",
+    "carrier": "Ridgeline Freight",
+    "shipmentId": "KB-SH-40122",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 412.0
+      },
+      {
+        "type": "fuel",
+        "amount": 98.88
+      },
+      {
+        "type": "accessorial",
+        "name": "liftgate",
+        "amount": 85.0
+      }
+    ],
+    "total": 595.88
+  },
+  {
+    "seq": 3,
+    "invoiceNumber": "RF-88219",
+    "carrier": "Ridgeline Freight",
+    "shipmentId": "KB-SH-40126",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 412.0
+      },
+      {
+        "type": "fuel",
+        "amount": 98.88
+      }
+    ],
+    "total": 510.88
+  },
+  {
+    "seq": 4,
+    "invoiceNumber": "BW-5521",
+    "carrier": "Bluewater Carriers",
+    "shipmentId": "KB-SH-40130",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 1280.0
+      },
+      {
+        "type": "fuel",
+        "amount": 281.6
+      }
+    ],
+    "total": 1561.6
+  },
+  {
+    "seq": 5,
+    "invoiceNumber": "PE-0931",
+    "carrier": "Pioneer Express",
+    "shipmentId": "KB-SH-40141",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 236.0
+      },
+      {
+        "type": "fuel",
+        "amount": 56.64
+      },
+      {
+        "type": "accessorial",
+        "name": "detention",
+        "hours": 2,
+        "amount": 150.0
+      }
+    ],
+    "total": 442.64
+  },
+  {
+    "seq": 6,
+    "invoiceNumber": "RF-88213",
+    "carrier": "Ridgeline Freight",
+    "shipmentId": "KB-SH-40117",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 412.0
+      },
+      {
+        "type": "fuel",
+        "amount": 98.88
+      }
+    ],
+    "total": 510.88
+  },
+  {
+    "seq": 7,
+    "invoiceNumber": "BW-5527",
+    "carrier": "Bluewater Carriers",
+    "shipmentId": "KB-SH-40999",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 1180.0
+      },
+      {
+        "type": "fuel",
+        "amount": 259.6
+      }
+    ],
+    "total": 1439.6
+  },
+  {
+    "seq": 8,
+    "invoiceNumber": "RF-88230",
+    "carrier": "Ridgeline Freight",
+    "shipmentId": "KB-SH-40155",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 412.0
+      },
+      {
+        "type": "fuel",
+        "amount": 98.88
+      }
+    ],
+    "total": 510.88
+  },
+  {
+    "seq": 9,
+    "invoiceNumber": "PE-0944",
+    "carrier": "Pioneer Express",
+    "shipmentId": "KB-SH-40160",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 236.0
+      },
+      {
+        "type": "fuel",
+        "amount": 56.64
+      }
+    ],
+    "total": 292.64,
+    "note": "crooked noisy phone scan (image-only PDF)"
+  },
+  {
+    "seq": 10,
+    "invoiceNumber": "RF-88241",
+    "carrier": "Ridgeline Freight",
+    "shipmentId": "KB-SH-40163",
+    "lines": [
+      {
+        "type": "base",
+        "amount": 412.0
+      },
+      {
+        "type": "fuel",
+        "amount": 98.88
+      }
+    ],
+    "total": 519.88,
+    "note": "printed total does not match the lines (should be 510.88)"
+  }
+]

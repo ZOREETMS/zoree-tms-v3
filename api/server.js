@@ -7,17 +7,28 @@
 // (touch 2026-08-03 to nudge nodemon so it reloads .env with the TEAMS_BOT_* vars)
 
 require('dotenv').config();
+// Domains (migration 052): scope every PostgREST call to the request's
+// domain. Must run before any Supabase client or fetch is captured.
+require('./services/domains/scopedFetch').install();
+const { createDomainScopeMiddleware } = require('./middleware/domainScope');
+const { currentDomain } = require('./services/domains/domainContext');
 const http    = require('http');
 const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
 const WebSocket = require('ws');
-const nodemailer = require('nodemailer');
 const { createRolePermissionService } = require('./services/rolePermissions');
 const { createRolesRouter } = require('./routes/roles');
 const { createApiKeysRouter } = require('./routes/apiKeys');
 const { createApiKeysService } = require('./services/apiKeys');
 const ingestRouter = require('./routes/ingest');
+const { createEmailIntakeRouter } = require('./routes/emailIntake'); // Email order agent
+const { createAgentsRouter } = require('./routes/agents');           // Quote / sourcing / trace / audit / POD agents
+const pagedRead = require('./services/db/pagedRead');
+const smtpTransport = require('./services/mail/smtpTransport');
+const { priceTlRate } = require('./services/rating/tlQuoteService');
+const { createAuthUserCache } = require('./middleware/authUserCache');
+const emailIntakePoller = require('./services/emailIntake/poller');
 const fusionIngestRouter = require('./routes/fusionIngest');
 const { buildMwQueueAdminRouter } = require('./routes/mwQueueAdmin');
 const mwQueueWorker = require('./services/mwQueueWorker');
@@ -74,6 +85,7 @@ const { buildLines: buildOrderLines } = require('./services/orderLines');
 const userMgmt = require('./services/userManagement');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
+const createAccessorialApprovalsRouter = require('./routes/accessorialApprovals');
 const locationsRouter = require('./routes/locations');  // REQ-29 / REQ-30
 const messagingHubRouter = require('./routes/messagingHub'); // Messaging Hub (plan: docs/messaging-hub/plan.md)
 const hubEntitySync      = require('./services/messagingHub/entitySync'); // entity-master → hub message (migration 042)
@@ -88,6 +100,9 @@ const teamsBotRouter = require('./routes/teamsBot');
 const fscRouter          = require('./routes/fsc');          // Migration 045: EIA fuel surcharge
 const { getCurrentDieselPrice } = require('./services/eiaFuelService');
 const { getSchedulesByCarrier, lookupFscPct } = require('./services/fscSchedule');
+// Otodus Quantum optimization engine (vendor Docker container, run by the
+// operator — see services/quantumEngine.js). Passthrough client only.
+const { createQuantumEngineRouter } = require('./routes/quantumEngine');
 
 // Fields on orders we record diffs for (label used in change_history.field).
 //
@@ -150,6 +165,7 @@ app.use((_req, res, next) => {
 });
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+app.use('/api', createDomainScopeMiddleware()); // which client domain this request works in
 
 // ── Supabase REST helpers (server-side only) ────────────────────────
 function sbHeaders(token) {
@@ -169,6 +185,13 @@ async function dbSelect(table, query, token) {
   const res = await fetch(url, { headers: sbHeaders(token) });
   if (!res.ok) throw new Error(`DB read failed (${res.status}): ${await res.text()}`);
   return res.json();
+}
+
+// Paged PostgREST read (services/db/pagedRead.js). Thin wrapper so the
+// call sites keep passing a URL; headers come from sbHeaders here.
+function fetchAllRows(baseUrl, opts = {}) {
+  const { token = null, ...rest } = opts;
+  return pagedRead.fetchAllRows(baseUrl, { ...rest, headers: sbHeaders(token) });
 }
 
 async function dbUpsert(table, data, token) {
@@ -246,6 +269,10 @@ async function _loadProfileCached(user) {
 }
 function _invalidateProfileCache(userId) { _profileCache.delete(userId); }
 
+// Cache of the GET /auth/v1/user round trip (middleware/authUserCache.js).
+// Same 30s TTL as the profile cache so a role switch lands just as fast.
+const authUserCache = createAuthUserCache({ ttlMs: 30_000, maxEntries: 500 });
+
 // QA bug #261c: lazy singleton — created on first call so the
 // SUPABASE creds are guaranteed initialised by the time we touch the
 // service. The closure over dbSelect/dbUpsert/dbUpdate keeps the
@@ -303,11 +330,15 @@ async function verifyToken(req, res) {
   }
   const token = auth.slice(7);
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + token }
-    });
-    if (!r.ok) { res.status(401).json({ error: 'Invalid or expired token' }); return null; }
-    const user = await r.json();
+    let user = authUserCache.get(token);
+    if (!user) {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + token }
+      });
+      if (!r.ok) { authUserCache.invalidate(token); res.status(401).json({ error: 'Invalid or expired token' }); return null; }
+      user = await r.json();
+      authUserCache.set(token, user);
+    }
     user._token = token;
     // REQ-08: hydrate user.roles + user.activeRole from user_profiles (cached).
     // Endpoints check against user.roles for access; getUserRole() reads activeRole.
@@ -343,6 +374,17 @@ function hasAnyRole(user, ...allowedRoles) {
 }
 
 // Allowed tables — security whitelist
+// Payment integrity (Nov 2026): invoices are readable through the generic
+// /api/db proxy but written only through /api/invoices, where the AP rules
+// run (approved/sent-to-AP invoices locked, no delete after release, the
+// edit form can't approve). A raw PATCH here would bypass all of them.
+const SERVICE_ONLY_WRITES = new Set(['invoices']);
+function refuseServiceOnlyWrite(req, res) {
+  if (!SERVICE_ONLY_WRITES.has(req.params.table)) return false;
+  res.status(403).json({ error: `${req.params.table} are written through /api/${req.params.table} so the payment checks run.` });
+  return true;
+}
+
 const ALLOWED = [
   // Core TMS
   'orders','shipments','carriers','rates','items','drivers','locations',
@@ -744,6 +786,18 @@ app.use('/api/invoices', createInvoicesRouter({
   hasAnyRole,
 }));
 
+// ── Migration 054: AP release & NetSuite-ready export (read-only NetSuite pilot) ──
+app.use('/api/ap', require('./routes/apRelease')({ verifyToken, hasAnyRole }));
+
+// ── Migration 052: client domains ───────────────────────────────────
+app.use('/api/domains', require('./routes/domains')({ verifyToken }));
+
+// ── Migration 051: approved extras per shipment (checked by Freight Audit) ──
+app.use('/api/shipments/:shipmentId/accessorial-approvals', createAccessorialApprovalsRouter({
+  verifyToken,
+  hasAnyRole,
+}));
+
 // ── REQ-01: OMS ingest + SSE stream ───────────────────────────────
 // POST /api/ingest/oms-orders  — middleware pushes OMS orders
 // GET  /api/events/orders      — SSE stream of live order events
@@ -753,6 +807,17 @@ app.use('/api', ingestRouter); // exposes /api/events/orders via the same router
 // Fusion (OM/Inv) inbound via OIC — see docs/integrations/oic/README.md.
 // Endpoints: /api/ingest/fusion/{sales-orders,shipment-requests,inventory/...,items,locations,carriers}
 app.use('/api/ingest/fusion', fusionIngestRouter);
+
+// ── Email order agent ─────────────────────────────────────────────
+// Reads order emails from the mailbox in EMAIL_INTAKE_IMAP_USER, has
+// Claude extract the order, and holds it as a draft until a planner
+// approves it on the Email Orders page. See docs/EMAIL_ORDER_AGENT.md.
+app.use('/api/email-intake', createEmailIntakeRouter({ verifyToken, getUserRole, canWriteTable, getTenantId }));
+
+// ── AI agents (docs/AI_AGENTS.md) ─────────────────────────────────
+// Quote, carrier sourcing, track & trace, freight audit, POD. Agents
+// only propose; approving an action runs the owning service.
+app.use('/api/agents', createAgentsRouter({ verifyToken, getUserRole, canWriteTable, getTenantId }));
 
 // ── MW Queue Admin (REQ-31) ───────────────────────────────────────
 // GET  /api/mw-queue/status     — worker state
@@ -798,24 +863,28 @@ app.use('/api/tendering',                         tenderingRouter);
 //   POST /api/teams/messages — inbound activities (JWT-validated)
 //   GET  /api/teams/status   — wiring diagnostics
 app.use('/api/teams',                             teamsBotRouter);
+
+// Otodus Quantum optimization engine (vendor Docker container, started
+// separately on the host — see docs/quantum-engine-runbook.md). Requires
+// QUANTUM_ENGINE_URL / QUANTUM_ENGINE_API_KEY in api/.env.
+//   GET  /api/quantum/status                 POST /api/quantum/plan/consolidate
+//   GET  /api/quantum/health                 POST /api/quantum/plan/rates
+//   POST /api/quantum/optimize/{rates,consolidate}, /predict/eta, /reroute
+// All but /health require auth (each call spends the vendor license).
+app.use('/api/quantum', createQuantumEngineRouter({ verifyToken }));
+
+// Jev (TypeSafe System One) carrier-message triage demo - dry run, no writes.
+//   POST /api/jev/triage, POST /api/jev/triage/batch
+app.use('/api/jev', require('./routes/jev'));
+
 app.post('/api/ingest/carrier-tender-response',
   tenderingRouter.requireIngestKey,
   tenderingRouter.carrierTenderResponseHandler);
 
 // ── POST /api/tender/email — notify carrier when a shipment is tendered ──
+// SMTP transport lives in services/mail/smtpTransport.js (shared with agent outbound mail).
 function getSmtpTransport() {
-  const host = process.env.SMTP_HOST;
-  if (!host) return null;
-  const opts = {
-    host,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' }
-      : undefined,
-  };
-  if (process.env.SMTP_DEBUG === 'true') opts.debug = true;
-  return nodemailer.createTransport(opts);
+  return smtpTransport.getSmtpTransport();
 }
 
 async function verifySmtpOnStartup() {
@@ -1354,6 +1423,7 @@ app.post('/api/db/:table', async (req, res) => {
   if (!user) return;
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  if (refuseServiceOnlyWrite(req, res)) return;
   if (!(await canWriteTable(user, req.params.table, 'POST', getTenantId(user)))) {
     return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot create ${req.params.table}` });
   }
@@ -1418,6 +1488,7 @@ app.patch('/api/db/:table/:id', async (req, res) => {
   if (!user) return;
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  if (refuseServiceOnlyWrite(req, res)) return;
   if (!(await canWriteTable(user, req.params.table, 'PATCH', getTenantId(user)))) {
     return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot edit ${req.params.table}` });
   }
@@ -1541,6 +1612,7 @@ app.delete('/api/db/:table/:id', async (req, res) => {
   if (!user) return;
   if (!ALLOWED.includes(req.params.table))
     return res.status(403).json({ error: 'Table not permitted: ' + req.params.table });
+  if (refuseServiceOnlyWrite(req, res)) return;
   if (!(await canWriteTable(user, req.params.table, 'DELETE', getTenantId(user)))) {
     return res.status(403).json({ error: `Role '${getUserRole(user)}' cannot delete ${req.params.table}` });
   }
@@ -2270,16 +2342,17 @@ app.post('/api/shipments/:id/change-carrier', async (req, res) => {
 // Idempotent — if the shipment already has an open (non-Cancelled)
 // invoice, the response carries that one with `reused: true`.
 //
-// Edit access on shipments is required (planners trigger this from the
-// shipment row); finance owns the resulting approval workflow on the
-// invoice page.
+// Edit access on invoices OR shipments is enough: planners trigger this
+// from the shipment row, and AP (finance) opens or creates the shipment's
+// invoice from the same button. The shipment itself is not changed.
 app.post('/api/shipments/:id/invoice', async (req, res) => {
   const u = await verifyToken(req, res);
   if (!u) return;
-  if (!(await canWriteTable(u, 'shipments', 'POST', getTenantId(u)))) {
+  const tenant = getTenantId(u);
+  if (!(await canWriteTable(u, 'invoices', 'POST', tenant)) && !(await canWriteTable(u, 'shipments', 'POST', tenant))) {
     const role = getUserRole(u);
     return res.status(403).json({
-      error: `Role '${role}' has no Edit access on Shipments. Ask an admin to grant Edit on the User Roles page.`,
+      error: `Role '${role}' has no Edit access on Freight Invoices or Shipments. Ask an admin to grant Edit on the User Roles page.`,
     });
   }
   try {
@@ -2606,7 +2679,10 @@ app.delete('/api/shipments/:id', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-app.get('/api/carriers',  async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('carriers','select=*&order=name&limit=200',u._token); res.json({ carriers: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
+// Auth required (verifyToken), but read with the service role: the carriers
+// table's RLS returns no rows to a user JWT, so this route came back empty for
+// every signed-in caller (the web app reads carriers via /api/db instead).
+app.get('/api/carriers',  async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('carriers','select=*&order=name&limit=200',null); res.json({ carriers: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/rates',     async (req, res) => { const u = await verifyToken(req,res); if(!u) return; try { const rows = await dbSelect('rates','select=*&order=lane&limit=500',u._token); res.json({ rates: rows, total: rows.length }); } catch(e){ res.status(500).json({error:e.message}); } });
 
 // ── Tenants/config ─────────────────────────────────────────────────
@@ -3081,17 +3157,18 @@ app.post('/api/ltl/quote', async (req, res) => {
     // may have origin/dest strings that don't contain the shipment's
     // city. Filtering client-side (in the matcher) is fine: the
     // rates table is small (tens to hundreds of rows per carrier).
-    const rr = await fetch(
+    // Paged for the same reason as the TL branch below: active LTL rates
+    // (6,646) exceed PostgREST's 1000-row cap, so an unpaged read returns
+    // a slice and lanes outside it silently lose their discount/FSC adders.
+    adderRates = await fetchAllRows(
       `${SUPABASE_URL}/rest/v1/rates?mode=eq.LTL&status=eq.Active&select=` +
-        'carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,' +
+        'id,carrier,origin,dest,discount,discount_flat,fsc,lane,service_level,' +
         'transit_days,' +
         // New columns from migration 021 — match_type + structured geo.
         'match_type,origin_zip,dest_zip,origin_country,dest_country,' +
         // Migration 024: trailer this rate was negotiated against.
-        'equipment',
-      { headers: sbHeaders(null) }
+        'equipment'
     );
-    if (rr.ok) adderRates = await rr.json();
     // Only keep rates for carriers with czarlite_enabled
     const czCarrierNames = new Set(czCarriers.map(c => c.name));
     adderRates = adderRates.filter(r => czCarrierNames.has(r.carrier));
@@ -3304,10 +3381,12 @@ app.get('/api/ltl/rates', async (req, res) => {
   const user = await verifyToken(req, res);
   if (!user) return;
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/rates?mode=eq.LTL&select=*&order=carrier', {
-      headers: sbHeaders(null)
-    });
-    const data = await r.json();
+    // Paged — see fetchAllRows. `carrier` is not unique, so id is
+    // appended to give offset paging a total order.
+    const data = await fetchAllRows(
+      SUPABASE_URL + '/rest/v1/rates?mode=eq.LTL&select=*',
+      { order: 'carrier.asc,id.asc' }
+    );
     res.json({ rates: data });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3606,6 +3685,7 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
       const wantsLtl = allowedModes.includes('LTL');
       const wantsTl = allowedModes.includes('TL');
       const laneCacheKey = {
+        domain: currentDomain(),
         ratesVersion,
         optimizeBy: optimizeBy === 'transit' ? 'transit' : 'cost',
         includeModes: allowedModes.slice().sort().join(','),
@@ -3720,8 +3800,9 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
             // Soft reference to equipment_types.name; planner uses it
             // to resolve max_weight when binning shipment groups.
             'equipment';
-          const tlRes = await fetch(tlUrl, { headers: sbHeaders(null) });
-          const tlRates = await tlRes.json();
+          // Paged: 6,678 active TL rates exceed PostgREST's 1000-row cap,
+          // and an unpaged read here silently hid ~85% of them.
+          const tlRates = await fetchAllRows(tlUrl);
 
           if (Array.isArray(tlRates)) {
             // Shipment context for the matcher — built once per lane.
@@ -3770,8 +3851,8 @@ app.post('/api/bulk-plan/rate', async (req, res) => {
                 const fscPct = eiaPct != null ? eiaPct : staticFscPct;
                 // Miles: PC*MILER if carrier has pcmiler_enabled, else rate.miles, else haversine.
                 const miles = (cFlags.pcmiler && pcmilerMiles) ? pcmilerMiles : (rate.miles || lane.miles || haversineMiles || 500);
-                const baseCost = Math.round(rpm * miles);
-                const fscCharge = Math.round(baseCost * (fscPct / 100));
+                // Shared with services/rating/tlQuoteService (Quote agent) so they never drift.
+                const { base: baseCost, fsc: fscCharge } = priceTlRate({ rpm, miles, fscPct });
                 tlMatched += 1;
                 quotes.push({
                   carrier: rate.carrier || carrierName || 'Unknown',
@@ -4565,6 +4646,9 @@ server.listen(PORT, () => {
   // Microsoft Teams notifications. No-op unless TEAMS_WEBHOOK_URL is set.
   // See api/services/teamsNotify.js and docs/TEAMS_SETUP.md.
   teamsNotify.start({ bus, EVENTS });
+
+  // Email order agent. No-op unless EMAIL_INTAKE_ENABLED=true.
+  emailIntakePoller.start();
   console.log('');
 });
 

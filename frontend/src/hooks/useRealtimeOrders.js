@@ -16,6 +16,7 @@
 
 import { useEffect, useRef } from "react";
 import { supabase, isSupabaseReady } from "../lib/supabaseClient";
+import { isInActiveDomain } from "../lib/domain";
 
 const DEBOUNCE_MS = 250;
 
@@ -49,6 +50,8 @@ export function useRealtimeOrders(refreshData, opts = {}) {
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
         (payload) => {
+          // Migration 052: ignore changes that belong to another client domain.
+          if (!isInActiveDomain(payload.new || payload.old)) return;
           try {
             optsRef.current?.onEvent?.(
               payload.eventType,

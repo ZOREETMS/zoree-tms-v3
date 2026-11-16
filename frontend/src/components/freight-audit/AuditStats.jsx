@@ -18,8 +18,8 @@ export default function AuditStats({ kpis }) {
         <div className="stat-value" style={{ fontSize: 26 }}>{kpis.pendingReview}</div>
       </div>
       <div className="stat-card green">
-        <div className="stat-label">Recovered</div>
-        <div className="stat-value" style={{ fontSize: 26 }}>${kpis.recovered.toLocaleString()}</div>
+        <div className="stat-label">Variance Flagged</div>
+        <div className="stat-value" style={{ fontSize: 26 }}>${Math.round(kpis.recovered).toLocaleString()}</div>
       </div>
     </div>
   );

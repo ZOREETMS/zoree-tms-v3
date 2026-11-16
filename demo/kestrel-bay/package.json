@@ -1,0 +1,15 @@
+{
+  "name": "kestrel-bay-invoice-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Carrier invoice audit agent built for Kestrel Bay Logistics (BackOps SE panel)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node scripts/verify.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  }
+}

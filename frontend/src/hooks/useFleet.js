@@ -1,7 +1,18 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { FleetService } from "../services/fleetService";
 
 export function useFleet(initialVehicles = []) {
   const [vehicles, setVehicles] = useState(initialVehicles);
+
+  // Load the vehicles on file. No sample rows: a failed or empty read
+  // leaves the list empty.
+  useEffect(() => {
+    let cancelled = false;
+    FleetService.getVehicles()
+      .then((rows) => { if (!cancelled) setVehicles(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const kpis = useMemo(() => {
     const total = vehicles.length;

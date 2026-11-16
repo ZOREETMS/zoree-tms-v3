@@ -28,6 +28,8 @@ const { cardActivity, textActivity } = require('./connector');
 // showed Dock Door / Loading Start / Loading End as "—". The shared
 // server-side port fills the same four fields the same way.
 const { assignDockToPlan } = require('../dockAssign');
+const intentGate = require('../ai/intentGate');
+const { shouldDryRun, dryRunReply } = require('./dryRun');
 
 const LIST_LIMIT = 8;
 
@@ -624,6 +626,87 @@ async function cmdReject(shipmentId) {
   }));
 }
 
+// ── typed-text parsing ─────────────────────────────────────────────
+function tokenize(text) {
+  const parts = String(text || '').split(/\s+/).filter(Boolean);
+  return { parts, norm: parts.map(normToken) };
+}
+
+// Question (or no verb): NEVER mutate. Pick the read-only command that
+// best matches what they're asking about:
+//   rate-ish words + order id → rate (carrier options + costs)
+//   SHP id → shipment detail · ORD id → order detail
+//   otherwise → help card via the switch default.
+function readOnlyCommand(text) {
+  const { parts, norm } = tokenize(text);
+  const parsed = parseArgs(parts);
+  const hasRateHint = norm.some((p) => RATE_HINTS.has(p));
+  if (hasRateHint && /^ORD/i.test(parsed.id)) return { cmd: 'rate', arg1: parsed.id, arg2: '' };
+  if (/^SHP/i.test(parsed.id)) return { cmd: 'shipment', arg1: parsed.id, arg2: '' };
+  if (/^ORD/i.test(parsed.id)) return { cmd: 'order', arg1: parsed.id, arg2: '' };
+  // A question like "clear?" must not fall back to the command it names:
+  // clear/reset need no id, so they would run. Any mutating word → help.
+  const first = norm[0] || '';
+  return { cmd: MUTATING_WORDS.has(first) ? 'help' : first, arg1: '', arg2: '' };
+}
+
+// Natural-language tolerance: find the first known command word in the
+// sentence instead of requiring it at position 0, so "can you plan
+// ORD-123" works the same as "plan ORD-123".
+function parseTypedCommand(text) {
+  const { parts, norm } = tokenize(text);
+  const verbIdx = norm.findIndex((p) => COMMAND_WORDS.has(p));
+  const isQuestion = QUESTION_STARTERS.has(norm[0]) || /\?\s*$/.test(parts[parts.length - 1] || '');
+  if (verbIdx === -1 || (isQuestion && MUTATING_WORDS.has(norm[verbIdx]))) {
+    return readOnlyCommand(text);
+  }
+  const parsed = parseArgs(parts.slice(verbIdx + 1));
+  return { cmd: norm[verbIdx], arg1: parsed.id, arg2: parsed.rest };
+}
+
+// Regex picks the command; the Jev intent gate (services/ai/intentGate)
+// may only veto a MUTATING command it is confident is really a question,
+// downgrading it to the read-only lookup. Off unless TYPESAFE_API_KEY is
+// set; shadow mode (default) only logs to api/jev-decisions.log.
+async function resolveTypedCommand(text) {
+  const parsed = parseTypedCommand(text);
+  const isMutating = MUTATING_WORDS.has(parsed.cmd);
+  let gate;
+  try {
+    gate = await intentGate.review({ text, regexCmd: parsed.cmd, isMutating, channel: 'teams' });
+  } catch (err) {
+    // review() is written not to throw; if it ever does, apply the same
+    // fail-open/closed policy as a Jev outage instead of dropping the turn.
+    console.error('[teamsBot] intent gate threw:', err.message);
+    gate = intentGate.decideOnUnavailable({
+      text, regexCmd: parsed.cmd, isMutating,
+      failMode: intentGate.getMode() === 'enforce' ? intentGate.getFailMode() : 'open',
+      error: err.message,
+    });
+  }
+  if (!gate.veto) return parsed;
+  console.warn(`[teamsBot] intent gate vetoed '${parsed.cmd}': ${gate.reason}`);
+  return {
+    ...readOnlyCommand(text),
+    gateNote: gateNoteFor(gate, parsed),
+  };
+}
+
+function gateNoteFor(gate, parsed) {
+  const direct = `\`${parsed.cmd} ${parsed.arg1 || '<id>'}\``;
+  const why = gate.kind === 'unavailable'
+    ? 'Couldn\'t verify what you meant (intent check unavailable)'
+    : 'Read as a question';
+  return `🛡️ ${why}, so nothing was changed (\`${parsed.cmd}\` skipped). ` +
+    `To do it, send the command directly, e.g. ${direct}.`;
+}
+
+// Shows the veto above whatever card the read-only command produced.
+function withGateNote(reply, gateNote) {
+  if (!gateNote || !reply || reply.type !== 'message') return reply;
+  return { ...reply, text: reply.text ? `${gateNote}\n\n${reply.text}` : gateNote };
+}
+
 // ── dispatch ───────────────────────────────────────────────────────
 async function handleActivity(activity) {
   if (!activity || activity.type !== 'message') {
@@ -642,40 +725,18 @@ async function handleActivity(activity) {
   let arg1 = v.id || '';
   let arg2 = v.carrier || '';
 
+  let gateNote = '';
   if (!cmd) {
-    const parts = stripMentions(activity.text).split(/\s+/).filter(Boolean);
-    const norm = parts.map(normToken);
-    // Natural-language tolerance: find the first known command word in
-    // the sentence instead of requiring it at position 0, so "can you
-    // plan ORD-123" works the same as "plan ORD-123".
-    const verbIdx = norm.findIndex((p) => COMMAND_WORDS.has(p));
-    const isQuestion = QUESTION_STARTERS.has(norm[0]) || /\?\s*$/.test(parts[parts.length - 1] || '');
-
-    if (verbIdx !== -1 && !(isQuestion && MUTATING_WORDS.has(norm[verbIdx]))) {
-      cmd = norm[verbIdx];
-      const parsed = parseArgs(parts.slice(verbIdx + 1));
-      arg1 = parsed.id;
-      arg2 = parsed.rest;
-    } else {
-      // Question (or no verb): NEVER mutate. Pick the read-only command
-      // that best matches what they're asking about:
-      //   rate-ish words + order id → rate (carrier options + costs)
-      //   SHP id → shipment detail · ORD id → order detail
-      //   otherwise → help card via the switch default.
-      const parsed = parseArgs(parts);
-      const hasRateHint = norm.some((p) => RATE_HINTS.has(p));
-      if (hasRateHint && /^ORD/i.test(parsed.id)) {
-        cmd = 'rate'; arg1 = parsed.id;
-      } else if (/^SHP/i.test(parsed.id)) {
-        cmd = 'shipment'; arg1 = parsed.id;
-      } else if (/^ORD/i.test(parsed.id)) {
-        cmd = 'order'; arg1 = parsed.id;
-      } else {
-        cmd = norm[0] || '';
-      }
-    }
+    ({ cmd, arg1, arg2, gateNote = '' } = await resolveTypedCommand(stripMentions(activity.text)));
   }
 
+  const reply = shouldDryRun(cmd, arg1)
+    ? dryRunReply(cmd, arg1, arg2)
+    : await runCommand(cmd, arg1, arg2);
+  return withGateNote(reply, gateNote);
+}
+
+async function runCommand(cmd, arg1, arg2) {
   try {
     switch (cmd) {
       case 'today':
@@ -741,4 +802,4 @@ async function handleActivity(activity) {
   }
 }
 
-module.exports = { handleActivity };
+module.exports = { handleActivity, parseTypedCommand, readOnlyCommand, MUTATING_WORDS };

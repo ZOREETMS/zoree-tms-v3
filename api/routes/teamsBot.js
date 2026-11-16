@@ -23,6 +23,8 @@ const { handleActivity } = require('../services/teamsBot/handlers');
 const { debugLog, ENABLED: DEBUG_ENABLED } = require('../services/teamsBot/debugLog');
 const tms = require('../services/teamsBot/tmsClient');
 const sentLog = require('../services/teamsBot/sentLog');
+const intentGate = require('../services/ai/intentGate');
+const { isDryRun, dryRunWarnings } = require('../services/teamsBot/dryRun');
 
 // Health/diagnostics for the bot wiring (public, no secrets).
 router.get('/status', (_req, res) => {
@@ -32,6 +34,12 @@ router.get('/status', (_req, res) => {
     endpoint: 'POST /api/teams/messages',
     debugLogEnabled: DEBUG_ENABLED,
     ...sdkStatus(),
+    // Demo safety switches — check these before presenting.
+    dryRun: isDryRun(),
+    intentGate: (() => {
+      const g = intentGate.status();
+      return { ...g, warnings: [...g.warnings, ...dryRunWarnings()] };
+    })(),
     build: 'teams-bot-sdk-1',
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { BulkPlanApi } from "../lib/api";
+import { domainHeaders } from "../lib/domain";
 
 /* ─────────── Static Data ─────────── */
 
@@ -24,13 +25,6 @@ const CITY_ZIP_MAP = {
 };
 
 /* Origins & Destinations are free-form text — no static arrays needed */
-
-const FALLBACK_TL_RATES = [
-  { carrier: "J.B. Hunt Transport", rate: "$2.38", fsc: "21.0%", mode: "TL" },
-  { carrier: "Werner Enterprises", rate: "$2.45", fsc: "22.5%", mode: "TL" },
-  { carrier: "J.B. Hunt Transport", rate: "$2.98", fsc: "21.0%", mode: "TL" },
-  { carrier: "Werner Enterprises", rate: "$3.06", fsc: "22.5%", mode: "TL" },
-];
 
 /* ─────────── CzarLite Engine ─────────── */
 const CZARLITE_BASE_RATES = {
@@ -209,29 +203,6 @@ function getCzarliteRate(weight, freightClass, miles, fscPct) {
   };
 }
 
-/* ─────────── Mock rate data (same as RateManagementPage) ─────────── */
-const MOCK_RATES = [
-  { id: "RATE-001", lane: "CHI-DAL", origin: "Chicago, IL", dest: "Dallas, TX", carrier: "XPO Logistics", mode: "LTL", rate: 1250, unit: "CWT", fsc: 18.5, discount_pct: 12, discount_amt: 150, transit_days: 3, effective: "2025-01-01", expires: "2025-12-31", status: "Active", czarlite: true },
-  { id: "RATE-002", lane: "ATL-MIA", origin: "Atlanta, GA", dest: "Miami, FL", carrier: "Estes Express", mode: "LTL", rate: 875, unit: "CWT", fsc: 16.0, discount_pct: 8, discount_amt: 70, transit_days: 2, effective: "2025-02-01", expires: "2025-11-30", status: "Active", czarlite: false },
-  { id: "RATE-003", lane: "LAX-SEA", origin: "Los Angeles, CA", dest: "Seattle, WA", carrier: "Old Dominion", mode: "LTL", rate: 1580, unit: "CWT", fsc: 20.0, discount_pct: 15, discount_amt: 237, transit_days: 4, effective: "2025-03-01", expires: "2026-02-28", status: "Active", czarlite: true },
-  { id: "RATE-004", lane: "NYC-BOS", origin: "New York, NY", dest: "Boston, MA", carrier: "Saia Inc", mode: "LTL", rate: 650, unit: "CWT", fsc: 14.5, discount_pct: 5, discount_amt: 32.5, transit_days: 1, effective: "2024-06-01", expires: "2025-05-31", status: "Expiring Soon", czarlite: false },
-  { id: "RATE-005", lane: "DAL-HOU", origin: "Dallas, TX", dest: "Houston, TX", carrier: "FedEx Freight", mode: "LTL", rate: 420, unit: "CWT", fsc: 12.0, discount_pct: 10, discount_amt: 42, transit_days: 1, effective: "2024-01-01", expires: "2024-12-31", status: "Expired", czarlite: false },
-  { id: "RATE-006", lane: "CHI-ATL", origin: "Chicago, IL", dest: "Atlanta, GA", carrier: "XPO Logistics", mode: "TL", rate: 3200, unit: "Flat", fsc: 22.0, discount_pct: 0, discount_amt: 0, transit_days: 2, effective: "2025-04-01", expires: "2026-03-31", status: "Active", czarlite: true },
-  { id: "RATE-007", lane: "DEN-PHX", origin: "Denver, CO", dest: "Phoenix, AZ", carrier: "Werner Enterprises", mode: "TL", rate: 2800, unit: "Flat", fsc: 19.5, discount_pct: 7, discount_amt: 196, transit_days: 2, effective: "2025-01-15", expires: "2026-01-14", status: "Active", czarlite: false },
-  { id: "RATE-008", lane: "SEA-PDX", origin: "Seattle, WA", dest: "Portland, OR", carrier: "ABF Freight", mode: "LTL", rate: 380, unit: "CWT", fsc: 11.0, discount_pct: 6, discount_amt: 22.8, transit_days: 1, effective: "2025-05-01", expires: "2026-04-30", status: "Active", czarlite: true },
-  { id: "RATE-009", lane: "MEM-STL", origin: "Memphis, TN", dest: "St. Louis, MO", carrier: "Estes Express", mode: "Intermodal", rate: 1100, unit: "Container", fsc: 15.0, discount_pct: 10, discount_amt: 110, transit_days: 3, effective: "2025-02-15", expires: "2026-02-14", status: "Active", czarlite: false },
-  { id: "RATE-010", lane: "LAX-LVS", origin: "Los Angeles, CA", dest: "Las Vegas, NV", carrier: "FedEx Freight", mode: "LTL", rate: 520, unit: "CWT", fsc: 13.0, discount_pct: 9, discount_amt: 46.8, transit_days: 1, effective: "2025-06-01", expires: "2026-05-31", status: "Pending", czarlite: true },
-];
-
-function getActiveRates(origin, dest) {
-  const oCity = normLaneCity(origin);
-  const dCity = normLaneCity(dest);
-  return MOCK_RATES.filter((r) => {
-    if (r.status !== "Active") return false;
-    return normLaneCity(r.origin) === oCity && normLaneCity(r.dest) === dCity;
-  });
-}
-
 /* ═══════════════════════════════════════════════════════════════════
    ROUTE OPTIMIZER PAGE
    ═══════════════════════════════════════════════════════════════════ */
@@ -314,35 +285,8 @@ export default function RouteOptimizerPage() {
         );
       } catch (e) {
         console.warn("[RouteOptimizer] TL bulk-plan/rate error:", e.message);
-        // Fallback to local calc using calculated distance
-        if (dist) {
-          rows = rows.concat(
-            FALLBACK_TL_RATES.map((r) => {
-              const c = calcCost(r.rate, r.fsc, dist);
-              return {
-                carrier: r.carrier, mode: "TL", base: c.base, fsc: c.fuel,
-                acc: c.acc, total: c.total, transit: Math.max(1, Math.ceil(dist / 500)),
-                _czarlite: false,
-              };
-            })
-          );
-        }
+        // No made-up rates: when rating fails, no TL options are shown.
       }
-    }
-
-    // Non-CzarLite LTL
-    if (showLTL) {
-      const nonCzLtl = getActiveRates(o, d).filter((r) => r.mode === "LTL" && !r.czarlite);
-      rows = rows.concat(
-        nonCzLtl.map((r) => {
-          const c = calcCost(r.rate, r.fsc, dist);
-          return {
-            carrier: r.carrier, mode: "LTL", base: c.base, fsc: c.fuel,
-            acc: c.acc, total: c.total, transit: r.transit_days || null,
-            _czarlite: false,
-          };
-        })
-      );
     }
 
     // CzarLite LTL — call live /api/ltl/quote API (same as old HTML)
@@ -358,6 +302,7 @@ export default function RouteOptimizerPage() {
             headers: {
               "Content-Type": "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              ...domainHeaders(),
             },
             body: JSON.stringify({
               originZip: effectiveOZip, destZip: effectiveDZip, weight: w,

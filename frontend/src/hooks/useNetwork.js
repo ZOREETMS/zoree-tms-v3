@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
-import { SEED_LANES, computeNetworkKpis, runLaneScenario } from "../services/networkService";
+import { computeNetworkKpis, runLaneScenario } from "../services/networkService";
 
 export function useNetwork() {
-  const [lanes] = useState(SEED_LANES);
+  const [lanes] = useState([]) /* no lane-analysis source in the API yet */;
   const [scenarioParams, setScenarioParams] = useState({ rateChange: -5, volumeChange: 10 });
   const [scenarioResult, setScenarioResult] = useState(null);
 

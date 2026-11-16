@@ -35,3 +35,22 @@ export function formatCell(value) {
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
+
+/**
+ * Minutes/hours since a timestamp, for status lines ("just now", "5 min ago", "2 h ago").
+ * Returns "never" for an empty value.
+ */
+export function formatAgo(ts, now = Date.now()) {
+  if (!ts) return "never";
+  const m = Math.round((now - new Date(ts).getTime()) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  return `${Math.round(m / 60)} h ago`;
+}
+
+/** Elapsed duration in ms → "850ms", "4.2s", "3m 12s". */
+export function formatElapsed(ms) {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+}

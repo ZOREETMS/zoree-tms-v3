@@ -1,0 +1,5 @@
+[
+  { "carrier": "Ridgeline Freight",  "origin": "Reno, NV",    "destination": "Phoenix, AZ",   "mode": "LTL", "baseRate": 412.00,  "fuelPct": 24 },
+  { "carrier": "Pioneer Express",    "origin": "Dallas, TX",  "destination": "Houston, TX",   "mode": "LTL", "baseRate": 236.00,  "fuelPct": 24 },
+  { "carrier": "Bluewater Carriers", "origin": "Ontario, CA", "destination": "Las Vegas, NV", "mode": "FTL", "baseRate": 1180.00, "fuelPct": 22 }
+]

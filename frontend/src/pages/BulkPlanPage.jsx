@@ -5,6 +5,8 @@ import { buildLaneGroups } from "../utils/laneUtils";
 import { createShipmentsFromRoute, findMatchingRoute, bulkPlanOrders } from "../services/ordersService";
 import { isFeatureEnabled } from "../services/planningParametersService";
 import PlanSummaryModal from "../components/orders/PlanSummaryModal";
+import PlanningProgressModal from "../components/orders/PlanningProgressModal";
+import { usePlanProgress } from "../hooks/usePlanProgress";
 import OrderEditModal from "../components/bulk-plan/OrderEditModal";
 // REQ-27 / REQ-28 shared primitives
 import Toast from "../components/ui/Toast";
@@ -22,6 +24,7 @@ export default function BulkPlanPage() {
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [busy, setBusy] = useState(false);
+  const { progress: planProgress, start: startPlanProgress, onProgress, clear: clearPlanProgress } = usePlanProgress();
   // REQ-27: toast state owned by useToast (configurable duration + dismiss).
   const { message, toast: toastEmit, dismiss: dismissMessage } = useToast();
   const [results, setResults] = useState(null);       // legacy success banner
@@ -117,8 +120,10 @@ export default function BulkPlanPage() {
   async function onPlan() {
     const selected = unplanned.filter((o) => selectedIds.has(o.id));
     if (!selected.length) { toast("No orders selected.", "warning"); return; }
+    if (busy) return; // already running
 
     setBusy(true);
+    startPlanProgress(selected.length);
     dismissMessage();
     setResults(null);
     setPlanResults(null); // REQ-28: clear previous pass/fail panel
@@ -137,6 +142,7 @@ export default function BulkPlanPage() {
       let multiStopSummary = null;
       if (routeMatch) {
         toast("Multi-stop route matched — creating shipments...", "info", true);
+        onProgress("creating", { shipments: 1 });
         try {
           const msResult = await createShipmentsFromRoute(routeMatch.route, routeMatch.matchedOrders, rates);
           if (msResult && !msResult.error) {
@@ -164,7 +170,7 @@ export default function BulkPlanPage() {
       if (remaining.length > 0) {
         toast(`Planning ${remaining.length} order(s)...`, "info", true);
         const dockOn = isFeatureEnabled(planningParameters, "dock_scheduling");
-        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs);
+        bulkResult = await bulkPlanOrders(remaining, shipments, dockOn, warehouseDockConfigs, { onProgress });
         // REQ-28: do NOT bail out on noQuotes — we want to render the pass/fail
         // panel even when 0 shipments got created, so the user sees WHY. The
         // panel's downloadable .xlsx includes the per-order reasons.
@@ -196,6 +202,7 @@ export default function BulkPlanPage() {
       });
       setPlanResults({ ...rollup, _elapsedMs: Date.now() - planStartTime });
 
+      clearPlanProgress(); // hand over to the summary / results panel
       if (allShipments.length > 0) {
         setPlanSummary({
           isCombined: true,
@@ -220,6 +227,7 @@ export default function BulkPlanPage() {
     } catch (err) {
       toast(`Planning failed: ${err.message || "Unknown error"}`, "error");
     } finally {
+      clearPlanProgress();
       setBusy(false);
     }
   }
@@ -439,6 +447,7 @@ export default function BulkPlanPage() {
 
       {/* Plan Summary Modal */}
       <PlanSummaryModal summary={planSummary} onClose={() => setPlanSummary(null)} />
+      <PlanningProgressModal progress={planProgress} />
     </div>
   );
 }

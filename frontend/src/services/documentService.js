@@ -67,22 +67,6 @@ export async function removeDocument(docId) {
   return DbApi.remove("documents", docId).catch(() => {});
 }
 
-// ── Seed data (fallback when DB is empty) ─────────────────────────
-export const SEED_DOCUMENTS = [
-  { id: "BOL-2024-1840", type: "BOL", ship: "SHP-2024-1840", carrier: "Swift Transport", generated: "2026-02-28", status: "Signed" },
-  { id: "POD-2024-1840", type: "POD", ship: "SHP-2024-1840", carrier: "Swift Transport", generated: "2026-03-03", status: "Received" },
-  { id: "BOL-2024-1841", type: "BOL", ship: "SHP-2024-1841", carrier: "Old Dominion", generated: "2026-03-01", status: "Signed" },
-  { id: "BOL-2024-1844", type: "BOL", ship: "SHP-2024-1844", carrier: "Werner Enterprises", generated: "2026-03-02", status: "Pending" },
-  { id: "POD-2024-1841", type: "POD", ship: "SHP-2024-1841", carrier: "Old Dominion", generated: "2026-03-04", status: "Received" },
-  { id: "BOL-2024-1845", type: "BOL", ship: "SHP-2024-1845", carrier: "Schneider National", generated: "2026-03-03", status: "Signed" },
-  { id: "BOL-2024-1848", type: "BOL", ship: "SHP-2024-1848", carrier: "XPO Logistics", generated: "2026-03-04", status: "Signed" },
-  { id: "HZM-2024-1851", type: "Hazmat", ship: "SHP-2024-1851", carrier: "JB Hunt", generated: "2026-03-05", status: "Filed" },
-  { id: "INV-COM-1840", type: "Invoice", ship: "SHP-2024-1840", carrier: "Swift Transport", generated: "2026-03-03", status: "Sent" },
-  { id: "BOL-2024-1849", type: "BOL", ship: "SHP-2024-1849", carrier: "Swift Transport", generated: "2026-03-05", status: "Pending" },
-  { id: "BOL-2024-1843", type: "BOL", ship: "SHP-2024-1843", carrier: "FedEx Freight", generated: "2026-03-01", status: "Signed" },
-  { id: "POD-2024-1843", type: "POD", ship: "SHP-2024-1843", carrier: "FedEx Freight", generated: "2026-03-04", status: "Received" },
-];
-
 export function generateBOLForShipment(shipment, orders, lineItems) {
   const bolType = shipment.bol_type || "BOL";
   const prefix = bolType === "MBOL" ? "MBOL" : bolType === "CBOL" ? "CBOL" : "BOL";

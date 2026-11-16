@@ -2,7 +2,7 @@ import { computeVariance, formatVariance } from "../../services/freightAuditServ
 import { AuditStatusBadge, PayStatusBadge } from "./AuditStatusBadge";
 import AuditActionButtons from "./AuditActionButtons";
 
-export default function AuditTable({ records, onApprove, onDispute, onRelease }) {
+export default function AuditTable({ records, onApprove, onDispute, onRelease, emptyText = "No invoices to audit" }) {
   return (
     <div className="card">
       <div className="card-header">
@@ -28,7 +28,7 @@ export default function AuditTable({ records, onApprove, onDispute, onRelease })
               const variance = computeVariance(r.agreed, r.billed);
               const varColor = variance > 0 ? "var(--red)" : variance < 0 ? "var(--green)" : "var(--text3)";
               return (
-                <tr key={r.inv}>
+                <tr key={r.id}>
                   <td className="mono" style={{ color: "var(--accent)", fontWeight: 600 }}>{r.inv}</td>
                   <td>{r.carrier}</td>
                   <td className="mono">{r.ship}</td>
@@ -58,7 +58,7 @@ export default function AuditTable({ records, onApprove, onDispute, onRelease })
             {records.length === 0 && (
               <tr>
                 <td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--text3)" }}>
-                  No audit records match the current filter
+                  {emptyText}
                 </td>
               </tr>
             )}

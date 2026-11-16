@@ -44,27 +44,6 @@ const TYPE_COLORS = {
   IBC:    { bg: "rgba(239,68,68,.1)", border: "rgba(239,68,68,.3)", text: "var(--red)" },
 };
 
-const SEED_PACKAGING = [
-  { id:"CTN-001", desc:"Standard Export Carton \u2014 Small",    type:"Carton", material:"Corrugated", len:12, wid:10, hgt:8,  tare:1.2, max_load:40,   stack:8,  returnable:false, nested:true,  hazmat:false, cost:1.85,  supplier:"Uline",          status:"Active" },
-  { id:"CTN-002", desc:"Standard Export Carton \u2014 Medium",   type:"Carton", material:"Corrugated", len:18, wid:14, hgt:10, tare:1.8, max_load:65,   stack:6,  returnable:false, nested:true,  hazmat:false, cost:2.40,  supplier:"Uline",          status:"Active" },
-  { id:"CTN-003", desc:"Standard Export Carton \u2014 Large",    type:"Carton", material:"Corrugated", len:24, wid:18, hgt:18, tare:2.5, max_load:100,  stack:5,  returnable:false, nested:true,  hazmat:false, cost:3.60,  supplier:"Uline",          status:"Active" },
-  { id:"CTN-004", desc:"Heavy-Duty Double-Wall Carton",          type:"Carton", material:"Corrugated", len:24, wid:20, hgt:20, tare:4.2, max_load:200,  stack:4,  returnable:false, nested:false, hazmat:false, cost:5.10,  supplier:"Pratt",          status:"Active" },
-  { id:"CTN-005", desc:"Electronics Anti-Static Carton",         type:"Carton", material:"Corrugated", len:16, wid:12, hgt:6,  tare:1.5, max_load:30,   stack:8,  returnable:false, nested:true,  hazmat:false, cost:4.20,  supplier:"Uline",          status:"Active" },
-  { id:"PLT-001", desc:"GMA Standard Wood Pallet 48\u00D740",   type:"Pallet", material:"Wood",       len:48, wid:40, hgt:5,  tare:45,  max_load:2800, stack:3,  returnable:true,  nested:false, hazmat:false, cost:14.50, supplier:"CHEP",           status:"Active" },
-  { id:"PLT-002", desc:"Euro Pallet 47\u00D731",                type:"Pallet", material:"Wood",       len:47, wid:31, hgt:5,  tare:33,  max_load:2200, stack:3,  returnable:true,  nested:false, hazmat:false, cost:12.00, supplier:"CHEP",           status:"Active" },
-  { id:"PLT-003", desc:"Plastic Pallet 48\u00D740 \u2014 Rackable", type:"Pallet", material:"Plastic", len:48, wid:40, hgt:6, tare:55, max_load:3000, stack:4, returnable:true, nested:true, hazmat:false, cost:65.00, supplier:"iGPS", status:"Active" },
-  { id:"PLT-004", desc:"Half Pallet 24\u00D740",                type:"Pallet", material:"Wood",       len:24, wid:40, hgt:5,  tare:22,  max_load:1400, stack:3,  returnable:true,  nested:false, hazmat:false, cost:8.00,  supplier:"CHEP",           status:"Active" },
-  { id:"DRM-001", desc:"Steel Drum 55-Gallon Open Head",        type:"Drum",   material:"Steel",      len:23, wid:23, hgt:36, tare:42,  max_load:440,  stack:2,  returnable:true,  nested:false, hazmat:true,  cost:58.00, supplier:"Container Pros", status:"Active" },
-  { id:"DRM-002", desc:"Plastic Drum 55-Gallon Closed",         type:"Drum",   material:"Plastic",    len:23, wid:23, hgt:36, tare:22,  max_load:400,  stack:2,  returnable:true,  nested:false, hazmat:true,  cost:38.00, supplier:"Container Pros", status:"Active" },
-  { id:"DRM-003", desc:"Fiber Drum 25-Gallon",                  type:"Drum",   material:"Fiber",      len:18, wid:18, hgt:28, tare:8,   max_load:180,  stack:3,  returnable:false, nested:false, hazmat:false, cost:18.00, supplier:"Greif",          status:"Active" },
-  { id:"CRT-001", desc:"Heavy Equipment Crate 36\u00D730\u00D730",  type:"Crate", material:"Wood",   len:36, wid:30, hgt:30, tare:85,  max_load:1200, stack:1,  returnable:false, nested:false, hazmat:false, cost:125.00,supplier:"PakTech",        status:"Active" },
-  { id:"CRT-002", desc:"Server/Electronics Crate 80\u00D730\u00D746", type:"Crate", material:"Wood", len:80, wid:30, hgt:46, tare:120, max_load:600,  stack:1,  returnable:false, nested:false, hazmat:false, cost:185.00,supplier:"PakTech",        status:"Active" },
-  { id:"TOT-001", desc:"Reusable Tote 24\u00D716\u00D713 \u2014 Plastic", type:"Tote", material:"Plastic", len:24, wid:16, hgt:13, tare:5.5, max_load:90, stack:6, returnable:true, nested:true, hazmat:false, cost:28.00, supplier:"Orbis", status:"Active" },
-  { id:"TOT-002", desc:"Bulk Tote / Gaylord 48\u00D740\u00D736", type:"Tote", material:"Corrugated", len:48, wid:40, hgt:36, tare:18, max_load:2200, stack:1, returnable:false, nested:false, hazmat:false, cost:22.00, supplier:"Uline", status:"Active" },
-  { id:"BAG-001", desc:"Poly Woven Bag 50-lb",                  type:"Bag",    material:"Plastic",    len:22, wid:14, hgt:4,  tare:0.3, max_load:50,   stack:10, returnable:false, nested:true,  hazmat:false, cost:0.65,  supplier:"Texcraft",       status:"Active" },
-  { id:"IBC-001", desc:"IBC Tote 275-Gallon \u2014 Steel Cage", type:"IBC",    material:"Plastic",    len:46, wid:46, hgt:46, tare:145, max_load:2700, stack:2,  returnable:true,  nested:false, hazmat:true,  cost:320.00,supplier:"Schutz",         status:"Active" },
-];
-
 export default function ItemMasterPage() {
   const { items, packagingUnits: dbPackagingUnits = [], setData, refreshData } = useOutletContext();
   // QA #138 follow-up: matrix-driven write gate. When canEdit is false the
@@ -73,8 +52,7 @@ export default function ItemMasterPage() {
   // override; "view" roles see the data but no mutation affordances.
   const { canEdit: canEditItems } = useFeatureAccess("items");
   const noEditTitle = canEditItems ? "" : "View-only access — ask an admin for Edit on Items";
-  // Use seed data as fallback when DB table is empty
-  const packagingUnits = dbPackagingUnits.length > 0 ? dbPackagingUnits : SEED_PACKAGING;
+  const packagingUnits = dbPackagingUnits; // packaging units on file only
   const [tab, setTab] = useState("items");
   const [q, setQ] = useState("");
   const [classFilter, setClassFilter] = useState("");

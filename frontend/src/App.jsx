@@ -28,10 +28,15 @@ import FreightInvoicesPage from "./pages/FreightInvoicesPage";
 import ReportsPage from "./pages/ReportsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AlertsPage from "./pages/AlertsPage";
+import JevInboxPage from "./pages/JevInboxPage";
+import JevCarrierPage from "./pages/JevCarrierPage";
+import JevBulkPlanPage from "./pages/JevBulkPlanPage";
 import MessagingHubPage from "./pages/MessagingHubPage";
 import NetworkModelingPage from "./pages/NetworkModelingPage";
 import DbExplorerPage from "./pages/DbExplorerPage";
 import MultiStopRoutesPage from "./pages/MultiStopRoutesPage";
+import EmailOrdersPage from "./pages/EmailOrdersPage";
+import AgentConsolePage from "./pages/AgentConsolePage";
 import EquipmentMasterPage from "./pages/EquipmentMasterPage";
 import PlanningParametersPage from "./pages/PlanningParametersPage";
 import HomePage from "./pages/HomePage";
@@ -51,6 +56,8 @@ function PrivateRoutes({ data }) {
         <Route index element={<RoleGuard><HomePage /></RoleGuard>} />
         <Route path="dashboard" element={<RoleGuard><DashboardPage /></RoleGuard>} />
         <Route path="orders" element={<RoleGuard><OrdersPage /></RoleGuard>} />
+        <Route path="email-orders" element={<RoleGuard><EmailOrdersPage /></RoleGuard>} />
+        <Route path="agents" element={<RoleGuard><AgentConsolePage /></RoleGuard>} />
         <Route path="shipments" element={<RoleGuard><ShipmentsPage /></RoleGuard>} />
         <Route path="carriers" element={<RoleGuard><CarriersPage /></RoleGuard>} />
         <Route path="bulk-plan" element={<RoleGuard><BulkPlanPage /></RoleGuard>} />
@@ -87,6 +94,9 @@ function PrivateRoutes({ data }) {
         <Route path="analytics" element={<RoleGuard><AnalyticsPage /></RoleGuard>} />
         <Route path="reports" element={<RoleGuard><ReportsPage /></RoleGuard>} />
         <Route path="alerts" element={<RoleGuard><AlertsPage /></RoleGuard>} />
+        <Route path="jev-inbox" element={<JevInboxPage />} />
+        <Route path="jev-carrier" element={<JevCarrierPage />} />
+        <Route path="jev-bulk-plan" element={<JevBulkPlanPage />} />
         <Route path="messaging" element={<RoleGuard><MessagingHubPage /></RoleGuard>} />
         <Route path="network-modeling" element={<RoleGuard><NetworkModelingPage /></RoleGuard>} />
         <Route path="db-explorer" element={<RoleGuard><DbExplorerPage /></RoleGuard>} />
@@ -104,9 +114,10 @@ export default function App() {
   // `ordersTotal` is the true row count from /api/orders/count — used by
   // the OrdersPage header, the "All" status chip, and Dashboard KPIs
   // that previously read `orders.length`. The `orders` array itself
-  // still tops out at the 500-row page (see DbApi.orders), so the
-  // table/list views stay paginated; only the displayed total is
-  // promoted to the real number.
+  // now pages up to 10,000 rows (see DbApi.orders / fetchPaged), so the
+  // grid's client-side status chips and search see the whole set rather
+  // than the newest 500. ordersTotal remains the exact server count and
+  // is still the number to trust for "how many orders exist".
   // QA #312 — documents is now plumbed through App state so the DB
   // Explorer can `SELECT * FROM documents`. DbApi.documents() already
   // exists; this is just the missing fan-out into refreshData() below.

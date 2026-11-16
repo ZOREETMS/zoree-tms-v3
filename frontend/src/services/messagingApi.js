@@ -30,6 +30,8 @@
 // `verifyToken` on these routes will Just Work.
 // ═══════════════════════════════════════════════════════════════════
 
+import { domainHeaders } from "../lib/domain";
+
 // Match the normalization in `frontend/src/lib/api.js` so both modules
 // agree on what `${API_BASE}/...` means. Always ends with exactly one
 // `/api` segment.
@@ -69,6 +71,7 @@ async function _fetchJson(url, options = {}) {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...domainHeaders(),
       ...(options.headers || {}),
     },
   });

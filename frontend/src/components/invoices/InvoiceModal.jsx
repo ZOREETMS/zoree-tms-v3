@@ -1,10 +1,17 @@
 import { useState, useEffect } from "react";
+import ShipmentLink from "../shipments/ShipmentLink";
+import { readableReason } from "../../services/invoiceService";
+import { openInvoiceDocument } from "../../services/invoiceIntakeService";
 import { INVOICE_STATUSES, PAYMENT_TERMS, emptyInvoice } from "../../types/invoice";
 import { generateInvoiceNum, computeDueDate } from "../../services/invoiceService";
 import {
   canManualApprove,
   canManualReject,
   canAutoDecide,
+  canDelete,
+  isLockedForEdit,
+  lockedHint,
+  statusOptionAllowed,
 } from "../../services/invoiceActionsService";
 import InvoiceCostLines from "./InvoiceCostLines";
 
@@ -98,6 +105,36 @@ export default function InvoiceModal({
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {invoice?.hasDocument && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "#F8FAFC" }}>
+                <span style={{ fontSize: 13 }}>📄 Read by Zoree AI from the carrier’s PDF</span>
+                <button type="button" className="btn btn-secondary btn-sm" style={{ marginLeft: "auto" }}
+                  onClick={() => openInvoiceDocument(invoice.id).catch((e) => window.alert(e?.message || "Could not open the document"))}>
+                  View original invoice
+                </button>
+              </div>
+            )}
+            {invoice?.decisionReason && (() => {
+              const ok = invoice.status === "Approved" || invoice.status === "Paid";
+              return (
+                <div style={{
+                  marginBottom: 14, padding: "10px 12px", borderRadius: 8, fontSize: 12.5, lineHeight: 1.45,
+                  background: ok ? "#ECFDF5" : "#FFF7ED", color: ok ? "#065F46" : "#9A3412",
+                  border: `1px solid ${ok ? "#A7F3D0" : "#FED7AA"}`,
+                }}>
+                  <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                    {ok ? "Why it was approved" : `Why it is ${String(invoice.status || "held").toLowerCase()}`}
+                  </div>
+                  <div>{readableReason(invoice.decisionReason)}</div>
+                  {(invoice.decidedBy || invoice.decidedAt) && (
+                    <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
+                      {[invoice.decidedBy === "invoice-intake-agent" ? "Zoree AI" : invoice.decidedBy,
+                        invoice.decidedAt ? new Date(invoice.decidedAt).toLocaleString() : null].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="form-grid">
               <div className="form-group">
                 <label>Invoice #</label>
@@ -128,7 +165,16 @@ export default function InvoiceModal({
                   {shipments.map((s) => (
                     <option key={s.id} value={s.id}>{s.id}</option>
                   ))}
+                  {/* Keep a referenced id selectable even when it is not in the list (e.g. not in the TMS). */}
+                  {form.shipId && !shipments.some((s) => String(s.id) === String(form.shipId)) && (
+                    <option value={form.shipId}>{form.shipId} (not in the TMS)</option>
+                  )}
                 </select>
+                {form.shipId && (
+                  shipments.some((s) => String(s.id) === String(form.shipId))
+                    ? <div style={{ fontSize: 12, marginTop: 6 }}><ShipmentLink id={form.shipId}>View shipment {form.shipId} →</ShipmentLink></div>
+                    : <div style={{ fontSize: 12, marginTop: 6, color: "#B91C1C" }}>Shipment {form.shipId} is not in the TMS.</div>
+                )}
               </div>
 
               {/* REQ-07: consolidated invoice — additional shipment IDs */}
@@ -172,11 +218,17 @@ export default function InvoiceModal({
                 <select
                   value={form.status}
                   onChange={(e) => handleField("status", e.target.value)}
+                  disabled={!isNew && invoice?.status === "Paid"}
                 >
                   {INVOICE_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s} disabled={!isNew && !statusOptionAllowed(invoice?.status, s)}>{s}</option>
                   ))}
                 </select>
+                {!isNew && lockedHint(invoice?.status, invoice?.sentToApAt) && (
+                  <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
+                    {lockedHint(invoice?.status, invoice?.sentToApAt)}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -267,7 +319,8 @@ export default function InvoiceModal({
             {form.id && (
               <InvoiceCostLines
                 invoiceId={form.id}
-                canEdit={canEdit !== false}
+                canEdit={canEdit !== false && !isLockedForEdit(invoice?.status, invoice?.sentToApAt)}
+                lockedReason={lockedHint(invoice?.status, invoice?.sentToApAt)}
                 legacyAgreed={form.agreed}
                 legacyAmount={form.amount}
               />
@@ -367,7 +420,7 @@ export default function InvoiceModal({
                 writes the audit trail BEFORE deleting, so the shipment
                 history drawer still shows the delete even though the
                 invoice row is gone. */}
-            {!isNew && form.id && typeof onDelete === "function" && canEdit !== false && (
+            {!isNew && form.id && typeof onDelete === "function" && canEdit !== false && canDelete(invoice?.status, invoice?.sentToApAt) && (
               <button
                 type="button"
                 className="btn btn-danger"
@@ -436,7 +489,7 @@ export default function InvoiceModal({
                   </button>
                 )}
 
-                {typeof onDecide === "function" && canAutoDecide(form.status) && (
+                {typeof onDecide === "function" && canAutoDecide(form.status, form) && (
                   <button
                     type="button"
                     className="btn btn-primary"

@@ -26,6 +26,7 @@ async function dbSelect(table, query = {}, tenantConfig = null) {
       if (op === 'gte') q = q.gte(col, val);
       if (op === 'lte') q = q.lte(col, val);
       if (op === 'ilike') q = q.ilike(col, val);
+      if (op === 'is')    q = q.is(col, val);   // null checks: ['carrier', 'is', null]
     });
   }
   if (query.order) q = q.order(query.order.col, { ascending: query.order.asc ?? false });
@@ -53,6 +54,7 @@ async function dbCount(table, query = {}, tenantConfig = null) {
       if (op === 'gte') q = q.gte(col, val);
       if (op === 'lte') q = q.lte(col, val);
       if (op === 'ilike') q = q.ilike(col, val);
+      if (op === 'is')    q = q.is(col, val);   // null checks: ['carrier', 'is', null]
     });
   }
   const { count, error } = await q;

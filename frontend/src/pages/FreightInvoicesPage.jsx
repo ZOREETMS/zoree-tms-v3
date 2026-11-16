@@ -7,6 +7,14 @@ import InvoiceStatsGrid from "../components/invoices/InvoiceStatsGrid";
 import InvoiceFilterBar from "../components/invoices/InvoiceFilterBar";
 import InvoiceTable from "../components/invoices/InvoiceTable";
 import InvoiceModal from "../components/invoices/InvoiceModal";
+import InvoicePdfIntakeModal from "../components/invoices/InvoicePdfIntakeModal";
+import InvoiceInboxModal from "../components/invoices/InvoiceInboxModal";
+import InvoiceMailboxModal from "../components/invoices/InvoiceMailboxModal";
+import InvoiceIntakeLog from "../components/invoices/InvoiceIntakeLog";
+import ApprovalQueue from "../components/invoices/ApprovalQueue";
+import ReleaseQueue from "../components/invoices/ReleaseQueue";
+import NetSuiteImportPreview from "../components/invoices/NetSuiteImportPreview";
+import AgentRunsLog from "../components/invoices/AgentRunsLog";
 import { generateInvoiceNum, computeDueDate } from "../services/invoiceService";
 // REQ-190 / REQ-191: write-action helpers + DB row mapper live in a
 // dedicated service so the page stays a thin controller (CLAUDE_RULES
@@ -27,6 +35,11 @@ export default function FreightInvoicesPage() {
   // both Finance and Viewer roles.
   const gate = useEditGate("invoices");
   const [invoices, setInvoices] = useState([]);
+  const [showPdfIntake, setShowPdfIntake] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
+  const [showMailbox, setShowMailbox] = useState(false);
+  // AP review (agent results) · Approval queue · All invoices (the full table).
+  const [tab, setTab] = useState(() => (new URLSearchParams(window.location.search).get("invoice") ? "all" : "review"));
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editInvoice, setEditInvoice] = useState(null);
@@ -102,8 +115,10 @@ export default function FreightInvoicesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceParam, loading, invoices]);
 
-  async function loadInvoices() {
-    setLoading(true);
+  // quiet = refresh the rows without the full-page loading state (keeps
+  // the review drawer open after an approve / dispute).
+  async function loadInvoices(quiet = false) {
+    if (quiet !== true) setLoading(true);
     try {
       const data = await InvoicesApi.list();
       // REQ-06: the domain endpoint returns { invoices: [...], total }.
@@ -111,17 +126,13 @@ export default function FreightInvoicesPage() {
       const rows = Array.isArray(data?.invoices) ? data.invoices
                  : Array.isArray(data) ? data
                  : null;
-      // Bug #171: never paper over the real DB with hardcoded seed
-      // rows. The previous code substituted getSeedInvoices() when the
-      // API returned an empty list, which made the Freight Invoices
-      // page show 12 fake "INV-844**" rows that DB Explorer didn't
-      // know about — exactly the mismatch the bug reporter saw. An
-      // empty table is the correct UI for an empty DB; the seed is
-      // kept for the catch branch only (network failure / dev offline)
-      // and tagged so it's obvious in QA that we're in fallback mode.
+      // Bug #171: an empty table is the correct UI for an empty DB —
+      // never substitute sample rows.
       setInvoices(Array.isArray(rows) ? rows.map(mapDbInvoice) : []);
-    } catch {
-      setInvoices(getSeedInvoices());
+    } catch (e) {
+      // No sample rows: an API failure shows an empty list and says why.
+      setInvoices([]);
+      showToast(`Could not load invoices: ${e?.message || "API unavailable"}`, "error");
     } finally {
       setLoading(false);
     }
@@ -224,14 +235,9 @@ export default function FreightInvoicesPage() {
       setModalOpen(false);
       loadInvoices();
     } catch (e) {
-      // Fallback: update local state
-      setInvoices((prev) => {
-        const exists = prev.find((i) => i.num === form.num);
-        if (exists) return prev.map((i) => (i.num === form.num ? form : i));
-        return [form, ...prev];
-      });
-      showToast(`Invoice ${form.num} saved locally (server error: ${e?.message || "unknown"})`, "warning");
-      setModalOpen(false);
+      // Nothing was saved. Keep the form open with the user's edits and say
+      // why — never show a server-rejected change as if it were saved.
+      showToast(`Invoice ${form.num} not saved: ${e?.message || "server error"}`, "error");
     } finally {
       setBusy(false);
     }
@@ -246,8 +252,13 @@ export default function FreightInvoicesPage() {
   // Resolve an invoice by `num` (table row id) or by `id` (modal). The
   // row-action buttons send `num`, the modal sends `id`. Centralized so
   // the handlers below stay one-liners.
+  // Rows are keyed by the unique invoice id: two invoices can share a
+  // number (a carrier resend), so `num` alone is ambiguous.
   function findInvoice({ num, id }) {
-    if (id)  return invoices.find((i) => i.id === id);
+    if (id) {
+      const hit = invoices.find((i) => i.id === id);
+      if (hit) return hit;
+    }
     if (num) return invoices.find((i) => i.num === num);
     return null;
   }
@@ -262,7 +273,7 @@ export default function FreightInvoicesPage() {
   // Row-action: manual force-approve from the table (`num`-keyed).
   async function handleApprove(num) {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    const inv = findInvoice({ num });
+    const inv = findInvoice({ id: num, num });
     if (!inv) return;
     applyServiceResult(await manualApprove({ invoice: inv }));
   }
@@ -274,7 +285,7 @@ export default function FreightInvoicesPage() {
   // is renamed to match.
   async function handleReject(num) {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    const inv = findInvoice({ num });
+    const inv = findInvoice({ id: num, num });
     if (!inv) return;
     applyServiceResult(await manualReject({ invoice: inv }));
   }
@@ -341,14 +352,14 @@ export default function FreightInvoicesPage() {
 
   // Row-level alias for Auto Approve (table sends `num`, not `id`).
   async function handleAutoDecide(num) {
-    const inv = findInvoice({ num });
+    const inv = findInvoice({ id: num, num });
     if (!inv) return;
     return handleDecide(inv);
   }
 
   async function handleSendToAp(num) {
     if (!gate.canEdit) return;
-    const inv = findInvoice({ num });
+    const inv = findInvoice({ id: num, num });
     if (!inv) return;
     applyServiceResult(await sendToApAction({ invoice: inv }));
   }
@@ -399,6 +410,21 @@ export default function FreightInvoicesPage() {
           </button>
           <button
             className="btn btn-primary btn-sm"
+            onClick={() => setShowMailbox(true)}
+            {...gate.editProps()}
+            title="Read the new carrier invoice emails for this domain"
+          >
+            📬 Read AP Mailbox
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowPdfIntake(true)}
+            {...gate.editProps()}
+          >
+            📄 Upload PDFs
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
             onClick={openNewInvoice}
             {...gate.editProps()}          /* QA #148/149 */
           >
@@ -407,7 +433,57 @@ export default function FreightInvoicesPage() {
         </div>
       </div>
 
+      {showMailbox && (
+        <InvoiceMailboxModal
+          onClose={(changed) => { setShowMailbox(false); if (changed) loadInvoices(); }}
+          onUseFolder={() => { setShowMailbox(false); loadInvoices(); setShowInbox(true); }}
+        />
+      )}
+
+      {showInbox && (
+        <InvoiceInboxModal
+          onClose={(changed) => { setShowInbox(false); if (changed) loadInvoices(); }}
+        />
+      )}
+
+      {showPdfIntake && (
+        <InvoicePdfIntakeModal
+          onClose={(changed) => { setShowPdfIntake(false); if (changed) loadInvoices(); }}
+        />
+      )}
+
       <div className="page-content">
+        <div className="ap-ui">
+          <div className="ap-tabs" role="tablist">
+            {[["review", "AP review", null], ["queue", "Approval queue", invoices.filter((i) => i.status === "On Hold").length], ["release", "Release & export", null], ["netsuite", "NetSuite preview (simulation)", null], ["runs", "Agent runs", null], ["all", "Invoices created", invoices.length]].map(([key, label, n]) => (
+              <button key={key} type="button" role="tab" aria-selected={tab === key}
+                className={`ap-tab${tab === key ? " active" : ""}`} onClick={() => setTab(key)}>
+                {label}{n != null && <span className="ap-count">{n}</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* Every invoice document received (email, upload, inbox folder) and
+              its outcome. Reloads whenever the invoice list changes. */}
+          {tab === "review" && (
+            <InvoiceIntakeLog refreshKey={invoices} canDecide={gate.canEdit} onChanged={() => loadInvoices(true)} onGoToRelease={() => setTab("release")} />
+          )}
+          {tab === "queue" && (
+            <ApprovalQueue refreshKey={invoices} canDecide={gate.canEdit} onChanged={() => loadInvoices(true)} onGoToRelease={() => setTab("release")} />
+          )}
+          {tab === "release" && (
+            <ReleaseQueue refreshKey={invoices} canDecide={gate.canEdit} onChanged={() => loadInvoices(true)} onOpenPreview={() => setTab("netsuite")} />
+          )}
+          {tab === "netsuite" && (
+            <NetSuiteImportPreview refreshKey={invoices} canDecide={gate.canEdit} />
+          )}
+          {/* Every agent run: mailbox timer checks and Read AP Mailbox presses (migration 056). */}
+          {tab === "runs" && (
+            <AgentRunsLog refreshKey={invoices} canDecide={gate.canEdit} onChanged={() => loadInvoices(true)} />
+          )}
+        </div>
+
+        {tab === "all" && (<>
         <InvoiceStatsGrid stats={stats} />
 
         <InvoiceFilterBar
@@ -436,6 +512,7 @@ export default function FreightInvoicesPage() {
           onOpenInvoice={openExistingInvoice}
           canEdit={gate.canEdit}
         />
+        </>)}
       </div>
 
       {modalOpen && (
@@ -485,20 +562,3 @@ export default function FreightInvoicesPage() {
 // the top of this file. Keeping a single definition prevents drift
 // when new fields are added to the invoices table (the previous
 // duplicate is the kind of footgun CLAUDE_RULES §6 calls out).
-
-function getSeedInvoices() {
-  return [
-    { num: "INV-84421", carrier: "SWIFT TRANSPORT", shipId: "SHP-2024-1840", date: "2026-03-01", due: "2026-03-31", agreed: 3240, amount: 3240, status: "Approved", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84422", carrier: "OLD DOMINION", shipId: "SHP-2024-1841", date: "2026-03-02", due: "2026-04-01", agreed: 980, amount: 980, status: "Approved", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84423", carrier: "JB HUNT", shipId: "SHP-2024-1851", date: "2026-03-03", due: "2026-04-02", agreed: 2750, amount: 3070, status: "Disputed", paymentTerms: "NET30", notes: "Fuel surcharge overage" },
-    { num: "INV-84424", carrier: "WERNER ENTERPRISES", shipId: "SHP-2024-1844", date: "2026-03-04", due: "2026-04-03", agreed: 2600, amount: 2600, status: "Pending", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84425", carrier: "XPO LOGISTICS", shipId: "SHP-2024-1848", date: "2026-03-04", due: "2026-04-03", agreed: 1850, amount: 2100, status: "Disputed", paymentTerms: "NET30", notes: "Accessorial not agreed" },
-    { num: "INV-84426", carrier: "SCHNEIDER NATIONAL", shipId: "SHP-2024-1845", date: "2026-03-05", due: "2026-04-04", agreed: 4100, amount: 3980, status: "Pending", paymentTerms: "NET30", notes: "Rate applied incorrectly" },
-    { num: "INV-84427", carrier: "SWIFT TRANSPORT", shipId: "SHP-2024-1849", date: "2026-03-05", due: "2026-04-04", agreed: 2200, amount: 2200, status: "Pending", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84428", carrier: "FEDEX FREIGHT", shipId: "SHP-2024-1843", date: "2026-03-01", due: "2026-03-31", agreed: 1420, amount: 1420, status: "Approved", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84429", carrier: "OLD DOMINION", shipId: "SHP-2024-1842", date: "2026-03-02", due: "2026-04-01", agreed: 1560, amount: 1560, status: "Approved", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84430", carrier: "JB HUNT", shipId: "SHP-2024-1850", date: "2026-03-06", due: "2026-04-05", agreed: 3400, amount: 3400, status: "Pending", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84431", carrier: "SWIFT TRANSPORT", shipId: "SHP-2024-1852", date: "2026-03-06", due: "2026-04-05", agreed: 2800, amount: 2800, status: "Pending", paymentTerms: "NET30", notes: "" },
-    { num: "INV-84432", carrier: "WERNER ENTERPRISES", shipId: "SHP-2024-1846", date: "2026-03-03", due: "2026-04-02", agreed: 3100, amount: 3100, status: "Approved", paymentTerms: "NET30", notes: "" },
-  ];
-}

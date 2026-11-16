@@ -65,6 +65,11 @@ export function mapDbInvoice(row) {
     sentToApBy: row.sent_to_ap_by || null,
     // REQ-191: invoice provenance so the page can offer a Source filter
     source: row.metadata?.source || (row.metadata?.consolidated ? "consolidated" : null),
+    // Read from a carrier PDF by Zoree AI → the original can be viewed.
+    hasDocument: Boolean(row.metadata?.intake?.file),
+    // Read and audited by the AP agent (contract rate, extras, duplicates,
+    // sender). The legacy tolerance-only "Auto Approve" is hidden for these.
+    readByAgent: Boolean(row.metadata?.intake),
   };
 }
 
@@ -216,12 +221,39 @@ export async function sendToAp({ invoice } = {}) {
 // The buttons disappear once the invoice is in a final state for that
 // action. Centralizing avoids drift between the two render sites.
 export function canManualApprove(status) {
-  return status !== "Approved";
+  return status !== "Approved" && status !== "Paid";
 }
 export function canManualReject(status) {
-  return status !== "Rejected";
+  return status !== "Rejected" && status !== "Paid";
 }
-export function canAutoDecide(status) {
+
+// Payment integrity (Nov 2026) — mirrors the server rules in
+// invoiceAudit.assertEditAllowed / deleteInvoice / invoiceCostLines:
+// an Approved or Paid invoice is what AP pays, so its money fields and
+// lines are locked, it can't be deleted, and the edit form can't approve.
+// Once sent to AP an invoice stays locked even if moved On Hold or
+// rejected: the ERP may already have it.
+export function isLockedForEdit(status, sentToApAt = null) {
+  return status === "Approved" || status === "Paid" || Boolean(sentToApAt);
+}
+export function canDelete(status, sentToApAt = null) {
+  return !isLockedForEdit(status, sentToApAt);
+}
+export function lockedHint(status, sentToApAt = null) {
+  if (status === "Paid") return "Paid — this invoice is closed.";
+  if (sentToApAt) return "Sent to AP — amounts, shipment and cost lines are locked. Reject it and ask the carrier for a corrected invoice.";
+  if (status === "Approved") return "Approved — amounts, shipment and cost lines are locked. Set Status to On Hold to change them.";
+  return null;
+}
+/** Which statuses the edit form's Status dropdown may move to from `current`. */
+export function statusOptionAllowed(current, option) {
+  if (option === current) return true;
+  if (current === "Paid") return false;
+  if (option === "Approved") return false;          // use the Approve button
+  if (option === "Paid") return current === "Approved";
+  return true;
+}
+export function canAutoDecide(status, invoice) {
   // REQ-191: Auto Approve must be available on EVERY non-terminal
   // invoice — not just the initial Pending/On Hold/Disputed ones.
   //
@@ -234,7 +266,18 @@ export function canAutoDecide(status) {
   // tolerance was adjusted, or after a cost line was edited.
   //
   // Only 'Cancelled' is truly terminal — re-running a tolerance check
-  // on a voided invoice is meaningless. 'Approved', 'Rejected',
-  // 'Pending', 'On Hold', and 'Disputed' all permit a re-decide.
-  return status !== "Cancelled" && status !== "Paid";
+  // on a voided invoice is meaningless. 'Rejected', 'Pending',
+  // 'On Hold', and 'Disputed' all permit a re-decide.
+  //
+  // Nov 2026: hidden on 'Approved' too — an "Auto Approve" button on an
+  // invoice that is already approved reads as a mistake to AP. To re-check
+  // an approved invoice after an edit, put it On Hold first.
+  //
+  // Nov 2026: hidden on invoices the AP agent read from a carrier PDF. The
+  // legacy check only compares the total against the shipment cost; it
+  // ignores duplicates, unapproved extras and sender checks, so it could
+  // approve a resend the agent held (double payment). AP approves or
+  // disputes those with the manual buttons after reading the agent's reason.
+  if (invoice && invoice.readByAgent) return false;
+  return status !== "Cancelled" && status !== "Paid" && status !== "Approved";
 }

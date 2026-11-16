@@ -23,8 +23,8 @@ export default function useCustomerPortal(shipments, orders) {
   }
 
   const stats = useMemo(
-    () => computePortalStats(shipments),
-    [shipments]
+    () => computePortalStats(shipments, orders),
+    [shipments, orders]
   );
 
   const customerList = useMemo(

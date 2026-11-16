@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kestrel Bay · Carrier Invoice Agent</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">KB</span>
+    <div>
+      <div class="title">Kestrel Bay Logistics · Carrier Invoice Agent</div>
+      <div class="sub">Reads each carrier invoice PDF, checks it against the TMS shipment and the contract rate, clears the clean ones, and sends the rest to AP with the reason.</div>
+    </div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="chipMode">Shadow mode</span>
+    <span class="chip">Read-only to TMS + NetSuite</span>
+    <span class="chip ghost">Pilot design: Microsoft SSO · US-only endpoint · M365 mailbox</span>
+  </div>
+</header>
+
+<section class="kpis" id="profile"></section>
+
+<main class="grid">
+  <section class="col-main">
+    <div class="card">
+      <div class="card-head">
+        <h2>1 · AP inbox — this week's carrier invoices</h2>
+        <div class="row">
+          <label class="muted small"><input type="checkbox" id="offline"> offline (use last reads)</label>
+          <button id="btnRun" class="primary">Run the agent</button>
+        </div>
+      </div>
+      <div class="inbox" id="inbox"></div>
+      <ul id="checks" class="checks"></ul>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>2 · What the agent decided</h2><span id="runMeta" class="muted small"></span></div>
+      <div id="progress" class="progress" hidden><div id="bar"></div></div>
+      <table class="run" id="runTable">
+        <thead><tr><th>#</th><th>Invoice</th><th>Carrier</th><th>Shipment</th><th class="num">Billed</th><th>Result</th><th>Why</th><th>Agent recommends</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="emptyRun" class="empty">Not run yet. The agent only reads — nothing is written to the TMS or NetSuite.</div>
+    </div>
+
+    <div class="card" id="detailCard" hidden>
+      <div class="card-head"><h2 id="detailTitle">Invoice</h2><button class="ghost" id="btnCloseDetail">Close</button></div>
+      <div id="detailBody"></div>
+    </div>
+  </section>
+
+  <aside class="col-side">
+    <div class="card">
+      <h2>3 · What AP gets</h2>
+      <div class="stats" id="stats"><div class="muted small">Run the agent to see results.</div></div>
+      <div id="typical" class="callout" hidden></div>
+      <div class="actions">
+        <a id="btnCsv" class="button" href="/api/export/ready-to-post.csv" download>Download ready-to-post list (CSV)</a>
+        <span class="muted small">NetSuite is read-only in the pilot. A clerk reviews this list and posts it.</span>
+      </div>
+      <table class="mini" id="rtp"><thead><tr><th>Invoice</th><th class="num">Pay</th><th>Cleared by</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>4 · How it fits your systems</h2>
+      <ol class="flow" id="flow"></ol>
+      <ul class="plain small" id="safety"></ul>
+      <div class="today" id="today"></div>
+    </div>
+
+    <div class="card close">
+      <h2>5 · 30-day pilot</h2>
+      <ul class="plain" id="pilot"></ul>
+      <div class="yes" id="yes"></div>
+    </div>
+
+    <div class="card">
+      <h2>Ask the agent</h2>
+      <div class="ask">
+        <input id="askInput" placeholder="e.g. What happens when the agent is not sure?">
+        <button id="btnAsk">Ask</button>
+      </div>
+      <div id="askOut" class="answer" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>Audit log</h2>
+      <ul class="log" id="log"></ul>
+    </div>
+  </aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

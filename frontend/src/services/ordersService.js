@@ -886,7 +886,9 @@ export function buildShipmentGroups(orders, baseLane, maxWeight = 15000) {
  * 6. Execute plans
  * Returns { created, updated, cost, noQuotes, shipments, plans }.
  */
-export async function bulkPlanOrders(unplannedOrders, existingShipments = [], dockEnabled = true, dockConfigs = []) {
+export async function bulkPlanOrders(unplannedOrders, existingShipments = [], dockEnabled = true, dockConfigs = [], { onProgress } = {}) {
+  // UI hook for the "Planning in progress" dialog; never allowed to break planning.
+  const progress = (stage, info = {}) => { try { onProgress && onProgress(stage, info); } catch { /* ignore */ } };
   if (!unplannedOrders.length) {
     return { created: 0, updated: 0, cost: 0, noQuotes: true, failures: [] };
   }
@@ -918,6 +920,8 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
     if (!laneMap[key]) laneMap[key] = [];
     laneMap[key].push(o);
   });
+
+  progress("rating", { lanes: Object.keys(laneMap).length });
 
   // REQ-05 perf: rate every lane in parallel via Promise.all. Each
   // lane-worker emits its own local plan list, then we concatenate.
@@ -1155,6 +1159,7 @@ export async function bulkPlanOrders(unplannedOrders, existingShipments = [], do
     }
   }
 
+  progress("creating", { shipments: allPlans.length });
   try {
     const execRes = await BulkPlanApi.execute(allPlans);
     const shipments = execRes?.shipments || [];

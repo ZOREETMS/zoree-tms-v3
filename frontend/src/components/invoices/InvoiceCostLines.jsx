@@ -26,6 +26,7 @@ import {
 export default function InvoiceCostLines({
   invoiceId,
   canEdit = true,
+  lockedReason = null,
   legacyAgreed = 0,
   legacyAmount = 0,
   onTotalsChange,
@@ -252,7 +253,7 @@ export default function InvoiceCostLines({
       </div>
       {!canEdit && (
         <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 6 }}>
-          Read-only — your role doesn't allow approving cost adjustments.
+          {lockedReason || "Read-only — your role doesn't allow approving cost adjustments."}
         </div>
       )}
       {/* QA 226 (2026-05-12): Add Cost form — Cost Type + Value + Add

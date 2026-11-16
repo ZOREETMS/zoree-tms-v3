@@ -7,21 +7,30 @@ export function computeVariance(agreed, invoiced) {
   return invoiced - agreed;
 }
 
+/** A decision reason without the agent's tag, for showing in lists. */
+export function readableReason(reason) {
+  return String(reason || "")
+    .replace(/^\[Zoree AI[^\]]*\]\s*/, "")
+    .replace(/^Needs AP review:\s*/i, "")
+    .trim();
+}
+
 export function computeStats(invoices) {
   const approved = invoices.filter((i) => i.status === "Approved");
-  const pending = invoices.filter((i) => i.status === "Pending");
+  // Waiting on a person: never decided, or held by the agent.
+  const pending = invoices.filter((i) => i.status === "Pending" || i.status === "On Hold");
   const disputed = invoices.filter((i) => i.status === "Disputed");
 
   const approvedTotal = approved.reduce((s, i) => s + (i.amount || 0), 0);
   const pendingTotal = pending.reduce((s, i) => s + (i.amount || 0), 0);
   const disputedTotal = disputed.reduce((s, i) => s + (i.amount || 0), 0);
 
-  const totalAgreed = invoices.reduce((s, i) => s + (i.agreed || 0), 0);
-  const totalInvoiced = invoices.reduce((s, i) => s + (i.amount || 0), 0);
-  const auditSavings = totalAgreed > 0
-    ? ((totalInvoiced - totalAgreed) / totalAgreed) * 100
-    : 0;
-  const auditSavingsAmt = Math.abs(totalInvoiced - totalAgreed);
+  // Overbilling flagged: billed above the agreed cost, only where an agreed
+  // cost exists (an invoice with no shipment has nothing to compare with).
+  const rated = invoices.filter((i) => (i.agreed || 0) > 0);
+  const totalAgreed = rated.reduce((s, i) => s + i.agreed, 0);
+  const auditSavingsAmt = rated.reduce((s, i) => s + Math.max(0, (i.amount || 0) - i.agreed), 0);
+  const auditSavings = totalAgreed > 0 ? (auditSavingsAmt / totalAgreed) * 100 : 0;
 
   return {
     approvedTotal,

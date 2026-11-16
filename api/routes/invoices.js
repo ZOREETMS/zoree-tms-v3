@@ -26,6 +26,13 @@
 const router = require('express').Router();
 const invoiceAudit = require('../services/invoiceAudit');
 const invoiceCostLines = require('../services/invoiceCostLines');
+const invoiceIntake = require('../services/invoiceIntake/intakeService');
+const inboxRun = require('../services/invoiceIntake/inboxRun');
+const mailboxRun = require('../services/invoiceIntake/mailboxRun');
+const intakeLog = require('../services/invoiceIntake/intakeLog');
+const intakeDetail = require('../services/invoiceIntake/intakeDetail');
+const intakeRepo = require('../services/invoiceIntake/intakeRepository');
+const intakeFiles = require('../services/invoiceIntake/intakeFiles');
 // QA P215 backend wiring (2026-05-11): public REST entry for the
 // existing api/services/invoiceFromShipment service. The service was
 // already used internally (e.g. by the shipment-confirm flow) but had
@@ -33,6 +40,9 @@ const invoiceCostLines = require('../services/invoiceCostLines');
 // CREATE_INVOICE action both had to no-op. Exposing it here keeps the
 // service as the single writer (the route is just a thin transport).
 const invoiceFromShipment = require('../services/invoiceFromShipment');
+// Migration 054/055: a held invoice decided through the legacy endpoints goes
+// through the AP release rules (written justification + audit ledger).
+const apRelease = require('../services/apRelease');
 
 module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
   function requireFinance(res, user) {
@@ -58,6 +68,154 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
         limit: parseInt(req.query.limit, 10) || 500,
       });
       res.json({ invoices: rows, total: rows.length });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // ── Carrier invoice PDF intake (migration 051) ─────────────────
+  // POST /api/invoices/intake/pdf  { fileName, contentBase64 }
+  // One PDF per request (keeps the JSON body under the 10 MB limit).
+  // Claude reads it, read checks gate it, Freight Audit line-audits it.
+  router.post('/intake/pdf', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const { fileName, contentBase64 } = req.body || {};
+      if (!fileName || !contentBase64) return res.status(400).json({ error: 'fileName and contentBase64 are required' });
+      const buffer = Buffer.from(String(contentBase64), 'base64');
+      const result = await invoiceIntake.intakePdf({ fileName: String(fileName).slice(0, 200), buffer, user });
+      res.status(result.status === 'created' ? 201 : 200).json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // ── AP mailbox ─────────────────────────────────────────────────
+  // GET  /api/invoices/intake/mailbox?since=ISO — mailbox state + invoices read from email for this domain
+  // POST /api/invoices/intake/mailbox/run       — check the mailbox now (background; poll the GET)
+  router.get('/intake/mailbox', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.json(await mailboxRun.status({ since: req.query.since })); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  router.post('/intake/mailbox/run', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.status(202).json(mailboxRun.start({ user })); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // ── Agent run log (migration 056) ──────────────────────────────
+  // GET /api/invoices/intake/runs?limit=50 — scheduled checks + button presses, newest first, with outcome counts
+  // GET /api/invoices/intake/runs/:id      — one run and every document it read
+  router.get('/intake/runs', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.json(await mailboxRun.runLog({ limit: req.query.limit })); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  router.get('/intake/runs/:id', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.json(await mailboxRun.runDetail(req.params.id)); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // ── AP inbox folder ────────────────────────────────────────────
+  // GET  /api/invoices/intake/inbox      — PDFs waiting in this domain's inbox + latest run
+  // POST /api/invoices/intake/inbox/run  — read every new PDF (background; poll the GET)
+  router.get('/intake/inbox', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.json(await inboxRun.status()); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  router.post('/intake/inbox/run', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.status(202).json(inboxRun.start({ user })); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // GET /api/invoices/intake/log — every invoice document received for this
+  // domain with its AP outcome (ready to post / needs review / duplicate …)
+  router.get('/intake/log', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.json(await intakeLog.list({ limit: req.query.limit })); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // GET /api/invoices/intake/:id/detail — one document: what was read, each
+  // line billed vs expected, the checks, and who did what
+  router.get('/intake/:id/detail', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try { res.json(await intakeDetail.get(req.params.id)); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // GET /api/invoices/intake/:id/file — the original document (PDF). The
+  // intake row is loaded first so only users in its domain can read it.
+  router.get('/intake/:id/file', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const intake = await intakeRepo.getById(req.params.id);
+      const file = intake ? await intakeFiles.get(intake.id) : null;
+      if (!file) return res.status(404).json({ error: 'The original document was not kept for this intake.' });
+      res.setHeader('Content-Type', file.contentType || 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${String(file.fileName || 'invoice.pdf').replace(/[^\w.\- ]/g, '_')}"`);
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.send(file.buffer);
+    } catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // GET /api/invoices/:id/document — the original PDF an invoice was read
+  // from. Looked up through the intake row, so only its domain can see it.
+  router.get('/:id/document', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const intake = await intakeRepo.findByInvoiceId(req.params.id);
+      const file = intake ? await intakeFiles.get(intake.id) : null;
+      if (!file) return res.status(404).json({ error: 'No original document is kept for this invoice.' });
+      res.setHeader('Content-Type', file.contentType || 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${String(file.fileName || 'invoice.pdf').replace(/[^\w.\- ]/g, '_')}"`);
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.send(file.buffer);
+    } catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // POST /api/invoices/:id/dispute { reason } — AP disputes the invoice with the carrier
+  router.post('/:id/dispute', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const held = await apRelease.defaultService().resolveIfHeld({ invoiceId: req.params.id, action: 'dispute', justification: req.body?.reason, user, actorRole: user.activeRole || null });
+      if (held) return res.json({ invoice: held });
+      const updated = await invoiceAudit.manualDecide({ invoiceId: req.params.id, decision: 'Disputed', reason: req.body?.reason, user });
+      res.json({ invoice: updated });
+    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
+  // GET /api/invoices/intake — recent PDF intakes (what was read, what happened)
+  router.get('/intake', async (req, res) => {
+    const user = await verifyToken(req, res);
+    if (!user) return;
+    if (!requireFinance(res, user)) return;
+    try {
+      const rows = await invoiceIntake.listRecent(req.query.limit);
+      res.json({ intakes: rows, total: rows.length });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -135,6 +293,8 @@ module.exports = function createInvoicesRouter({ verifyToken, hasAnyRole }) {
     if (!user) return;
     if (!requireFinance(res, user)) return;
     try {
+      const held = await apRelease.defaultService().resolveIfHeld({ invoiceId: req.params.id, action: 'approve', justification: req.body?.reason, user, actorRole: user.activeRole || null });
+      if (held) return res.json(held);
       const updated = await invoiceAudit.manualDecide({
         invoiceId: req.params.id, decision: 'Approved',
         reason: req.body?.reason, user,

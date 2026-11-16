@@ -23,7 +23,6 @@ export const CERT_STATUS = {
   EXPIRED: "Expired",
 };
 
-export const HAZMAT_CERTIFIED_CARRIERS = ["JB Hunt", "XPO Logistics", "FedEx Freight"];
 
 export const STATUS_COLORS = {
   OK:        { color: "var(--green)",  bg: "var(--green-dim)" },

@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { useFleet } from "../hooks/useFleet";
 import { useDrivers } from "../hooks/useDrivers";
-import { SEED_VEHICLES, SEED_DRIVERS } from "../services/fleetService";
 import { DRIVER_STATUSES } from "../types/fleet";
 import { useEditGate } from "../hooks/useEditGate";
 import StatCard from "../components/fleet/StatCard";
@@ -22,8 +21,8 @@ export default function FleetManagementPage() {
   const gate = useEditGate("fleet_management");
 
   // Hooks for fleet and driver state
-  const fleet = useFleet(SEED_VEHICLES);
-  const driverState = useDrivers(SEED_DRIVERS);
+  const fleet = useFleet();
+  const driverState = useDrivers();
 
   const vehicleSel = useRowSelection({ getKey: (v) => v.unit });
   const driverSel = useRowSelection({ getKey: (d) => d.id });

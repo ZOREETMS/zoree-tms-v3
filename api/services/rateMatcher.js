@@ -48,6 +48,29 @@ const MATCH_TYPES = Object.freeze({
 });
 
 /**
+ * Is this rate usable on `asOf`?
+ *
+ * Added 2026-09-09. Neither this matcher nor any caller checked `status`
+ * or the eff/exp window, so expired and deactivated rates were still
+ * being matched and quoted — 8 of 133 "Active" rows were already past
+ * their exp date, and a batch of $0.00 placeholder rows priced freight
+ * at zero. Marking a rate Expired now actually takes it out of matching.
+ *
+ * A rate with no eff/exp is treated as open-ended, which is how the
+ * existing data behaves. Status comparison is case-insensitive because
+ * the column is free text.
+ */
+function isRateCurrent(rate, asOf) {
+  if (!rate) return false;
+  if (rate.status && String(rate.status).trim().toLowerCase() !== 'active') return false;
+  const day = asOf instanceof Date ? asOf : new Date(asOf || Date.now());
+  const stamp = Number.isFinite(day.getTime()) ? day.getTime() : Date.now();
+  if (rate.eff) { const t = Date.parse(rate.eff); if (Number.isFinite(t) && t > stamp) return false; }
+  if (rate.exp) { const t = Date.parse(rate.exp); if (Number.isFinite(t) && t < stamp) return false; }
+  return true;
+}
+
+/**
  * Normalize a city name for comparison: lowercase, trimmed, drop any
  * state/zip suffix that might have been concatenated into it.
  * Returns '' if the input is falsy.
@@ -141,6 +164,8 @@ function matchRate(ctx, rates) {
   if (!Array.isArray(rates) || rates.length === 0) {
     return { rate: null, reason: 'no-candidates' };
   }
+  rates = rates.filter((r) => isRateCurrent(r, ctx && ctx.asOf));
+  if (rates.length === 0) return { rate: null, reason: 'no-candidates' };
 
   const context = {
     originCity:    normCity(ctx.originCity),
@@ -207,6 +232,8 @@ function matchAllRates(ctx, rates) {
   if (!Array.isArray(rates) || rates.length === 0) {
     return { rates: [], reason: 'no-candidates' };
   }
+  rates = rates.filter((r) => isRateCurrent(r, ctx && ctx.asOf));
+  if (rates.length === 0) return { rates: [], reason: 'no-candidates' };
 
   const context = {
     originCity:    normCity(ctx.originCity),
@@ -248,6 +275,7 @@ function matchAllRates(ctx, rates) {
 
 module.exports = {
   MATCH_TYPES,
+  isRateCurrent,
   matchRate,
   matchAllRates,
   // Exposed for unit tests; not part of the public API.

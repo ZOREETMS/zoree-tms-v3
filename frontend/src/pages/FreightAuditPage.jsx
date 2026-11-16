@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useFreightAudit } from "../hooks/useFreightAudit";
-import { SEED_AUDIT_DATA } from "../services/freightAuditService";
 import { useEditGate } from "../hooks/useEditGate";
 import AuditStats from "../components/freight-audit/AuditStats";
 import AuditFilterBar from "../components/freight-audit/AuditFilterBar";
@@ -8,15 +7,9 @@ import AuditTable from "../components/freight-audit/AuditTable";
 
 export default function FreightAuditPage() {
   const {
-    filtered,
-    filter,
-    setFilter,
-    kpis,
-    approveInvoice,
-    disputeInvoice,
-    releaseHold,
-    approveAllClean,
-  } = useFreightAudit(SEED_AUDIT_DATA);
+    filtered, filter, setFilter, kpis, loading, error, busy,
+    approveInvoice, disputeInvoice, releaseHold, approveAllClean, runAudit,
+  } = useFreightAudit();
 
   // QA #148 / QA #149: Finance module 'view' must collapse Approve /
   // Dispute / Release / Approve-all / Run Auto-Audit on the audit page,
@@ -30,33 +23,36 @@ export default function FreightAuditPage() {
     setTimeout(() => setToast(null), 4000);
   }
 
-  function handleApprove(inv) {
+  // Each handler saves through the API; the toast reports what the server did.
+  async function handleApprove(id) {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    approveInvoice(inv);
-    showToast(`${inv} approved for payment`, "success");
+    const out = await approveInvoice(id);
+    showToast(out.toast.text, out.toast.type);
   }
 
-  function handleDispute(inv) {
+  async function handleDispute(id) {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    disputeInvoice(inv);
-    showToast(`${inv} marked as disputed`, "warning");
+    const out = await disputeInvoice(id);
+    showToast(out.toast.text, out.toast.type);
   }
 
-  function handleRelease(inv) {
+  async function handleRelease(id) {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    releaseHold(inv);
-    showToast(`${inv} released — pending approval`, "info");
+    const out = await releaseHold(id);
+    showToast(out.toast.text, out.toast.type);
   }
 
-  function handleRunAudit() {
+  async function handleRunAudit() {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    showToast("Auto-audit complete — " + kpis.discrepancies + " discrepancies flagged", "warning");
+    const out = await runAudit();
+    showToast(out.summary, out.ok ? "info" : "warning");
   }
 
-  function handleApproveAllClean() {
+  async function handleApproveAllClean() {
     if (!gate.canEdit) return;            // QA #148/149 guard
-    approveAllClean();
-    showToast("All matched invoices approved", "success");
+    const out = await approveAllClean();
+    showToast(out.total ? `${out.approved} of ${out.total} matched invoices approved` : "No matched invoices waiting for approval",
+      out.total && out.approved === out.total ? "success" : "info");
   }
 
   return (
@@ -73,6 +69,7 @@ export default function FreightAuditPage() {
             className="btn btn-secondary btn-sm"
             onClick={handleRunAudit}
             {...gate.editProps()}          /* QA #148/149 */
+            disabled={busy || !gate.canEdit}
           >
             Run Auto-Audit
           </button>
@@ -80,6 +77,7 @@ export default function FreightAuditPage() {
             className="btn btn-primary btn-sm"
             onClick={handleApproveAllClean}
             {...gate.editProps()}          /* QA #148/149 */
+            disabled={busy || !gate.canEdit}
           >
             Approve All Clean
           </button>
@@ -98,6 +96,7 @@ export default function FreightAuditPage() {
           onDispute={gate.canEdit ? handleDispute : undefined}
           onRelease={gate.canEdit ? handleRelease : undefined}
           canEdit={gate.canEdit}
+          emptyText={loading ? "Loading invoices…" : error ? `Could not load invoices: ${error}` : filter ? "No invoices match the current filter" : "No invoices in this domain yet"}
         />
       </div>
 

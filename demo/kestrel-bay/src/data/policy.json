@@ -1,0 +1,99 @@
+{
+  "customer": "Kestrel Bay Logistics",
+  "profile": {
+    "business": "3PL storing and shipping for 48 consumer brands",
+    "warehouses": [
+      "Reno, NV (HQ)",
+      "Ontario, CA",
+      "Dallas, TX",
+      "Columbus, OH"
+    ],
+    "ordersPerDay": 11000,
+    "invoicesPerMonth": 2400,
+    "apClerks": 3,
+    "statedExceptionRate": 0.1667,
+    "stepsPerInvoiceToday": 5,
+    "systemsPerInvoiceToday": 3
+  },
+  "apRules": {
+    "payContractRate": true,
+    "fuelIsPercentOfBase": true,
+    "extrasNeedTmsApproval": [
+      "liftgate",
+      "detention",
+      "lumper",
+      "layover",
+      "redelivery"
+    ],
+    "neverPayTwice": true,
+    "personReviewOver": 2500,
+    "toleranceUsd": 1
+  },
+  "it": {
+    "sso": "Microsoft Entra ID (single sign-on)",
+    "dataResidency": "US only",
+    "netsuite": "read-only during pilot \u2014 agent never posts; it hands AP a ready-to-post list",
+    "writes": "TMS and NetSuite are read-only to the agent; the only outputs are a reviewed list and an audit log",
+    "flow": [
+      "Carrier invoices land in the AP mailbox (Microsoft 365). In the pilot the agent reads new PDFs with read-only mailbox access.",
+      "Claude reads each PDF into fields. The agent checks the read: lines add up to the total, the carrier is contracted, confidence is 0.85 or higher. If not, a person keys it.",
+      "The agent looks up the shipment and approved extras in the TMS and the contract lane \u2014 read-only API.",
+      "Fixed AP rules decide: contract base, fuel % of contract base, extras need TMS approval, never pay twice, over $2,500 needs a sign-off. Claude never decides pay or no-pay.",
+      "Clean invoices go on the ready-to-post list for AP. Everything else goes to a person with the reason and a recommendation."
+    ],
+    "safety": [
+      "Pilot: sign-in with Microsoft SSO (Entra ID); only the AP group sees the queue.",
+      "Pilot: model runs on a US-region endpoint; invoices are not used to train models.",
+      "Read-only to TMS and NetSuite \u2014 the agent cannot change a shipment or post a bill.",
+      "Every read, decision, human override and export is logged with who and when.",
+      "If a carrier changes its layout or a total does not add up, the read check sends it to a person \u2014 never a guess."
+    ],
+    "demoVsPilot": [
+      [
+        "Invoices in",
+        "Demo: a folder of PDFs",
+        "Pilot: AP mailbox in Microsoft 365, read-only"
+      ],
+      [
+        "Sign-in",
+        "Demo: local laptop",
+        "Pilot: Microsoft SSO"
+      ],
+      [
+        "Model",
+        "Demo: Anthropic API",
+        "Pilot: Claude on a US-region endpoint"
+      ],
+      [
+        "TMS / contracts",
+        "Demo: your data pack",
+        "Pilot: read-only TMS API"
+      ],
+      [
+        "AP output",
+        "Demo: CSV",
+        "Pilot: CSV or a NetSuite import file AP posts"
+      ],
+      [
+        "Audit log",
+        "Demo: in memory",
+        "Pilot: stored, exportable"
+      ]
+    ]
+  },
+  "peakFreeze": {
+    "start": "2026-11-20",
+    "end": "2027-01-05",
+    "rule": "No changes to live systems. Pilot runs in shadow mode or starts after the freeze."
+  },
+  "pilot": {
+    "days": 30,
+    "metrics": [
+      "Share of invoices cleared with no human touch (target set from week 1)",
+      "Dollars caught: overcharges plus duplicate and cancelled-shipment bills",
+      "Invoice-to-ready-to-post time",
+      "Agent calls AP disagreed with \u2014 both missed problems and false flags"
+    ],
+    "ask": "Agree that it works on your data, fits your systems, and is safe \u2014 and start a 30-day shadow pilot now, live after Jan 5."
+  }
+}

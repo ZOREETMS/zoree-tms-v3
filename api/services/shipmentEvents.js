@@ -62,9 +62,20 @@ const SHIPMENT_STATUS_TO_ORDER_STATUS = {
   'Tender Accepted': 'Tender Accepted',
   'In Transit':      'In Transit',
   'Delivered':       'Delivered',
+  // Withdraw tender (2026-10-17): Tendered → Planned on the shipment used
+  // to leave every linked order stuck at 'Tendered', because nothing
+  // mapped 'Planned'. The orders then showed a live tender that no longer
+  // existed and were refused by Unplan. Only orders still sitting in a
+  // tender state follow the shipment back (ORDER_TENDER_STATUSES guard
+  // below), so a shipment moving to Planned from anywhere else never
+  // drags an order sideways. Disjoint from the order→shipment map in
+  // orderMutations.js (Tendered / Tender Accepted only), so no loop.
+  'Planned':         'Planned',
 };
 
 const ORDER_TERMINAL_STATUSES = new Set(['Delivered', 'Cancelled']);
+// Statuses an order only holds because its shipment was tendered.
+const ORDER_TENDER_STATUSES = new Set(['Tendered', 'Tender Accepted']);
 
 async function syncLinkedOrdersForShipmentStatus({ shipmentId, newStatus, user, via, extraMetadata }) {
   const id = String(shipmentId || '').trim();
@@ -102,6 +113,9 @@ async function syncLinkedOrdersForShipmentStatus({ shipmentId, newStatus, user, 
       if (!prior)                                       { skipped.push({ id: oid, reason: 'not_found' });    continue; }
       if (prior.status === targetOrderStatus)           { skipped.push({ id: oid, reason: 'already_set' });  continue; }
       if (ORDER_TERMINAL_STATUSES.has(prior.status))    { skipped.push({ id: oid, reason: 'terminal' });     continue; }
+      if (newStatus === 'Planned' && !ORDER_TENDER_STATUSES.has(prior.status)) {
+        skipped.push({ id: oid, reason: 'not_tendered' }); continue;
+      }
 
       await db.dbUpdate('orders', oid, { status: targetOrderStatus }, null);
       updated.push(oid);

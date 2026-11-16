@@ -1,0 +1,225 @@
+{
+  "description": "Labeled Teams-bot messages for measuring the Jev intent gate. label=question: nothing should change (information requests, hesitation, negation). label=command: the user is authorizing a change. IDs are real records from the demo database (Sep 26 2026); the eval only calls Jev, never the TMS.",
+  "cases": [
+    {
+      "id": "q01",
+      "label": "question",
+      "text": "tell me the carrier options to plan ORD-140346"
+    },
+    {
+      "id": "q02",
+      "label": "question",
+      "text": "I want to see which carriers could plan ORD-140346"
+    },
+    {
+      "id": "q03",
+      "label": "question",
+      "text": "curious if the carrier will accept SHP-2026-783705"
+    },
+    {
+      "id": "q04",
+      "label": "question",
+      "text": "can we tender SHP-2026-209837 to KLLM or is it too late"
+    },
+    {
+      "id": "q05",
+      "label": "question",
+      "text": "wondering whether we should withdraw SHP-2026-783705"
+    },
+    {
+      "id": "q06",
+      "label": "question",
+      "text": "remind me how to plan ORD-290336"
+    },
+    {
+      "id": "q07",
+      "label": "question",
+      "text": "show me what it would cost to plan ORD-549512 with XPO"
+    },
+    {
+      "id": "q08",
+      "label": "question",
+      "text": "not sure if I should unplan ORD-312629, what happens to the shipment"
+    },
+    {
+      "id": "q09",
+      "label": "question",
+      "text": "did Averitt accept SHP-2026-099506 yet"
+    },
+    {
+      "id": "q10",
+      "label": "question",
+      "text": "has SHP-2026-633638 been delivered"
+    },
+    {
+      "id": "q11",
+      "label": "question",
+      "text": "explain what reject does for SHP-2026-783705"
+    },
+    {
+      "id": "q12",
+      "label": "question",
+      "text": "any idea when the carrier will pickup SHP-2026-209683"
+    },
+    {
+      "id": "q13",
+      "label": "question",
+      "text": "before I tender SHP-2026-208696 tell me the rate"
+    },
+    {
+      "id": "q14",
+      "label": "question",
+      "text": "would it be cheaper to plan ORD-140346 with a different carrier"
+    },
+    {
+      "id": "q15",
+      "label": "question",
+      "text": "i'm checking whether SHP-2026-209837 went intransit"
+    },
+    {
+      "id": "q16",
+      "label": "question",
+      "text": "what are different carrier options available to plan ORD-140346"
+    },
+    {
+      "id": "q17",
+      "label": "question",
+      "text": "should we tender SHP-2026-209683 today"
+    },
+    {
+      "id": "q18",
+      "label": "question",
+      "text": "quick question about how accept works on SHP-2026-099506"
+    },
+    {
+      "id": "q19",
+      "label": "question",
+      "text": "let me know the status before we plan ORD-290336"
+    },
+    {
+      "id": "q20",
+      "label": "question",
+      "text": "compare rates to plan ORD-549512"
+    },
+    {
+      "id": "q21",
+      "label": "question",
+      "text": "don't plan ORD-140346 yet"
+    },
+    {
+      "id": "q22",
+      "label": "question",
+      "text": "tell me about plan ORD-140346"
+    },
+    {
+      "id": "q23",
+      "label": "question",
+      "text": "I wonder if I should accept SHP-2026-783705"
+    },
+    {
+      "id": "q24",
+      "label": "question",
+      "text": "hold off, do not tender SHP-2026-209837 until I check the rate"
+    },
+    {
+      "id": "c01",
+      "label": "command",
+      "text": "plan ORD-140346"
+    },
+    {
+      "id": "c02",
+      "label": "command",
+      "text": "plan ORD-290336 XPO"
+    },
+    {
+      "id": "c03",
+      "label": "command",
+      "text": "tender SHP-2026-209837"
+    },
+    {
+      "id": "c04",
+      "label": "command",
+      "text": "withdraw SHP-2026-783705"
+    },
+    {
+      "id": "c05",
+      "label": "command",
+      "text": "accept SHP-2026-783705"
+    },
+    {
+      "id": "c06",
+      "label": "command",
+      "text": "reject SHP-2026-099506"
+    },
+    {
+      "id": "c07",
+      "label": "command",
+      "text": "unplan ORD-312629"
+    },
+    {
+      "id": "c08",
+      "label": "command",
+      "text": "delivered SHP-2026-633638"
+    },
+    {
+      "id": "c09",
+      "label": "command",
+      "text": "intransit SHP-2026-209683"
+    },
+    {
+      "id": "c10",
+      "label": "command",
+      "text": "can you plan ORD-549512"
+    },
+    {
+      "id": "c11",
+      "label": "command",
+      "text": "please tender SHP-2026-208696"
+    },
+    {
+      "id": "c12",
+      "label": "command",
+      "text": "go ahead and plan ORD-140346 with KLLM"
+    },
+    {
+      "id": "c13",
+      "label": "command",
+      "text": "plan order ORD-290336"
+    },
+    {
+      "id": "c14",
+      "label": "command",
+      "text": "carrier confirmed, accept SHP-2026-099506"
+    },
+    {
+      "id": "c15",
+      "label": "command",
+      "text": "unassign ORD-312629 from its shipment"
+    },
+    {
+      "id": "c16",
+      "label": "command",
+      "text": "please withdraw the tender on SHP-2026-783705"
+    },
+    {
+      "id": "c17",
+      "label": "command",
+      "text": "tender SHP-2026-209683 now"
+    },
+    {
+      "id": "c18",
+      "label": "command",
+      "text": "plan ORD-549512 asap"
+    },
+    {
+      "id": "c19",
+      "label": "command",
+      "text": "driver picked up, set intransit SHP-2026-209837"
+    },
+    {
+      "id": "c20",
+      "label": "command",
+      "text": "carrier declined, reject SHP-2026-208696"
+    }
+  ]
+}

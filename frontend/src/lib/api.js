@@ -1,3 +1,5 @@
+import { domainHeaders, clearActiveDomain } from "./domain";
+
 /** Same idea as legacy `zoreeApiOrigin() + '/api'` in test/index.html — always end with exactly one `/api`. */
 function normalizeApiBase(raw) {
   let b = String(raw || "").trim();
@@ -74,9 +76,19 @@ async function api(path, options = {}, _retried = false) {
     headers: {
       "Content-Type": "application/json",
       ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+      ...domainHeaders(),
       ...(options.headers || {}),
     },
   });
+  // Stored domain this user can't use (e.g. another user signed in on
+  // this browser) → forget it and retry once in the user's default.
+  if (res.status === 403 && !_retried && domainHeaders()["X-Zoree-Domain"]) {
+    const peek = await res.clone().json().catch(() => ({}));
+    if (/^No access to domain/.test(peek.error || "")) {
+      clearActiveDomain();
+      return api(path, options, true);
+    }
+  }
   // Auto-refresh on 401 and retry once. /auth/* is exempt so a wrong
   // password during login doesn't get treated as a session expiry.
   if (res.status === 401 && !_retried && !path.includes("/auth/")) {
@@ -182,9 +194,67 @@ export const AuthApi = {
   },
 };
 
+/* ── Paged reads ───────────────────────────────────────────────────
+ * PostgREST caps a single response at its db-max-rows setting (1000 on
+ * Supabase by default), so asking for `limit=10000` in one shot does NOT
+ * return 10000 — it silently returns the cap, and the caller has no way
+ * to tell a truncated page from a complete one. Fetching in offset pages
+ * and stopping on a short page is the only read that is correct whatever
+ * that server-side cap happens to be.
+ *
+ * ── The sort key MUST be unique ──
+ * Offset paging is only stable if the ORDER BY totally orders the rows.
+ * `created_at` alone does not: a bulk insert writes thousands of rows on
+ * one timestamp (a 5,000-order seed produced a single tie group of 5,000),
+ * and Postgres may then return tied rows in a different order per request.
+ * offset=1000 hands back rows already seen at offset=0 while others are
+ * skipped entirely — duplicates in the grid and silently missing orders.
+ * Appending the primary key breaks every tie, so `id` is always the last
+ * sort term here and callers cannot opt out of it.
+ *
+ * Pages are fetched sequentially for the same reason concurrency is unsafe:
+ * rows shifting between requests move across offset boundaries.
+ *
+ * @param {string} table
+ * @param {{order?:string, max?:number, pageSize?:number}} [opts]
+ */
+async function fetchPaged(table, opts = {}) {
+  const { order = "created_at.desc", max = 10000, pageSize = 1000 } = opts;
+  // id last = total order, so offsets are deterministic across requests.
+  const stableOrder = /(^|,)id(\.|,|$)/.test(order) ? order : `${order},id.asc`;
+  const out = [];
+  const seen = new Set();
+  for (let offset = 0; offset < max; offset += pageSize) {
+    const take = Math.min(pageSize, max - offset);
+    const q = `select=*%26order=${stableOrder}%26limit=${take}%26offset=${offset}`;
+    // eslint-disable-next-line no-await-in-loop
+    const page = await api(`/db/${table}?q=${q}`);
+    const rows = Array.isArray(page) ? page : [];
+    // Belt and braces: even with a total order, a row inserted mid-scan
+    // can shift a boundary. Dropping ids we have already taken keeps the
+    // grid free of duplicate keys whatever the server returns.
+    for (const row of rows) {
+      const key = row && row.id;
+      if (key === undefined || key === null) { out.push(row); continue; }
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+    }
+    // A page shorter than requested means the table is exhausted. This is
+    // also what stops us paging forever when max exceeds the row count.
+    if (rows.length < take) break;
+  }
+  return out;
+}
+
 export const DbApi = {
-  orders() {
-    return api("/db/orders?q=select=*%26order=created_at.desc%26limit=500");
+  // Raised from a single hard-capped 500-row call: the fixture alone is
+  // ~5,700 orders, and the Orders grid paginates client-side (100/page),
+  // so the fetch cap — not rendering — was what hid rows. Client-side
+  // status chips and search filter this array, so anything not fetched
+  // is invisible to them too.
+  orders(max = 10000) {
+    return fetchPaged("orders", { max });
   },
   // True row count for the orders table — paired with `orders()` above
   // because that call is hard-capped at 500 rows. Header chips, the
@@ -195,8 +265,12 @@ export const DbApi = {
   ordersCount() {
     return api("/orders/count").then((r) => Number(r?.total) || 0);
   },
-  shipments() {
-    return api("/db/shipments?q=select=*%26order=created_at.desc%26limit=500");
+  shipments(max = 10000) {
+    // Shipments track orders roughly 1:7 for consolidated freight, but a
+    // fixture of unconsolidated singles pushes them close to parity —
+    // capping these at 500 while orders page to 10k would leave the grid
+    // unable to resolve most orders' shipment rows.
+    return fetchPaged("shipments", { max });
   },
   carriers() {
     return api("/db/carriers?q=select=*%26order=name.asc%26limit=500");
@@ -218,6 +292,9 @@ export const DbApi = {
   },
   drivers() {
     return api("/db/drivers?q=select=*%26order=name.asc%26limit=500");
+  },
+  vehicles() {
+    return api("/db/vehicles?q=select=*%26order=id.asc%26limit=500");
   },
   invoices() {
     return api("/db/invoices?q=select=*%26order=created_at.desc%26limit=500");
@@ -488,6 +565,70 @@ export const NotifyApi = {
 // REQ-06: invoices now go through domain endpoints that run the tolerance
 // decision server-side. The generic /db/invoices proxy is kept as a
 // fallback for list reads (admin) but writes should use the new routes.
+// Migration 051: carrier invoice PDF intake — Claude reads, rules decide.
+export const InvoiceIntakeApi = {
+  // One PDF per call: { fileName, contentBase64 } → intake result
+  uploadPdf(fileName, contentBase64) {
+    return api("/invoices/intake/pdf", { method: "POST", body: JSON.stringify({ fileName, contentBase64 }) });
+  },
+  listRecent(limit = 50) {
+    return api(`/invoices/intake?limit=${encodeURIComponent(limit)}`);
+  },
+  // Every invoice document received for the active domain + its AP outcome.
+  log(limit = 100) {
+    return api(`/invoices/intake/log?limit=${encodeURIComponent(limit)}`);
+  },
+  // One document: fields read, each line billed vs expected, checks, activity.
+  detail(id) {
+    return api(`/invoices/intake/${encodeURIComponent(id)}/detail`);
+  },
+  // The original document as a Blob (PDF), for the review drawer.
+  async file(id) {
+    const res = await fetch(`${API_BASE}/invoices/intake/${encodeURIComponent(id)}/file`, {
+      headers: { ...(token() ? { Authorization: `Bearer ${token()}` } : {}), ...domainHeaders() },
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not load the document (${res.status})`);
+    return res.blob();
+  },
+  // AP inbox folder for the active domain: PDFs waiting + the latest run.
+  inbox() {
+    return api("/invoices/intake/inbox");
+  },
+  // Read every new PDF in the inbox (background run; poll inbox()).
+  runInbox() {
+    return api("/invoices/intake/inbox/run", { method: "POST" });
+  },
+  // AP mailbox: state + carrier invoices read from email for the active domain.
+  mailbox(since) {
+    return api(`/invoices/intake/mailbox${since ? `?since=${encodeURIComponent(since)}` : ""}`);
+  },
+  // Check the mailbox now (background; poll mailbox()).
+  runMailbox() {
+    return api("/invoices/intake/mailbox/run", { method: "POST" });
+  },
+  // Agent run log (migration 056): scheduled checks + button presses, with outcome counts.
+  runs(limit = 50) {
+    return api(`/invoices/intake/runs?limit=${encodeURIComponent(limit)}`);
+  },
+  // One agent run and every invoice document it read.
+  run(id) {
+    return api(`/invoices/intake/runs/${encodeURIComponent(id)}`);
+  },
+};
+
+// Migration 051: approved extras per shipment (checked by Freight Audit).
+export const AccessorialApprovalsApi = {
+  list(shipmentId) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/accessorial-approvals`);
+  },
+  create(shipmentId, payload) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/accessorial-approvals`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  remove(shipmentId, approvalId) {
+    return api(`/shipments/${encodeURIComponent(shipmentId)}/accessorial-approvals/${encodeURIComponent(approvalId)}`, { method: "DELETE" });
+  },
+};
+
 export const InvoicesApi = {
   // List via the domain endpoint (finance | admin gated)
   list(params = {}) {
@@ -523,6 +664,17 @@ export const InvoicesApi = {
       method: "POST",
       body: JSON.stringify({ reason }),
     });
+  },
+  // The original PDF this invoice was read from, as a Blob.
+  async document(id) {
+    const res = await fetch(`${API_BASE}/invoices/${encodeURIComponent(id)}/document`, {
+      headers: { ...(token() ? { Authorization: `Bearer ${token()}` } : {}), ...domainHeaders() },
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not load the document (${res.status})`);
+    return res.blob();
+  },
+  dispute(id, reason) {
+    return api(`/invoices/${encodeURIComponent(id)}/dispute`, { method: "POST", body: JSON.stringify({ reason }) });
   },
   reject(id, reason) {
     return api(`/invoices/${encodeURIComponent(id)}/reject`, {
@@ -603,6 +755,27 @@ export const InvoicesApi = {
   },
 };
 
+// Email order agent — /api/email-intake (api/routes/emailIntake.js).
+export const EmailIntakeApi = {
+  status() { return api("/email-intake/status"); },
+  list(status = "pending_review") { return api(`/email-intake?status=${encodeURIComponent(status)}`); },
+  get(id) { return api(`/email-intake/${encodeURIComponent(id)}`); },
+  poll() { return api("/email-intake/poll", { method: "POST" }); },
+  paste(payload) { return api("/email-intake/paste", { method: "POST", body: JSON.stringify(payload) }); },
+  approve(id, drafts) { return api(`/email-intake/${encodeURIComponent(id)}/approve`, { method: "POST", body: JSON.stringify(drafts ? { drafts } : {}) }); },
+  reject(id, reason) { return api(`/email-intake/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ reason }) }); },
+  retry(id) { return api(`/email-intake/${encodeURIComponent(id)}/retry`, { method: "POST" }); },
+};
+
+// AI agents — /api/agents (api/routes/agents.js).
+export const AgentsApi = {
+  catalog() { return api("/agents"); },
+  runs(agent, limit = 15) { return api(`/agents/runs?agent=${encodeURIComponent(agent || "")}&limit=${limit}`); },
+  run(agent, input) { return api(`/agents/${encodeURIComponent(agent)}/run`, { method: "POST", body: JSON.stringify(input || {}) }); },
+  approve(actionId, edits) { return api(`/agents/actions/${encodeURIComponent(actionId)}/approve`, { method: "POST", body: JSON.stringify(edits ? { edits } : {}) }); },
+  reject(actionId, reason) { return api(`/agents/actions/${encodeURIComponent(actionId)}/reject`, { method: "POST", body: JSON.stringify({ reason }) }); },
+};
+
 export const MileageApi = {
   get(origin, dest) {
     return api(`/mileage?origin=${encodeURIComponent(origin)}&dest=${encodeURIComponent(dest)}`);
@@ -671,6 +844,40 @@ export const BulkPlanApi = {
 // All writes land on `oms_locations` (source of truth). The DB trigger
 // propagates the row to TMS `locations` and records an audit entry in
 // `mw_requests` (cmd='PUSH_LOCATION_TO_TMS').
+// Otodus Quantum optimization engine (api/routes/quantumEngine.js).
+// plan* calls build the payload from Zoree's own orders server-side;
+// results are proposals — nothing is written. A 'blocked' result comes
+// back as HTTP 422 and is thrown with the server's message.
+export const QuantumApi = {
+  status() {
+    return api("/quantum/status");
+  },
+  /** body: { orderIds?, limit?, densityLbPerCuft?, allow?, dryRun? } */
+  planConsolidate(body = {}) {
+    return api("/quantum/plan/consolidate", { method: "POST", body: JSON.stringify(body) });
+  },
+  planRates(body = {}) {
+    return api("/quantum/plan/rates", { method: "POST", body: JSON.stringify(body) });
+  },
+  predictEta({ distance_miles, weather, traffic, carrier_id }) {
+    return api("/quantum/predict/eta", {
+      method: "POST",
+      body: JSON.stringify({ distance_miles, weather, traffic, carrier_id }),
+    });
+  },
+  reroute({ origin_city, destination_city, avoid_disruptions = true }) {
+    return api("/quantum/reroute", {
+      method: "POST",
+      body: JSON.stringify({ origin_city, destination_city, avoid_disruptions }),
+    });
+  },
+};
+
+// Migration 052: client domains the signed-in user can work in.
+export const DomainsApi = {
+  mine: () => api("/domains/mine"),
+};
+
 export const LocationsApi = {
   /**
    * @param {string} q          — partial name or city
@@ -694,5 +901,31 @@ export const LocationsApi = {
       method: "POST",
       body: JSON.stringify(input),
     });
+  },
+};
+
+// ── AP release & NetSuite-ready export (migration 054) ──────────────
+// NetSuite is read-only in the pilot: these endpoints release invoices and
+// produce CSV batches for AP to import. None of them writes to NetSuite.
+export const ApReleaseApi = {
+  queue() { return api("/ap/queue"); },
+  resolve(invoiceId, action, justification) {
+    return api(`/ap/invoices/${encodeURIComponent(invoiceId)}/resolve`, { method: "POST", body: JSON.stringify({ action, justification }) });
+  },
+  revalidate(invoiceId) { return api(`/ap/invoices/${encodeURIComponent(invoiceId)}/revalidate`, { method: "POST" }); },
+  release(invoiceId, body) { return api(`/ap/invoices/${encodeURIComponent(invoiceId)}/release`, { method: "POST", body: JSON.stringify(body || {}) }); },
+  releaseMany(invoiceIds, note) { return api("/ap/release", { method: "POST", body: JSON.stringify({ invoiceIds, note }) }); },
+  history(invoiceId) { return api(`/ap/invoices/${encodeURIComponent(invoiceId)}/history`); },
+  exports() { return api("/ap/exports"); },
+  createExport(invoiceIds = null) { return api("/ap/exports", { method: "POST", body: JSON.stringify(invoiceIds ? { invoiceIds } : {}) }); },
+  batchHistory(batchId) { return api(`/ap/exports/${encodeURIComponent(batchId)}/history`); },
+  confirmImport(batchId, reference = "") { return api(`/ap/exports/${encodeURIComponent(batchId)}/confirm-import`, { method: "POST", body: JSON.stringify({ reference }) }); },
+  // The batch CSV as text (same batch every time; the server logs the re-download).
+  async batchCsv(batchId) {
+    const res = await fetch(`${API_BASE}/ap/exports/${encodeURIComponent(batchId)}/csv`, {
+      headers: { ...(token() ? { Authorization: `Bearer ${token()}` } : {}), ...domainHeaders() },
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not download the batch (${res.status})`);
+    return res.text();
   },
 };

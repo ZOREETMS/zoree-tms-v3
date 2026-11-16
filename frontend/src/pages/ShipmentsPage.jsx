@@ -18,6 +18,7 @@ import LocationFieldsEditor from "../components/LocationFieldsEditor";
 import { locationFromShipmentOrigin, locationFromShipmentDest } from "../types/location";
 import { unassignOrderFromShipment, updateOrderStatus } from "../services/orderWriteService";
 import { confirmOrdersForShipment, unassignOrderAndCleanupShipment, unplanOrdersForShipmentRemoval } from "../services/shipmentOrderService";
+import { deleteShipmentsAndUnassign, summarizeShipmentDelete, partitionShipmentsForDelete } from "../services/bulkShipmentDeleteService";
 import { propagateTenderAcceptance } from "../services/tenderAcceptanceNotifier";
 import LocationFilter from "../components/ui/LocationFilter";
 import { matchesLocation } from "../utils/locationFilter";
@@ -28,6 +29,11 @@ import { fetchOmsSyncForShipmentIds } from "../services/omsSyncStatusService";
 import { deriveOmsSyncStatus } from "../utils/omsSyncStatus";
 import OmsSyncPill from "../components/shipments/OmsSyncPill";
 import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
+import ShipmentAccessorialApprovals from "../components/shipments/ShipmentAccessorialApprovals";
+import ShipmentInvoices from "../components/shipments/ShipmentInvoices";
+import { useShipmentInvoices } from "../hooks/useShipmentInvoices";
+import { invoicedStep, withBillingStatus } from "../services/shipmentInvoiceService";
+import { useInvoicesByShipment } from "../hooks/useInvoicesByShipment";
 import { buildLaneKey } from "../utils/laneUtils";
 import { TOAST_DURATIONS } from "../constants/toast";
 import ExportButton from "../components/ui/ExportButton";
@@ -53,6 +59,10 @@ const STATUS_BADGES = {
   Confirmed: "badge badge-green",
   "In Transit": "badge badge-blue",
   Delivered: "badge badge-green",
+  // Billing, after delivery (derived from the carrier invoice — see withBillingStatus)
+  Invoicing: "badge badge-amber",
+  Invoiced: "badge badge-blue",
+  "Invoice Disputed": "badge badge-red",
   Exception: "badge badge-red",
   Cancelled: "badge badge-red",
 };
@@ -130,6 +140,7 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
   // shipment_id link (race on first open after shipment creation).
   const commodityFromLinked = deriveCommodityFromOrders(linked);
   const displayStatus = effectiveShipmentStatus(ds);
+  const shipInvoices = useShipmentInvoices(ds.id);
   const [lines, setLines] = useState([]);
   const [linesLoading, setLinesLoading] = useState(true);
   const [showAddEvent, setShowAddEvent] = useState(false);
@@ -391,6 +402,8 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
     { icon: "🚛", label: "Picked Up", done: isPickedUp, time: isPickedUp ? phaseLine("pickedUp", ds.shipped_at, "Confirmed") : "Pending" },
     { icon: "📍", label: "In Transit", done: isInTransit, time: isInTransit ? phaseLine("inTransit", ds.shipped_at, "En route") : "Pending" },
     { icon: "✅", label: "Delivered", done: isDelivered, time: isDelivered ? phaseLine("delivered", ds.delivered_at, "Confirmed") : "Pending" },
+    // After delivery: the carrier's invoice and where AP stands on it.
+    { icon: "🧾", ...invoicedStep(shipInvoices.invoices) },
   ];
 
   return (
@@ -580,6 +593,12 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             <InfoBox icon="⏹️" label="Loading End" value={ds.loading_end || "—"} />
           </div>
 
+          {/* Migration 051: approved extras checked by Freight Audit */}
+          <ShipmentAccessorialApprovals shipmentId={ds.id} canEdit={canEdit} />
+
+          {/* Carrier invoices on this shipment, with the original PDF */}
+          <ShipmentInvoices invoices={shipInvoices.invoices} loading={shipInvoices.loading} error={shipInvoices.error} />
+
           {/* Consolidated Orders */}
           {linked.length > 0 && (
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
@@ -697,13 +716,14 @@ function ShipmentDetailModal({ ds, onClose, onTender, onWithdraw, onUnassign, on
             {timelineEvents.map((ev, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 4 }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: ev.done ? "var(--accent)" : "var(--bg3)", border: ev.done ? "2px solid var(--accent)" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
-                    {ev.done ? <span style={{ color: "#fff", fontSize: 12 }}>{ev.icon}</span> : <span style={{ opacity: 0.4, fontSize: 12 }}>{ev.icon}</span>}
+                  {/* tone: a step that is reached but stuck (e.g. invoice on hold) */}
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: ev.done ? "var(--accent)" : ev.tone === "bad" ? "#FEE2E2" : ev.tone === "warn" ? "#FEF3C7" : "var(--bg3)", border: ev.done ? "2px solid var(--accent)" : ev.tone === "bad" ? "2px solid #EF4444" : ev.tone === "warn" ? "2px solid #F59E0B" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+                    {ev.done || ev.tone ? <span style={{ color: "#fff", fontSize: 12 }}>{ev.icon}</span> : <span style={{ opacity: 0.4, fontSize: 12 }}>{ev.icon}</span>}
                   </div>
-                  {i < 4 && <div style={{ width: 2, height: 20, background: ev.done ? "var(--accent)" : "var(--border)" }} />}
+                  {i < timelineEvents.length - 1 && <div style={{ width: 2, height: 20, background: ev.done ? "var(--accent)" : "var(--border)" }} />}
                 </div>
                 <div style={{ paddingTop: 4 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: ev.done ? "var(--text)" : "var(--text3)" }}>{ev.label}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: ev.done ? "var(--text)" : ev.tone === "bad" ? "#B91C1C" : ev.tone === "warn" ? "#B45309" : "var(--text3)" }}>{ev.label}</div>
                   <div style={{ fontSize: 11, color: "var(--text3)" }}>{ev.time || (ev.done ? "Confirmed" : "Pending")}</div>
                 </div>
               </div>
@@ -1066,7 +1086,7 @@ export default function ShipmentsPage() {
       }
       toast(
         result.reused
-          ? `Reusing existing invoice ${inv.invoice_number || inv.id} for ${shipmentId}.`
+          ? `Opening invoice ${inv.invoice_number || inv.id} for ${shipmentId}.`
           : `Invoice ${inv.invoice_number || inv.id} created (On Hold) for ${shipmentId}.`,
         "success",
       );
@@ -1100,6 +1120,9 @@ export default function ShipmentsPage() {
   }
 
   const sel = useRowSelection();
+  const { byShipment: invoicesByShipment, reload: reloadInvoiceStatus } = useInvoicesByShipment();
+  // Billing status follows the shipments: refresh it whenever they reload.
+  useEffect(() => { reloadInvoiceStatus(); }, [shipments, reloadInvoiceStatus]);
 
   const rows = useMemo(() => {
     let list = shipments.map((s) => {
@@ -1109,7 +1132,7 @@ export default function ShipmentsPage() {
       return {
         ...s,
         _carrier: resolveCarrierName(s),
-        _displayStatus: effectiveShipmentStatus(s),
+        _displayStatus: withBillingStatus(effectiveShipmentStatus(s), invoicesByShipment.get(s.id)),
         _linkedOrders: linkedOrders,
         _orderCount: linkedOrders.length,
         _commodity: deriveCommodityFromOrders(linkedOrders) || s.commodity || "",
@@ -1138,7 +1161,7 @@ export default function ShipmentsPage() {
       const bv = String((sortCol === "status" ? b._displayStatus : b[sortCol]) || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [shipments, orders, q, statusFilter, modeFilter, shipFromFilter, shipToFilter, createdFrom, createdTo, idsFilter, sortCol, sortAsc]);
+  }, [shipments, orders, q, statusFilter, modeFilter, shipFromFilter, shipToFilter, createdFrom, createdTo, idsFilter, sortCol, sortAsc, invoicesByShipment]);
 
 
   const laneRoutes = useMemo(() => {
@@ -1534,14 +1557,54 @@ export default function ShipmentsPage() {
     }
   }
 
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState("");
+
+  async function runShipmentUnassignAndDelete() {
+    const { deletable, blocked } = partitionShipmentsForDelete(rows, sel.selected);
+    if (deletable.length === 0) {
+      toast(
+        blocked.length
+          ? `All ${blocked.length} selected shipment(s) are tendered or in transit — withdraw the tender first`
+          : "Nothing selected",
+        "warning"
+      );
+      return;
+    }
+    const orderCount = deletable.reduce((n, s) => n + (s._linkedOrders?.length || 0), 0);
+    const skipNote = blocked.length ? `\n\n${blocked.length} tendered/in-transit shipment(s) will be SKIPPED.` : "";
+    if (!window.confirm(
+      `Delete ${deletable.length} shipment(s)?\n\n${orderCount} linked order(s) will be unassigned and returned to Unplanned. The orders are NOT deleted.${skipNote}\n\nThis cannot be undone.`
+    )) return;
+    if (deletable.length > 50) {
+      const typed = window.prompt(`This deletes ${deletable.length} shipments. Type DELETE to confirm.`);
+      if (typed !== "DELETE") { toast("Cancelled", "warning"); return; }
+    }
+    setBulkDeleteBusy(true);
+    setBulkDeleteProgress(`0 / ${deletable.length}`);
+    try {
+      const result = await deleteShipmentsAndUnassign(rows, shipments, orders, sel.selected, {
+        onProgress: (done, total) => setBulkDeleteProgress(`${done} / ${total}`),
+      });
+      toast(summarizeShipmentDelete(result), result.failed.length ? "warning" : "success");
+      sel.clear();
+      await refreshData();
+    } catch (err) {
+      toast(`Bulk delete failed: ${err.message}`, "error");
+    } finally {
+      setBulkDeleteBusy(false);
+      setBulkDeleteProgress("");
+    }
+  }
+
   const statusCounts = useMemo(() => {
     const c = { All: shipments.length };
     shipments.forEach((s) => {
-      const st = effectiveShipmentStatus(s);
+      const st = withBillingStatus(effectiveShipmentStatus(s), invoicesByShipment.get(s.id));
       c[st] = (c[st] || 0) + 1;
     });
     return c;
-  }, [shipments]);
+  }, [shipments, invoicesByShipment]);
 
   const SortIcon = ({ col }) => (
     <span style={{ opacity: sortCol === col ? 1 : 0.3, marginLeft: 4 }}>
@@ -1598,7 +1661,7 @@ export default function ShipmentsPage() {
           className="search"
         />
         <select className="fsel" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          {["All", "Planned", "Tendered", "Tender Rejected", "Tender Accepted", "In Transit", "Delivered", "Cancelled"].map((s) => (
+          {["All", "Planned", "Tendered", "Tender Rejected", "Tender Accepted", "In Transit", "Delivered", "Invoicing", "Invoiced", "Invoice Disputed", "Cancelled"].map((s) => (
             <option key={s} value={s}>{s === "All" ? "ALL STATUSES" : s} {statusCounts[s] ? `(${statusCounts[s]})` : ""}</option>
           ))}
         </select>
@@ -1627,7 +1690,31 @@ export default function ShipmentsPage() {
 
       {/* Table */}
       <div className="card" style={{ padding: 0 }}><div className="table-wrap">
-      <SelectionBar count={sel.size} entityLabel="Shipment" onClear={sel.clear} />
+      <SelectionBar
+        count={sel.size}
+        entityLabel="Shipment"
+        onClear={sel.clear}
+        extras={
+          <button
+            onClick={runShipmentUnassignAndDelete}
+            disabled={bulkDeleteBusy}
+            title="Delete the selected shipments and return their orders to Unplanned"
+            style={{
+              padding: "5px 14px",
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,.45)",
+              background: bulkDeleteBusy ? "rgba(255,255,255,.15)" : "#dc2626",
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: bulkDeleteBusy ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {bulkDeleteBusy ? `Deleting ${bulkDeleteProgress}...` : "🗑️ Unassign + Delete"}
+          </button>
+        }
+      />
       <table className="grid" style={{ border: "none", boxShadow: "none" }}>
         <thead>
           <tr>
@@ -1882,7 +1969,7 @@ export default function ShipmentsPage() {
             {/* Shipment summary cards below map */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, marginTop: 16 }}>
               {rows.slice(0, 12).map((s) => {
-                const col = s._displayStatus === "In Transit" ? "var(--accent)" : s._displayStatus === "Exception" ? "var(--red)" : s._displayStatus === "Delivered" ? "var(--green)" : "var(--yellow)";
+                const col = s._displayStatus === "In Transit" ? "var(--accent)" : s._displayStatus === "Exception" ? "var(--red)" : ["Delivered", "Invoicing", "Invoiced", "Invoice Disputed"].includes(s._displayStatus) ? "var(--green)" : "var(--yellow)";
                 return (
                   <div key={s.id} style={{ padding: "10px 14px", border: "1.5px solid var(--border)", borderRadius: 10, cursor: "pointer", borderLeft: `3px solid ${col}` }}
                     onClick={() => setDetailShipment(s)}>

@@ -1,13 +1,16 @@
-import { CUSTOMERS_WITH_ACCESS } from "../types/customerPortal";
-
 /**
  * Customer Portal service layer.
  * All API calls for customer portal go through here.
  * Currently uses local computation; swap for real endpoints when ready.
  */
 
+/** Customers that appear on orders (no hardcoded customer list). */
+export function customersOnOrders(orders) {
+  return [...new Set((orders || []).map((o) => String(o.customer || "").trim()).filter(Boolean))].sort();
+}
+
 /** Compute portal statistics from shipments */
-export function computePortalStats(shipments) {
+export function computePortalStats(shipments, orders) {
   const all = shipments || [];
   const shipped = all.filter((s) => s.status !== "Planned").length;
   const inTransit = all.filter((s) => s.status === "In Transit").length;
@@ -15,7 +18,7 @@ export function computePortalStats(shipments) {
   const exceptions = all.filter((s) => s.status === "Exception").length;
 
   return {
-    activeCustomers: CUSTOMERS_WITH_ACCESS.length,
+    activeCustomers: customersOnOrders(orders).length,
     shipmentsShared: shipped,
     inTransit,
     delivered,
@@ -25,7 +28,7 @@ export function computePortalStats(shipments) {
 
 /** Build customer access list with shipment counts */
 export function buildCustomerAccessList(shipments, orders) {
-  return CUSTOMERS_WITH_ACCESS.map((name) => {
+  return customersOnOrders(orders).map((name) => {
     const count = (shipments || []).filter((s) =>
       (orders || []).some(
         (o) => o.customer === name && o.shipmentId === s.id

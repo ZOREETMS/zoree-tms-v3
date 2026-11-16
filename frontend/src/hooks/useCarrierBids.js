@@ -10,7 +10,7 @@ export function useCarrierBids(initialData = []) {
     const activeRfqs = bids.filter((b) => b.status === BID_STATUSES.OPEN).length;
     const totalBids = bids.reduce((sum, b) => sum + (b.bids || 0), 0);
     const awarded = bids.filter((b) => b.status === BID_STATUSES.AWARDED).length;
-    return { activeRfqs, totalBids, awarded, avgSavings: "8.4%" };
+    return { activeRfqs, totalBids, awarded, avgSavings: "—" };
   }, [bids]);
 
   function awardBid(rfqId, carrier) {

@@ -13,8 +13,9 @@
 //   planner — planning + execution + rate management + shipments.
 //             Finance menus (invoices, audit, bids) are hidden.
 //   finance — freight invoices, rate management, lane preferences,
-//             carrier bids, freight audit, analytics/reports. Planning
-//             and execution menus are hidden.
+//             carrier bids, freight audit, analytics/reports, plus
+//             Shipments and Orders to look up what an invoice bills for.
+//             Other planning and execution menus are hidden.
 //
 // Each role also gets a minimal common set (Home, Dashboard, Settings).
 // ═══════════════════════════════════════════════════════════════════
@@ -26,7 +27,7 @@ const COMMON = ["Home", "Dashboard", "Settings"];
 
 const PLANNING = [
   "Item Master", "Location Master", "Equipment Master",
-  "Shipments", "Orders", "Route Optimizer",
+  "Shipments", "Orders", "Email Orders", "Route Optimizer",
   "Bulk Plan", "Multi-Stop Routes", "Planning Params",
 ];
 
@@ -50,14 +51,18 @@ const INSIGHTS = [
 
 const SYSTEM = ["User Roles", "User Management"];
 
+// AI agent console. Every role that plans, executes or audits uses it;
+// approvals are still gated per action on the server (role matrix).
+const AI = ["AI Agents"];
+
 // Whitelist of allowed nav labels per role.
 export const ROLE_NAV = {
   admin: [
-    ...COMMON, ...PLANNING, ...EXECUTION, ...FINANCE,
+    ...COMMON, ...AI, ...PLANNING, ...EXECUTION, ...FINANCE,
     ...DOCS, ...INTEGRATION, ...INSIGHTS, ...SYSTEM,
   ],
   planner: [
-    ...COMMON,
+    ...COMMON, ...AI,
     ...PLANNING, ...EXECUTION, ...DOCS,
     "Rate Management",          // crosses into Finance (per requirement)
     "Fuel Surcharge",           // rides with Rate Management (migration 045)
@@ -66,8 +71,12 @@ export const ROLE_NAV = {
     "Messaging Hub",
   ],
   finance: [
-    ...COMMON,
+    ...COMMON, ...AI,
     ...FINANCE,
+    // Accounts payable looks up the shipment and order behind an invoice.
+    // View only: the server still limits order/shipment writes to
+    // admin and planner.
+    "Shipments", "Orders",
     "Documents & BOL",
     "Analytics", "Reports", "Alerts",
   ],
@@ -86,6 +95,8 @@ const LABEL_TO_PATH = {
   "Equipment Master": "/equipment-master",
   "Shipments": "/shipments",
   "Orders": "/orders",
+  "Email Orders": "/email-orders",
+  "AI Agents": "/agents",
   "Route Optimizer": "/route-optimizer",
   "Bulk Plan": "/bulk-plan",
   "Multi-Stop Routes": "/multi-stop-routes",

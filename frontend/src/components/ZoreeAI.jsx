@@ -6,6 +6,7 @@ import {
   executeChatAction,
   isDestructiveChatAction,
 } from "../services/zoreeAIActionsService";
+import { chatGate } from "../services/jevTriageService";
 
 /* ─────────────────────────────────────────────
    ZoreeAI — Floating chat assistant (UI only)
@@ -249,6 +250,22 @@ export default function ZoreeAI({ data }) {
       // Check for action block
       const action = parseAction(reply);
       let shouldSpeakReply = true;
+      // Jev intent gate: Claude proposed a data-changing action. Before it
+      // runs, Jev checks the user's own words were a request to change data,
+      // not a question. Jev can only veto, never initiate. Fails open.
+      if (action && action.action !== "GET_RATES") {
+        const gate = await chatGate(userText, action.action).catch(() => null);
+        if (gate?.veto) {
+          const p = typeof gate.pQuestion === "number" ? ` (question p=${gate.pQuestion.toFixed(2)})` : "";
+          const blocked = `🛡️ Jev blocked ${action.action}: your message reads as a question${p}, ${gate.latencyMs} ms. Nothing was changed. Say it as an instruction (e.g. "plan ORD-123") if you want me to do it.`;
+          chatHistoryRef.current.push({ role: "user", content: `[SYSTEM: ${action.action} was blocked by the intent gate because the user asked a question. Nothing changed. Answer the question instead.]` });
+          setMessages((prev) => [...prev, { role: "ai", text: blocked }]);
+          return;
+        }
+        if (gate && !gate.failedOpen) {
+          setMessages((prev) => [...prev, { role: "ai", text: `🛡️ Jev check: "${action.action}" is a real request (${gate.intent}, ${gate.latencyMs} ms) — proceeding.` }]);
+        }
+      }
       if (action) {
         const actionId = `act-${Date.now()}`;
         // Destructive actions require user confirmation; safe actions auto-execute.

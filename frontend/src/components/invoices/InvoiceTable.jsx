@@ -1,4 +1,7 @@
 import { STATUS_BADGES } from "../../types/invoice";
+import ShipmentLink from "../shipments/ShipmentLink";
+import { readableReason } from "../../services/invoiceService";
+import { openInvoiceDocument } from "../../services/invoiceIntakeService";
 import {
   canManualApprove,
   canManualReject,
@@ -59,9 +62,9 @@ function SortHeader({ label, col, sortCol, sortAsc, onSort }) {
 export default function InvoiceTable({
   invoices, sortCol, sortAsc, onSort,
   // REQ-190 / REQ-191:
-  //   onApprove    — manual force-approve (handler receives invoice.num)
-  //   onReject     — manual force-reject  (handler receives invoice.num)
-  //   onAutoDecide — run carrier-tolerance comparison (handler receives invoice.num)
+  //   onApprove    — manual force-approve (handler receives invoice.id, or num for rows without an id)
+  //   onReject     — manual force-reject  (handler receives invoice.id, or num for rows without an id)
+  //   onAutoDecide — run carrier-tolerance comparison (handler receives invoice.id, or num for rows without an id)
   // `onDispute` is accepted as a back-compat alias for onReject so older
   // callers (and the QA gate in FreightInvoicesPage) keep working through
   // one release while we migrate.
@@ -74,6 +77,11 @@ export default function InvoiceTable({
   // Action-column buttons live inside a row that is itself clickable
   // (to open the invoice detail modal). Stop propagation so an action
   // click doesn't also trigger the row's open handler.
+  // Read-only, so it is shown for every role that can see the list.
+  function viewDocument(id) {
+    openInvoiceDocument(id).catch((e) => window.alert(e?.message || "Could not open the document"));
+  }
+
   function actionClick(handler, ...args) {
     return (e) => {
       e.stopPropagation();
@@ -116,20 +124,21 @@ export default function InvoiceTable({
                   onSort={onSort}
                 />
               ))}
+              <th style={{ minWidth: 260 }}>Reason</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {invoices.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ textAlign: "center", padding: 40, color: "var(--text3)" }}>
+                <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--text3)" }}>
                   No invoices found
                 </td>
               </tr>
             )}
             {invoices.map((inv) => (
               <tr
-                key={inv.num}
+                key={inv.id || inv.num}
                 onClick={onOpenInvoice ? () => onOpenInvoice(inv) : undefined}
                 onKeyDown={(e) => rowKeyDown(e, inv)}
                 tabIndex={onOpenInvoice ? 0 : undefined}
@@ -146,12 +155,12 @@ export default function InvoiceTable({
                 <td className="mono">
                   {Array.isArray(inv.shipIds) && inv.shipIds.length > 1 ? (
                     <span title={inv.shipIds.join(", ")} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      <span>{inv.shipId || inv.shipIds[0]}</span>
+                      <ShipmentLink id={inv.shipId || inv.shipIds[0]} />
                       <span style={{ padding: "1px 6px", fontSize: 9, fontWeight: 700, borderRadius: 999, background: "#e0e7ff", color: "#3730a3", border: "1px solid #a5b4fc" }}>
                         +{inv.shipIds.length - 1} (consolidated)
                       </span>
                     </span>
-                  ) : (inv.shipId || "—")}
+                  ) : <ShipmentLink id={inv.shipId} />}
                 </td>
                 <td className="mono">{inv.date}</td>
                 <td className="mono">{inv.due}</td>
@@ -166,11 +175,17 @@ export default function InvoiceTable({
                       AP ✓
                     </span>
                   )}
-                  {inv.decisionReason && (
-                    <div title={inv.decisionReason} style={{ fontSize: 10, color: "var(--text3)", marginTop: 2, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {inv.decisionReason}
+                </td>
+                {/* Why the invoice is in this status — its own column. */}
+                <td title={inv.decisionReason || ""} style={{ maxWidth: 360 }}>
+                  {inv.decisionReason ? (
+                    <div style={{
+                      fontSize: 11.5, lineHeight: 1.4, color: inv.status === "Approved" || inv.status === "Paid" ? "var(--text2)" : "#9A3412",
+                      display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+                    }}>
+                      {readableReason(inv.decisionReason)}
                     </div>
-                  )}
+                  ) : <span style={{ color: "var(--text3)" }}>—</span>}
                 </td>
                 <td style={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                   {/* REQ-190 / REQ-191: row-level actions mirror the
@@ -180,10 +195,21 @@ export default function InvoiceTable({
                       row's detail modal. Visibility is driven by the
                       same predicates the modal uses so the two surfaces
                       cannot drift. */}
+                  {inv.hasDocument && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={actionClick(viewDocument, inv.id)}
+                      style={{ marginRight: 4 }}
+                      title="Open the original invoice PDF the agent read"
+                    >
+                      📄 View
+                    </button>
+                  )}
                   {onApprove && canManualApprove(inv.status) && (
                     <button
                       className="btn btn-success btn-sm"
-                      onClick={actionClick(onApprove, inv.num)}
+                      onClick={actionClick(onApprove, inv.id || inv.num)}
                       style={{ marginRight: 4 }}
                       title="Force this invoice to Approved (manual override)."
                     >
@@ -193,17 +219,17 @@ export default function InvoiceTable({
                   {rejectHandler && canManualReject(inv.status) && (
                     <button
                       className="btn btn-danger btn-sm"
-                      onClick={actionClick(rejectHandler, inv.num)}
+                      onClick={actionClick(rejectHandler, inv.id || inv.num)}
                       style={{ marginRight: 4 }}
                       title="Force this invoice to Rejected (manual override)."
                     >
                       Reject
                     </button>
                   )}
-                  {onAutoDecide && canAutoDecide(inv.status) && (
+                  {onAutoDecide && canAutoDecide(inv.status, inv) && (
                     <button
                       className="btn btn-primary btn-sm"
-                      onClick={actionClick(onAutoDecide, inv.num)}
+                      onClick={actionClick(onAutoDecide, inv.id || inv.num)}
                       style={{ marginRight: 4 }}
                       title="Run the carrier-tolerance check. Within tolerance → Approved & sent to AP. Outside → Rejected."
                     >
@@ -213,7 +239,7 @@ export default function InvoiceTable({
                   {inv.status === "Approved" && !inv.sentToApAt && onSendToAp && (
                     <button
                       className="btn btn-primary btn-sm"
-                      onClick={actionClick(onSendToAp, inv.num)}
+                      onClick={actionClick(onSendToAp, inv.id || inv.num)}
                       style={{ background: "#059669", borderColor: "#059669" }}
                     >
                       Send to AP

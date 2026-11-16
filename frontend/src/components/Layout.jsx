@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import ZoreeAI from "./ZoreeAI";
 import { visibleNavLabels, canonicalRole } from "../config/roleMatrix";
 import RoleSwitcher from "./RoleSwitcher";
+import DomainSwitcher from "./DomainSwitcher";
 import { useFeatureAccessMap } from "../hooks/useFeatureAccess";
 
 // QA #139: each nav item carries `featureKey` so we can drop the entry
@@ -16,6 +17,7 @@ const navStructure = [
   { section: "Overview", items: [
     { to: "/", label: "Home", icon: "🏠", featureKey: "home" },
     { to: "/dashboard", label: "Dashboard", icon: "📊", featureKey: "dashboard" },
+    { to: "/agents", label: "AI Agents", icon: "🤖", featureKey: "home" },
   ]},
   { section: "Planning", items: [
     { to: "/item-master", label: "Item Master", icon: "📦", featureKey: "items" },
@@ -23,13 +25,14 @@ const navStructure = [
     { to: "/equipment-master", label: "Equipment Master", icon: "🚛", featureKey: "equipments" },
     { to: "/shipments", label: "Shipments", icon: "📦", badgeKey: "shipments", featureKey: "shipments" },
     { to: "/orders", label: "Orders", icon: "🧾", badgeKey: "orders", badgeColor: "yellow", featureKey: "orders" },
+    { to: "/email-orders", label: "Email Orders", icon: "📥", featureKey: "orders" },
     { to: "/route-optimizer", label: "Route Optimizer", icon: "🗺️", featureKey: "route_optimizer" },
     { to: "/bulk-plan", label: "Bulk Plan", icon: "⚡", featureKey: "bulk_plan" },
     { to: "/multi-stop-routes", label: "Multi-Stop Routes", icon: "🛣️", featureKey: "multi_stop_routes" },
     { to: "/planning-parameters", label: "Planning Params", icon: "🎛️", featureKey: "planning_params" },
   ]},
   { section: "Execution", items: [
-    { to: "/live-tracking", label: "Live Tracking", icon: "📡", badgeVal: "3", badgeColor: "red", featureKey: "live_tracking" },
+    { to: "/live-tracking", label: "Live Tracking", icon: "📡", featureKey: "live_tracking" },
     { to: "/carriers", label: "Carriers", icon: "🚛", featureKey: "carriers" },
     { to: "/carrier-portal", label: "Carrier Portal", icon: "🏢", badgeKey: "tenderedShipments", featureKey: "carrier_portal" },
     { to: "/dock-scheduling", label: "Dock Scheduling", icon: "🚪", featureKey: "dock_scheduling" },
@@ -37,27 +40,27 @@ const navStructure = [
     { to: "/compliance", label: "Compliance", icon: "⚖️", featureKey: "compliance" },
   ]},
   { section: "Finance", items: [
-    { to: "/freight-invoices", label: "Freight Invoices", icon: "💰", badgeVal: "5", badgeColor: "yellow", featureKey: "invoices" },
+    { to: "/freight-invoices", label: "Freight Invoices", icon: "💰", featureKey: "invoices" },
     { to: "/rate-management", label: "Rate Management", icon: "📋", featureKey: "rate_management" },
     // Migration 045: EIA-indexed FSC schedules. Shares rate_management's
     // feature permission — it is rate configuration, same audience.
     { to: "/fuel-surcharge", label: "Fuel Surcharge", icon: "⛽", featureKey: "rate_management" },
     { to: "/lane-preferences", label: "Lane Preferences", icon: "⭐", featureKey: "lane_preferences" },
     { to: "/carrier-bids", label: "Carrier Bids", icon: "🎯", featureKey: "carrier_bids" },
-    { to: "/freight-audit", label: "Freight Audit", icon: "🔍", badgeVal: "3", badgeColor: "red", featureKey: "freight_audit" },
+    { to: "/freight-audit", label: "Freight Audit", icon: "🔍", featureKey: "freight_audit" },
   ]},
   { section: "Documents", items: [
     { to: "/documents", label: "Documents & BOL", icon: "📄", featureKey: "documents" },
     { to: "/customer-portal", label: "Customer Portal", icon: "👁️", featureKey: "customer_portal" },
   ]},
   { section: "Integration", items: [
-    { to: "/messaging", label: "Messaging Hub", icon: "📨", badgeVal: "3", badgeColor: "red", featureKey: "messaging" },
+    { to: "/messaging", label: "Messaging Hub", icon: "📨", featureKey: "messaging" },
   ]},
   { section: "Insights", items: [
     { to: "/network-modeling", label: "Network Modeling", icon: "🌐", featureKey: "network_modeling" },
     { to: "/analytics", label: "Analytics", icon: "📈", featureKey: "analytics" },
     { to: "/reports", label: "Reports", icon: "📊", featureKey: "reports" },
-    { to: "/alerts", label: "Alerts", icon: "🔔", badgeVal: "2", badgeColor: "red", featureKey: "alerts" },
+    { to: "/alerts", label: "Alerts", icon: "🔔", featureKey: "alerts" },
     { to: "/db-explorer", label: "DB Explorer", icon: "🗄️", featureKey: "db_explorer" },
   ]},
   { section: "System", items: [
@@ -151,6 +154,8 @@ export default function Layout({ data }) {
         {/* User Footer */}
         <div className="sidebar-footer">
           {/* REQ-08: role switcher (shown only when user has 2+ roles) */}
+          {/* Migration 052: client domain (data partition) */}
+          <DomainSwitcher />
           <RoleSwitcher />
           <div className="user-chip">
             <div className="user-avatar">{initials}</div>

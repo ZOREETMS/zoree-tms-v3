@@ -152,6 +152,9 @@ async function replaceForInvoice({ invoiceId, lines, tenantId = null }) {
       approved_cost: num(l.approved_cost, num(l.invoice_cost, 0)),
       line_order:    Number.isInteger(l.line_order) ? l.line_order : (i + 1) * 10,
       tenant_id:     tenantId || l.tenant_id || null,
+      // Migration 051: only sent when the caller knows the extra's type
+      // (PDF intake), so older callers keep working before 051 is applied.
+      ...(l.accessorial_type ? { accessorial_type: l.accessorial_type } : {}),
     };
   });
   if (!safeLines.length) return [];
@@ -176,8 +179,24 @@ async function listForInvoice(invoiceId) {
 // a charge — add a new line instead).
 const EDITABLE = new Set(['description', 'invoice_cost', 'approved_cost']);
 
+// An approved invoice is what AP pays: its lines change only after it is
+// put back On Hold, so the change goes through review again.
+async function assertLinesEditable(invoiceId) {
+  const rows = await db.dbSelect('invoices', { select: 'id,invoice_number,status,sent_to_ap_at', filters: [['id', 'eq', invoiceId]], limit: 1 });
+  const inv = rows && rows[0];
+  if (inv && inv.sent_to_ap_at) {
+    const e = new Error(`${inv.invoice_number || invoiceId} was sent to AP, so its cost lines can't change. Reject it and ask the carrier for a corrected invoice.`);
+    e.status = 409; throw e;
+  }
+  if (inv && (inv.status === 'Approved' || inv.status === 'Paid')) {
+    const e = new Error(`${inv.invoice_number || invoiceId} is ${inv.status}, so its cost lines can't change. Put it On Hold first.`);
+    e.status = 409; throw e;
+  }
+}
+
 async function updateLine({ invoiceId, lineId, patch, user }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
+  await assertLinesEditable(invoiceId);
   if (!lineId)    { const e = new Error('lineId is required');    e.status = 400; throw e; }
   const cleaned = {};
   for (const [k, v] of Object.entries(patch || {})) {
@@ -248,6 +267,7 @@ async function updateLine({ invoiceId, lineId, patch, user }) {
 // invoice mirroring updateLine's diff format.
 async function addLine({ invoiceId, line, user, tenantId = null }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
+  await assertLinesEditable(invoiceId);
   if (!line || typeof line !== 'object') {
     const e = new Error('line is required'); e.status = 400; throw e;
   }

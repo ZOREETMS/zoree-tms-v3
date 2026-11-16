@@ -1,20 +1,6 @@
 import { OPPORTUNITY_LEVELS, UTILIZATION_THRESHOLDS, VARIANCE_THRESHOLDS } from "../types/network";
 
 /**
- * Seed lane data for network modeling.
- */
-export const SEED_LANES = [
-  { lane: "CHI → DAL", loads: 12, avgCostMi: 2.31, benchmark: 2.20, util: 78, opportunity: "Low — consider consolidation" },
-  { lane: "CMH → ATL", loads: 8, avgCostMi: 2.18, benchmark: 2.25, util: 85, opportunity: "Optimized" },
-  { lane: "LAX → SEA", loads: 5, avgCostMi: 2.58, benchmark: 2.40, util: 62, opportunity: "High — rebid lane" },
-  { lane: "NYC → CHI", loads: 15, avgCostMi: 2.15, benchmark: 2.20, util: 91, opportunity: "Optimized" },
-  { lane: "HOU → MIA", loads: 4, avgCostMi: 2.72, benchmark: 2.45, util: 55, opportunity: "High — rebid lane" },
-  { lane: "ATL → CMH", loads: 9, avgCostMi: 2.22, benchmark: 2.25, util: 80, opportunity: "Optimized" },
-  { lane: "DAL → CHI", loads: 7, avgCostMi: 2.44, benchmark: 2.35, util: 70, opportunity: "Medium — review rates" },
-  { lane: "SEA → LAX", loads: 6, avgCostMi: 2.49, benchmark: 2.40, util: 68, opportunity: "Medium — review rates" },
-];
-
-/**
  * Compute network KPIs from lane data.
  */
 export function computeNetworkKpis(lanes) {

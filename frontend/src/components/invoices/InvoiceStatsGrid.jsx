@@ -15,7 +15,7 @@ export default function InvoiceStatsGrid({ stats }) {
       </div>
 
       <div className="stat-card yellow">
-        <div className="stat-label">Pending Review</div>
+        <div className="stat-label">Pending Review / On Hold</div>
         <div className="stat-value" style={{ fontSize: 22 }}>
           {formatCurrency(stats.pendingTotal)}
         </div>
@@ -31,12 +31,12 @@ export default function InvoiceStatsGrid({ stats }) {
       </div>
 
       <div className="stat-card blue">
-        <div className="stat-label">Avg Audit Savings</div>
+        <div className="stat-label">Overbilling Flagged</div>
         <div className="stat-value" style={{ fontSize: 22 }}>
-          {stats.auditSavingsPct}%
+          {formatCurrency(stats.auditSavingsAmt)}
         </div>
         <div className="stat-delta">
-          {formatCurrency(stats.auditSavingsAmt)} this month
+          {stats.auditSavingsPct}% above agreed cost
         </div>
       </div>
     </div>
