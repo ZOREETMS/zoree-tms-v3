@@ -8,6 +8,7 @@
 // shows today's contract rate and approvals.
 // ═══════════════════════════════════════════════════════════════════
 'use strict';
+const { buildCarrierDraft } = require('./carrierDraft');
 
 const db = require('../supabase');
 const repo = require('./intakeRepository');
@@ -146,6 +147,13 @@ async function get(id) {
     ...history.map((c) => ({ at: c.created_at, who: c.username || 'system', text: activityText(c) })),
   ];
 
+  const sourceEmail = await sourceEmailOf(row).catch(() => null);
+  // Draft-only carrier email for a held invoice; building it changes nothing.
+  const carrierDraft = own && !['Approved', 'Paid'].includes(own.status) ? buildCarrierDraft({
+    invoiceNumber: own.invoice_number, carrier: own.carrier, shipmentId: row.shipment_ref || own.shipment_id || null,
+    invoiceTotal: own.invoiced_amount, lines, audit, to: sourceEmail ? sourceEmail.from : null,
+  }) : null;
+
   return {
     entry: intakeLog.entry(row, own, shipments[0] || null),
     invoice: invoice ? { id: invoice.id, status: invoice.status, agreedCost: invoice.agreed_cost, invoicedAmount: invoice.invoiced_amount, variance: invoice.variance, decisionReason: invoice.decision_reason, decidedBy: invoice.decided_by } : null,
@@ -155,13 +163,14 @@ async function get(id) {
       return m.sender_verification ? { sender: m.sender || null, status: m.sender_verification, detail: m.sender_detail || null, auth: m.sender_auth || {} } : null;
     })(),
     hasFile: await intakeFiles.exists(row.id).catch(() => false),
-    sourceEmail: await sourceEmailOf(row).catch(() => null),
+    sourceEmail,
     shipment: shipments[0] ? { id: shipments[0].id, status: shipments[0].status, carrier: shipments[0].carrier, origin: shipments[0].origin, destination: shipments[0].dest || shipments[0].destination } : null,
     fields: fieldsOf(row),
     warnings: [...(row.read_warnings || []), ...(row.problems || [])],
     lines,
     audit,
     recheck: recheckOf({ invoice: own, audit }),
+    carrierDraft,
     activity,
   };
 }

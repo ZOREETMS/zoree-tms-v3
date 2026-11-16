@@ -49,8 +49,7 @@ module.exports = function createApReleaseRouter({ verifyToken, hasAnyRole, servi
   router.post('/invoices/:id/revalidate', handle(async (req, res, ctx) => res.json(await svc().revalidate({ invoiceId: req.params.id, ...ctx }))));
 
   router.post('/invoices/:id/release', handle(async (req, res, ctx) => {
-    const override = req.body?.override && typeof req.body.override === 'object' ? { justification: String(req.body.override.justification || '') } : null;
-    res.status(201).json(await svc().release({ invoiceId: req.params.id, note: req.body?.note, override, ...ctx }));
+    res.status(201).json(await svc().release({ invoiceId: req.params.id, note: req.body?.note, ...ctx }));
   }));
 
   router.post('/release', handle(async (req, res, ctx) => res.json(await svc().releaseMany({ invoiceIds: ids(req.body?.invoiceIds), note: req.body?.note, ...ctx }))));

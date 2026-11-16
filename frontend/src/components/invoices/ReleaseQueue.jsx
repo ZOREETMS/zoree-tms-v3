@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useApReleaseQueue } from "../../hooks/useApReleaseQueue";
 import {
-  releaseInvoice, releaseInvoices, revalidateInvoice, exportReleased, downloadBatch, releaseSummary,
+  releaseInvoice, releaseInvoices, exportReleased, downloadBatch, releaseSummary,
 } from "../../services/apReleaseService";
 import { AwaitingReleaseTable, ReleasedTable, BlockedTable } from "./releaseTables";
 import ApAuditHistory from "./ApAuditHistory";
@@ -65,14 +65,7 @@ export default function ReleaseQueue({ refreshKey, canDecide, onChanged, onOpenP
       <AwaitingReleaseTable rows={q.awaitingRelease} total={q.totals.awaitingRelease} canDecide={canDecide} busy={busy}
         onHistory={(r) => setHistory({ invoiceId: r.invoiceId, title: `${r.invoiceNumber} · ${r.carrier}` })}
         onRelease={(id, note) => run(async () => { const r = await releaseInvoice(id, { note }); return `${label(id)} released for export (${r.path.replace(/_/g, " ")}).`; })}
-        onReleaseMany={(ids, note) => run(async () => releaseSummary(await releaseInvoices(ids, note)))}
-        onRevalidate={(id) => run(async () => {
-          const r = await revalidateInvoice(id);
-          return r.audit && ["approve", "review"].includes(r.audit.verdict)
-            ? `${label(id)}: the 3-way match now passes — release it on the normal path.`
-            : `${label(id)}: revalidation still fails — ${r.audit?.issues?.[0]?.detail || "no change"}`;
-        })}
-        onOverride={(id, text) => run(async () => { await releaseInvoice(id, { overrideJustification: text }); return `${label(id)} released by authorized override. The justification is in the audit history.`; })} />
+        onReleaseMany={(ids, note) => run(async () => releaseSummary(await releaseInvoices(ids, note)))} />
 
       <ReleasedTable rows={q.released} total={q.totals.released} canDecide={canDecide} busy={busy}
         onHistory={(r) => setHistory({ invoiceId: r.invoiceId, title: `${r.invoiceNumber} · ${r.carrier}` })}

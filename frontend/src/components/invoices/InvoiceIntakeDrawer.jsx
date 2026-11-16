@@ -183,12 +183,45 @@ function ActivityTab({ d }) {
 
 const TABS = [["fields", "Extracted fields"], ["lines", "Line items"], ["activity", "Activity"]];
 
+/** Draft-only dispute email for the carrier. Zoree never sends it; building it changes nothing. */
+function CarrierDraft({ draft }) {
+  const [show, setShow] = useState(false);
+  const [body, setBody] = useState(draft.body);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { setBody(draft.body); }, [draft.body]);
+  const mailto = `mailto:${encodeURIComponent(draft.to || "")}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(body)}`;
+  async function copy() {
+    try { await navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${body}`); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked: AP can select the text */ }
+  }
+  if (!show) {
+    return <button type="button" className="btn btn-secondary btn-sm" style={{ width: "100%", marginBottom: 10 }} onClick={() => setShow(true)}>✉ Draft email to carrier</button>;
+  }
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 10, background: "#F8FAFC" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <b style={{ fontSize: 12.5, flex: 1 }}>Draft email to carrier</b>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", background: "#FEF3C7", borderRadius: 999, padding: "2px 8px" }}>DRAFT ONLY · NOT SENT</span>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShow(false)}>Close</button>
+      </div>
+      <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}><b>To:</b> {draft.to || "carrier billing contact"} · <b>Subject:</b> {draft.subject}</div>
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={11}
+        style={{ width: "100%", fontSize: 12, fontFamily: "inherit", padding: 8, border: "1px solid #CBD5E1", borderRadius: 6, resize: "vertical" }} />
+      <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={copy}>{copied ? "Copied ✓" : "Copy"}</button>
+        <a className="btn btn-primary btn-sm" href={mailto}>Open in email</a>
+        <span style={{ fontSize: 11, color: "var(--text3)", flex: 1 }}>AP reviews and sends it from Outlook. The invoice stays on hold; this does not approve, dispute or release it.</span>
+      </div>
+    </div>
+  );
+}
+
 export default function InvoiceIntakeDrawer({ intakeId, canDecide, onClose, onChanged }) {
   const { detail: d, error, busy, decide, fileUrl } = useInvoiceIntakeDetail(intakeId, onChanged);
   const [tab, setTab] = useState("fields");
   const [comment, setComment] = useState("");
   const meta = d ? INTAKE_OUTCOME[d.entry.outcome] || { label: d.entry.outcome, tone: "bad" } : null;
   const open = d && d.entry.outcome === "needs_review" && d.invoice && !d.isDuplicate;
+  const passesNow = Boolean(d && d.audit && ["approve", "review"].includes(d.audit.verdict));
 
   // Esc closes the drawer, like any panel.
   useEffect(() => {
@@ -265,15 +298,25 @@ export default function InvoiceIntakeDrawer({ intakeId, canDecide, onClose, onCh
         {d && tab === "activity" && <ActivityTab d={d} />}
       </div>
 
+      {d && d.carrierDraft && canDecide && (
+        <div style={{ padding: "12px 14px 0", borderTop: "1px solid var(--border)" }}>
+          <CarrierDraft draft={d.carrierDraft} />
+        </div>
+      )}
       {open && canDecide && (
-        <div style={{ padding: 14, borderTop: "1px solid var(--border)" }}>
+        <div style={{ padding: 14, borderTop: d && d.carrierDraft ? "none" : "1px solid var(--border)" }}>
           <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder={`Justification for the audit history (required, ${MIN_JUSTIFICATION}+ characters)`}
             style={{ width: "100%", padding: "8px 10px", border: "1.5px solid var(--border)", borderRadius: 7, fontSize: 12.5, marginBottom: 10 }} />
           <div style={{ display: "flex", gap: 10 }}>
             <button className="btn btn-secondary" style={{ flex: 1 }} disabled={busy || comment.trim().length < MIN_JUSTIFICATION} onClick={() => decide("dispute", comment)}>Dispute with carrier</button>
-            <button className="btn btn-primary" style={{ flex: 1, background: "#16A34A" }} disabled={busy || comment.trim().length < MIN_JUSTIFICATION} onClick={() => decide("approve", comment)}>Approve invoice</button>
+            <button className="btn btn-primary" style={{ flex: 1, background: "#16A34A" }} disabled={busy || !passesNow || comment.trim().length < MIN_JUSTIFICATION} onClick={() => decide("approve", comment)}
+              title={passesNow ? "Approve with the justification above" : "Still fails the 3-way match: dispute it, or fix the data, then approve once it passes"}>Approve invoice</button>
           </div>
-          <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>A person decides. Nothing is paid by the agent. An approved exception still has to be revalidated and released before it can be exported.</div>
+          <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>
+            {passesNow
+              ? "A person decides. Nothing is paid by the agent. The 3-way match runs again at release."
+              : "Approve stays off while the 3-way match fails. A note can't override a contract mismatch: dispute it and wait for a corrected invoice or a contract update."}
+          </div>
         </div>
       )}
       </div>

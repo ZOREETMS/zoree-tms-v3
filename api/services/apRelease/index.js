@@ -80,7 +80,9 @@ function createApReleaseService({
   // ── Exceptions: a person approves (with justification) or disputes ──
   async function resolveException({ invoiceId, action, justification, user, actorRole = null }) {
     const invoice = await repo.getInvoice(invoiceId);
-    const v = policy.validateResolution({ invoice, action, justification });
+    // Approving re-runs the 3-way match first: a note never approves past a mismatch.
+    const audit = invoice && action === 'approve' ? await revalidationOf(invoice) : null;
+    const v = policy.validateResolution({ invoice, action, justification, audit });
     if (!v.ok) throw httpError(v.status, v.error);
     const label = invoice.invoice_number || invoice.id;
     // Same change_history rows manualDecide writes (invoice + each linked shipment), so the
@@ -98,7 +100,8 @@ function createApReleaseService({
       detail: action === 'approve'
         ? `${label}: exception approved by ${who(user)} — "${v.reason}". Not export-eligible until revalidated and released.`
         : `${label}: disputed with ${invoice.carrier} by ${who(user)} — "${v.reason}". Blocked from export.`,
-      payload: { invoiced: r2(invoice.invoiced_amount), agreed: invoice.agreed_cost == null ? null : r2(invoice.agreed_cost), variance: invoice.variance == null ? null : r2(invoice.variance), agentFinding: invoice.decision_reason || null },
+      payload: { invoiced: r2(invoice.invoiced_amount), agreed: invoice.agreed_cost == null ? null : r2(invoice.agreed_cost), variance: invoice.variance == null ? null : r2(invoice.variance), agentFinding: invoice.decision_reason || null,
+        ...(audit ? { revalidation: { verdict: audit.verdict, passed: audit.passed } } : {}) },
     });
     return { invoice: updated, next: action === 'approve' ? 'Revalidate and release it under Release & export.' : null };
   }
@@ -117,35 +120,34 @@ function createApReleaseService({
   }
 
   // ── Release one invoice for export ──────────────────────────────
-  async function release({ invoiceId, note = '', override = null, user, isAdmin = false, actorRole = null }) {
+  async function release({ invoiceId, note = '', user, actorRole = null }) {
     const invoice = await repo.getInvoice(invoiceId);
     if (!invoice) throw httpError(404, 'Invoice not found in this domain');
     const { standing, audit } = await standingOf(invoice);
-    const decision = policy.decideRelease({ standing, actor: { email: who(user), isAdmin }, override, env });
+    const decision = policy.decideRelease({ standing });
     const label = invoice.invoice_number || invoice.id;
     if (!decision.ok) {
       if (standing.state !== 'released' && standing.state !== 'exported') {
         await record([{ invoice_id: invoiceId, event_type: 'release_blocked', actor: who(user), actor_role: actorRole,
-          detail: `${label}: release refused — ${decision.error}`, payload: { verdict: audit && audit.verdict, override: Boolean(override) } }]);
+          detail: `${label}: release refused — ${decision.error}`, payload: { verdict: audit && audit.verdict } }]);
       }
       throw httpError(decision.status, decision.error);
     }
     const words = {
       validated: 'agent-validated, revalidated clean at release',
       revalidated: `exception approved by ${standing.exceptionApprovedBy}, revalidated clean at release`,
-      authorized_override: `AUTHORIZED OVERRIDE by ${who(user)} — "${decision.path === 'authorized_override' ? String(override.justification).trim() : ''}"`,
     }[decision.path];
     // One transaction: lock the invoice, refuse if it changed since this revalidation, write release + ledger.
     const [carrierKey, invoiceNumberKey] = policy.billKey(invoice).split('|');
     const row = await repo.releaseInvoice({
       invoiceId, path: decision.path, by: who(user), byId: (user && (user.id || user.sub)) || null, role: actorRole,
       note: String(note || '').trim() || null, exceptionBy: standing.exceptionApprovedBy,
-      justification: decision.path === 'authorized_override' ? String(override.justification).trim() : null,
+      justification: null,
       verdict: audit ? audit.verdict : 'not_run', expectedAmount: r2(invoice.invoiced_amount),
       expectedDecidedBy: invoice.decided_by == null ? null : invoice.decided_by,
       expectedDecidedAt: invoice.decided_at == null ? null : invoice.decided_at,
       carrierKey, invoiceNumberKey,
-      eventType: decision.path === 'authorized_override' ? 'override_released' : 'released',
+      eventType: 'released',
       detail: `${label} (${invoice.carrier}, ${usd(invoice.invoiced_amount)}) released for NetSuite export — ${words}.`,
       payload: { path: decision.path, verdict: audit ? audit.verdict : null, note: String(note || '').trim() || null },
     });
@@ -153,14 +155,14 @@ function createApReleaseService({
     return { release: row, path: decision.path };
   }
 
-  /** Release several on the normal path. Overrides are one at a time, never in a batch. */
-  async function releaseMany({ invoiceIds, note = '', user, isAdmin = false, actorRole = null }) {
+  /** Release several. Each one is revalidated; any that fail are refused individually. */
+  async function releaseMany({ invoiceIds, note = '', user, actorRole = null }) {
     const ids = [...new Set((invoiceIds || []).map(String))];
     if (!ids.length) throw httpError(400, 'Select at least one invoice to release');
     const results = [];
     for (const id of ids) {
       try {
-        const r = await release({ invoiceId: id, note, user, isAdmin, actorRole });
+        const r = await release({ invoiceId: id, note, user, actorRole });
         results.push({ invoiceId: id, ok: true, path: r.path });
       } catch (e) {
         results.push({ invoiceId: id, ok: false, error: e.message, status: e.status || 500 });
@@ -295,7 +297,7 @@ function createApReleaseService({
     const sum = (list) => r2(list.reduce((s, x) => s + x.amount, 0));
     const by = (st) => rows.filter((r) => r.state === st);
     return {
-      policy: { erpReadOnly: true, netsuiteWrites: false, overrideApprovers: Boolean(env.FREIGHT_AUDIT_OVERRIDE_APPROVERS) },
+      policy: { erpReadOnly: true, netsuiteWrites: false, overridePath: false },
       awaitingRelease: by('awaiting_release'), released: by('released'), exported: by('exported'),
       blocked: [...by('blocked'), ...heldRows],
       totals: { awaitingRelease: sum(by('awaiting_release')), released: sum(by('released')), exported: sum(by('exported')) },

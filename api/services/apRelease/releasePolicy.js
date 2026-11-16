@@ -11,11 +11,14 @@
 //     revalidated          a person approved an exception with a written
 //                          justification, and the re-run now passes (e.g.
 //                          the missing accessorial approval was added)
-//     authorized_override  a person approved an exception, the re-run still
-//                          fails, and an authorized approver (admin, or a
-//                          named override approver) who is NOT the person
-//                          who approved the exception releases it with a
-//                          justification of 20+ characters
+//
+//   One authorized person can approve and release. A written note never
+//   bypasses a failed 3-way match: an exception can only be approved once
+//   the re-run passes (corrected invoice, approval added, or contract
+//   updated), and the same person may then release it. An invoice whose
+//   re-run fails stays blocked until the data is fixed — there is no
+//   override path. ('authorized_override' remains only so releases made
+//   under the old rule still display.)
 //
 //   Never releasable: not Approved (On Hold / Disputed / Rejected / Paid),
 //   already released, already exported, or a resend of an invoice number
@@ -25,7 +28,6 @@
 
 const RELEASE_PATHS = Object.freeze(['validated', 'revalidated', 'authorized_override']);
 const MIN_EXCEPTION_JUSTIFICATION = 15;
-const MIN_OVERRIDE_JUSTIFICATION = 20;
 const PASSING_VERDICTS = new Set(['approve', 'review']); // review = clean but over the auto-approve limit
 
 const AGENT_USERS = new Set(['invoice-intake-agent', 'freight-audit-agent', 'verify-run', 'system']);
@@ -49,22 +51,12 @@ function billKey(inv) {
 const clean = (s) => String(s || '').trim();
 
 /**
- * Who may authorize an override release.
- * @param {{isAdmin:boolean, email?:string, env?:object}} a
- */
-function canAuthorizeOverride({ isAdmin, email, env = process.env }) {
-  if (isAdmin) return true;
-  const list = String(env.FREIGHT_AUDIT_OVERRIDE_APPROVERS || '').split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
-  return Boolean(email) && list.includes(String(email).toLowerCase());
-}
-
-/**
  * Validate a person's resolution of a held invoice (approve or dispute).
  * A reviewer can't casually wave an overcharge through: approving needs a
  * written justification, and only On Hold / Pending invoices are open.
  * @returns {{ok:true, decision:'Approved'|'Disputed', reason:string} | {ok:false, error:string, status:number}}
  */
-function validateResolution({ invoice, action, justification }) {
+function validateResolution({ invoice, action, justification, audit = null }) {
   if (!invoice) return { ok: false, status: 404, error: 'Invoice not found in this domain' };
   if (!['approve', 'dispute'].includes(action)) return { ok: false, status: 400, error: `Unknown action '${action}' (approve or dispute)` };
   if (!['On Hold', 'Pending'].includes(invoice.status)) {
@@ -75,6 +67,10 @@ function validateResolution({ invoice, action, justification }) {
     return { ok: false, status: 400, error: action === 'approve'
       ? `Approving an exception needs a written justification (at least ${MIN_EXCEPTION_JUSTIFICATION} characters) — it is kept in the audit history.`
       : `Write what to tell the carrier (at least ${MIN_EXCEPTION_JUSTIFICATION} characters) — it is kept in the audit history.` };
+  }
+  if (action === 'approve' && (!audit || !PASSING_VERDICTS.has(audit.verdict))) {
+    const why = audit ? (audit.issues || []).map((i) => i.detail).filter(Boolean)[0] : null;
+    return { ok: false, status: 409, error: `${invoice.invoice_number || invoice.id} still fails the 3-way match${why ? ` — ${String(why).replace(/\.+$/, '')}` : ''}. A note can't approve past a contract mismatch: keep it on hold and dispute it, then approve once a corrected invoice or a contract update makes it pass.` };
   }
   return { ok: true, decision: action === 'approve' ? 'Approved' : 'Disputed', reason: text };
 }
@@ -112,8 +108,8 @@ function classify({ invoice, release = null, exportItem = null, takenBillKeys = 
       return { state: 'blocked', path: null, needsOverride: false, exceptionApprovedBy,
         blockers: [`Revalidation failed — ${String(why[0] || 'the 3-way match no longer passes').replace(/\.+$/, '')}. Put it On Hold and review it.`] };
     }
-    return { state: 'awaiting_release', path: 'authorized_override', needsOverride: true, exceptionApprovedBy,
-      blockers: [`Revalidation still fails — ${String(why[0] || 'the 3-way match does not pass').replace(/\.+$/, '')}. Only an authorized override can release it.`] };
+    return { state: 'blocked', path: null, needsOverride: false, exceptionApprovedBy,
+      blockers: [`Revalidation fails — ${String(why[0] || 'the 3-way match does not pass').replace(/\.+$/, '')}. A manual approval can't release it: put it On Hold and dispute it, or fix the data, then revalidate.`] };
   }
   const path = exceptionApprovedBy ? 'revalidated' : 'validated';
   return { state: 'awaiting_release', path, needsOverride: false, exceptionApprovedBy, blockers: [] };
@@ -123,27 +119,13 @@ function classify({ invoice, release = null, exportItem = null, takenBillKeys = 
  * Pure: may this person release this invoice now? Run after revalidation.
  * @param {object} a
  * @param {ReturnType<typeof classify>} a.standing   classify(...) with the fresh audit
- * @param {{email:string, isAdmin:boolean}} a.actor
- * @param {{justification?:string}|null} [a.override]
  * @returns {{ok:true, path:string} | {ok:false, status:number, error:string}}
  */
-function decideRelease({ standing, actor, override = null, env = process.env }) {
+function decideRelease({ standing }) {
   if (standing.state === 'exported') return { ok: false, status: 409, error: 'Already exported to NetSuite — it can never be exported again.' };
   if (standing.state === 'released') return { ok: false, status: 409, error: 'Already released — it is waiting on the next export.' };
   if (standing.state === 'blocked') return { ok: false, status: 409, error: standing.blockers.join(' ') };
-  if (!standing.needsOverride) return { ok: true, path: standing.path };
-
-  if (!override) return { ok: false, status: 409, error: standing.blockers.join(' ') };
-  if (!canAuthorizeOverride({ isAdmin: actor.isAdmin, email: actor.email, env })) {
-    return { ok: false, status: 403, error: 'Only an authorized approver (admin or a named override approver) can override a failed revalidation.' };
-  }
-  if (standing.exceptionApprovedBy && String(standing.exceptionApprovedBy).toLowerCase() === String(actor.email || '').toLowerCase()) {
-    return { ok: false, status: 403, error: 'Segregation of duties: the person who approved the exception cannot also authorize its override release.' };
-  }
-  if (clean(override.justification).length < MIN_OVERRIDE_JUSTIFICATION) {
-    return { ok: false, status: 400, error: `An override needs a justification of at least ${MIN_OVERRIDE_JUSTIFICATION} characters.` };
-  }
-  return { ok: true, path: 'authorized_override' };
+  return { ok: true, path: standing.path };
 }
 
 /**
@@ -173,7 +155,7 @@ function selectForExport({ released, exported, onlyIds = null }) {
 }
 
 module.exports = {
-  RELEASE_PATHS, MIN_EXCEPTION_JUSTIFICATION, MIN_OVERRIDE_JUSTIFICATION,
-  isAgentActor, carrierKey, billKey, canAuthorizeOverride,
+  RELEASE_PATHS, MIN_EXCEPTION_JUSTIFICATION, PASSING_VERDICTS,
+  isAgentActor, carrierKey, billKey,
   validateResolution, classify, decideRelease, selectForExport,
 };

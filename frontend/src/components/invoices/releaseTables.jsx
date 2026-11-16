@@ -32,33 +32,9 @@ function useSelection(rows) {
   return { live, toggle, all, toggleAll, clear: () => setPicked(new Set()) };
 }
 
-/** Override form for one invoice whose revalidation still fails. */
-function OverrideRow({ row, busy, onOverride, onCancel }) {
-  const [text, setText] = useState("");
-  const ok = text.trim().length >= MIN_OVERRIDE_JUSTIFICATION;
-  return (
-    <tr style={{ background: "#FFFBEB", cursor: "default" }}>
-      <td colSpan={7}>
-        <div style={{ fontSize: 12.5, color: "#92400E", marginBottom: 6 }}>
-          <b>Authorized override for {row.invoiceNumber}.</b> Revalidation still fails. Only an admin or a named override approver, who is not
-          {row.exceptionApprovedBy ? ` ${row.exceptionApprovedBy} (who approved the exception)` : " the exception approver"}, can release it. The justification is kept in the audit history.
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder={`Override justification (at least ${MIN_OVERRIDE_JUSTIFICATION} characters)`}
-            style={{ flex: 1, height: 36, padding: "0 10px", border: "1px solid #FCD34D", borderRadius: 8, fontSize: 13 }} />
-          <button type="button" className="btn btn-sm" disabled={busy || !ok} onClick={() => onOverride(row.invoiceId, text)}
-            style={{ background: ok ? "#D97706" : "#FDE68A", color: "#fff" }}>{busy ? "Saving…" : "Release with override"}</button>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={onCancel}>Cancel</button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
 /** Validated invoices waiting for a person to release them. */
-export function AwaitingReleaseTable({ rows, total, canDecide, busy, onRelease, onReleaseMany, onRevalidate, onOverride, onHistory }) {
-  const sel = useSelection(rows.filter((r) => !r.needsOverride));
-  const [overrideFor, setOverrideFor] = useState(null);
+export function AwaitingReleaseTable({ rows, total, canDecide, busy, onRelease, onReleaseMany, onHistory }) {
+  const sel = useSelection(rows);
   const [note, setNote] = useState("");
   const selectedAmount = rows.filter((r) => sel.live.has(r.invoiceId)).reduce((s, r) => s + r.amount, 0);
 
@@ -88,7 +64,7 @@ export function AwaitingReleaseTable({ rows, total, canDecide, busy, onRelease, 
             <Fragment key={r.invoiceId}>
               <tr onClick={() => onHistory(r)} title="Open the audit history">
                 <td onClick={(e) => e.stopPropagation()}>
-                  {canDecide && !r.needsOverride && <input type="checkbox" style={box} checked={sel.live.has(r.invoiceId)} onChange={() => sel.toggle(r.invoiceId)} aria-label={`Select ${r.invoiceNumber}`} />}
+                  {canDecide && <input type="checkbox" style={box} checked={sel.live.has(r.invoiceId)} onChange={() => sel.toggle(r.invoiceId)} aria-label={`Select ${r.invoiceNumber}`} />}
                 </td>
                 <td><div style={{ fontWeight: 700 }}>{r.invoiceNumber}</div><div style={{ fontSize: 11.5, color: "#94A3B8" }}>{r.carrier}</div></td>
                 <td className="mono" style={{ fontSize: 12.5 }}>{r.shipment || "—"}</td>
@@ -102,20 +78,11 @@ export function AwaitingReleaseTable({ rows, total, canDecide, busy, onRelease, 
                     : <span style={{ color: "#B91C1C" }}>▲ {r.revalidation?.issues?.[0] || "Fails"}</span>}
                 </td>
                 <td style={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                  {!canDecide ? <span style={{ color: "#94A3B8", fontSize: 12 }}>View only</span> : r.needsOverride ? (
-                    <>
-                      <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => onRevalidate(r.invoiceId)} style={{ marginRight: 6 }}>Revalidate</button>
-                      <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setOverrideFor(r.invoiceId)} style={{ background: "#FEF3C7", color: "#92400E" }}>Override…</button>
-                    </>
-                  ) : (
+                  {!canDecide ? <span style={{ color: "#94A3B8", fontSize: 12 }}>View only</span> : (
                     <button type="button" className="btn btn-sm" disabled={busy} onClick={() => onRelease(r.invoiceId, note)} style={{ background: "#DCFCE7", color: "#166534" }}>Release</button>
                   )}
                 </td>
               </tr>
-              {overrideFor === r.invoiceId && (
-                <OverrideRow row={r} busy={busy} onCancel={() => setOverrideFor(null)}
-                  onOverride={async (id, text) => { if (await onOverride(id, text)) setOverrideFor(null); }} />
-              )}
             </Fragment>
           ))}
           {!rows.length && <tr style={{ cursor: "default" }}><td colSpan={7} style={{ textAlign: "center", padding: 24, color: "#64748B" }}>Nothing waiting to be released.</td></tr>}
@@ -167,7 +134,7 @@ export function ReleasedTable({ rows, total, canDecide, busy, onExport, onHistor
 export function BlockedTable({ rows, onHistory }) {
   return (
     <div className="ap-card" style={{ marginBottom: 16, overflow: "hidden" }}>
-      <Header title={`Blocked from export (${rows.length})`} sub="Exceptions stay blocked until a person resolves them in the approval queue, with a written justification." />
+      <Header title={`Blocked from export (${rows.length})`} sub="Exceptions stay blocked until the data is fixed — a corrected invoice, an approval in the TMS, or a contract update — and the 3-way match passes. A note alone never releases one." />
       <table className="ap-table">
         <thead><tr><th>Invoice</th><th>Shipment</th><th style={{ textAlign: "right" }}>Amount</th><th>Status</th><th>Why it is blocked</th></tr></thead>
         <tbody>
@@ -177,7 +144,7 @@ export function BlockedTable({ rows, onHistory }) {
               <td className="mono" style={{ fontSize: 12.5 }}>{r.shipment || "—"}</td>
               <td style={{ textAlign: "right", fontWeight: 600 }}>{money(r.amount)}</td>
               <td><Pill tone={r.status === "Disputed" || r.status === "Rejected" ? "bad" : "warn"}>{r.status || "Blocked"}</Pill></td>
-              <td style={{ fontSize: 12.5, color: "#9A3412", maxWidth: 420 }}>{(r.reason || "").replace(/^Needs AP review:\s*/i, "") || r.blockers?.[0]}</td>
+              <td style={{ fontSize: 12.5, color: "#9A3412", maxWidth: 420 }}>{(r.status === "Approved" && r.blockers?.[0]) || (r.reason || "").replace(/^Needs AP review:\s*/i, "") || r.blockers?.[0]}</td>
             </tr>
           ))}
           {!rows.length && <tr style={{ cursor: "default" }}><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "#64748B" }}>Nothing blocked.</td></tr>}

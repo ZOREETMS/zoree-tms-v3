@@ -22,6 +22,7 @@ export default function ApprovalQueue({ refreshKey, canDecide, onChanged, onGoTo
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [msgBad, setMsgBad] = useState(false);
   const [openId, setOpenId] = useState(null);
 
   const queue = useMemo(() => entries
@@ -33,15 +34,17 @@ export default function ApprovalQueue({ refreshKey, canDecide, onChanged, onGoTo
     if (!pending) return;
     setBusy(true);
     setMsg("");
+    setMsgBad(false);
     try {
       await resolveException(pending.invoiceId, pending.action, comment);
-      setMsg(`${pending.label} ${pending.action === "approve" ? "exception approved — it is not export-eligible until it is revalidated and released under Release & export" : "disputed with the carrier — blocked from export"}.`);
+      setMsg(`${pending.label} ${pending.action === "approve" ? "approved — the 3-way match passed; release it under Release & export" : "disputed with the carrier — blocked from export"}.`);
       setPending(null);
       setComment("");
       reload();
       if (onChanged) onChanged();
     } catch (e) {
       setMsg(e?.message || "Could not save the decision");
+      setMsgBad(true);
     } finally {
       setBusy(false);
     }
@@ -55,12 +58,12 @@ export default function ApprovalQueue({ refreshKey, canDecide, onChanged, onGoTo
       <div className="ap-card" style={{ marginBottom: 16, overflow: "hidden" }}>
         <div style={{ padding: "16px 18px 6px" }}>
           <div style={{ fontWeight: 700, fontSize: 17 }}>Approval queue</div>
-          <div style={{ fontSize: 13, color: "#64748B" }}>Invoices the agent paused for a person before anything is released. Riskiest first. Every decision needs a written justification and is kept in the audit history.</div>
+          <div style={{ fontSize: 13, color: "#64748B" }}>Invoices the agent paused for a person before anything is released. Riskiest first. Every decision needs a written justification and is kept in the audit history. Approve only works once the 3-way match passes; a contract mismatch is disputed, not approved.</div>
         </div>
         {msg && (
-          <div style={{ margin: "8px 18px", padding: "8px 12px", borderRadius: 8, background: "#F0FDF4", color: "#166534", fontSize: 13, display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ margin: "8px 18px", padding: "8px 12px", borderRadius: 8, background: msgBad ? "#FEF2F2" : "#F0FDF4", color: msgBad ? "#B91C1C" : "#166534", fontSize: 13, display: "flex", gap: 10, alignItems: "center" }}>
             <span style={{ flex: 1 }}>{msg}</span>
-            {onGoToRelease && /approved/.test(msg) && <button type="button" className="btn btn-secondary btn-sm" onClick={onGoToRelease}>Go to Release &amp; export →</button>}
+            {onGoToRelease && !msgBad && /approved/.test(msg) && <button type="button" className="btn btn-secondary btn-sm" onClick={onGoToRelease}>Go to Release &amp; export →</button>}
           </div>
         )}
         <table className="ap-table" style={{ marginTop: 6 }}>
@@ -87,6 +90,8 @@ export default function ApprovalQueue({ refreshKey, canDecide, onChanged, onGoTo
                           onClick={() => { setPending({ intakeId: e.intakeId, invoiceId: e.invoiceId, action: "approve", label: e.invoiceNumber }); setComment(""); }}>Approve</button>
                         <button type="button" className="btn btn-sm" style={{ background: "#FEE2E2", color: "#B91C1C" }}
                           onClick={() => { setPending({ intakeId: e.intakeId, invoiceId: e.invoiceId, action: "dispute", label: e.invoiceNumber }); setComment(""); }}>Dispute</button>
+                        <button type="button" className="btn btn-secondary btn-sm" style={{ marginLeft: 6 }} title="Open the review to draft the email to the carrier (draft only, not sent)"
+                          onClick={() => setOpenId(e.intakeId)}>✉ Draft email</button>
                       </>
                     ) : <span style={{ color: "#94A3B8", fontSize: 12 }}>View only</span>}
                   </td>

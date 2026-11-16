@@ -129,30 +129,40 @@ test('dispute keeps BW-5521 blocked from release and export', async () => {
   assert.ok(!q.awaitingRelease.some((b) => b.invoiceNumber === 'BW-5521'));
 });
 
-test('override: non-admin refused, same approver refused, short justification refused, admin + 20 chars allowed', async () => {
+test('a note cannot approve BW-5521 past the contract mismatch: refused, stays On Hold', async () => {
   const { svc, repo } = setup({ audits: { 'INV-4': FAILING } });
-  await svc.resolveException({ invoiceId: 'INV-4', action: 'approve', justification: 'Carrier quoted a spot rate by phone; ops confirmed.', user: clerk });
-  // Revalidation still fails → the normal path is closed.
-  await assert.rejects(svc.release({ invoiceId: 'INV-4', user: controller }), (e) => e.status === 409 && /authorized override/.test(e.message));
-  await assert.rejects(svc.release({ invoiceId: 'INV-4', user: controller, override: { justification: 'Spot rate agreed by ops manager, see email 11/12.' } }), (e) => e.status === 403 && /authorized approver/.test(e.message));
-  await assert.rejects(svc.release({ invoiceId: 'INV-4', user: clerk, isAdmin: true, override: { justification: 'Spot rate agreed by ops manager, see email 11/12.' } }), (e) => e.status === 403 && /Segregation of duties/.test(e.message));
-  await assert.rejects(svc.release({ invoiceId: 'INV-4', user: controller, isAdmin: true, override: { justification: 'approved' } }), (e) => e.status === 400);
-  const r = await svc.release({ invoiceId: 'INV-4', user: controller, isAdmin: true, override: { justification: 'Spot rate agreed by ops manager, see email 11/12.' } });
-  assert.equal(r.path, 'authorized_override');
-  assert.equal(repo.s.releases[0].exception_approved_by, clerk.email);
+  await assert.rejects(
+    svc.resolveException({ invoiceId: 'INV-4', action: 'approve', justification: 'Carrier quoted a spot rate by phone; ops confirmed.', user: clerk }),
+    (e) => e.status === 409 && /still fails the 3-way match/.test(e.message) && /Linehaul billed/.test(e.message));
+  assert.equal(repo.s.invoices.get('INV-4').status, 'On Hold');
+  assert.equal(repo.s.releases.length, 0);
 });
 
-test('a named override approver (env) is authorized without the admin role', () => {
-  assert.equal(policy.canAuthorizeOverride({ isAdmin: false, email: 'Controller@KestrelBay.com', env: { FREIGHT_AUDIT_OVERRIDE_APPROVERS: 'controller@kestrelbay.com, cfo@kestrelbay.com' } }), true);
-  assert.equal(policy.canAuthorizeOverride({ isAdmin: false, email: 'ap.clerk@kestrelbay.com', env: { FREIGHT_AUDIT_OVERRIDE_APPROVERS: 'controller@kestrelbay.com' } }), false);
+test('an invoice approved elsewhere whose re-run fails is blocked; there is no override path', async () => {
+  const invoices = KB(); invoices.find((i) => i.id === 'INV-4').status = 'Approved'; invoices.find((i) => i.id === 'INV-4').decided_by = 'ap.clerk@kestrelbay.com';
+  const { svc } = setup({ audits: { 'INV-4': FAILING }, invoices });
+  await assert.rejects(svc.release({ invoiceId: 'INV-4', user: controller, isAdmin: true, override: { justification: 'Spot rate agreed by ops manager, see email 11/12.' } }),
+    (e) => e.status === 409 && /Revalidation fails/.test(e.message));
+  const q = await svc.queue();
+  assert.ok(q.blocked.some((b) => b.invoiceNumber === 'BW-5521'));
+  assert.ok(!q.awaitingRelease.some((b) => b.invoiceNumber === 'BW-5521'), 'never counted as ready to release');
+});
+
+test('one authorized person approves (once it passes) and releases the same invoice', async () => {
+  const { svc, repo } = setup({ audits: { 'INV-5': PASSING } });
+  await svc.resolveException({ invoiceId: 'INV-5', action: 'approve', justification: 'Liftgate approval added in TMS with the signed delivery receipt.', user: clerk });
+  const r = await svc.release({ invoiceId: 'INV-5', user: clerk });
+  assert.equal(r.path, 'revalidated');
+  assert.equal(repo.s.releases[0].exception_approved_by, clerk.email);
 });
 
 // ── Revalidation ────────────────────────────────────────────────────
 test('an approved exception that now passes the 3-way match releases on the revalidated path', async () => {
   const audits = { 'INV-5': FAILING };
   const { svc } = setup({ audits });
-  await svc.resolveException({ invoiceId: 'INV-5', action: 'approve', justification: 'Liftgate was ordered by the consignee; approval added in TMS.', user: clerk });
+  await assert.rejects(svc.resolveException({ invoiceId: 'INV-5', action: 'approve', justification: 'Liftgate was ordered by the consignee.', user: clerk }), (e) => e.status === 409);
   audits['INV-5'] = PASSING; // the accessorial approval was added to the shipment
+  await svc.resolveException({ invoiceId: 'INV-5', action: 'approve', justification: 'Liftgate was ordered by the consignee; approval added in TMS.', user: clerk });
   const r = await svc.release({ invoiceId: 'INV-5', user: clerk });
   assert.equal(r.path, 'revalidated');
 });
