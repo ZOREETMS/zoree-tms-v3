@@ -60,7 +60,11 @@ export default function InvoiceMailboxModal({ onClose, onUseFolder }) {
               Read inbox folder instead
             </button>
           )}
-          <button className="btn btn-secondary btn-sm" disabled={running} onClick={close}>Close</button>
+          {/* Once the read is finished, Close is the next step: make it the primary button. */}
+          <button className={`btn btn-sm ${checked && !running ? "btn-primary" : "btn-secondary"}`} disabled={running} onClick={close}
+            autoFocus={checked && !running} key={checked && !running ? "done" : "busy"}>
+            {running ? "Reading…" : "Close"}
+          </button>
         </div>
       </div>
     </div>
