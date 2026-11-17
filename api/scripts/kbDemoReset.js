@@ -5,6 +5,8 @@
 //
 //   node scripts/kbDemoReset.js          dry run: shows what would go
 //   node scripts/kbDemoReset.js --yes    backs up, then deletes
+//   add --keep-mail to leave emails already in the AP mailbox marked as
+//   read (live demo: send a new email and the agent picks it up)
 //
 // What it clears (KESTREL_BAY only — refuses any other domain):
 //   AP release / export / audit ledger   via ap_demo_reset (migration 054/055)
@@ -56,7 +58,10 @@ async function collect(apMailbox) {
     : [];
   const intakeFiles = intakeIds.length ? await rest('GET', `invoice_intake_files?select=intake_id,file_name,size_bytes&intake_id=in.${inList(intakeIds)}`) : [];
   const runs = await rest('GET', `invoice_intake_runs?select=*&domain_code=eq.${DOMAIN}`).catch(() => []);
-  const emails = apMailbox
+  // --keep-mail: keep the "already read" markers, so emails already in the
+  // mailbox are NOT read again — for a live demo where a new email is sent
+  // and the agent picks it up on arrival.
+  const emails = apMailbox && !process.argv.includes('--keep-mail')
     ? await rest('GET', `email_order_intake?select=*&domain_code=eq.${DOMAIN}&mailbox=eq.${encodeURIComponent(apMailbox)}`)
     : [];
   return { invoices, intakes, costLines, historyInvoices, historyShipments, intakeFiles, emails, runs };
@@ -103,7 +108,9 @@ async function main() {
 
   const after = await collect(apMailbox);
   const left = Object.entries(after).filter(([, v]) => v.length).map(([k, v]) => `${k}=${v.length}`);
-  console.log(left.length ? `NOT CLEAN: ${left.join(', ')}` : 'Clean. Read AP Mailbox will read the carrier emails again.');
+  console.log(left.length ? `NOT CLEAN: ${left.join(', ')}`
+    : process.argv.includes('--keep-mail') ? 'Clean. Emails already in the AP mailbox stay marked as read; send a new email to see the agent pick it up.'
+    : 'Clean. The agent will read the carrier emails in the AP mailbox again.');
 }
 
 main().catch((e) => { console.error(`Reset failed: ${e.message}`); process.exit(1); });

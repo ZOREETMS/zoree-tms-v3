@@ -43,7 +43,10 @@ module.exports = function createApReleaseRouter({ verifyToken, hasAnyRole, servi
   router.get('/queue', handle(async (_req, res) => res.json(await svc().queue())));
 
   router.post('/invoices/:id/resolve', handle(async (req, res, ctx) => res.json(await svc().resolveException({
-    invoiceId: req.params.id, action: req.body?.action, justification: req.body?.justification, ...ctx,
+    invoiceId: req.params.id, action: req.body?.action, justification: req.body?.justification,
+    manualException: req.body?.manualException && typeof req.body.manualException === 'object'
+      ? { evidence: String(req.body.manualException.evidence || ''), confirmAmount: req.body.manualException.confirmAmount } : null,
+    ...ctx,
   }))));
 
   router.post('/invoices/:id/revalidate', handle(async (req, res, ctx) => res.json(await svc().revalidate({ invoiceId: req.params.id, ...ctx }))));

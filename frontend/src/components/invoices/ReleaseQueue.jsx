@@ -10,6 +10,7 @@ import {
 import { AwaitingReleaseTable, ReleasedTable, BlockedTable } from "./releaseTables";
 import ApAuditHistory from "./ApAuditHistory";
 import { StatCard, Pill, money, dateTime } from "./intakeUi";
+import { BRAND } from "../../config/brand";
 
 export default function ReleaseQueue({ refreshKey, canDecide, onChanged, onOpenPreview }) {
   const { queue, loading, error, reload } = useApReleaseQueue(refreshKey);
@@ -45,7 +46,7 @@ export default function ReleaseQueue({ refreshKey, canDecide, onChanged, onOpenP
       <div className="ap-card" style={{ padding: "12px 16px", marginBottom: 14, display: "flex", gap: 10, alignItems: "center", background: "#F8FAFC" }}>
         <Pill tone="info">NetSuite read-only pilot</Pill>
         <span style={{ fontSize: 12.5, color: "#334155" }}>
-          The agent validates and recommends. A person releases each invoice. Zoree generates a NetSuite-ready CSV and AP imports it —
+          The agent validates and recommends. A person releases each invoice. {BRAND.short} generates a NetSuite-ready CSV and AP imports it —
           the agent cannot create bills, write to NetSuite, or move money.
         </span>
       </div>

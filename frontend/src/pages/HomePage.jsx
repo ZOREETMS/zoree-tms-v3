@@ -6,6 +6,7 @@ import ActivityCard from "../components/home/ActivityCard";
 import SectionHeader from "../components/home/SectionHeader";
 
 import ModuleCard from "../components/home/ModuleCard";
+import { BRAND } from "../config/brand";
 
 
 /* ── All Modules Directory ────────────────────────────────────── */
@@ -106,7 +107,7 @@ export default function HomePage() {
       <div className="page-header">
         <div>
           <div className="page-title">Home</div>
-          <div className="page-sub">Zoree Transportation Management System</div>
+          <div className="page-sub">{BRAND.product} · Transportation Management System</div>
         </div>
         <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
           <input

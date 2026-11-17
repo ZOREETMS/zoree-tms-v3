@@ -17,10 +17,12 @@
 'use strict';
 
 const CONFIG_NEEDED = 'CONFIG_NEEDED';
+// Display brand (APP_BRAND_NAME in api/.env); defaults to Zoree.
+const BRAND = () => String(process.env.APP_BRAND_NAME || 'Zoree').trim() || 'Zoree';
 
 const COLUMNS = Object.freeze([
   'External ID', 'Vendor', 'Vendor Internal ID', 'Reference No.', 'Date', 'Due Date', 'Currency',
-  'Subsidiary', 'Expense Account', 'Amount', 'Memo', 'Shipment', 'Zoree Invoice ID',
+  'Subsidiary', 'Expense Account', 'Amount', 'Memo', 'Shipment', 'TMS Invoice ID',
   'Release Path', 'Released By', 'Released At', 'Export Batch',
 ]);
 
@@ -37,7 +39,10 @@ function cell(v) {
 /** Stable NetSuite External ID: same bill → same id, so a re-import updates instead of duplicating. */
 function externalIdFor({ domainCode, carrierKey, invoiceNumber }) {
   const num = String(invoiceNumber || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
-  return `ZOREE-${String(domainCode || 'ZOREE').toUpperCase()}-${carrierKey}-${num}`;
+  // Prefix is the brand (NETSUITE_EXTERNAL_ID_PREFIX); keep it fixed once a
+  // client imports, since NetSuite matches re-imports on this ID.
+  const prefix = String(process.env.NETSUITE_EXTERNAL_ID_PREFIX || 'ZOREE').trim().toUpperCase() || 'ZOREE';
+  return `${prefix}-${String(domainCode || 'ZOREE').toUpperCase()}-${carrierKey}-${num}`;
 }
 
 function config(env = process.env) {
@@ -74,7 +79,7 @@ function buildCsv({ batch, items, env = process.env }) {
   const rows = items.map((it) => [
     it.external_id, it.carrier, c.vendorIds[it.carrier_key] || CONFIG_NEEDED, it.invoice_number,
     iso(it.invoice_date), iso(it.due_date), c.currency, c.subsidiary, c.expenseAccount, fixed(it.amount),
-    `Freight ${it.shipment_ref || ''} · audited by Zoree (${it.release_path})`.replace(/\s+·/, ' ·'),
+    `Freight ${it.shipment_ref || ''} · audited by ${BRAND()} (${it.release_path})`.replace(/\s+·/, ' ·'),
     it.shipment_ref || '', it.invoice_id, it.release_path, it.released_by, it.released_at ? new Date(it.released_at).toISOString() : '',
     batch.id,
   ]);

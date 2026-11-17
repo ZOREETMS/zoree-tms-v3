@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useInvoiceMailbox } from "../../hooks/useInvoiceMailbox";
 import { intakeSummary } from "../../services/invoiceIntakeService";
 import IntakeResultRow from "./IntakeResultRow";
+import { BRAND } from "../../config/brand";
 
 export default function InvoiceMailboxModal({ onClose, onUseFolder }) {
   const { box, results, running, checked, error, start } = useInvoiceMailbox();
@@ -36,7 +37,7 @@ export default function InvoiceMailboxModal({ onClose, onUseFolder }) {
         </div>
         <div className="modal-body">
           <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 10 }}>
-            Zoree AI reads new carrier invoice emails, reads each attached PDF, checks the read and the sender,
+            {BRAND.ai} reads new carrier invoice emails, reads each attached PDF, checks the read and the sender,
             matches the shipment and the contract rate, and runs the freight audit. Clean invoices go to AP.
             Everything else is held with the reason. Nothing is paid by the agent, and the mailbox is read-only.
           </div>

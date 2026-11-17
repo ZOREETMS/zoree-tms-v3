@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import MwQueuePanel from "../components/admin/MwQueuePanel";
+import { BRAND } from "../config/brand";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -134,7 +135,7 @@ export default function SettingsPage() {
             <div className="card-body">
               <InfoRow label="PC*Miler" value={health?.pcmiler ? "Connected" : "Not configured"} color={health?.pcmiler ? "var(--green)" : "var(--text3)"} />
               <InfoRow label="SMC³ / CzarLite" value={health?.smc3 ? "Connected" : "Not configured"} color={health?.smc3 ? "var(--green)" : "var(--text3)"} />
-              <InfoRow label="Zoree AI" value="Anthropic Claude" />
+              <InfoRow label={BRAND.ai} value="Anthropic Claude" />
             </div>
           </div>
         </div>

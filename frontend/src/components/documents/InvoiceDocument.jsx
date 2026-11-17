@@ -1,3 +1,4 @@
+import { BRAND } from "../../config/brand";
 const headerCellStyle = { padding: "8px 16px", textAlign: "left", fontSize: 10, textTransform: "uppercase", borderRight: "1px solid #ccc" };
 const cellStyle = { padding: "10px 16px", borderRight: "1px solid #ccc" };
 
@@ -15,7 +16,7 @@ export default function InvoiceDocument({ doc, shipment, carrier }) {
       {/* Header */}
       <div style={{ padding: 16, borderBottom: "2px solid #000", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2 }}>ZOREE TMS</div>
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2 }}>{BRAND.docTitle}</div>
           <div style={{ fontSize: 10, color: "#444", marginTop: 3 }}>1309 Coffeen Ave, Ste 3336, Sheridan, WY 82801</div>
           <div style={{ fontSize: 14, fontWeight: 800, marginTop: 10, letterSpacing: 1 }}>COMMERCIAL INVOICE</div>
         </div>
@@ -81,8 +82,8 @@ export default function InvoiceDocument({ doc, shipment, carrier }) {
 
       {/* Footer */}
       <div style={{ padding: 16, fontSize: 10, color: "#666" }}>
-        Payment Terms: Net 30 days. Please remit payment to Zoree TMS, referencing invoice number above.<br />
-        Questions? Contact finance@zoree.io or call 1-800-ZOREE-TMS.
+        Payment Terms: Net 30 days. Please remit payment to {BRAND.company}, referencing invoice number above.<br />
+        {BRAND.docContact}
       </div>
     </div>
   );

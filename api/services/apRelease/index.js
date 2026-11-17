@@ -20,6 +20,7 @@
 
 const crypto = require('node:crypto');
 const policy = require('./releasePolicy');
+const { getApPolicy } = require('../agents/freightAudit/apPolicy');
 const netsuiteCsv = require('./netsuiteCsv');
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -68,28 +69,41 @@ function createApReleaseService({
     }
   }
 
+  /** The latest manual-exception approval recorded for an Approved invoice, if any. */
+  async function manualExceptionOf(invoice) {
+    if (!invoice || invoice.status !== 'Approved' || !repo.listAudit) return null;
+    const events = await repo.listAudit({ invoiceId: invoice.id }).catch(() => []);
+    const hit = (events || []).filter((e) => e.event_type === 'exception_approved' && e.payload && e.payload.manualException).pop();
+    return hit ? { by: hit.actor, at: hit.created_at || null, failedChecks: hit.payload.failedChecks || [], evidence: hit.payload.evidence || null,
+      reason: hit.payload.reason || null, aboveContract: hit.payload.aboveContract ?? null } : null;
+  }
+
   async function standingOf(invoice, { withAudit = true } = {}) {
     const [release, items, taken] = await Promise.all([
       repo.getRelease(invoice.id), repo.listExportItems({ invoiceIds: [invoice.id] }), takenBillKeys(invoice.id),
     ]);
     const audit = withAudit && !release && !items.length ? await revalidationOf(invoice) : null;
-    const standing = policy.classify({ invoice, release, exportItem: items[0] || null, takenBillKeys: taken, audit });
-    return { standing, release, exportItem: items[0] || null, audit };
+    const manualException = await manualExceptionOf(invoice);
+    const standing = policy.classify({ invoice, release, exportItem: items[0] || null, takenBillKeys: taken, audit, manualException });
+    return { standing, release, exportItem: items[0] || null, audit, manualException };
   }
 
   // ── Exceptions: a person approves (with justification) or disputes ──
-  async function resolveException({ invoiceId, action, justification, user, actorRole = null }) {
+  async function resolveException({ invoiceId, action, justification, manualException = null, user, isAdmin = false, actorRole = null }) {
     const invoice = await repo.getInvoice(invoiceId);
     // Approving re-runs the 3-way match first: a note never approves past a mismatch.
+    // A manual exception (only if the customer turned it on) accepts the failed checks explicitly.
     const audit = invoice && action === 'approve' ? await revalidationOf(invoice) : null;
-    const v = policy.validateResolution({ invoice, action, justification, audit });
+    const v = policy.validateResolution({ invoice, action, justification, audit, manualException,
+      policy: getApPolicy({ env }), actor: { email: who(user), isAdmin } });
     if (!v.ok) throw httpError(v.status, v.error);
     const label = invoice.invoice_number || invoice.id;
     // Same change_history rows manualDecide writes (invoice + each linked shipment), so the
     // invoice and shipment activity views show the decision.
     const shipmentIds = Array.isArray(invoice.shipment_ids) && invoice.shipment_ids.length ? invoice.shipment_ids : (invoice.shipment_id ? [invoice.shipment_id] : []);
     const historyRows = history ? [
-      history.buildRow({ entityType: 'invoice', entityId: invoiceId, action: 'status', field: 'status', before: invoice.status, after: v.decision, user, metadata: { reason: v.reason, manual: true, apResolution: true } }),
+      history.buildRow({ entityType: 'invoice', entityId: invoiceId, action: 'status', field: 'status', before: invoice.status, after: v.decision, user,
+        metadata: { reason: v.reason, manual: true, apResolution: true, ...(v.manual ? { manualException: true, evidence: v.manual.evidence, failedChecks: v.manual.failedChecks.map((c) => c.detail) } : {}) } }),
       ...shipmentIds.map((sid) => history.buildRow({ entityType: 'shipment', entityId: sid, action: 'invoice', field: 'status', before: invoice.status, after: v.decision, user,
         metadata: { invoiceId, invoiceNumber: invoice.invoice_number, carrier: invoice.carrier, invoicedAmount: invoice.invoiced_amount, agreedCost: invoice.agreed_cost, decisionReason: v.reason, manual: true } })),
     ].map(({ created_at: _c, ...row }) => row) : []; // eslint-disable-line camelcase
@@ -97,13 +111,17 @@ function createApReleaseService({
     const updated = await repo.resolveException({
       invoiceId, decision: v.decision, reason: v.reason, by: who(user), byId: (user && (user.id || user.sub)) || null, role: actorRole,
       history: historyRows, eventType: action === 'approve' ? 'exception_approved' : 'exception_disputed',
-      detail: action === 'approve'
+      detail: v.manual
+        ? `${label}: approved as a MANUAL EXCEPTION by ${who(user)} — ${v.manual.confirmation}. Failed checks kept on record: ${v.manual.failedChecks.map((c) => c.detail).filter(Boolean).join(' ')} Reason: "${v.reason}". Evidence: "${v.manual.evidence}".`
+        : action === 'approve'
         ? `${label}: exception approved by ${who(user)} — "${v.reason}". Not export-eligible until revalidated and released.`
         : `${label}: disputed with ${invoice.carrier} by ${who(user)} — "${v.reason}". Blocked from export.`,
       payload: { invoiced: r2(invoice.invoiced_amount), agreed: invoice.agreed_cost == null ? null : r2(invoice.agreed_cost), variance: invoice.variance == null ? null : r2(invoice.variance), agentFinding: invoice.decision_reason || null,
-        ...(audit ? { revalidation: { verdict: audit.verdict, passed: audit.passed } } : {}) },
+        ...(audit ? { revalidation: { verdict: audit.verdict, passed: audit.passed } } : {}),
+        ...(v.manual ? { manualException: true, reason: v.reason, evidence: v.manual.evidence, failedChecks: v.manual.failedChecks,
+          amount: v.manual.amount, aboveContract: v.manual.aboveContract, confirmation: v.manual.confirmation } : {}) },
     });
-    return { invoice: updated, next: action === 'approve' ? 'Revalidate and release it under Release & export.' : null };
+    return { invoice: updated, manualException: Boolean(v.manual), next: action === 'approve' ? 'Release it under Release & export.' : null };
   }
 
   // ── Revalidate on demand (re-run the 3-way match against live TMS data) ──
@@ -123,7 +141,7 @@ function createApReleaseService({
   async function release({ invoiceId, note = '', user, actorRole = null }) {
     const invoice = await repo.getInvoice(invoiceId);
     if (!invoice) throw httpError(404, 'Invoice not found in this domain');
-    const { standing, audit } = await standingOf(invoice);
+    const { standing, audit, manualException } = await standingOf(invoice);
     const decision = policy.decideRelease({ standing });
     const label = invoice.invoice_number || invoice.id;
     if (!decision.ok) {
@@ -136,13 +154,14 @@ function createApReleaseService({
     const words = {
       validated: 'agent-validated, revalidated clean at release',
       revalidated: `exception approved by ${standing.exceptionApprovedBy}, revalidated clean at release`,
+      manual_exception: `MANUAL EXCEPTION approved by ${standing.exceptionApprovedBy}; the 3-way match still fails (${(standing.failedChecks || [])[0] || 'see history'}) and that difference was accepted`,
     }[decision.path];
     // One transaction: lock the invoice, refuse if it changed since this revalidation, write release + ledger.
     const [carrierKey, invoiceNumberKey] = policy.billKey(invoice).split('|');
     const row = await repo.releaseInvoice({
       invoiceId, path: decision.path, by: who(user), byId: (user && (user.id || user.sub)) || null, role: actorRole,
       note: String(note || '').trim() || null, exceptionBy: standing.exceptionApprovedBy,
-      justification: null,
+      justification: decision.path === 'manual_exception' && manualException ? `${manualException.reason || ''} | Evidence: ${manualException.evidence || ''}`.trim() : null,
       verdict: audit ? audit.verdict : 'not_run', expectedAmount: r2(invoice.invoiced_amount),
       expectedDecidedBy: invoice.decided_by == null ? null : invoice.decided_by,
       expectedDecidedAt: invoice.decided_at == null ? null : invoice.decided_at,
@@ -277,13 +296,14 @@ function createApReleaseService({
       if (release || exportItem) taken.delete(policy.billKey(inv));
       // Preview revalidation for what is still waiting; the release itself re-runs it and records it.
       const audit = release || exportItem ? null : await revalidationOf(inv);
-      const standing = policy.classify({ invoice: inv, release, exportItem, takenBillKeys: taken, audit });
+      const manualException = release || exportItem ? null : await manualExceptionOf(inv);
+      const standing = policy.classify({ invoice: inv, release, exportItem, takenBillKeys: taken, audit, manualException });
       return {
         invoiceId: inv.id, invoiceNumber: inv.invoice_number, carrier: inv.carrier,
         shipment: inv.shipment_id || (inv.shipment_ids || []).join(' '), amount: r2(inv.invoiced_amount),
         invoiceDate: inv.invoice_date, approvedBy: inv.decided_by, approvedAt: inv.decided_at, approvalReason: inv.decision_reason,
         state: standing.state, path: standing.path, needsOverride: standing.needsOverride, blockers: standing.blockers,
-        exceptionApprovedBy: standing.exceptionApprovedBy,
+        exceptionApprovedBy: standing.exceptionApprovedBy, manualException: Boolean(standing.manualException), failedChecks: standing.failedChecks || [],
         revalidation: audit ? { verdict: audit.verdict, passes: PASS.has(audit.verdict), issues: audit.issues.map((i) => i.detail) } : null,
         release: release && { path: release.release_path, by: release.released_by, at: release.released_at, note: release.note, justification: release.override_justification },
         exportBatchId: exportItem ? exportItem.batch_id : null,
@@ -297,7 +317,7 @@ function createApReleaseService({
     const sum = (list) => r2(list.reduce((s, x) => s + x.amount, 0));
     const by = (st) => rows.filter((r) => r.state === st);
     return {
-      policy: { erpReadOnly: true, netsuiteWrites: false, overridePath: false },
+      policy: { erpReadOnly: true, netsuiteWrites: false, manualExceptions: getApPolicy({ env }).manualExceptions },
       awaitingRelease: by('awaiting_release'), released: by('released'), exported: by('exported'),
       blocked: [...by('blocked'), ...heldRows],
       totals: { awaitingRelease: sum(by('awaiting_release')), released: sum(by('released')), exported: sum(by('exported')) },

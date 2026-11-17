@@ -15,14 +15,16 @@ function TriggerBadge({ run }) {
   const t = scheduled ? TONE.info : TONE.none;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 9px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", background: t.bg, color: t.fg, border: `1px solid ${t.line}` }}>
-      {scheduled ? "⏱ Scheduled" : "👆 Manual"}
+      {!scheduled ? "👆 Manual" : run.startedBy === "new-email" ? "✉ New email" : "⏱ Automatic"}
     </span>
   );
 }
 
 function ScheduleBanner({ schedule }) {
   if (!schedule) return null;
-  const text = schedule.on
+  const text = schedule.live
+    ? `Live: the agent reads each new email in ${schedule.mailbox} as it arrives${schedule.connected ? "" : " (reconnecting…)"}.${schedule.everySec ? ` Backup check every ${runEvery(schedule.everySec)}.` : ""} Last check ${dateTime(schedule.lastCheckAt)}. Checks that find nothing are not listed.`
+    : schedule.on
     ? `The agent checks ${schedule.mailbox} every ${runEvery(schedule.everySec)}. Last check ${dateTime(schedule.lastCheckAt)}. Checks that find nothing are not listed.`
     : `The mailbox timer is off for ${schedule.mailbox || "the AP mailbox"}: invoices are read when someone presses 📬 Read AP Mailbox.`;
   return (
@@ -32,6 +34,9 @@ function ScheduleBanner({ schedule }) {
     </div>
   );
 }
+
+// What started an automatic run (invoice_intake_runs.started_by).
+const TRIGGER_LABEL = { "new-email": "New email", "catch-up-check": "Catch-up check", "backup-check": "Backup check", scheduler: "Timer" };
 
 function RunInvoices({ runId, onOpen }) {
   const { detail, loading, error } = useIntakeRun(runId);
@@ -120,7 +125,7 @@ export default function AgentRunsLog({ refreshKey, canDecide, onChanged }) {
                   <tr key={r.id} onClick={() => setOpenRun(open ? null : r.id)} style={{ background: open ? "#F8FAFC" : undefined }} title={open ? "Hide the invoices" : "Show the invoices from this run"}>
                     <td style={{ whiteSpace: "nowrap" }}>{open ? "▾" : "▸"} {dateTime(r.startedAt)}</td>
                     <td><TriggerBadge run={r} /><div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 3 }}>{r.label}</div></td>
-                    <td style={{ fontSize: 12.5 }}>{r.trigger === "schedule" ? "Timer" : r.startedBy}</td>
+                    <td style={{ fontSize: 12.5 }}>{r.trigger === "schedule" ? (TRIGGER_LABEL[r.startedBy] || "Timer") : r.startedBy}</td>
                     <td style={{ fontSize: 12.5, color: "#475569" }}>{r.mailbox || (r.channel === "inbox_folder" ? "Inbox folder" : "—")}</td>
                     <td style={{ textAlign: "right" }}>{num(r.emailsRead)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{c.documents || 0}</td>

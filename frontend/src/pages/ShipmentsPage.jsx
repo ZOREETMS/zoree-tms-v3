@@ -32,7 +32,7 @@ import TenderAcceptModal from "../components/shipments/TenderAcceptModal";
 import ShipmentAccessorialApprovals from "../components/shipments/ShipmentAccessorialApprovals";
 import ShipmentInvoices from "../components/shipments/ShipmentInvoices";
 import { useShipmentInvoices } from "../hooks/useShipmentInvoices";
-import { invoicedStep, withBillingStatus } from "../services/shipmentInvoiceService";
+import { invoicedStep, invoiceStatusOf } from "../services/shipmentInvoiceService";
 import { useInvoicesByShipment } from "../hooks/useInvoicesByShipment";
 import { buildLaneKey } from "../utils/laneUtils";
 import { TOAST_DURATIONS } from "../constants/toast";
@@ -1132,7 +1132,8 @@ export default function ShipmentsPage() {
       return {
         ...s,
         _carrier: resolveCarrierName(s),
-        _displayStatus: withBillingStatus(effectiveShipmentStatus(s), invoicesByShipment.get(s.id)),
+        _displayStatus: effectiveShipmentStatus(s),
+        _invoice: invoiceStatusOf(invoicesByShipment.get(s.id)),
         _linkedOrders: linkedOrders,
         _orderCount: linkedOrders.length,
         _commodity: deriveCommodityFromOrders(linkedOrders) || s.commodity || "",
@@ -1157,8 +1158,9 @@ export default function ShipmentsPage() {
       });
     }
     return [...list].sort((a, b) => {
-      const av = String((sortCol === "status" ? a._displayStatus : a[sortCol]) || "").toLowerCase();
-      const bv = String((sortCol === "status" ? b._displayStatus : b[sortCol]) || "").toLowerCase();
+      const pick = (r) => (sortCol === "status" ? r._displayStatus : sortCol === "invoice" ? r._invoice?.label : r[sortCol]);
+      const av = String(pick(a) || "").toLowerCase();
+      const bv = String(pick(b) || "").toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
   }, [shipments, orders, q, statusFilter, modeFilter, shipFromFilter, shipToFilter, createdFrom, createdTo, idsFilter, sortCol, sortAsc, invoicesByShipment]);
@@ -1600,7 +1602,7 @@ export default function ShipmentsPage() {
   const statusCounts = useMemo(() => {
     const c = { All: shipments.length };
     shipments.forEach((s) => {
-      const st = withBillingStatus(effectiveShipmentStatus(s), invoicesByShipment.get(s.id));
+      const st = effectiveShipmentStatus(s);
       c[st] = (c[st] || 0) + 1;
     });
     return c;
@@ -1661,7 +1663,7 @@ export default function ShipmentsPage() {
           className="search"
         />
         <select className="fsel" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          {["All", "Planned", "Tendered", "Tender Rejected", "Tender Accepted", "In Transit", "Delivered", "Invoicing", "Invoiced", "Invoice Disputed", "Cancelled"].map((s) => (
+          {["All", "Planned", "Tendered", "Tender Rejected", "Tender Accepted", "In Transit", "Delivered", "Cancelled"].map((s) => (
             <option key={s} value={s}>{s === "All" ? "ALL STATUSES" : s} {statusCounts[s] ? `(${statusCounts[s]})` : ""}</option>
           ))}
         </select>
@@ -1729,14 +1731,15 @@ export default function ShipmentsPage() {
             <th>Est. Cost</th>
             <th>Pickup</th>
             <th>Delivery</th>
-            <th onClick={() => toggleSort("status")}>Status <SortIcon col="status" /></th>
+            <th onClick={() => toggleSort("status")}>Shipment status <SortIcon col="status" /></th>
+            <th onClick={() => toggleSort("invoice")} title="Carrier invoice for this shipment">Invoice status <SortIcon col="invoice" /></th>
             <th title="OMS sync — did the tender-accept reach the OMS mirror?">OMS</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={12} className="empty-state">No shipments found</td></tr>
+            <tr><td colSpan={13} className="empty-state">No shipments found</td></tr>
           ) : rows.filter((s) => s.bol_type !== "CBOL").map((s) => (<React.Fragment key={s.id}>
             <tr>
               <td onClick={(e) => e.stopPropagation()}>
@@ -1784,6 +1787,9 @@ export default function ShipmentsPage() {
                 <span className={STATUS_BADGES[s._displayStatus] || "badge badge-blue"}>
                   {s._displayStatus || "—"}
                 </span>
+              </td>
+              <td>
+                <span className={s._invoice?.cls || "badge"} style={s._invoice?.style}>{s._invoice?.label || "—"}</span>
               </td>
               <td>
                 <OmsSyncPill
@@ -1870,7 +1876,7 @@ export default function ShipmentsPage() {
             {/* CBOL sub-rows for MBOL shipments */}
             {s.bol_type === "MBOL" && rows.filter((c) => c.bol_type === "CBOL" && c.master_shipment_id === s.id).map((c) => (
               <tr key={c.id} style={{ background: "#f8faff", fontSize: 11 }}>
-                <td colSpan={12} style={{ padding: "4px 16px 4px 40px" }}>
+                <td colSpan={13} style={{ padding: "4px 16px 4px 40px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "nowrap" }}>
                     <span className="badge badge-teal" style={{ fontSize: 8, padding: "0 5px", height: 16, lineHeight: "16px" }}>CBOL</span>
                     <a href="#" onClick={(e) => { e.preventDefault(); setDetailShipment(c); }} className="mono" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 11 }}>{c.id}</a>

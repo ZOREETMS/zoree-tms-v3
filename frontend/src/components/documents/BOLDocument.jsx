@@ -1,3 +1,4 @@
+import { BRAND } from "../../config/brand";
 const cellStyle = { padding: "10px 16px", borderRight: "1px solid #ccc" };
 const headerCellStyle = { padding: "8px 16px", textAlign: "left", fontSize: 10, textTransform: "uppercase", borderRight: "1px solid #ccc" };
 const sectionHeaderStyle = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".8px", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 8 };
@@ -24,7 +25,7 @@ export default function BOLDocument({ doc, shipment, order, carrier }) {
       {/* Header */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", borderBottom: "2px solid #000" }}>
         <div style={{ padding: "12px 16px", borderRight: "2px solid #000" }}>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2, marginBottom: 2 }}>ZOREE TMS</div>
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2, marginBottom: 2 }}>{BRAND.docTitle}</div>
           <div style={{ fontSize: 10, color: "#444" }}>1309 Coffeen Ave, Ste 3336, Sheridan, WY 82801</div>
           <div style={{ fontSize: 10, color: "#444" }}>support@zoree.io &nbsp;|&nbsp; zoree.io</div>
           <div style={{ marginTop: 8, fontSize: 14, fontWeight: 800, letterSpacing: 1, borderTop: "1px solid #ccc", paddingTop: 8 }}>
@@ -52,7 +53,7 @@ export default function BOLDocument({ doc, shipment, order, carrier }) {
         </div>
         <div style={{ padding: "12px 16px", borderRight: "2px solid #000" }}>
           <div style={sectionHeaderStyle}>Shipper (Origin)</div>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>{order ? order.customer : "Zoree Shipper"}</div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>{order ? order.customer : BRAND.shipper}</div>
           <div style={{ fontSize: 11, color: "#444", marginTop: 3 }}>{s.origin}</div>
           <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>Ready: {s.pickup}</div>
         </div>

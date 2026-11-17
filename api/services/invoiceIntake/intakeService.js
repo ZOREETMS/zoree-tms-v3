@@ -23,6 +23,7 @@ const costLines = require('../invoiceCostLines');
 const freightAudit = require('../agents/freightAudit');
 const extractor = require('./pdfExtractor');
 const readChecks = require('./readChecks');
+const readVerifier = require('./readVerifier');
 const repo = require('./intakeRepository');
 const intakeFiles = require('./intakeFiles');
 const senderCheck = require('./senderCheck');
@@ -116,12 +117,14 @@ async function closeDrafts({ invoice, drafts, user }) {
   return notes.length ? ` ${notes.join(' ')}` : '';
 }
 
-function readColumns(read, chk) {
+function readColumns(read, chk, verify = null) {
   const f = read.fields;
   return {
     invoice_number: f.invoiceNumber, carrier: chk.carrier || f.carrier, shipment_ref: f.shipmentRef,
     total: f.total, read_confidence: f.confidence, model: read.model,
-    read_warnings: f.warnings, raw_extraction: f,
+    read_warnings: f.warnings,
+    // The independent Jev check rides with the read (raw_extraction is jsonb).
+    raw_extraction: verify ? { ...f, verify } : f,
   };
 }
 
@@ -232,10 +235,12 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
     return publicResult(await keep({ ...base, status: 'failed', problems: [e.message], outcome_reason: `Could not read the PDF: ${e.message}` }));
   }
 
-  // 3. Check the read before trusting it.
+  // 3. Check the read before trusting it: Jev independently compares the
+  //    read with the PDF's printed text, then the rule checks run.
   const carriers = await loadCarriers();
-  const chk = readChecks.check(read.fields, { knownCarriers: carriers.map((c) => c.name).filter(Boolean) });
-  const cols = readColumns(read, chk);
+  const verify = await readVerifier.verify({ buffer, fields: read.fields });
+  const chk = readChecks.check(read.fields, { knownCarriers: carriers.map((c) => c.name).filter(Boolean), verify });
+  const cols = readColumns(read, chk, verify);
   if (!chk.ok) {
     return publicResult(await keep({ ...base, ...cols, status: 'needs_manual', problems: chk.problems,
       outcome_reason: chk.problems.every((p) => /not a carrier on file/.test(p))
@@ -251,7 +256,7 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
   const replaced = dup ? [] : sameNumber;
   if (dup) {
     return publicResult(await keep({ ...base, ...cols, status: 'duplicate', duplicate_of_invoice_id: dup.id,
-      outcome_reason: `Invoice ${dup.invoice_number} from ${dup.carrier} is already in Zoree (${dup.status}). Pay once — nothing created.` }), { passed: chk.passed });
+      outcome_reason: `Invoice ${dup.invoice_number} from ${dup.carrier} is already in ${process.env.APP_BRAND_NAME || 'Zoree'} (${dup.status}). Pay once — nothing created.` }), { passed: chk.passed });
   }
 
   // 5. Create the invoice through the single writer; AP send waits for the line audit.

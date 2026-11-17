@@ -7,6 +7,7 @@ import {
   isDestructiveChatAction,
 } from "../services/zoreeAIActionsService";
 import { chatGate } from "../services/jevTriageService";
+import { BRAND } from "../config/brand";
 
 /* ─────────────────────────────────────────────
    ZoreeAI — Floating chat assistant (UI only)
@@ -137,7 +138,7 @@ export default function ZoreeAI({ data }) {
   function initChat() {
     const welcome = {
       role: "ai",
-      text: "Hi! 👋 I'm ZoreeAI — your TMS copilot.\n\nJust tell me what to do and I'll execute it:\n• **\"Plan ORD-2026-XXXXX\"** → I pick the best carrier, price it, create the shipment\n• **Shipment summary** — overview of all in-transit & exceptions\n• **Carrier performance** — OTD rates and shipment counts\n• Assign / reassign carriers, hold or cancel orders, flag exceptions\n\nNo steps. No options. Just results.",
+      text: "Hi! 👋 I'm " + BRAND.assistant + " — your TMS copilot.\n\nJust tell me what to do and I'll execute it:\n• **\"Plan ORD-2026-XXXXX\"** → I pick the best carrier, price it, create the shipment\n• **Shipment summary** — overview of all in-transit & exceptions\n• **Carrier performance** — OTD rates and shipment counts\n• Assign / reassign carriers, hold or cancel orders, flag exceptions\n\nNo steps. No options. Just results.",
     };
     setMessages([welcome]);
     chatHistoryRef.current = [];
@@ -296,7 +297,7 @@ export default function ZoreeAI({ data }) {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: "ai", text: `⚠️ Could not reach ZoreeAI.\n\nError: ${err.message}` },
+        { role: "ai", text: `⚠️ Could not reach ${BRAND.assistant}.\n\nError: ${err.message}` },
       ]);
     } finally {
       setTyping(false);
@@ -330,7 +331,7 @@ export default function ZoreeAI({ data }) {
   return (
     <>
       {/* Floating Action Button */}
-      <div className="zoree-ai-fab" onClick={() => setOpen(!open)} title="Ask ZoreeAI">
+      <div className="zoree-ai-fab" onClick={() => setOpen(!open)} title={`Ask ${BRAND.assistant}`}>
         🧠
       </div>
 
@@ -341,7 +342,7 @@ export default function ZoreeAI({ data }) {
           <div className="zoree-ai-header">
             <div className="zoree-ai-header-icon">🧠</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>ZoreeAI</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>{BRAND.assistant}</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)" }}>
                 {connected ? (
                   <>
@@ -368,7 +369,7 @@ export default function ZoreeAI({ data }) {
             <div className="zoree-ai-apikey-screen">
               <div style={{ fontSize: 32 }}>🔑</div>
               <div style={{ fontWeight: 700, fontSize: 15, color: "#1e2d6b", textAlign: "center" }}>
-                Connect ZoreeAI
+                Connect {BRAND.assistant}
               </div>
               <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", lineHeight: 1.6 }}>
                 Enter your Anthropic API key to enable the AI assistant. Your key is stored only in

@@ -4648,6 +4648,8 @@ server.listen(PORT, () => {
   teamsNotify.start({ bus, EVENTS });
 
   // Email order agent. No-op unless EMAIL_INTAKE_ENABLED=true.
+  // AP mailbox: run the invoice agent when new email arrives (+ backup check).
+  require('./services/emailIntake/apWatcher').start();
   emailIntakePoller.start();
   console.log('');
 });

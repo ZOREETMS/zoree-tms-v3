@@ -34,6 +34,26 @@ export function withBillingStatus(status, invoices) {
   return "Invoicing";
 }
 
+/**
+ * Invoice status of a shipment, shown in its own column next to the
+ * shipment status (the shipment status is never overwritten by billing).
+ *   no carrier invoice        → Not invoiced
+ *   any invoice approved/paid → Approved
+ *   any disputed / rejected   → Disputed / Rejected
+ *   any on hold               → On hold (AP must decide)
+ *   otherwise                 → Received (being checked)
+ */
+const GREY = { background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" };
+export function invoiceStatusOf(invoices) {
+  const list = (invoices || []).filter((i) => i.status !== "Duplicate");
+  if (!list.length) return { label: "Not invoiced", cls: "badge", style: GREY };
+  if (list.some((i) => i.status === "Approved" || i.status === "Paid")) return { label: list.some((i) => i.status === "Paid") ? "Paid" : "Approved", cls: "badge badge-green" };
+  if (list.some((i) => i.status === "Disputed")) return { label: "Disputed", cls: "badge badge-red" };
+  if (list.some((i) => i.status === "Rejected")) return { label: "Rejected", cls: "badge badge-red" };
+  if (list.some((i) => i.status === "On Hold")) return { label: "On hold", cls: "badge badge-amber" };
+  return { label: "Received", cls: "badge badge-blue" };
+}
+
 export async function getShipmentInvoices(shipmentId) {
   const data = await InvoicesApi.list({ shipment: shipmentId });
   const rows = Array.isArray(data?.invoices) ? data.invoices : Array.isArray(data) ? data : [];

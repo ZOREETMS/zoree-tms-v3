@@ -48,6 +48,7 @@ import { useAuth } from "./state/AuthContext";
 import { DbApi } from "./lib/api";
 import { fetchDurations as fetchDockLoadingDurations } from "./services/dockLoadingDurationsService";
 import RoleGuard from "./components/RoleGuard";
+import { BRAND } from "./config/brand";
 
 function PrivateRoutes({ data }) {
   return (
@@ -225,7 +226,7 @@ export default function App() {
       <div className="screen-center">
         <div style={{ textAlign: "center" }}>
           <div className="spinner" style={{ margin: "0 auto 12px" }} />
-          <div>Loading Zoree TMS...</div>
+          <div>Loading {BRAND.product}...</div>
         </div>
       </div>
     );

@@ -94,7 +94,7 @@ function readAccountLogged(account, tally, { trigger, startedBy, domains }) {
  */
 async function runOnce({ accounts = null, trigger = 'schedule', startedBy = 'scheduler', domains = [] } = {}) {
   if (state.running) return { skipped: true, reason: 'a check is already running' };
-  const list = accounts || mailbox.timerAccounts();
+  const list = accounts || mailbox.timerAccounts().filter((a) => !(state.apHandled && a.ap));
   if (!list.length) throw new Error('Mailbox not configured: set EMAIL_INTAKE_IMAP_USER and EMAIL_INTAKE_IMAP_PASS in api/.env');
   if (!extractor.isConfigured()) throw new Error('ANTHROPIC_API_KEY is not set in api/.env');
   state.running = true;
@@ -119,8 +119,30 @@ async function runOnce({ accounts = null, trigger = 'schedule', startedBy = 'sch
   } finally {
     state.running = false;
     state.lastRunAt = new Date().toISOString();
+    // A trigger arrived during this run: run once more now, so that email
+    // does not wait for the next backup check.
+    if (state.pending) {
+      const next = state.pending;
+      state.pending = null;
+      setImmediate(() => { runOnce(next).catch(() => {}); });
+    }
   }
 }
+
+/**
+ * Run now, or — when a run is already going — queue exactly one more run
+ * to start as soon as it ends (later requests replace the queued one).
+ */
+function requestRun(opts = {}) {
+  if (state.running) {
+    state.pending = opts;
+    return Promise.resolve({ queued: true });
+  }
+  return runOnce(opts);
+}
+
+/** apWatcher owns the AP mailbox's triggers; the general timer skips it. */
+function setApHandled(on) { state.apHandled = Boolean(on); }
 
 function start() {
   if (String(process.env.EMAIL_INTAKE_ENABLED || '').toLowerCase() !== 'true') {
@@ -132,12 +154,13 @@ function start() {
     return false;
   }
   const sec = Math.max(30, Number(process.env.EMAIL_INTAKE_POLL_SECONDS) || 120);
+  const timed = mailbox.timerAccounts().filter((a) => !(state.apHandled && a.ap));
   state.enabled = true;
   state.intervalSec = sec;
   state.timer = setInterval(() => { runOnce().catch(() => {}); }, sec * 1000);
   if (state.timer.unref) state.timer.unref();
   setTimeout(() => { runOnce().catch(() => {}); }, 5000);
-  console.log(`   ✅ Email order agent watching ${mailbox.timerAccounts().map((a) => a.user).join(' + ')} every ${sec}s`);
+  console.log(`   ✅ Email order agent watching ${timed.map((a) => a.user).join(' + ')} every ${sec}s`);
   const ap = mailbox.apConfig();
   if (ap && !ap.auto) console.log(`   ℹ️  AP mailbox ${ap.user} is read only when "Read AP Mailbox" is pressed`);
   return true;
@@ -169,4 +192,4 @@ function status() {
   };
 }
 
-module.exports = { start, stop, runOnce, status };
+module.exports = { start, stop, runOnce, status, requestRun, setApHandled };

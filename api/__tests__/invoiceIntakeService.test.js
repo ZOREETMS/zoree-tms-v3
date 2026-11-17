@@ -25,9 +25,12 @@ stub('invoiceAudit.js', {
 stub('invoiceCostLines.js', { replaceForInvoice: async (a) => { calls.push(['lines', a.lines.map((l) => l.accessorial_type || l.cost_type)]); } });
 stub('agents/freightAudit/index.js', { auditOne: async () => ({ audit: lineAudit }) });
 stub('invoiceIntake/pdfExtractor.js', { extract: async () => ({ fields: extracted, model: 'test-model' }) });
+let verifyResult = null;
+let lastRow = null;
+stub('invoiceIntake/readVerifier.js', { verify: async () => verifyResult });
 stub('invoiceIntake/intakeRepository.js', {
   findCreatedByHash: async () => priorByHash,
-  record: async (row) => ({ id: 'IN-1', ...row }),
+  record: async (row) => { lastRow = row; return { id: 'IN-1', ...row }; },
   listRecent: async () => [],
 });
 process.env.FREIGHT_AUDIT_SHADOW_MODE = 'off'; // tests must not depend on today's date
@@ -43,7 +46,7 @@ const good = {
   ],
 };
 const okLines = async (a) => { calls.push(['lines', a.lines.map((l) => l.accessorial_type || l.cost_type)]); };
-const reset = () => { require.cache[require.resolve(S('invoiceCostLines.js'))].exports.replaceForInvoice = okLines; calls.length = 0; extracted = JSON.parse(JSON.stringify(good)); existingInvoices = []; priorByHash = null; tolerance = 'Approved'; lineAudit = { verdict: 'approve', issues: [], passed: ['Detention approved'] }; };
+const reset = () => { require.cache[require.resolve(S('invoiceCostLines.js'))].exports.replaceForInvoice = okLines; calls.length = 0; extracted = JSON.parse(JSON.stringify(good)); existingInvoices = []; priorByHash = null; tolerance = 'Approved'; lineAudit = { verdict: 'approve', issues: [], passed: ['Detention approved'] }; verifyResult = { status: 'checked', score: 0.97, min: 0.8, answers: { fields_match: 0.98, lines_match: 0.97, total_matches: 0.99 } }; lastRow = null; };
 const run = () => svc.intakePdf({ fileName: 'pe.pdf', buffer: Buffer.from('%PDF-1.4 test'), user: { email: 'ap@x.com' } });
 
 test('clean PDF: created, lines typed, line-audited, then sent to AP', async () => {
@@ -172,4 +175,35 @@ test('change freeze (shadow mode): a clean invoice is recommended, never release
     assert.equal(r.sentToAp, false);
     assert.match(r.summary, /Shadow mode/);
   } finally { process.env.FREIGHT_AUDIT_SHADOW_MODE = 'off'; }
+});
+
+test('Jev independent check: a low score sends the invoice to a person, nothing created', async () => {
+  reset();
+  verifyResult = { status: 'checked', score: 0.04, min: 0.8, answers: { fields_match: 0.97, lines_match: 0.04, total_matches: 0.98 } };
+  const r = await run();
+  assert.equal(r.status, 'needs_manual');
+  assert.ok(!calls.some((c) => c[0] === 'submit'), 'no invoice created');
+  assert.ok(lastRow.problems.some((p) => /Jev\) scored the read 0\.04.*charge lines/.test(p)));
+});
+
+test('Jev independent check: unreachable means a person keys it (fails closed)', async () => {
+  reset();
+  verifyResult = { status: 'error', min: 0.8, detail: 'Jev timed out after 8000ms' };
+  const r = await run();
+  assert.equal(r.status, 'needs_manual');
+  assert.ok(lastRow.problems.some((p) => /could not run \(Jev timed out/.test(p)));
+});
+
+test('Jev independent check: a scan with no text layer goes to a person', async () => {
+  reset();
+  verifyResult = { status: 'no_text', min: 0.8, detail: 'no text' };
+  const r = await run();
+  assert.equal(r.status, 'needs_manual');
+});
+
+test('Jev independent check: the score is kept with the read for AP to see', async () => {
+  reset();
+  const r = await run();
+  assert.equal(r.status, 'created');
+  assert.equal(lastRow.raw_extraction.verify.score, 0.97);
 });

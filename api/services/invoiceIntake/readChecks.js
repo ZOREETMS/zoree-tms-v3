@@ -18,12 +18,26 @@ function matchCarrier(printed, knownCarriers) {
   return (knownCarriers || []).find((c) => firstWord(c) === k) || null;
 }
 
+const WHAT = { fields_match: 'invoice number, carrier, shipment or date', lines_match: 'charge lines', total_matches: 'total' };
+
+/** The independent Jev check (readVerifier) as problems / passed lines. */
+function verifyLines(v) {
+  if (!v || v.status === 'off') return { problems: [], passed: [] };
+  if (v.status === 'checked') {
+    if (v.score >= v.min) return { problems: [], passed: [`Independent check (Jev): the read matches the PDF text (${v.score.toFixed(2)})`] };
+    const off = Object.entries(v.answers || {}).filter(([, n]) => n < v.min).map(([k]) => WHAT[k] || k);
+    return { problems: [`Independent check (Jev) scored the read ${v.score.toFixed(2)}, below ${v.min}: the ${off.join(', ') || 'read'} may not match the PDF.`], passed: [] };
+  }
+  if (v.status === 'no_text') return { problems: ['The independent check (Jev) could not run: the PDF has no readable text layer (a scan or image). A person keys it.'], passed: [] };
+  return { problems: [`The independent check (Jev) could not run${v.detail ? ` (${v.detail})` : ''}. A person keys it.`], passed: [] };
+}
+
 /**
  * @param {object} fields         normalized extraction
- * @param {object} ctx            { knownCarriers: string[] }
+ * @param {object} ctx            { knownCarriers: string[], verify?: readVerifier result }
  * @returns {{ ok:boolean, problems:string[], passed:string[], carrier:string|null, lines:object[] }}
  */
-function check(fields, { knownCarriers = [], now = new Date() } = {}) {
+function check(fields, { knownCarriers = [], now = new Date(), verify = null } = {}) {
   const problems = [];
   const passed = [];
   if (!fields) return { ok: false, problems: ['Nothing could be read from the PDF.'], passed, carrier: null, lines: [] };
@@ -57,6 +71,10 @@ function check(fields, { knownCarriers = [], now = new Date() } = {}) {
   if (!(fields.confidence >= MIN_CONFIDENCE)) problems.push(`Read confidence ${fields.confidence.toFixed(2)} is below ${MIN_CONFIDENCE}.`);
   else passed.push(`Read confidence ${fields.confidence.toFixed(2)}`);
 
+  const v = verifyLines(verify);
+  problems.push(...v.problems);
+  passed.push(...v.passed);
+
   const lines = fields.lines.map((l, i) => ({
     cost_type: COST_TYPE[l.category] || 'other',
     description: l.description,
@@ -68,4 +86,4 @@ function check(fields, { knownCarriers = [], now = new Date() } = {}) {
   return { ok: problems.length === 0, problems, passed, carrier, lines };
 }
 
-module.exports = { check, matchCarrier, MIN_CONFIDENCE };
+module.exports = { check, matchCarrier, verifyLines, MIN_CONFIDENCE };

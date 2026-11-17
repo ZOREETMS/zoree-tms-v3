@@ -6,6 +6,7 @@ import { useInvoiceIntakeDetail } from "../../hooks/useInvoiceIntakeDetail";
 import { INTAKE_OUTCOME, LINE_STATUS, SENDER_STATUS, paymentEligibility } from "../../services/invoiceIntakeService";
 import { MIN_JUSTIFICATION } from "../../services/apReleaseService";
 import { TONE, Pill, FieldConfidence, money, pct, dateTime } from "./intakeUi";
+import { BRAND } from "../../config/brand";
 
 const SOURCE = { email: "AP mailbox", pdf_upload: "PDF upload" };
 const MARK = { ok: "✓", warn: "!", bad: "▲" };
@@ -86,7 +87,7 @@ function FieldsTab({ d }) {
     <>
       <PaymentChecks d={d} />
       <SourceEmail d={d} />
-      <Section title="Extracted by Zoree AI">
+      <Section title={`Extracted by ${BRAND.ai}`}>
         {(() => {
           const low = d.fields.filter((f) => f.confidence != null && f.confidence < 0.9);
           return low.length > 0 && (
@@ -257,7 +258,10 @@ export default function InvoiceIntakeDrawer({ intakeId, canDecide, onClose, onCh
         {d && (
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
             <Pill tone={meta.tone}>{meta.label}</Pill>
-            <Pill tone={d.entry.confidence >= 0.9 ? "ok" : "warn"}>{pct(d.entry.confidence)} read confidence</Pill>
+            <Pill tone={d.entry.confidence >= 0.9 ? "ok" : "warn"}>Claude read {pct(d.entry.confidence)}</Pill>
+            {d.readCheck && d.readCheck.jev && (d.readCheck.jev.status === "checked"
+              ? <span title="Jev independently checked Claude's read against the text printed in the PDF"><Pill tone={d.readCheck.jev.score >= d.readCheck.jev.min ? "ok" : "warn"}>Jev check {pct(d.readCheck.jev.score)}</Pill></span>
+              : d.readCheck.jev.status !== "off" && <span title={d.readCheck.jev.detail || ""}><Pill tone="warn">Jev check not run</Pill></span>)}
             {d.entry.invoiceNumber && <Pill>{d.entry.invoiceNumber}</Pill>}
             {d.entry.total != null && <Pill>{money(d.entry.total)}</Pill>}
           </div>

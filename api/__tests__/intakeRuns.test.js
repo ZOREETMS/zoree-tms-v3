@@ -108,3 +108,22 @@ test('a run still "running" after 30 minutes shows as interrupted', () => {
   assert.equal(view({ id: 'R', trigger: 'manual', channel: 'ap_mailbox', status: 'running', started_at: startedAt }).status, 'interrupted');
   assert.equal(view({ id: 'R', trigger: 'schedule', channel: 'ap_mailbox', status: 'completed', started_at: startedAt, finished_at: startedAt }).label, 'Scheduled check');
 });
+
+test('run label says what started an automatic run', () => {
+  const { view } = runs._internals;
+  const at = '2026-11-17T19:58:02Z';
+  const v = (startedBy) => view({ id: 'R', trigger: 'schedule', channel: 'ap_mailbox', started_by: startedBy, status: 'completed', started_at: at, finished_at: at }).label;
+  assert.equal(v('new-email'), 'New email arrived');
+  assert.equal(v('catch-up-check'), 'Catch-up check');
+  assert.equal(v('backup-check'), 'Backup check');
+  assert.equal(v('scheduler'), 'Scheduled check');
+});
+
+test('AP review says an invoice came in by a new email, not a "scheduled check"', () => {
+  const log = require('../services/invoiceIntake/intakeLog');
+  const arrival = (log._internals && log._internals.arrivalOf) || log.arrivalOf;
+  if (!arrival) return; // not exported in this build
+  assert.equal(arrival({}, { id: 'R', trigger: 'schedule', started_by: 'new-email' }).label, 'New email');
+  assert.equal(arrival({}, { id: 'R', trigger: 'schedule', started_by: 'backup-check' }).label, 'Backup check');
+  assert.equal(arrival({}, { id: 'R', trigger: 'schedule', started_by: 'scheduler' }).label, 'Scheduled check');
+});

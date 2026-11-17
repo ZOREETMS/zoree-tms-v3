@@ -109,7 +109,8 @@ function shortReasonOf({ row, invoice, shipment, outcome, extras = [] }) {
  */
 function arrivalOf(row, run) {
   if (run) {
-    const label = run.trigger === 'schedule' ? 'Scheduled check'
+    const AUTO = { 'new-email': 'New email', 'catch-up-check': 'Catch-up check', 'backup-check': 'Backup check' };
+    const label = run.trigger === 'schedule' ? (AUTO[run.started_by] || 'Scheduled check')
       : run.channel === 'inbox_folder' ? `Inbox folder · ${run.started_by}` : `Read AP Mailbox · ${run.started_by}`;
     return { kind: run.trigger, runId: run.id, label };
   }

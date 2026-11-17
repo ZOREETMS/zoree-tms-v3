@@ -14,6 +14,7 @@ import {
   statusOptionAllowed,
 } from "../../services/invoiceActionsService";
 import InvoiceCostLines from "./InvoiceCostLines";
+import { BRAND } from "../../config/brand";
 
 export default function InvoiceModal({
   invoice,
@@ -107,7 +108,7 @@ export default function InvoiceModal({
           <div className="modal-body">
             {invoice?.hasDocument && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "#F8FAFC" }}>
-                <span style={{ fontSize: 13 }}>📄 Read by Zoree AI from the carrier’s PDF</span>
+                <span style={{ fontSize: 13 }}>📄 Read by {BRAND.ai} from the carrier’s PDF</span>
                 <button type="button" className="btn btn-secondary btn-sm" style={{ marginLeft: "auto" }}
                   onClick={() => openInvoiceDocument(invoice.id).catch((e) => window.alert(e?.message || "Could not open the document"))}>
                   View original invoice
@@ -128,7 +129,7 @@ export default function InvoiceModal({
                   <div>{readableReason(invoice.decisionReason)}</div>
                   {(invoice.decidedBy || invoice.decidedAt) && (
                     <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
-                      {[invoice.decidedBy === "invoice-intake-agent" ? "Zoree AI" : invoice.decidedBy,
+                      {[invoice.decidedBy === "invoice-intake-agent" ? BRAND.ai : invoice.decidedBy,
                         invoice.decidedAt ? new Date(invoice.decidedAt).toLocaleString() : null].filter(Boolean).join(" · ")}
                     </div>
                   )}

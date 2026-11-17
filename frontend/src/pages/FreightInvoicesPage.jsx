@@ -15,6 +15,7 @@ import ApprovalQueue from "../components/invoices/ApprovalQueue";
 import ReleaseQueue from "../components/invoices/ReleaseQueue";
 import NetSuiteImportPreview from "../components/invoices/NetSuiteImportPreview";
 import AgentRunsLog from "../components/invoices/AgentRunsLog";
+import { useAgentRunWatch } from "../hooks/useAgentRunWatch";
 import { generateInvoiceNum, computeDueDate } from "../services/invoiceService";
 // REQ-190 / REQ-191: write-action helpers + DB row mapper live in a
 // dedicated service so the page stays a thin controller (CLAUDE_RULES
@@ -34,6 +35,9 @@ export default function FreightInvoicesPage() {
   // Approve / Dispute / Send-to-AP) must obey the Finance matrix for
   // both Finance and Viewer roles.
   const gate = useEditGate("invoices");
+  // The agent also runs on its own when new email arrives: reload the
+  // lists when such a run finishes, and show that it is reading.
+  const { running: agentRun } = useAgentRunWatch(() => loadInvoices(true));
   const [invoices, setInvoices] = useState([]);
   const [showPdfIntake, setShowPdfIntake] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
@@ -400,6 +404,12 @@ export default function FreightInvoicesPage() {
         <div>
           <div className="page-title">Freight Invoices</div>
           <div className="page-sub">3-way match, audit, and AP processing</div>
+          {agentRun && (
+            <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 8, padding: "4px 10px", borderRadius: 8, background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1D4ED8", fontSize: 12.5, fontWeight: 600 }}>
+              <span className="spinner" style={{ width: 8, height: 8, borderRadius: 4, background: "#2563EB" }} />
+              {agentRun.startedBy === "new-email" ? "New email in the AP mailbox: the agent is reading it…" : agentRun.trigger === "schedule" ? "The agent is checking the AP mailbox…" : "Reading the AP mailbox…"}
+            </div>
+          )}
         </div>
         <div className="header-actions">
           <button

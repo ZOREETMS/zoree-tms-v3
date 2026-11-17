@@ -85,7 +85,7 @@ export default function InvoiceIntakeLog({ refreshKey, canDecide, onChanged, onG
     return (
       <div className="ap-card" style={{ padding: 28, textAlign: "center", color: "#475569" }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>No invoices received yet</div>
-        <div style={{ fontSize: 13 }}>Click <b>📬 Read AP Mailbox</b> to read new carrier invoice emails.</div>
+        <div style={{ fontSize: 13 }}>The agent reads each new carrier invoice email as it arrives in the AP mailbox. To check now, click <b>📬 Read AP Mailbox</b>.</div>
       </div>
     );
   }

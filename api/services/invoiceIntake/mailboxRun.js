@@ -16,6 +16,7 @@
 const db = require('../supabase');
 const repo = require('./intakeRepository');
 const poller = require('../emailIntake/poller');
+const apWatcher = require('../emailIntake/apWatcher');
 const mailbox = require('../emailIntake/mailbox');
 const domainRouting = require('../emailIntake/domainRouting');
 const { currentDomain } = require('../domains/domainContext');
@@ -73,8 +74,22 @@ function start({ user = null } = {}) {
   return { started: true, running: true, startedAt };
 }
 
-/** Pure: whether the timer reads the AP mailbox, and how often. */
-function scheduleOf(pollerStatus, ap) {
+/**
+ * Pure: how the AP mailbox gets read — live (new-email trigger + backup
+ * check), on the general timer, or only when someone presses the button.
+ */
+function scheduleOf(pollerStatus, ap, watch = null) {
+  if (watch && watch.active) {
+    return {
+      on: true,
+      live: watch.watching,
+      connected: watch.connected,
+      everySec: watch.backupSec,
+      lastCheckAt: pollerStatus.lastRunAt,
+      lastEventAt: watch.lastEventAt,
+      mailbox: ap ? ap.user : watch.mailbox,
+    };
+  }
   const on = Boolean(pollerStatus.enabled && ap && ap.auto);
   return {
     on,
@@ -87,7 +102,7 @@ function scheduleOf(pollerStatus, ap) {
 /** Agent run log for the current domain: every scheduled check that read something, every button press. */
 async function runLog({ limit = 50 } = {}) {
   const runs = await intakeRuns.listRuns({ limit });
-  return { runs, schedule: scheduleOf(poller.status(), mailbox.apConfig()) };
+  return { runs, schedule: scheduleOf(poller.status(), mailbox.apConfig(), apWatcher.status()) };
 }
 
 module.exports = { status, start, runLog, runDetail: intakeRuns.runDetail, _internals: { scheduleOf } };

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { BRAND } from "../../config/brand";
 
 function extractCity(location) {
   if (!location) return "";
@@ -119,7 +120,7 @@ export default function InsightsCard({ orders, shipments }) {
     <div className="card" style={{ padding: 0, height: "100%" }}>
       <div className="card-header">
         <div>
-          <span className="card-title">Zoree AI Insights</span>
+          <span className="card-title">{BRAND.ai} Insights</span>
           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text3)", marginTop: 2, textTransform: "none" }}>
             Recommendations based on current shipments and exceptions
           </div>

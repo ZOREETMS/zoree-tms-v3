@@ -7,6 +7,7 @@ import { useApExports } from "../../hooks/useApExports";
 import { confirmImport, downloadBatch } from "../../services/apReleaseService";
 import ApAuditHistory from "./ApAuditHistory";
 import { Pill, money, dateTime } from "./intakeUi";
+import { BRAND } from "../../config/brand";
 
 const STATUS = { exported: ["Exported", "info"], import_confirmed: ["Imported by AP", "ok"] };
 
@@ -78,7 +79,7 @@ export default function NetSuiteImportPreview({ refreshKey, canDecide }) {
       <div className="ap-card" style={{ padding: "14px 16px", marginBottom: 14, borderLeft: "4px solid #F59E0B" }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>NetSuite Import Preview — Simulation</div>
         <div style={{ fontSize: 12.5, color: "#475569", marginTop: 4 }}>
-          What AP will import from each Zoree export file. This is not NetSuite and nothing here is posted to NetSuite —
+          What AP will import from each {BRAND.short} export file. This is not NetSuite and nothing here is posted to NetSuite —
           NetSuite stays read-only for the pilot and AP performs the import. After the pilot, subject to IT approval, the same
           batches could create vendor bills through a controlled NetSuite API with duplicate safeguards and audit logging.
         </div>
@@ -93,7 +94,7 @@ export default function NetSuiteImportPreview({ refreshKey, canDecide }) {
         <Batch key={b.id} b={b} canDecide={canDecide} busy={busy}
           onHistory={() => setHistory(b.id)}
           onDownload={() => run(async () => { await downloadBatch(b); return `${b.fileName} downloaded again — same batch, not a new export.`; })}
-          onConfirm={(ref) => run(async () => { await confirmImport(b.id, ref); return `${b.id} marked as imported by AP. Zoree did not write to NetSuite.`; })} />
+          onConfirm={(ref) => run(async () => { await confirmImport(b.id, ref); return `${b.id} marked as imported by AP. ${BRAND.short} did not write to NetSuite.`; })} />
       ))}
       {!batches.length && (
         <div className="ap-card" style={{ padding: 28, textAlign: "center", color: "#64748B", fontSize: 13 }}>

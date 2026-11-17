@@ -6,6 +6,8 @@ import { visibleNavLabels, canonicalRole } from "../config/roleMatrix";
 import RoleSwitcher from "./RoleSwitcher";
 import DomainSwitcher from "./DomainSwitcher";
 import { useFeatureAccessMap } from "../hooks/useFeatureAccess";
+import { BRAND } from "../config/brand";
+import BrandMark from "./brand/BrandMark";
 
 // QA #139: each nav item carries `featureKey` so we can drop the entry
 // when the role_feature_permissions matrix says the user has 'none'
@@ -117,8 +119,11 @@ export default function Layout({ data }) {
       <aside className="sidebar">
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="logo-word">zoree</div>
-          <div className="logo-sub">TMS PLATFORM &nbsp;<span style={{ fontSize: 9, opacity: 0.4 }}>v3.11</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {BRAND.key !== "zoree" && <BrandMark size={28} />}
+            <div className="logo-word" style={BRAND.key !== "zoree" ? { fontSize: 15, letterSpacing: 0.5, whiteSpace: "nowrap" } : undefined}>{BRAND.word}</div>
+          </div>
+          <div className="logo-sub">{BRAND.sub} &nbsp;<span style={{ fontSize: 9, opacity: 0.4 }}>v3.11</span></div>
         </div>
 
         {/* Navigation */}
@@ -161,7 +166,7 @@ export default function Layout({ data }) {
             <div className="user-avatar">{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: "12.5px", fontWeight: 500, color: "#fff" }}>{user?.email || "Not signed in"}</div>
-              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>{(user?.activeRole || user?.role || "admin").toUpperCase()} · Zoree</div>
+              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>{(user?.activeRole || user?.role || "admin").toUpperCase()} · {BRAND.short}</div>
             </div>
           </div>
           <button onClick={logout} className="sidebar-logout-btn">

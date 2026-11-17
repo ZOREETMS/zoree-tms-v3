@@ -144,7 +144,7 @@ export function BlockedTable({ rows, onHistory }) {
               <td className="mono" style={{ fontSize: 12.5 }}>{r.shipment || "—"}</td>
               <td style={{ textAlign: "right", fontWeight: 600 }}>{money(r.amount)}</td>
               <td><Pill tone={r.status === "Disputed" || r.status === "Rejected" ? "bad" : "warn"}>{r.status || "Blocked"}</Pill></td>
-              <td style={{ fontSize: 12.5, color: "#9A3412", maxWidth: 420 }}>{(r.status === "Approved" && r.blockers?.[0]) || (r.reason || "").replace(/^Needs AP review:\s*/i, "") || r.blockers?.[0]}</td>
+              <td style={{ fontSize: 12.5, color: "#9A3412", maxWidth: 420 }}>{(r.status === "Approved" && r.blockers?.[0]) || (r.reason || "").replace(/^\[[^\]]*\]\s*/, "").replace(/^Needs AP review:\s*/i, "") || r.blockers?.[0]}</td>
             </tr>
           ))}
           {!rows.length && <tr style={{ cursor: "default" }}><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "#64748B" }}>Nothing blocked.</td></tr>}

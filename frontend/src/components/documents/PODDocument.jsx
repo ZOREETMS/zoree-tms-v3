@@ -1,3 +1,4 @@
+import { BRAND } from "../../config/brand";
 const gridLabel = { display: "grid", gridTemplateColumns: "100px 1fr", fontSize: 11, lineHeight: 2 };
 
 export default function PODDocument({ doc, shipment }) {
@@ -8,7 +9,7 @@ export default function PODDocument({ doc, shipment }) {
       {/* Header */}
       <div style={{ padding: 16, borderBottom: "2px solid #000", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2 }}>ZOREE TMS</div>
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2 }}>{BRAND.docTitle}</div>
           <div style={{ fontSize: 14, fontWeight: 800, marginTop: 4, letterSpacing: 1 }}>PROOF OF DELIVERY</div>
         </div>
         <div style={{ textAlign: "right" }}>

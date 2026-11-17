@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../state/AuthContext";
+import { BRAND } from "../config/brand";
+import BrandMark from "../components/brand/BrandMark";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -30,17 +32,10 @@ export default function LoginPage() {
       <div className="login-card">
         {/* Logo — exact match from old app */}
         <div className="login-logo">
-          <svg width="56" height="56" viewBox="0 0 62 62" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="zlogin" x1="0" y1="0" x2="62" y2="62" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#818CF8"/></linearGradient></defs>
-            <circle cx="31" cy="31" r="29" fill="#111827" stroke="url(#zlogin)" strokeWidth="2"/>
-            <line x1="15" y1="18" x2="47" y2="18" stroke="white" strokeWidth="5" strokeLinecap="round"/>
-            <line x1="47" y1="18" x2="15" y2="44" stroke="white" strokeWidth="5" strokeLinecap="round"/>
-            <line x1="15" y1="44" x2="47" y2="44" stroke="white" strokeWidth="5" strokeLinecap="round"/>
-            <circle cx="47" cy="18" r="5" fill="#38BDF8"/>
-          </svg>
-          <div className="login-brand">zoree</div>
-          <div className="login-subtitle">TMS PLATFORM</div>
-          <div className="login-tagline">Intelligent Transportation Management</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}><BrandMark size={56} /></div>
+          <div className="login-brand">{BRAND.word}</div>
+          <div className="login-subtitle">{BRAND.sub}</div>
+          <div className="login-tagline">{BRAND.tagline}</div>
         </div>
 
         <form onSubmit={onSubmit}>
@@ -79,7 +74,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="login-footer">Secured by Supabase · Zoree LLC</div>
+        <div className="login-footer">Secured by Supabase · {BRAND.company}</div>
       </div>
     </div>
   );

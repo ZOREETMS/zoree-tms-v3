@@ -14,6 +14,7 @@
  */
 
 import { TMS_SCOPE_DIRECTIVE } from "./zoreeAIScope";
+import { BRAND } from "../config/brand";
 
 /**
  * Maximum counts included in the prompt. Increasing these raises
@@ -237,7 +238,7 @@ export function buildSystemPrompt(data, referencedIds = []) {
   const referencedSection = buildReferencedSection(data, referencedIds);
 
   const sections = [
-    "You are ZoreeAI, an AI assistant embedded in ZoreeTMS — a Transportation Management System.",
+    `You are ${BRAND.assistant}, an AI assistant embedded in ${BRAND.product} — a Transportation Management System.`,
     "You have live access to the TMS data below. Be concise, specific, and actionable. Reference actual IDs and numbers.",
     "",
     TMS_SCOPE_DIRECTIVE,

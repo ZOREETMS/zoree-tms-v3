@@ -26,9 +26,13 @@ const LABEL = {
 };
 
 /** Pure: how a run is named in the UI. */
+// What started an automatic run (started_by, set by apWatcher).
+const AUTO_LABEL = { 'new-email': 'New email arrived', 'catch-up-check': 'Catch-up check', 'backup-check': 'Backup check' };
+
 function labelOf(run) {
   if (!run) return null;
-  return run.trigger === 'schedule' ? LABEL.schedule : (LABEL[run.channel] || 'Manual run');
+  if (run.trigger === 'schedule') return AUTO_LABEL[run.started_by] || LABEL.schedule;
+  return LABEL[run.channel] || 'Manual run';
 }
 
 function createScope({ trigger, channel, startedBy, mailbox = null, tenantId = null }) {

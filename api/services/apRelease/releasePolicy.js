@@ -12,13 +12,17 @@
 //                          justification, and the re-run now passes (e.g.
 //                          the missing accessorial approval was added)
 //
-//   One authorized person can approve and release. A written note never
-//   bypasses a failed 3-way match: an exception can only be approved once
-//   the re-run passes (corrected invoice, approval added, or contract
-//   updated), and the same person may then release it. An invoice whose
-//   re-run fails stays blocked until the data is fixed — there is no
-//   override path. ('authorized_override' remains only so releases made
-//   under the old rule still display.)
+//     manual_exception     only when the customer turned manual exceptions on:
+//                          an authorized person accepted a known discrepancy
+//                          with a reason, evidence and an explicit amount
+//                          confirmation. The failed checks stay on record;
+//                          release re-runs the match and refuses anything
+//                          that fails beyond the checks that were accepted.
+//
+//   One authorized person can approve and release. A plain note never
+//   bypasses a failed 3-way match: the standard path is a corrected invoice
+//   or fixed data, then approve. ('authorized_override' remains only so
+//   releases made under the old two-person rule still display.)
 //
 //   Never releasable: not Approved (On Hold / Disputed / Rejected / Paid),
 //   already released, already exported, or a resend of an invoice number
@@ -26,7 +30,9 @@
 // ═══════════════════════════════════════════════════════════════════
 'use strict';
 
-const RELEASE_PATHS = Object.freeze(['validated', 'revalidated', 'authorized_override']);
+const RELEASE_PATHS = Object.freeze(['validated', 'revalidated', 'authorized_override', 'manual_exception']);
+const MIN_MANUAL_REASON = 20;   // the release row requires 20+ characters
+const MIN_EVIDENCE = 10;
 const MIN_EXCEPTION_JUSTIFICATION = 15;
 const PASSING_VERDICTS = new Set(['approve', 'review']); // review = clean but over the auto-approve limit
 
@@ -50,13 +56,56 @@ function billKey(inv) {
 
 const clean = (s) => String(s || '').trim();
 
+const cents = (n) => Math.round(Number(n || 0) * 100);
+const usd = (n) => `$${(cents(n) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Who may approve a manual exception: admins, or the named approvers; anyone who can decide when no list is set. */
+function canApproveManualException({ actor, policy }) {
+  const list = (policy && policy.exceptionApprovers) || [];
+  if (!list.length) return true;
+  return Boolean(actor && (actor.isAdmin || list.includes(String(actor.email || '').toLowerCase())));
+}
+
+/** The confirmation sentence AP ticks, built from the invoice. */
+function manualExceptionConfirmation(invoice) {
+  const above = Number(invoice.variance || 0);
+  return `Approve ${usd(invoice.invoiced_amount)}${above > 0 ? `, including ${usd(above)} above contract` : ''}`;
+}
+
+/**
+ * Pure: an authorized person accepting a known discrepancy. Needs the customer's
+ * policy on, permission, a reason, evidence, and the exact amount confirmed.
+ */
+function validateManualException({ invoice, reason, audit, manualException, policy, actor }) {
+  const label = invoice.invoice_number || invoice.id;
+  if (!policy || !policy.manualExceptions) {
+    return { ok: false, status: 409, error: `Manual exceptions are turned off for this customer. ${label} stays on hold until a corrected invoice or a contract update makes it pass.` };
+  }
+  if (!canApproveManualException({ actor, policy })) {
+    return { ok: false, status: 403, error: 'Only an authorized exception approver can approve a manual exception.' };
+  }
+  if (reason.length < MIN_MANUAL_REASON) {
+    return { ok: false, status: 400, error: `A manual exception needs a reason of at least ${MIN_MANUAL_REASON} characters.` };
+  }
+  const evidence = clean(manualException.evidence);
+  if (evidence.length < MIN_EVIDENCE) {
+    return { ok: false, status: 400, error: 'A manual exception needs supporting evidence (for example "Email from Bluewater, 11/12, rate increase").' };
+  }
+  if (manualException.confirmAmount == null || cents(manualException.confirmAmount) !== cents(invoice.invoiced_amount)) {
+    return { ok: false, status: 400, error: `Confirm the amount: ${manualExceptionConfirmation(invoice)}.` };
+  }
+  const failedChecks = (audit.issues || []).map((i) => ({ code: i.code || null, detail: i.detail || null }));
+  return { ok: true, decision: 'Approved', reason, manual: { evidence, failedChecks, amount: cents(invoice.invoiced_amount) / 100,
+    aboveContract: invoice.variance == null ? null : cents(invoice.variance) / 100, confirmation: manualExceptionConfirmation(invoice) } };
+}
+
 /**
  * Validate a person's resolution of a held invoice (approve or dispute).
  * A reviewer can't casually wave an overcharge through: approving needs a
  * written justification, and only On Hold / Pending invoices are open.
  * @returns {{ok:true, decision:'Approved'|'Disputed', reason:string} | {ok:false, error:string, status:number}}
  */
-function validateResolution({ invoice, action, justification, audit = null }) {
+function validateResolution({ invoice, action, justification, audit = null, manualException = null, policy = null, actor = null }) {
   if (!invoice) return { ok: false, status: 404, error: 'Invoice not found in this domain' };
   if (!['approve', 'dispute'].includes(action)) return { ok: false, status: 400, error: `Unknown action '${action}' (approve or dispute)` };
   if (!['On Hold', 'Pending'].includes(invoice.status)) {
@@ -67,6 +116,9 @@ function validateResolution({ invoice, action, justification, audit = null }) {
     return { ok: false, status: 400, error: action === 'approve'
       ? `Approving an exception needs a written justification (at least ${MIN_EXCEPTION_JUSTIFICATION} characters) — it is kept in the audit history.`
       : `Write what to tell the carrier (at least ${MIN_EXCEPTION_JUSTIFICATION} characters) — it is kept in the audit history.` };
+  }
+  if (action === 'approve' && manualException && audit && !PASSING_VERDICTS.has(audit.verdict) && audit.verdict !== 'error') {
+    return validateManualException({ invoice, reason: text, audit, manualException, policy, actor });
   }
   if (action === 'approve' && (!audit || !PASSING_VERDICTS.has(audit.verdict))) {
     const why = audit ? (audit.issues || []).map((i) => i.detail).filter(Boolean)[0] : null;
@@ -89,7 +141,7 @@ function validateResolution({ invoice, action, justification, audit = null }) {
  * @returns {{state:'blocked'|'awaiting_release'|'released'|'exported', path:string|null,
  *            needsOverride:boolean, exceptionApprovedBy:string|null, blockers:string[]}}
  */
-function classify({ invoice, release = null, exportItem = null, takenBillKeys = new Set(), audit = null }) {
+function classify({ invoice, release = null, exportItem = null, takenBillKeys = new Set(), audit = null, manualException = null }) {
   const label = invoice.invoice_number || invoice.id;
   const exceptionApprovedBy = isAgentActor(invoice.decided_by) ? null : invoice.decided_by;
   if (exportItem) return { state: 'exported', path: release ? release.release_path : exportItem.release_path, needsOverride: false, exceptionApprovedBy, blockers: [] };
@@ -107,6 +159,16 @@ function classify({ invoice, release = null, exportItem = null, takenBillKeys = 
       // The agent approved it earlier but the live data no longer matches.
       return { state: 'blocked', path: null, needsOverride: false, exceptionApprovedBy,
         blockers: [`Revalidation failed — ${String(why[0] || 'the 3-way match no longer passes').replace(/\.+$/, '')}. Put it On Hold and review it.`] };
+    }
+    if (manualException && audit.verdict !== 'error') {
+      const accepted = new Set((manualException.failedChecks || []).map((c) => c.code).filter(Boolean));
+      const fresh = (audit.issues || []).filter((i) => !i.code || !accepted.has(i.code));
+      if (!fresh.length) {
+        return { state: 'awaiting_release', path: 'manual_exception', needsOverride: false, exceptionApprovedBy, manualException: true,
+          failedChecks: why, blockers: [] };
+      }
+      return { state: 'blocked', path: null, needsOverride: false, exceptionApprovedBy,
+        blockers: [`A new check fails since the manual exception was approved — ${String(fresh[0].detail || fresh[0].code).replace(/\.+$/, '')}. Review it again.`] };
     }
     return { state: 'blocked', path: null, needsOverride: false, exceptionApprovedBy,
       blockers: [`Revalidation fails — ${String(why[0] || 'the 3-way match does not pass').replace(/\.+$/, '')}. A manual approval can't release it: put it On Hold and dispute it, or fix the data, then revalidate.`] };
@@ -155,7 +217,7 @@ function selectForExport({ released, exported, onlyIds = null }) {
 }
 
 module.exports = {
-  RELEASE_PATHS, MIN_EXCEPTION_JUSTIFICATION, PASSING_VERDICTS,
+  RELEASE_PATHS, MIN_EXCEPTION_JUSTIFICATION, MIN_MANUAL_REASON, PASSING_VERDICTS,
   isAgentActor, carrierKey, billKey,
-  validateResolution, classify, decideRelease, selectForExport,
+  validateResolution, validateManualException, canApproveManualException, manualExceptionConfirmation, classify, decideRelease, selectForExport,
 };

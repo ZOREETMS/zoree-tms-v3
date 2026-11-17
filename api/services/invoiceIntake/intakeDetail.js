@@ -74,6 +74,26 @@ function fieldsOf(row) {
     .map(([label, key, value]) => ({ label, key, value, confidence: fc[key] != null ? fc[key] : null }));
 }
 
+function jevNote(row) {
+  const v = (row.raw_extraction || {}).verify;
+  if (!v || v.status === 'off') return '';
+  if (v.status === 'checked') return `; independent check by Jev ${Math.round(v.score * 100)}%${v.score >= v.min ? ' — matches the PDF' : ' — does not match the PDF'}`;
+  return `; independent check by Jev could not run${v.detail ? ` (${v.detail})` : ''}`;
+}
+
+/**
+ * Pure: the two read checks AP sees — Claude's own confidence and the
+ * independent Jev check of that read against the PDF text (null when the
+ * read predates the Jev check).
+ */
+function readCheckOf(row) {
+  const v = (row.raw_extraction || {}).verify || null;
+  return {
+    claude: row.read_confidence != null ? Number(row.read_confidence) : null,
+    jev: v ? { status: v.status, score: v.score != null ? v.score : null, min: v.min, answers: v.answers || null, detail: v.detail || null, latencyMs: v.latencyMs || null } : null,
+  };
+}
+
 /** The email a document arrived in, if it came by email (domain-scoped lookup). */
 async function sourceEmailOf(row) {
   if (row.source !== 'email') return null;
@@ -143,7 +163,7 @@ async function get(id) {
 
   const history = own ? await db.dbSelect('change_history', { filters: [['entity_id', 'eq', own.id]], order: { col: 'created_at', asc: true }, limit: 100 }) : [];
   const activity = [
-    { at: row.created_at, who: 'Zoree AI', text: `Received by ${SOURCE[row.source] || row.source} and read (${row.model || 'model'}, confidence ${row.read_confidence != null ? Math.round(row.read_confidence * 100) + '%' : 'n/a'})` },
+    { at: row.created_at, who: process.env.APP_AI_NAME || 'Zoree AI', text: `Received by ${SOURCE[row.source] || row.source} and read (${row.model || 'model'}, confidence ${row.read_confidence != null ? Math.round(row.read_confidence * 100) + '%' : 'n/a'})${jevNote(row)}` },
     ...history.map((c) => ({ at: c.created_at, who: c.username || 'system', text: activityText(c) })),
   ];
 
@@ -166,6 +186,7 @@ async function get(id) {
     sourceEmail,
     shipment: shipments[0] ? { id: shipments[0].id, status: shipments[0].status, carrier: shipments[0].carrier, origin: shipments[0].origin, destination: shipments[0].dest || shipments[0].destination } : null,
     fields: fieldsOf(row),
+    readCheck: readCheckOf(row),
     warnings: [...(row.read_warnings || []), ...(row.problems || [])],
     lines,
     audit,
@@ -175,4 +196,4 @@ async function get(id) {
   };
 }
 
-module.exports = { get, compareLines, fieldsOf, activityText, recheckOf };
+module.exports = { readCheckOf, get, compareLines, fieldsOf, activityText, recheckOf };

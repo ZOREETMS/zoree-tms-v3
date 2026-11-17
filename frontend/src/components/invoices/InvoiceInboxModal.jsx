@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useInvoiceInbox } from "../../hooks/useInvoiceInbox";
 import { inboxRunSummary } from "../../services/invoiceIntakeService";
 import IntakeResultRow from "./IntakeResultRow";
+import { BRAND } from "../../config/brand";
 
 export default function InvoiceInboxModal({ onClose }) {
   const { inbox, job, running, error, refresh, start } = useInvoiceInbox();
@@ -42,7 +43,7 @@ export default function InvoiceInboxModal({ onClose }) {
         </div>
         <div className="modal-body">
           <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 10 }}>
-            Zoree AI reads each new carrier invoice PDF in the inbox, checks the read, matches the shipment and the
+            {BRAND.ai} reads each new carrier invoice PDF in the inbox, checks the read, matches the shipment and the
             contract rate, and runs the freight audit. Clean invoices go to AP. Everything else is held with the reason.
             Nothing is paid by the agent.
           </div>

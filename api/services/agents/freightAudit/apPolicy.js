@@ -9,18 +9,24 @@
 //   shadowMode        during a live-system change freeze the agent only
 //                     reads and suggests; every action needs a person
 //                     (default freeze Nov 20 – Jan 5, every year)
+//   manualExceptions  an authorized user may approve a held invoice as a
+//                     manual exception, accepting a known discrepancy with a
+//                     reason, evidence and an explicit amount confirmation
+//                     (default off — the customer must agree to it)
 //
 // Env overrides (api/.env):
 //   FREIGHT_AUDIT_APPROVAL_LIMIT_USD=2500
 //   FREIGHT_AUDIT_ERP_READ_ONLY=true|false
 //   FREIGHT_AUDIT_FREEZE=11-20..01-05        (MM-DD..MM-DD, may wrap the year)
 //   FREIGHT_AUDIT_SHADOW_MODE=auto|on|off    (auto = on inside the freeze)
+//   FREIGHT_AUDIT_MANUAL_EXCEPTIONS=on|off   (default off)
+//   FREIGHT_AUDIT_OVERRIDE_APPROVERS=a@x.com,b@x.com  (who may; empty = anyone who can edit invoices)
 // Pure: no I/O. `now` is injectable for tests.
 // ═══════════════════════════════════════════════════════════════════
 
 'use strict';
 
-const DEFAULTS = Object.freeze({ approvalLimitUsd: 2500, erpReadOnly: true, freeze: '11-20..01-05', shadowMode: 'auto' });
+const DEFAULTS = Object.freeze({ approvalLimitUsd: 2500, erpReadOnly: true, freeze: '11-20..01-05', shadowMode: 'auto', manualExceptions: false });
 
 function parseFreeze(text) {
   const m = /^(\d{2})-(\d{2})\.\.(\d{2})-(\d{2})$/.exec(String(text || '').trim());
@@ -39,7 +45,7 @@ const flag = (v, dflt) => (v === undefined || v === '' ? dflt : !/^(false|0|off|
 
 /**
  * @param {{env?:object, now?:Date}} [opts]
- * @returns {{approvalLimitUsd:number, erpReadOnly:boolean, shadowMode:boolean, freeze:string|null, freezeActive:boolean}}
+ * @returns {{approvalLimitUsd:number, erpReadOnly:boolean, shadowMode:boolean, freeze:string|null, freezeActive:boolean, manualExceptions:boolean, exceptionApprovers:string[]}}
  */
 function getApPolicy({ env = process.env, now = new Date() } = {}) {
   const limit = Number(env.FREIGHT_AUDIT_APPROVAL_LIMIT_USD);
@@ -53,6 +59,8 @@ function getApPolicy({ env = process.env, now = new Date() } = {}) {
     shadowMode,
     freeze: freeze ? freeze.label : null,
     freezeActive,
+    manualExceptions: flag(env.FREIGHT_AUDIT_MANUAL_EXCEPTIONS, DEFAULTS.manualExceptions),
+    exceptionApprovers: String(env.FREIGHT_AUDIT_OVERRIDE_APPROVERS || '').split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),
   };
 }
 

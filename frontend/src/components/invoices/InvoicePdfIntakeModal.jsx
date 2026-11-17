@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadInvoicePdfs, intakeSummary, MAX_PDF_MB } from "../../services/invoiceIntakeService";
 import IntakeResultRow from "./IntakeResultRow";
+import { BRAND } from "../../config/brand";
 
 // Upload carrier invoice PDFs. Zoree AI reads each one, checks the read,
 // creates the invoice and line-audits it. Clean ones go to AP; the rest
@@ -36,7 +37,7 @@ export default function InvoicePdfIntakeModal({ onClose }) {
         </div>
         <div className="modal-body">
           <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>
-            Zoree AI reads each PDF, checks the read (lines add up, carrier on file, confidence), matches the shipment,
+            {BRAND.ai} reads each PDF, checks the read (lines add up, carrier on file, confidence), matches the shipment,
             and runs the freight audit. Clean invoices go to AP. Everything else is held with the reason.
             Nothing is paid by the agent. Max {MAX_PDF_MB} MB per file.
           </div>
