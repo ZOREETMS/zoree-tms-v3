@@ -30,11 +30,11 @@ export function formatVariance(variance) {
 // The audit queue is the invoices of the active domain. Agreed = the
 // rated shipment cost, billed = what the carrier invoiced.
 
-const HELD = new Set(["On Hold", "Rejected", "Disputed", "Cancelled"]);
+const HELD = new Set(["On Hold", "Rejected", "Disputed", "Cancelled", "Superseded"]);
 const PAY_BY_STATUS = {
   Approved: PAY_STATUS.APPROVED, Paid: PAY_STATUS.APPROVED,
   "On Hold": PAY_STATUS.ON_HOLD,
-  Disputed: PAY_STATUS.DISPUTED, Rejected: PAY_STATUS.DISPUTED, Cancelled: PAY_STATUS.DISPUTED,
+  Disputed: PAY_STATUS.DISPUTED, Rejected: PAY_STATUS.DISPUTED, Cancelled: PAY_STATUS.DISPUTED, Superseded: PAY_STATUS.DISPUTED,
 };
 
 /** One invoice (already through mapDbInvoice) → one audit queue row. */

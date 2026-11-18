@@ -190,7 +190,12 @@ function CarrierDraft({ draft }) {
   const [body, setBody] = useState(draft.body);
   const [copied, setCopied] = useState(false);
   useEffect(() => { setBody(draft.body); }, [draft.body]);
-  const mailto = `mailto:${encodeURIComponent(draft.to || "")}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(body)}`;
+  // Outlook on the web by default (works without the Outlook desktop app);
+  // VITE_MAIL_COMPOSE=mailto uses the computer's default mail app instead.
+  const q = (k, v) => `${k}=${encodeURIComponent(v || "")}`;
+  const composeUrl = (import.meta.env.VITE_MAIL_COMPOSE || "outlook-web") === "mailto"
+    ? `mailto:${encodeURIComponent(draft.to || "")}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(body)}`
+    : `https://outlook.office.com/mail/deeplink/compose?${[q("to", draft.to), q("subject", draft.subject), q("body", body)].join("&")}`;
   async function copy() {
     try { await navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${body}`); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked: AP can select the text */ }
   }
@@ -209,7 +214,7 @@ function CarrierDraft({ draft }) {
         style={{ width: "100%", fontSize: 12, fontFamily: "inherit", padding: 8, border: "1px solid #CBD5E1", borderRadius: 6, resize: "vertical" }} />
       <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
         <button type="button" className="btn btn-secondary btn-sm" onClick={copy}>{copied ? "Copied ✓" : "Copy"}</button>
-        <a className="btn btn-primary btn-sm" href={mailto}>Open in email</a>
+        <a className="btn btn-primary btn-sm" href={composeUrl} target="_blank" rel="noopener noreferrer">Open in Outlook</a>
         <span style={{ fontSize: 11, color: "var(--text3)", flex: 1 }}>AP reviews and sends it from Outlook. The invoice stays on hold; this does not approve, dispute or release it.</span>
       </div>
     </div>
@@ -291,7 +296,20 @@ export default function InvoiceIntakeDrawer({ intakeId, canDecide, onClose, onCh
             )}
           </div>
         )}
-        {d && !d.recheck && d.entry.outcome !== "ready_to_post" && d.entry.reason && (
+        {d && d.entry.revisionOf && (
+          <div style={{ padding: 12, borderRadius: 8, marginBottom: 14, fontSize: 12.5, background: "#F5F3FF", color: "#4C1D95", border: "1px solid #DDD6FE" }}>
+            <b>Corrected revision.</b> Replaces {d.entry.revisionOf.number} ({d.entry.revisionOf.id}), which was {d.entry.revisionOf.status} and is now Superseded.
+            {d.entry.revisionOf.changes && <div style={{ marginTop: 4 }}>What changed: {d.entry.revisionOf.changes}</div>}
+            <div style={{ marginTop: 4 }}>Only this version can be paid.</div>
+          </div>
+        )}
+        {d && d.entry.supersededBy && (
+          <div style={{ padding: 12, borderRadius: 8, marginBottom: 14, fontSize: 12.5, background: "#F5F3FF", color: "#4C1D95", border: "1px solid #DDD6FE" }}>
+            <b>Superseded — not payable.</b> The carrier sent a corrected revision ({d.entry.supersededBy.id}). This version is kept with its audit history only.
+            {d.entry.supersededBy.changes && <div style={{ marginTop: 4 }}>What changed: {d.entry.supersededBy.changes}</div>}
+          </div>
+        )}
+        {d && !d.recheck && d.entry.outcome !== "ready_to_post" && d.entry.outcome !== "superseded" && d.entry.reason && (
           <div style={{ padding: 12, borderRadius: 8, marginBottom: 14, fontSize: 12.5, background: TONE[meta.tone].bg, color: TONE[meta.tone].fg, border: `1px solid ${TONE[meta.tone].line}` }}>
             <b>{meta.label}.</b> {d.entry.reason.replace(/^Needs AP review:\s*/i, "")}
             {d.warnings.length > 0 && <div style={{ marginTop: 4 }}>{d.warnings.join(" ")}</div>}

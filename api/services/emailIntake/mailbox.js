@@ -30,6 +30,7 @@ const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const domainRouting = require('./domainRouting');
 const { parseAuthResults } = require('../invoiceIntake/senderCheck');
+const graphMailbox = require('./graphMailbox');
 
 // Recent inbox mail that mentions freight words. Claude then decides
 // whether each one is really an order. Narrow it to a label
@@ -65,6 +66,18 @@ function config() {
 
 /** The common AP mailbox, when one is set up; otherwise null. */
 function apConfig() {
+  // Microsoft 365 AP mailbox read through Graph (graphMailbox.js).
+  if (graphMailbox.isGraph()) {
+    const user = graphMailbox.settings().mailbox;
+    if (!user) return null;
+    return {
+      provider: 'graph',
+      user,
+      mailbox: 'Inbox',
+      ap: true,
+      auto: String(process.env.EMAIL_INTAKE_AP_AUTO || '').toLowerCase() !== 'false',
+    };
+  }
   const user = process.env.EMAIL_INTAKE_AP_IMAP_USER || '';
   if (!user) return null;
   const main = config();
@@ -100,10 +113,11 @@ function readsInvoices(account) {
 /** Accounts the timer checks: the main mailbox, plus the AP mailbox unless it is button-only. */
 function timerAccounts() {
   const ap = apConfig();
-  return [config(), ap && ap.auto ? ap : null].filter((a) => a && a.user && a.pass);
+  return [config(), ap && ap.auto ? ap : null].filter((a) => isConfigured(a));
 }
 
 function isConfigured(account = config()) {
+  if (account && account.provider === 'graph') return graphMailbox.isConfigured();
   return Boolean(account && account.user && account.pass);
 }
 
@@ -116,6 +130,30 @@ function normalizeMessageId(id) {
   return String(id || '').trim().replace(/^<|>$/g, '');
 }
 
+/** One parsed email (mailparser) in the shape the intake pipeline uses. Shared by the IMAP and Graph readers. */
+function emailFromParsed(parsed, e) {
+  const from = parsed.from && parsed.from.value && parsed.from.value[0] || {};
+  return {
+    messageId: e.messageId,
+    fromAddress: (from.address || '').toLowerCase(),
+    fromName: from.name || null,
+    // To + Cc — which client domain's address it was sent to (domainRouting).
+    toAddresses: [parsed.to, parsed.cc].flat().filter(Boolean)
+      .flatMap((h) => (h.value || [])).map((v) => (v.address || '').toLowerCase()).filter(Boolean),
+    // SPF / DKIM / DMARC as the receiving server recorded them.
+    auth: parseAuthResults(parsed.headers && parsed.headers.get && parsed.headers.get('authentication-results')),
+    subject: parsed.subject || '',
+    receivedAt: (parsed.date || e.internalDate || new Date()).toISOString(),
+    text: parsed.text || '',
+    html: typeof parsed.html === 'string' ? parsed.html : '',
+    attachments: (parsed.attachments || []).filter((a) => a.contentDisposition !== 'inline' || /pdf/i.test(a.contentType)).map((a) => ({
+      filename: a.filename || 'attachment',
+      contentType: a.contentType,
+      content: a.content,
+    })),
+  };
+}
+
 /**
  * Fetch up to `max` emails matching the query that `isSeen` has not seen.
  * @param {object} opts
@@ -125,6 +163,9 @@ function normalizeMessageId(id) {
  * @returns {Promise<{ scanned:number, emails:object[] }>}
  */
 async function fetchNewEmails({ isSeen, max = 10, account = config() }) {
+  if (account && account.provider === 'graph') {
+    return graphMailbox.fetchNewEmails({ isSeen, max, parse: simpleParser, toEmail: emailFromParsed, normalizeMessageId });
+  }
   const c = account;
   if (!c.user || !c.pass) {
     throw new Error(c.ap
@@ -163,26 +204,7 @@ async function fetchNewEmails({ isSeen, max = 10, account = config() }) {
       const msg = await client.fetchOne(String(e.uid), { uid: true, source: true }, { uid: true });
       if (!msg || !msg.source) continue;
       const parsed = await simpleParser(msg.source);
-      const from = parsed.from && parsed.from.value && parsed.from.value[0] || {};
-      emails.push({
-        messageId: e.messageId,
-        fromAddress: (from.address || '').toLowerCase(),
-        fromName: from.name || null,
-        // To + Cc — which client domain's address it was sent to (domainRouting).
-        toAddresses: [parsed.to, parsed.cc].flat().filter(Boolean)
-          .flatMap((h) => (h.value || [])).map((v) => (v.address || '').toLowerCase()).filter(Boolean),
-        // SPF / DKIM / DMARC as the receiving server recorded them.
-        auth: parseAuthResults(parsed.headers && parsed.headers.get && parsed.headers.get('authentication-results')),
-        subject: parsed.subject || '',
-        receivedAt: (parsed.date || e.internalDate || new Date()).toISOString(),
-        text: parsed.text || '',
-        html: typeof parsed.html === 'string' ? parsed.html : '',
-        attachments: (parsed.attachments || []).filter((a) => a.contentDisposition !== 'inline' || /pdf/i.test(a.contentType)).map((a) => ({
-          filename: a.filename || 'attachment',
-          contentType: a.contentType,
-          content: a.content,
-        })),
-      });
+      emails.push(emailFromParsed(parsed, e));
     }
     return { scanned: envs.length, emails };
   } finally {
@@ -193,5 +215,5 @@ async function fetchNewEmails({ isSeen, max = 10, account = config() }) {
 
 module.exports = {
   fetchNewEmails, isConfigured, mailboxKey, config, apConfig, invoiceAccount, timerAccounts, readsInvoices,
-  DEFAULT_QUERY, AP_QUERY, normalizeMessageId,
+  DEFAULT_QUERY, AP_QUERY, normalizeMessageId, emailFromParsed,
 };

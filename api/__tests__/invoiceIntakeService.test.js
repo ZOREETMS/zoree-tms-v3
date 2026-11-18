@@ -88,10 +88,20 @@ test('bad read (lines do not add up): nothing created, needs manual entry', asyn
 
 test('same invoice number from same carrier: duplicate, nothing created', async () => {
   reset();
-  existingInvoices = [{ id: 'INV-1', invoice_number: 'PE-0931', carrier: 'PIONEER EXPRESS', status: 'Approved' }];
+  existingInvoices = [{ id: 'INV-1', invoice_number: 'PE-0931', carrier: 'PIONEER EXPRESS', status: 'Approved', invoiced_amount: '442.64' }];
   const r = await run();
   assert.equal(r.status, 'duplicate');
   assert.equal(r.duplicateOfInvoiceId, 'INV-1');
+  assert.equal(calls.length, 0);
+});
+
+test('changed copy of an approved invoice: not replaced, a person handles the adjustment', async () => {
+  reset();
+  existingInvoices = [{ id: 'INV-1', invoice_number: 'PE-0931', carrier: 'PIONEER EXPRESS', status: 'Approved', invoiced_amount: '500.00' }];
+  const r = await run();
+  assert.equal(r.status, 'needs_manual');
+  assert.equal(r.revisionKind, 'adjustment');
+  assert.match(r.summary, /credit or adjustment/);
   assert.equal(calls.length, 0);
 });
 

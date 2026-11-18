@@ -28,7 +28,9 @@ const { getApPolicy } = require('./apPolicy');
 
 const bad = (msg, status = 400) => { const e = new Error(msg); e.status = status; return e; };
 const SCAN_STATUSES = ['Rejected', 'On Hold'];
-const CLOSED = new Set(['Cancelled']);
+// Superseded (migration 058): an original replaced by its corrected revision —
+// kept for history, never a second bill.
+const CLOSED = new Set(['Cancelled', 'Superseded']);
 const PAID_OUT = new Set(['Approved', 'Paid']);
 
 function validateInput(i) {
@@ -71,7 +73,7 @@ function isEarlierCopy(other, invoice) {
   return a < b || (a === b && String(other.id) < String(invoice.id));
 }
 
-/** Disputed originals this invoice is a corrected copy of (set by PDF intake). */
+/** Disputed or held originals this invoice is a corrected copy of (set by PDF intake). */
 const replacedBy = (inv) => new Set(((inv.metadata && inv.metadata.intake && inv.metadata.intake.replaces) || []).map((r) => r.id));
 /** A shipment-row draft nobody approved is an estimate, not a carrier bill. */
 const isOpenDraft = (s) => Boolean(s.metadata && s.metadata.created_from === 'shipment') && !PAID_OUT.has(s.status);
@@ -91,9 +93,10 @@ async function auditOne(invoice, policy = getApPolicy()) {
   const sameCarrier = byNumber.filter((s) => carrierKey(s.carrier) === carrierKey(invoice.carrier));
   const siblings = [...new Map([...byShipment, ...sameCarrier].map((s) => [s.id, s])).values()]
     .filter((s) => s.id !== invoice.id && !CLOSED.has(s.status) && isEarlierCopy(s, invoice)
-      // A disputed original this invoice corrects is not a second bill —
-      // but only while it is still Disputed; approved/paid it counts again.
-      && !(replacedBy(invoice).has(s.id) && s.status === 'Disputed') && !isOpenDraft(s));
+      // A disputed or held original this invoice corrects is not a second
+      // bill — but only while it is still Disputed / On Hold; approved or
+      // paid it counts again.
+      && !(replacedBy(invoice).has(s.id) && (s.status === 'Disputed' || s.status === 'On Hold')) && !isOpenDraft(s));
   const expected = expectedCharges(shipments, { eiaFscPct: fuel.pct });
   const audit = auditInvoice({ invoice, lines, shipments, siblings, expected, approvals, policy });
   return { invoice, lines, shipments, expected, approvals, audit, carrierEmail: fuel.carrier && (fuel.carrier.contact_email || fuel.carrier.email) };

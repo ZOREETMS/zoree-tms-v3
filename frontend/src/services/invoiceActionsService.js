@@ -282,5 +282,5 @@ export function canAutoDecide(status, invoice) {
   // approve a resend the agent held (double payment). AP approves or
   // disputes those with the manual buttons after reading the agent's reason.
   if (invoice && invoice.readByAgent) return false;
-  return status !== "Cancelled" && status !== "Paid" && status !== "Approved";
+  return status !== "Cancelled" && status !== "Superseded" && status !== "Paid" && status !== "Approved";
 }

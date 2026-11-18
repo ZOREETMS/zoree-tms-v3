@@ -1,10 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../state/AuthContext";
 import { BRAND } from "../config/brand";
 import BrandMark from "../components/brand/BrandMark";
+import { MicrosoftAuthApi } from "../lib/api";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithMicrosoft, ssoError } = useAuth();
+  const [ms, setMs] = useState({ enabled: false, label: "" });
+  const [msBusy, setMsBusy] = useState(false);
+
+  useEffect(() => {
+    MicrosoftAuthApi.config().then((c) => setMs(c || { enabled: false })).catch(() => {});
+  }, []);
+
+  async function onMicrosoft() {
+    setMsBusy(true);
+    setError("");
+    try {
+      await loginWithMicrosoft(); // leaves the page for Microsoft's sign-in
+    } catch (err) {
+      setError(err.message || "Microsoft sign-in failed");
+      setMsBusy(false);
+    }
+  }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,6 +55,31 @@ export default function LoginPage() {
           <div className="login-subtitle">{BRAND.sub}</div>
           <div className="login-tagline">{BRAND.tagline}</div>
         </div>
+
+        {ms.enabled && (
+          <>
+            <button
+              type="button"
+              id="login-microsoft"
+              className="login-btn"
+              onClick={onMicrosoft}
+              disabled={msBusy}
+              style={{ background: "#ffffff", color: "#1f2937", border: "1px solid #d1d5db", marginTop: 0, marginBottom: 6 }}
+            >
+              {msBusy ? "Opening Microsoft sign-in…" : (ms.label || "Sign in with Microsoft")}
+            </button>
+            <div style={{ fontSize: 11, color: "#6b7280", textAlign: "center", marginBottom: 14 }}>
+              Your company's Microsoft account. Roles come from your IT groups.
+            </div>
+            {ssoError && <div className="login-error" style={{ marginBottom: 12 }}>{ssoError}</div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 14px", color: "#9ca3af", fontSize: 11 }}>
+              <span style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
+              or use a TMS password
+              <span style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
+            </div>
+          </>
+        )}
+        {!ms.enabled && ssoError && <div className="login-error" style={{ marginBottom: 12 }}>{ssoError}</div>}
 
         <form onSubmit={onSubmit}>
           <label className="login-label">EMAIL</label>

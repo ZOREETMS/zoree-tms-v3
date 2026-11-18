@@ -26,6 +26,8 @@ function outcomeOf(row, invoice) {
     if (!row.invoice_id) return 'deleted'; // the FK is cleared when the invoice is deleted
     if (invoice && ['Approved', 'Paid'].includes(invoice.status)) return 'ready_to_post';
     if (invoice && ['Disputed', 'Rejected'].includes(invoice.status)) return 'disputed';
+    // Replaced by a corrected revision (migration 058): kept for history, never payable.
+    if (invoice && invoice.status === 'Superseded') return 'superseded';
     return 'needs_review';
   }
   return ['duplicate', 'needs_manual', 'failed'].includes(row.status) ? row.status : 'needs_review';
@@ -38,7 +40,8 @@ function outcomeOf(row, invoice) {
 function reasonOf(row, invoice, outcome) {
   const agent = row.outcome_reason || null;
   if (outcome === 'deleted') return `The invoice was deleted after it was read. Agent finding at the time: ${agent || '—'}`;
-  if (invoice && /^Needs AP review/i.test(agent || '') && (outcome === 'ready_to_post' || outcome === 'disputed')) {
+  if (outcome === 'superseded') return `${invoice.decision_reason || 'Superseded by a corrected revision.'} Agent finding on this version: ${agent || '—'}`;
+  if (invoice && /Needs AP review/i.test(agent || '') && (outcome === 'ready_to_post' || outcome === 'disputed')) {
     const verb = outcome === 'disputed' ? invoice.status : 'Approved';
     return `${verb} by AP${invoice.decided_by ? ` (${invoice.decided_by})` : ''}${invoice.decision_reason ? `: ${invoice.decision_reason}` : ''}. Agent finding: ${agent}`;
   }
@@ -77,17 +80,28 @@ const usd = (n) => `$${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString
  */
 function shortReasonOf({ row, invoice, shipment, outcome, extras = [] }) {
   if (outcome === 'duplicate') return `Resend of ${row.invoice_number || 'an invoice already received'}`;
-  if (outcome === 'needs_manual') return /not a carrier on file/.test((row.problems || []).join(' ')) ? 'Carrier not on file' : 'Key by hand: read not reliable';
+  if (outcome === 'needs_manual') {
+    const p = (row.problems || []).join(' ');
+    if (/credit or adjustment/.test(p)) return 'Correction to a posted invoice: credit or adjustment';
+    if (/different load/.test(p)) return 'Same number, different shipment';
+    if (/was rejected|already closed/.test(p)) return 'Changed copy of a closed invoice';
+    return /not a carrier on file/.test(p) ? 'Carrier not on file' : 'Key by hand: read not reliable';
+  }
+  if (outcome === 'superseded') {
+    const by = invoice && invoice.metadata && invoice.metadata.superseded_by;
+    return `Superseded by revision${by && by.id ? ` ${by.id}` : ''}: not payable`;
+  }
   if (outcome === 'failed') return 'Processing failed';
   if (outcome === 'deleted') return 'Invoice deleted';
   if (!invoice) return null;
   const meta = (invoice.metadata && invoice.metadata.intake) || {};
   const text = `${row.outcome_reason || ''} ${invoice.decision_reason || ''}`;
+  const rev = meta.revision_of ? 'Corrected revision · ' : '';
   if (outcome === 'ready_to_post') {
-    if (/^Needs AP review/i.test(row.outcome_reason || '')) return 'Approved by AP';
+    if (/Needs AP review/i.test(row.outcome_reason || '')) return `${rev}Approved by AP`;
     // Extras billed on a clean invoice passed because they were approved in the TMS.
     const named = extras.map((x) => `${usd(x.amount)} ${String(x.type || 'extra').replace(/_/g, ' ')} approved`);
-    return named.length ? `Contract matched; ${named.join(', ')}` : 'Contract matched';
+    return `${rev}${named.length ? `Contract matched; ${named.join(', ')}` : 'Contract matched'}`;
   }
   if (outcome === 'disputed') return `Disputed by AP`;
   const parts = [];
@@ -100,7 +114,7 @@ function shortReasonOf({ row, invoice, shipment, outcome, extras = [] }) {
   else if (Number(invoice.variance) > 1 && shipment && String(shipment.status || '').toLowerCase() !== 'cancelled') parts.push(`Over contract ${usd(invoice.variance)}`);
   if (/Shadow mode/i.test(text)) parts.push('Change freeze: recommend approve');
   if (/auto-approve limit/i.test(text)) parts.push('Over $2,500 sign-off');
-  return parts.length ? parts.join(' · ') : 'Needs AP review';
+  return `${rev}${parts.length ? parts.join(' · ') : 'Needs AP review'}`;
 }
 
 /**
@@ -134,6 +148,9 @@ function entry(row, invoice, shipment, extras = [], run = null) {
     total: row.total, confidence: row.read_confidence,
     outcome,
     invoiceStatus: invoice ? invoice.status : null,
+    // Revision links (migration 058): the original this corrects / the revision that replaced it.
+    revisionOf: ((invoice && invoice.metadata && invoice.metadata.intake) || {}).revision_of || null,
+    supersededBy: (invoice && invoice.metadata && invoice.metadata.superseded_by) || null,
     risk: outcome === 'needs_review' ? riskOf({ invoice, shipment }) : null,
     reason: reasonOf(row, invoice, outcome),
     shortReason: shortReasonOf({ row, invoice, shipment, outcome, extras }),
@@ -145,7 +162,7 @@ function entry(row, invoice, shipment, extras = [], run = null) {
 function summarize(entries) {
   const bucket = () => ({ count: 0, total: 0 });
   const s = { received: entries.length, receivedTotal: 0, avgConfidence: null,
-    ready_to_post: bucket(), needs_review: bucket(), disputed: bucket(), deleted: bucket(), duplicate: bucket(), needs_manual: bucket(), failed: bucket() };
+    ready_to_post: bucket(), needs_review: bucket(), disputed: bucket(), superseded: bucket(), deleted: bucket(), duplicate: bucket(), needs_manual: bucket(), failed: bucket() };
   const conf = [];
   for (const e of entries) {
     const b = s[e.outcome] || s.needs_review;

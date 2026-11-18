@@ -19,12 +19,14 @@ export const INTAKE_OUTCOME = {
   ready_to_post: { label: "Ready to post", tone: "ok" },
   needs_review: { label: "Needs review", tone: "warn" },
   disputed: { label: "Disputed", tone: "bad" },
+  // Replaced by a corrected revision: kept for history, never payable.
+  superseded: { label: "Superseded", tone: "none" },
   deleted: { label: "Invoice deleted", tone: "none" },
   duplicate: { label: "Duplicate", tone: "warn" },
   needs_manual: { label: "Needs manual entry", tone: "warn" },
   failed: { label: "Failed", tone: "bad" },
 };
-export const INTAKE_OUTCOME_ORDER = ["needs_review", "ready_to_post", "disputed", "duplicate", "needs_manual", "failed", "deleted"];
+export const INTAKE_OUTCOME_ORDER = ["needs_review", "ready_to_post", "disputed", "duplicate", "needs_manual", "failed", "superseded", "deleted"];
 
 /** Outcome code of a log entry or a live run result. */
 export function outcomeCode(result) {
@@ -182,6 +184,7 @@ export const SENDER_STATUS = {
 export function paymentEligibility(outcome) {
   if (outcome === "ready_to_post") return { label: "Ready to post", tone: "ok" };
   if (outcome === "disputed") return { label: "Disputed with carrier", tone: "bad" };
+  if (outcome === "superseded") return { label: "Not payable (superseded)", tone: "none" };
   return { label: "On hold", tone: "warn" };
 }
 

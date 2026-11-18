@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { AuthApi, AuthApiExt, resetSessionExpiredLatch } from "../lib/api";
+import { AuthApi, AuthApiExt, MicrosoftAuthApi, resetSessionExpiredLatch } from "../lib/api";
+import { microsoftSignOutUrl, startMicrosoftSignIn, takeMicrosoftRedirect } from "../lib/microsoftSignIn";
 
 const AuthContext = createContext(null);
 
@@ -14,8 +15,38 @@ export function AuthProvider({ children }) {
     }
   });
   const [booting, setBooting] = useState(true);
+  const [ssoError, setSsoError] = useState("");
+
+  function storeSession(data) {
+    localStorage.setItem("zoree_token", data.token);
+    localStorage.setItem("zoree_refresh_token", data.refresh_token || "");
+    localStorage.setItem("zoree_user", JSON.stringify(data.user || null));
+    // New session — re-arm the one-shot session-expired latch so
+    // the next 401 can bounce the user back to login again.
+    resetSessionExpiredLatch();
+    setUser(data.user || null);
+  }
 
   useEffect(() => {
+    // Coming back from Microsoft sign-in: turn that session into TMS roles.
+    const ms = takeMicrosoftRedirect();
+    if (ms) {
+      if (ms.error) {
+        setSsoError(ms.error);
+        setBooting(false);
+        return;
+      }
+      MicrosoftAuthApi.session(ms.accessToken, ms.refreshToken)
+        .then(storeSession)
+        .catch((e) => {
+          localStorage.removeItem("zoree_token");
+          localStorage.removeItem("zoree_user");
+          setUser(null);
+          setSsoError(e.message || "Microsoft sign-in failed");
+        })
+        .finally(() => setBooting(false));
+      return;
+    }
     const t = localStorage.getItem("zoree_token");
     if (!t) {
       setBooting(false);
@@ -50,21 +81,29 @@ export function AuthProvider({ children }) {
       user,
       booting,
       isAuthenticated: !!user,
+      ssoError,
       async login(email, password) {
         const data = await AuthApi.login(email, password);
-        localStorage.setItem("zoree_token", data.token);
-        localStorage.setItem("zoree_refresh_token", data.refresh_token || "");
-        localStorage.setItem("zoree_user", JSON.stringify(data.user || null));
-        // New session — re-arm the one-shot session-expired latch so
-        // the next 401 can bounce the user back to login again.
-        resetSessionExpiredLatch();
-        setUser(data.user || null);
+        storeSession(data);
         return data;
       },
+      async loginWithMicrosoft() {
+        setSsoError("");
+        await startMicrosoftSignIn();
+      },
       logout() {
+        const viaMicrosoft = user && user.signIn === "microsoft";
         localStorage.removeItem("zoree_token");
+        localStorage.removeItem("zoree_refresh_token");
         localStorage.removeItem("zoree_user");
         setUser(null);
+        if (viaMicrosoft) {
+          // Signed in with Microsoft: end that session too, or the next
+          // "Sign in with Microsoft" would reuse it without asking.
+          MicrosoftAuthApi.config()
+            .then((c) => { window.location.assign(microsoftSignOutUrl(c && c.tenantId)); })
+            .catch(() => { window.location.assign(microsoftSignOutUrl(null)); });
+        }
       },
       // REQ-08: switch the currently-active role without re-login.
       async switchRole(nextRole) {
@@ -79,7 +118,7 @@ export function AuthProvider({ children }) {
         return next;
       },
     }),
-    [user, booting]
+    [user, booting, ssoError]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

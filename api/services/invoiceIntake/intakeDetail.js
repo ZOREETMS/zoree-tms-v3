@@ -169,7 +169,7 @@ async function get(id) {
 
   const sourceEmail = await sourceEmailOf(row).catch(() => null);
   // Draft-only carrier email for a held invoice; building it changes nothing.
-  const carrierDraft = own && !['Approved', 'Paid'].includes(own.status) ? buildCarrierDraft({
+  const carrierDraft = own && !['Approved', 'Paid', 'Superseded'].includes(own.status) ? buildCarrierDraft({
     invoiceNumber: own.invoice_number, carrier: own.carrier, shipmentId: row.shipment_ref || own.shipment_id || null,
     invoiceTotal: own.invoiced_amount, lines, audit, to: sourceEmail ? sourceEmail.from : null,
   }) : null;

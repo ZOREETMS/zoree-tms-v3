@@ -5,7 +5,11 @@
 //       → read checks (readChecks)            fail → needs_manual, nothing saved
 //       → sender check (senderCheck, email only) never stops the audit; an
 //         unverified sender only stops automatic approval
-//       → same PDF / same invoice # already in? → duplicate, nothing saved
+//       → same PDF already in? → duplicate, nothing saved
+//       → same carrier + invoice # already in? → revisionClassifier:
+//           unchanged copy → duplicate · changed copy of a disputed/held one →
+//           corrected revision (original Superseded) · changed copy of an
+//           approved/paid one → a person handles credit/adjustment
 //       → invoiceAudit.submitInvoice           (single writer of invoices; tolerance decision)
 //       → invoiceCostLines.replaceForInvoice   (lines with accessorial_type)
 //       → Freight Audit line audit (auditOne)  contract, fuel, approvals, duplicates, delivery
@@ -27,6 +31,7 @@ const readVerifier = require('./readVerifier');
 const repo = require('./intakeRepository');
 const intakeFiles = require('./intakeFiles');
 const senderCheck = require('./senderCheck');
+const revisions = require('./revisionClassifier');
 const runContext = require('./runContext');
 const { currentDomain } = require('../domains/domainContext');
 const { getApPolicy } = require('../agents/freightAudit/apPolicy');
@@ -45,19 +50,19 @@ async function loadCarriers() {
 // Invoice numbers compare without case, spaces or punctuation:
 // "GF-1001", "gf 1001" and "GF1001" are the same invoice.
 const invoiceKey = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-// After AP disputes an invoice, the carrier may send a corrected copy under
-// the same number. That copy is kept (not dropped as a duplicate) and held
-// for AP; the disputed original closes only when AP approves the copy
-// (invoiceAudit.manualDecide). A Rejected original stays final.
-const REPLACEABLE = new Set(['Disputed']);
+// A carrier often re-sends a disputed or held invoice under the same number
+// with corrected charges. revisionClassifier decides duplicate / revision /
+// a person; a revision is a new invoice linked to the original
+// (supersedes_invoice_id), and the original becomes Superseded — kept with
+// its audit history, never payable (migration 058).
 // Decisions the agent makes are recorded as the agent, never as the person who
 // uploaded the PDF or pressed the button (they stay on the intake as created_by).
 // Otherwise an agent approval would look like a person's and change the release path.
 const AGENT_USER = Object.freeze({ email: 'invoice-intake-agent', role: 'system' });
 
-/** Open invoices from the same carrier with the same invoice number (normalized). */
+/** Every invoice from the same carrier with the same invoice number (normalized), with its charge lines. */
 async function sameNumberInvoices(invoiceNumber, carrier) {
-  const sel = 'id,invoice_number,carrier,status';
+  const sel = 'id,invoice_number,carrier,status,invoiced_amount,shipment_id,received_at,created_at';
   const [byNumber, byCarrier] = await Promise.all([
     db.dbSelect('invoices', { select: sel, filters: [['invoice_number', 'eq', invoiceNumber]], limit: 20 }),
     // Prefix match so "ACME FREIGHT LLC" and "ACME FREIGHT" are both seen; the
@@ -66,7 +71,10 @@ async function sameNumberInvoices(invoiceNumber, carrier) {
   ]);
   const key = invoiceKey(invoiceNumber);
   const all = [...new Map([...byNumber, ...byCarrier].map((r) => [r.id, r])).values()];
-  return all.filter((r) => r.status !== 'Cancelled' && invoiceKey(r.invoice_number) === key && firstWord(r.carrier) === firstWord(carrier));
+  const rows = all.filter((r) => invoiceKey(r.invoice_number) === key && firstWord(r.carrier) === firstWord(carrier));
+  const ids = rows.filter((r) => r.status !== 'Cancelled').map((r) => r.id);
+  const lines = ids.length ? await db.dbSelect('invoice_cost_lines', { select: 'invoice_id,cost_type,accessorial_type,invoice_cost', filters: [['invoice_id', 'in', ids]], limit: 1000 }) : [];
+  return rows.map((r) => ({ ...r, lines: lines.filter((l) => l.invoice_id === r.id) }));
 }
 
 /** Match the printed shipment reference to a shipment id ("qa-sh-013", "Ref: QA-SH-014"). */
@@ -132,49 +140,42 @@ function readColumns(read, chk, verify = null) {
  * Decide what happens to a just-created invoice once the line audit is in.
  * `sender` (senderCheck.verify) can only hold an invoice, never clear one.
  */
-async function settle({ invoice, decision, audit, user, sender = null, policy = getApPolicy(), replaces = [] }) {
+async function settle({ invoice, decision, audit, user, sender = null, policy = getApPolicy(), revisionOf = null }) {
   const a = audit.audit;
-  if (replaces.length) {
-    // A corrected copy of a disputed invoice always goes to a person: AP
-    // closes the dispute by approving it (which cancels the original).
-    const orig = replaces.map((r) => r.invoice_number || r.number).join(', ');
-    const clean = decision.status === 'Approved' && a.verdict === 'approve' && !(sender && (sender.status === 'unverified' || sender.status === 'unregistered'));
-    const issues = [...a.issues.map((i) => i.detail), ...(sender && sender.status !== 'verified' && sender.status !== 'not_checked' ? [`Sender not verified: ${sender.detail}`] : [])];
-    const why = clean
-      ? `Corrected copy of disputed ${orig}: every line now matches the contract. Approve it to close the dispute — the disputed original is then cancelled.`
-      : `Corrected copy of disputed ${orig}, but it still does not match: ${[decision.status !== 'Approved' ? decision.reason : null, ...issues].filter(Boolean).join(' ')}`;
-    await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} ${why}`.slice(0, 1000), user });
-    return { invoiceStatus: 'On Hold', sentToAp: false, summary: `Needs AP review: ${why}` };
-  }
+  // A corrected revision is audited like any new invoice: if it now matches
+  // the contract, shipment and approved extras it is Ready to post; if not it
+  // stays in Needs review with the new discrepancy. The note says what it replaced.
+  const pre = revisionOf ? `Corrected revision of ${revisionOf.invoice_number} (was ${revisionOf.status}, now Superseded${revisionOf.changes ? `; ${revisionOf.changes}` : ''}). ` : '';
+  const hold = async (why) => {
+    await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} ${pre}${why}`.slice(0, 1000), user });
+    return { invoiceStatus: 'On Hold', sentToAp: false, summary: `${pre}Needs AP review: ${why}` };
+  };
   const senderHold = sender && (sender.status === 'unverified' || sender.status === 'unregistered');
   const reasons = [...a.issues.map((i) => i.detail), ...(senderHold ? [`Sender not verified: ${sender.detail}`] : [])];
   if (decision.status === 'Approved' && a.verdict === 'approve' && senderHold) {
-    const why = `Invoice audit passed, but the sender is not verified. ${sender.detail} Confirm with the carrier through a known contact before release.`;
-    await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} ${why}`.slice(0, 1000), user });
-    return { invoiceStatus: 'On Hold', sentToAp: false, summary: `Needs AP review: ${why}` };
+    return hold(`Invoice audit passed, but the sender is not verified. ${sender.detail} Confirm with the carrier through a known contact before release.`);
   }
   if (decision.status === 'Approved' && a.verdict === 'approve' && policy.shadowMode) {
     // Live-system change freeze: the agent recommends, a person releases.
-    const why = `Shadow mode (change freeze ${policy.freeze || ''}): every check passed and the agent recommends approval, but nothing is released automatically during the freeze.`;
-    await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} ${why}`.slice(0, 1000), user });
-    return { invoiceStatus: 'On Hold', sentToAp: false, summary: `Needs AP review: ${why}` };
+    return hold(`Shadow mode (change freeze ${policy.freeze || ''}): every check passed and the agent recommends approval, but nothing is released automatically during the freeze.`);
   }
   if (decision.status === 'Approved' && a.verdict === 'approve') {
-    await invoiceAudit.sendToAp({ invoiceId: invoice.id, user });
-    return { invoiceStatus: 'Approved', sentToAp: true, summary: `Ready to post — matches the contract rate and approved extras (${money(invoice.invoiced_amount)}).` };
+    try {
+      await invoiceAudit.sendToAp({ invoiceId: invoice.id, user });
+    } catch (e) {
+      if (e && e.code === 'ONE_PAYABLE') return hold(e.message);
+      throw e;
+    }
+    return { invoiceStatus: 'Approved', sentToAp: true, summary: `${pre}Ready to post — matches the contract rate and approved extras (${money(invoice.invoiced_amount)}).` };
   }
   if (decision.status === 'Approved') {
-    const reason = `${TAG} Within carrier tolerance, but the line audit found: ${reasons.join(' ')}`.slice(0, 1000);
-    await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason, user });
-    return { invoiceStatus: 'On Hold', sentToAp: false, summary: `Needs AP review: ${reasons.join(' ')}` };
+    return hold(`Within carrier tolerance, but the line audit found: ${reasons.join(' ')}`);
   }
   // The agent never rejects a carrier's invoice. Anything that is not
   // clean is held with the reason, and a person in AP decides.
   // Missing data (no shipment, no contract rate): lead with what is missing, not a variance against nothing.
   const why = (a.verdict === 'needs_data' ? reasons : [decision.reason, ...reasons]).filter(Boolean).join(' ');
-  if (decision.status !== 'On Hold') {
-    await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} Needs AP review: ${why}`.slice(0, 1000), user });
-  }
+  if (decision.status !== 'On Hold' || pre) return hold(why);
   return { invoiceStatus: 'On Hold', sentToAp: false, summary: `Needs AP review: ${why}` };
 }
 
@@ -250,19 +251,25 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
   // Payment authorization, separate from invoice correctness: audited either way.
   const senderResult = senderCheck.verify({ sender, auth: senderAuth || {}, carrierRow: carriers.find((c) => c.name === chk.carrier) || null, source });
 
-  // 4. Same invoice number from the same carrier = a resend. Pay once.
-  const sameNumber = await sameNumberInvoices(read.fields.invoiceNumber, chk.carrier);
-  const dup = sameNumber.find((r) => !REPLACEABLE.has(r.status)) || null;
-  const replaced = dup ? [] : sameNumber;
-  if (dup) {
-    return publicResult(await keep({ ...base, ...cols, status: 'duplicate', duplicate_of_invoice_id: dup.id,
-      outcome_reason: `Invoice ${dup.invoice_number} from ${dup.carrier} is already in ${process.env.APP_BRAND_NAME || 'Zoree'} (${dup.status}). Pay once — nothing created.` }), { passed: chk.passed });
-  }
-
-  // 5. Create the invoice through the single writer; AP send waits for the line audit.
+  // 4. Same carrier + invoice number already on file: duplicate, corrected
+  //    revision, or a person (credit/adjustment, different shipment).
   const f = read.fields;
   const shipmentRef = await resolveShipmentRef(f.shipmentRef);
   cols.shipment_ref = shipmentRef;
+  const sameNumber = await sameNumberInvoices(f.invoiceNumber, chk.carrier);
+  const cls = revisions.classify(sameNumber, { total: f.total, shipmentId: shipmentRef, lines: chk.lines });
+  if (cls.kind === 'duplicate') {
+    return publicResult(await keep({ ...base, ...cols, status: 'duplicate', duplicate_of_invoice_id: cls.target.id,
+      outcome_reason: cls.reason }), { passed: chk.passed });
+  }
+  if (cls.kind === 'adjustment' || cls.kind === 'needs_person') {
+    // Nothing payable is created: a posted/paid invoice is never replaced automatically.
+    return publicResult(await keep({ ...base, ...cols, status: 'needs_manual', problems: [cls.reason],
+      outcome_reason: `${cls.reason} Nothing created.` }), { passed: chk.passed, revisionKind: cls.kind, relatedInvoiceId: cls.target && cls.target.id });
+  }
+  const revisionOf = cls.kind === 'revision' ? { ...cls.target, changes: cls.changes } : null;
+
+  // 5. Create the invoice through the single writer; AP send waits for the line audit.
   const sub = await invoiceAudit.submitInvoice({
     invoiceNumber: f.invoiceNumber, carrier: chk.carrier, shipmentId: shipmentRef,
     invoicedAmount: f.total, invoiceDate: f.invoiceDate,
@@ -270,7 +277,7 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
     metadata: { intake: { file: fileName, sha256: sha, model: read.model, confidence: f.confidence, pro_number: f.proNumber,
       sender: senderResult.sender, sender_verification: senderResult.status, sender_detail: senderResult.detail, sender_auth: senderResult.auth,
       ...(shipmentRef !== f.shipmentRef ? { printed_shipment_ref: f.shipmentRef } : {}),
-      ...(replaced.length ? { replaces: replaced.map((r) => ({ id: r.id, number: r.invoice_number, status: r.status })) } : {}) } },
+      ...(revisionOf ? { revision_of: { id: revisionOf.id, number: revisionOf.invoice_number, status: revisionOf.status, changes: revisionOf.changes } } : {}) } },
     user: AGENT_USER, deferApSend: true,
   });
   const invoice = sub.invoice;
@@ -280,13 +287,19 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
   //      without lines.
   try {
     await costLines.replaceForInvoice({ invoiceId: invoice.id, lines: chk.lines, tenantId: invoice.tenant_id || base.tenant_id });
+    if (revisionOf) {
+      // Link first, then retire the original — before the audit, so the
+      // original is not counted as a second bill for the same load.
+      await db.dbUpdate('invoices', invoice.id, { supersedes_invoice_id: revisionOf.id });
+      await invoiceAudit.supersedeInvoice({ originalId: revisionOf.id, revision: invoice, changes: revisionOf.changes, user: AGENT_USER });
+    }
     const drafts = await shipmentDrafts(shipmentRef, invoice.id);
     const audit = await freightAudit.auditOne(invoice);
-    const outcome = await settle({ invoice, decision: sub.decision, audit, user: AGENT_USER, sender: senderResult, replaces: replaced });
+    const outcome = await settle({ invoice, decision: sub.decision, audit, user: AGENT_USER, sender: senderResult, revisionOf });
     // Only now — the carrier's invoice exists and is audited — retire the drafts it supersedes.
     const draftNote = await closeDrafts({ invoice, drafts, user });
     const intake = await keep({ ...base, ...cols, status: 'created', invoice_id: invoice.id, outcome_reason: `${outcome.summary}${draftNote}` });
-    return publicResult(intake, { invoiceStatus: outcome.invoiceStatus, sentToAp: outcome.sentToAp, passed: [...chk.passed, ...(audit.audit.passed || [])], issues: audit.audit.issues, recoverable: audit.audit.recoverable });
+    return publicResult(intake, { invoiceStatus: outcome.invoiceStatus, sentToAp: outcome.sentToAp, passed: [...chk.passed, ...(audit.audit.passed || [])], issues: audit.audit.issues, recoverable: audit.audit.recoverable, ...(revisionOf ? { revisionOf: revisionOf.id } : {}) });
   } catch (e) {
     await invoiceAudit.manualDecide({ invoiceId: invoice.id, decision: 'On Hold', reason: `${TAG} Could not finish processing ${fileName}: ${e.message}`.slice(0, 1000), user }).catch(() => {});
     return publicResult(await keep({ ...base, ...cols, status: 'failed', invoice_id: invoice.id, problems: [e.message],
@@ -294,4 +307,4 @@ async function intakePdfOnce({ fileName, buffer, user, source = 'pdf_upload', se
   }
 }
 
-module.exports = { intakePdf, listRecent: repo.listRecent, _internals: { settle, invoiceKey } };
+module.exports = { intakePdf, listRecent: repo.listRecent, _internals: { settle, invoiceKey, sameNumberInvoices } };

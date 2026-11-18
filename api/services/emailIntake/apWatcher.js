@@ -29,6 +29,7 @@
 const { ImapFlow } = require('imapflow');
 const mailbox = require('./mailbox');
 const poller = require('./poller');
+const graphMailbox = require('./graphMailbox');
 
 const LABEL = { 'new-email': 'new-email', 'catch-up': 'catch-up-check', backup: 'backup-check' };
 
@@ -125,14 +126,18 @@ function start(env = process.env) {
   const ap = mailbox.apConfig();
   if (!ap || !ap.auto) return false;
   if (!mailbox.isConfigured(ap)) {
-    console.log(`   ⚠️  AP mailbox ${ap.user || ''} set to read automatically but has no app password — not started`);
+    console.log(`   ⚠️  AP mailbox ${ap.user || ''} set to read automatically but has no ${ap.provider === 'graph' ? 'Microsoft app credentials' : 'app password'} — not started`);
     return false;
   }
   state.account = ap;
   state.active = true;
   poller.setApHandled(true); // the general timer no longer reads the AP mailbox
   state.watch = watchEnabled(env);
-  if (state.watch) {
+  if (state.watch && ap.provider === 'graph') {
+    const client = graphMailbox.createClient();
+    state.watcher = graphMailbox.createGraphWatcher({ onNewMail: (reason) => { trigger(reason); }, peek: () => client.latestId() });
+    state.watcher.start();
+  } else if (state.watch) {
     state.watcher = createWatcher({
       account: ap,
       onNewMail: (reason) => { trigger(reason); },

@@ -10,7 +10,7 @@ export async function getInvoicesByShipment() {
   const rows = Array.isArray(data?.invoices) ? data.invoices : Array.isArray(data) ? data : [];
   const map = new Map();
   for (const inv of rows.map(mapDbInvoice)) {
-    if (inv.status === "Cancelled") continue;
+    if (inv.status === "Cancelled" || inv.status === "Superseded") continue;
     for (const id of inv.shipIds.length ? inv.shipIds : [inv.shipId]) {
       if (!id) continue;
       if (!map.has(id)) map.set(id, []);
@@ -57,7 +57,7 @@ export function invoiceStatusOf(invoices) {
 export async function getShipmentInvoices(shipmentId) {
   const data = await InvoicesApi.list({ shipment: shipmentId });
   const rows = Array.isArray(data?.invoices) ? data.invoices : Array.isArray(data) ? data : [];
-  return rows.map(mapDbInvoice).filter((i) => i.status !== "Cancelled");
+  return rows.map(mapDbInvoice).filter((i) => i.status !== "Cancelled" && i.status !== "Superseded");
 }
 
 const money = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

@@ -74,7 +74,10 @@ const navStructure = [
 
 export default function Layout({ data }) {
   const { user, logout } = useAuth();
-  const initials = (user?.email || "").slice(0, 2).toUpperCase();
+  const displayName = (user?.name && user.name !== user?.email) ? user.name : (user?.email || "");
+  const initials = (displayName.includes(" ")
+    ? displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("")
+    : displayName.slice(0, 2)).toUpperCase();
 
   // REQ-04/08: filter the navStructure by the user's currently active role.
   // Admin sees everything; planner sees planning/execution + rate-management;
@@ -165,8 +168,11 @@ export default function Layout({ data }) {
           <div className="user-chip">
             <div className="user-avatar">{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "12.5px", fontWeight: 500, color: "#fff" }}>{user?.email || "Not signed in"}</div>
-              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)" }}>{(user?.activeRole || user?.role || "admin").toUpperCase()} · {BRAND.short}</div>
+              <div title={user?.email || ""} style={{ fontSize: "12.5px", fontWeight: 500, color: "#fff", textTransform: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName || "Not signed in"}</div>
+              {user?.email && displayName !== user.email && (
+                <div title={user.email} style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)", textTransform: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+              )}
+              <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(user?.activeRole || user?.role || "admin").toUpperCase()} · {BRAND.short}</div>
             </div>
           </div>
           <button onClick={logout} className="sidebar-logout-btn">

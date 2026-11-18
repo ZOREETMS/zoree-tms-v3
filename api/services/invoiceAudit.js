@@ -19,6 +19,30 @@
 // ═══════════════════════════════════════════════════════════════════
 
 const db = require('./supabase');
+
+// ── One payable invoice per carrier + invoice number (migration 058) ──
+// The database refuses a second Approved/Paid row for the same domain,
+// carrier and normalized invoice number (uq_invoices_one_payable). Turn that
+// refusal into a plain 409 instead of a raw DB error.
+function onePayableError(e, label) {
+  if (e && /uq_invoices_one_payable/.test(String(e.message || ''))) {
+    const x = new Error(`${label}: another invoice from this carrier with this invoice number is already approved or paid. Pay once — handle the difference as a credit or adjustment.`);
+    x.status = 409; x.code = 'ONE_PAYABLE'; return x;
+  }
+  return e;
+}
+async function updateInvoiceRow(id, patch, label) {
+  try { return await db.dbUpdate('invoices', id, patch); } catch (e) { throw onePayableError(e, label || id); }
+}
+// A Superseded invoice was replaced by a corrected revision. It keeps its
+// history but is never decided, edited or paid again.
+function assertNotSuperseded(before) {
+  if (before && before.status === 'Superseded') {
+    const by = before.metadata && before.metadata.superseded_by;
+    const e = new Error(`${before.invoice_number || before.id} is Superseded${by && by.number ? ` by the corrected revision ${by.number} (${by.id})` : ''}. It can't be approved, edited or paid — act on the latest revision.`);
+    e.status = 409; throw e;
+  }
+}
 const history = require('./changeHistory');
 
 // System-wide defaults — used when the carrier row has no tolerance set.
@@ -341,7 +365,8 @@ async function submitInvoice({
     updated_at: nowIso,
   };
 
-  const inserted = await db.dbUpsert('invoices', row, 'id');
+  let inserted;
+  try { inserted = await db.dbUpsert('invoices', row, 'id'); } catch (e) { throw onePayableError(e, invoiceNumber); }
 
   // 5. REQ-02: write a 'create' event for the invoice + a 'status' event
   //    for the decision so the history drawer shows the full story.
@@ -468,6 +493,7 @@ async function decideInvoice({ invoiceId, user }) {
   const beforeRows = await db.dbSelect('invoices', { filters: [['id', 'eq', invoiceId]], limit: 1 });
   const before = Array.isArray(beforeRows) && beforeRows.length ? beforeRows[0] : null;
   if (!before) { const e = new Error(`Invoice not found: ${invoiceId}`); e.status = 404; throw e; }
+  assertNotSuperseded(before);
 
   // Invoices read by the AP agent were already audited against the contract
   // rate, approved extras, duplicates and the sender. The tolerance-only
@@ -526,7 +552,7 @@ async function decideInvoice({ invoiceId, user }) {
     patch.sent_to_ap_by = user?.email || 'system';
   }
 
-  const updated = await db.dbUpdate('invoices', invoiceId, patch);
+  const updated = await updateInvoiceRow(invoiceId, patch, before.invoice_number || invoiceId);
 
   // REQ-02: history. Emit a status row on the invoice and mirror the
   // outcome on each linked shipment so the shipment history drawer
@@ -614,6 +640,7 @@ async function manualDecide({ invoiceId, decision, reason, user }) {
   if (before.status === 'Paid' && decision !== 'Paid') {
     const e = new Error(`${before.invoice_number || invoiceId} is Paid and closed. Its status can't change.`); e.status = 409; throw e;
   }
+  assertNotSuperseded(before);
 
   // A corrected copy (PDF intake) closes the dispute it answers. Check and
   // close the originals BEFORE approving the copy: if an original was paid
@@ -626,7 +653,7 @@ async function manualDecide({ invoiceId, decision, reason, user }) {
       const e = new Error(`The original ${paidOut.map((o) => `${o.invoice_number} (${o.status})`).join(', ')} is already approved — pay once. Reject this corrected copy instead.`);
       e.status = 409; throw e;
     }
-    for (const o of originals.filter((x) => x.status === 'Disputed')) {
+    for (const o of originals.filter((x) => x.status === 'Disputed' || x.status === 'On Hold')) {
       await manualDecide({ invoiceId: o.id, decision: 'Cancelled', user,
         reason: `Dispute closed: replaced by the corrected copy ${before.invoice_number || invoiceId} (${invoiceId}), approved by ${user?.email || 'AP'}.` });
     }
@@ -644,7 +671,7 @@ async function manualDecide({ invoiceId, decision, reason, user }) {
     patch.sent_to_ap_at = nowIso;
     patch.sent_to_ap_by = user?.email || 'admin';
   }
-  const updated = await db.dbUpdate('invoices', invoiceId, patch);
+  const updated = await updateInvoiceRow(invoiceId, patch, before.invoice_number || invoiceId);
 
   try {
     // REQ-20: mirror manual invoice decisions into shipment history too.
@@ -803,6 +830,7 @@ function sameValue(a, b) {
 function locked(message) { const e = new Error(message); e.status = 409; return e; }
 
 function assertEditAllowed(before, patch) {
+  assertNotSuperseded(before);
   const label = before.invoice_number || before.id;
   const to = 'status' in patch ? patch.status : before.status;
   if (before.status === 'Paid' && to !== 'Paid') throw locked(`${label} is Paid and closed. Its status can't change.`);
@@ -836,7 +864,7 @@ async function editInvoice({ invoiceId, patch: rawPatch, user }) {
   assertEditAllowed(before, patch);
 
   patch.updated_at = new Date().toISOString();
-  const updated = await db.dbUpdate('invoices', invoiceId, patch);
+  const updated = await updateInvoiceRow(invoiceId, patch, before.invoice_number || invoiceId);
 
   try {
     await history.recordFieldDiffs({
@@ -964,6 +992,40 @@ async function deleteInvoice({ invoiceId, reason, user }) {
   return { deleted: true, id: invoiceId, reason: finalReason };
 }
 
+// ── Supersede an original with its corrected revision (migration 058) ──
+// Only an open original (Disputed / On Hold / Pending) can be superseded;
+// one that was approved or paid meanwhile is left alone (pay once) and the
+// caller routes the revision to a person. The original keeps its lines,
+// audit result and history; only its status and a pointer change.
+const SUPERSEDABLE = new Set(['Disputed', 'On Hold', 'Pending']);
+async function supersedeInvoice({ originalId, revision, changes = '', user }) {
+  const rows = await db.dbSelect('invoices', { filters: [['id', 'eq', originalId]], limit: 1 });
+  const before = rows && rows[0];
+  if (!before) { const e = new Error(`Invoice not found: ${originalId}`); e.status = 404; throw e; }
+  if (!SUPERSEDABLE.has(before.status)) {
+    const e = new Error(`${before.invoice_number || originalId} is ${before.status}; only a disputed or held invoice can be superseded.`); e.status = 409; throw e;
+  }
+  const nowIso = new Date().toISOString();
+  const reason = `Superseded by corrected revision ${revision.invoice_number || revision.id} (${revision.id})${changes ? `: ${changes}` : ''}. Kept for history; not payable.`;
+  const updated = await db.dbUpdate('invoices', originalId, {
+    status: 'Superseded',
+    decision_reason: reason.slice(0, 1000),
+    decided_at: nowIso,
+    decided_by: user?.email || 'system',
+    updated_at: nowIso,
+    metadata: { ...(before.metadata || {}), superseded_by: { id: revision.id, number: revision.invoice_number, at: nowIso, previous_status: before.status, changes } },
+  });
+  try {
+    const sids = Array.isArray(before.shipment_ids) && before.shipment_ids.length ? before.shipment_ids : (before.shipment_id ? [before.shipment_id] : []);
+    await history.recordChangeBatch([
+      history.buildRow({ entityType: 'invoice', entityId: originalId, action: 'status', field: 'status', before: before.status, after: 'Superseded', user, metadata: { reason, supersededBy: revision.id } }),
+      ...sids.map((sid) => history.buildRow({ entityType: 'shipment', entityId: sid, action: 'invoice', field: 'status', before: before.status, after: 'Superseded', user,
+        metadata: { invoiceId: originalId, invoiceNumber: before.invoice_number, carrier: before.carrier, supersededBy: revision.id, decisionReason: reason } })),
+    ]);
+  } catch (_) { /* best-effort */ }
+  return updated;
+}
+
 // ── Mark an Approved invoice as sent to AP (idempotent) ─────────
 async function sendToAp({ invoiceId, user }) {
   if (!invoiceId) { const e = new Error('invoiceId is required'); e.status = 400; throw e; }
@@ -1006,8 +1068,9 @@ module.exports = {
   decideInvoice,
   manualDecide,
   sendToAp,
+  supersedeInvoice,
   editInvoice,
   deleteInvoice,     // REQ-192
   // Exposed for unit testing of the field mapper / alias coverage.
-  _internals: { buildInvoicePatch, EDIT_FIELD_MAP, EDIT_LEGACY_ALIASES, assertEditAllowed, sameValue },
+  _internals: { onePayableError, assertNotSuperseded, buildInvoicePatch, EDIT_FIELD_MAP, EDIT_LEGACY_ALIASES, assertEditAllowed, sameValue },
 };

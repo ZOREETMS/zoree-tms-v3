@@ -162,6 +162,19 @@ export const ApiKeysApi = {
   },
 };
 
+export const MicrosoftAuthApi = {
+  config() {
+    return api("/auth/microsoft/config");
+  },
+  session(accessToken, refreshToken) {
+    return api("/auth/microsoft/session", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ refresh_token: refreshToken || null }),
+    });
+  },
+};
+
 export const AuthApi = {
   login(email, password) {
     return api("/auth/login", {
@@ -768,6 +781,12 @@ export const EmailIntakeApi = {
 };
 
 // AI agents — /api/agents (api/routes/agents.js).
+// In-app chat assistant. The server holds the AI key; the browser never does.
+export const AssistantApi = {
+  status() { return api("/assistant/status"); },
+  chat(system, messages) { return api("/assistant/chat", { method: "POST", body: JSON.stringify({ system, messages }) }); },
+};
+
 export const AgentsApi = {
   catalog() { return api("/agents"); },
   runs(agent, limit = 15) { return api(`/agents/runs?agent=${encodeURIComponent(agent || "")}&limit=${limit}`); },

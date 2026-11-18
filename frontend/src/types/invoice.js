@@ -6,6 +6,8 @@
 // edit-modal status dropdown set it, and gives the table a distinct
 // red badge for rejected rows (Disputed is kept separate — disputes are
 // adjustments under review; rejections are final).
+// Superseded (migration 058) is set only by the server when a corrected
+// revision replaces an invoice; it has a badge but is not a choice in the edit form.
 export const INVOICE_STATUSES = ["Approved", "Pending", "Rejected", "Disputed", "On Hold", "Cancelled"];
 
 export const STATUS_BADGES = {
@@ -17,6 +19,7 @@ export const STATUS_BADGES = {
   Disputed:  { bg: "#fee2e2", color: "#7f1d1d", border: "#fca5a5", dot: "#dc2626" },
   "On Hold": { bg: "#fff7ed", color: "#7c2d12", border: "#fdba74", dot: "#ea580c" },
   Cancelled: { bg: "#f3f4f6", color: "#374151", border: "#d1d5db", dot: "#9ca3af" },
+  Superseded: { bg: "#ede9fe", color: "#4c1d95", border: "#c4b5fd", dot: "#7c3aed" },
 };
 
 export const PAYMENT_TERMS = ["NET15", "NET30", "NET45", "NET60"];

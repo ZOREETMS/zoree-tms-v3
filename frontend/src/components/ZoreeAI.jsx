@@ -73,16 +73,13 @@ function actionLabel(a) {
   }
 }
 
-const ENV_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
-
 export default function ZoreeAI({ data }) {
   const [open, setOpen] = useState(false);
-  const [apiKey, setApiKey] = useState(ENV_KEY);
-  const [keyInput, setKeyInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [inputVal, setInputVal] = useState("");
-  const [connected, setConnected] = useState(!!ENV_KEY);
+  // The AI key lives on the API server; the chat is ready whenever the user is signed in.
+  const connected = true;
   const [initialized, setInitialized] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const chatHistoryRef = useRef([]);
@@ -141,22 +138,6 @@ export default function ZoreeAI({ data }) {
       text: "Hi! 👋 I'm " + BRAND.assistant + " — your TMS copilot.\n\nJust tell me what to do and I'll execute it:\n• **\"Plan ORD-2026-XXXXX\"** → I pick the best carrier, price it, create the shipment\n• **Shipment summary** — overview of all in-transit & exceptions\n• **Carrier performance** — OTD rates and shipment counts\n• Assign / reassign carriers, hold or cancel orders, flag exceptions\n\nNo steps. No options. Just results.",
     };
     setMessages([welcome]);
-    chatHistoryRef.current = [];
-  }
-
-  function handleSaveKey() {
-    const key = keyInput.trim();
-    if (!key || key.length < 20) return;
-    setApiKey(key);
-    setKeyInput("");
-    setConnected(true);
-    initChat();
-  }
-
-  function handleResetKey() {
-    setApiKey("");
-    setConnected(false);
-    setMessages([]);
     chatHistoryRef.current = [];
   }
 
@@ -224,7 +205,6 @@ export default function ZoreeAI({ data }) {
 
     try {
       const result = await sendMessage({
-        apiKey,
         userText,
         history: chatHistoryRef.current,
         data,
@@ -233,7 +213,7 @@ export default function ZoreeAI({ data }) {
       if (result.kind === "error") {
         setMessages((prev) => [
           ...prev,
-          { role: "ai", text: `⚠️ API error: ${result.message}\n\nIf this says "invalid x-api-key", click "change key" in the header and re-enter your key.` },
+          { role: "ai", text: `⚠️ ${result.message}` },
         ]);
         return;
       }
@@ -344,19 +324,7 @@ export default function ZoreeAI({ data }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>{BRAND.assistant}</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)" }}>
-                {connected ? (
-                  <>
-                    🟢 Connected&nbsp;
-                    <span
-                      onClick={handleResetKey}
-                      style={{ cursor: "pointer", textDecoration: "underline", opacity: 0.7 }}
-                    >
-                      change key
-                    </span>
-                  </>
-                ) : (
-                  "Ask me anything about your TMS"
-                )}
+                🟢 Connected
               </div>
             </div>
             <button className="zoree-ai-close" onClick={() => setOpen(false)}>
@@ -364,39 +332,6 @@ export default function ZoreeAI({ data }) {
             </button>
           </div>
 
-          {/* API Key Screen */}
-          {!connected && (
-            <div className="zoree-ai-apikey-screen">
-              <div style={{ fontSize: 32 }}>🔑</div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#1e2d6b", textAlign: "center" }}>
-                Connect {BRAND.assistant}
-              </div>
-              <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", lineHeight: 1.6 }}>
-                Enter your Anthropic API key to enable the AI assistant. Your key is stored only in
-                memory and never sent anywhere except the Anthropic API.
-              </div>
-              <input
-                type="password"
-                placeholder="sk-ant-api03-..."
-                value={keyInput}
-                onChange={(e) => setKeyInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveKey()}
-                className="zoree-ai-key-input"
-                autoFocus
-              />
-              <button onClick={handleSaveKey} className="zoree-ai-connect-btn">
-                Connect →
-              </button>
-              <a
-                href="https://console.anthropic.com/settings/keys"
-                target="_blank"
-                rel="noreferrer"
-                style={{ fontSize: 11, color: "#3b82f6", textDecoration: "none" }}
-              >
-                Get an API key at console.anthropic.com ↗
-              </a>
-            </div>
-          )}
 
           {/* Messages Area */}
           {connected && (

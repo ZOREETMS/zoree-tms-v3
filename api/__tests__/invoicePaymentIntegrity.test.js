@@ -69,20 +69,67 @@ test('once sent to AP, money fields stay as sent even if moved On Hold', () => {
   assert.doesNotThrow(() => audit.assertEditAllowed(sent, { status: 'On Hold', notes: 'checking with carrier' }));
 });
 
-test('a corrected copy of a disputed invoice is always held for AP, even when clean', async () => {
+test('a clean corrected revision is Ready to post; a revision that still mismatches is held', async () => {
   const calls = [];
   const invoiceAuditMod = require('../services/invoiceAudit');
-  const orig = invoiceAuditMod.manualDecide;
+  const origDecide = invoiceAuditMod.manualDecide;
+  const origSend = invoiceAuditMod.sendToAp;
+  invoiceAuditMod.manualDecide = async (a) => { calls.push(['decide', a]); return {}; };
+  invoiceAuditMod.sendToAp = async (a) => { calls.push(['send', a]); return {}; };
+  const revisionOf = { id: 'INV-1', invoice_number: 'GF-1022', status: 'Disputed', changes: 'total $1561.60 → $1439.60' };
+  try {
+    const ok = await intake.settle({
+      invoice: { id: 'INV-2', invoice_number: 'GF-1022', invoiced_amount: 1439.6 },
+      decision: { status: 'Approved' }, audit: { audit: { verdict: 'approve', issues: [] } }, user: {},
+      policy: { shadowMode: false }, revisionOf,
+    });
+    assert.equal(ok.invoiceStatus, 'Approved');
+    assert.equal(ok.sentToAp, true);
+    assert.match(ok.summary, /Corrected revision of GF-1022 \(was Disputed, now Superseded/);
+    assert.match(ok.summary, /Ready to post/);
+    assert.equal(calls[0][0], 'send');
+
+    calls.length = 0;
+    const bad = await intake.settle({
+      invoice: { id: 'INV-3', invoice_number: 'GF-1022', invoiced_amount: 1500 },
+      decision: { status: 'Rejected', reason: 'Over contract by $60.40.' }, audit: { audit: { verdict: 'dispute', issues: [{ detail: 'Detention not approved.' }] } }, user: {},
+      policy: { shadowMode: false }, revisionOf,
+    });
+    assert.equal(bad.invoiceStatus, 'On Hold');
+    assert.match(bad.summary, /Needs AP review: .*Detention not approved/);
+    assert.equal(calls[0][1].decision, 'On Hold');
+    assert.match(calls[0][1].reason, /Corrected revision of GF-1022/);
+  } finally { invoiceAuditMod.manualDecide = origDecide; invoiceAuditMod.sendToAp = origSend; }
+});
+
+test('a revision that would be a second payable invoice is held, not sent', async () => {
+  const invoiceAuditMod = require('../services/invoiceAudit');
+  const origDecide = invoiceAuditMod.manualDecide;
+  const origSend = invoiceAuditMod.sendToAp;
+  const calls = [];
   invoiceAuditMod.manualDecide = async (a) => { calls.push(a); return {}; };
+  invoiceAuditMod.sendToAp = async () => { const e = new Error('GF-1022: another invoice from this carrier with this invoice number is already approved or paid.'); e.code = 'ONE_PAYABLE'; throw e; };
   try {
     const out = await intake.settle({
-      invoice: { id: 'INV-2', invoice_number: 'GF-1022', invoiced_amount: 1240 },
-      decision: { status: 'Approved' }, audit: { audit: { verdict: 'approve', issues: [] } }, user: {},
-      policy: { shadowMode: false }, replaces: [{ id: 'INV-1', invoice_number: 'GF-1022', status: 'Disputed' }],
+      invoice: { id: 'INV-2', invoice_number: 'GF-1022', invoiced_amount: 1439.6 },
+      decision: { status: 'Approved' }, audit: { audit: { verdict: 'approve', issues: [] } }, user: {}, policy: { shadowMode: false },
     });
     assert.equal(out.invoiceStatus, 'On Hold');
-    assert.equal(out.sentToAp, false);
-    assert.match(out.summary, /Corrected copy of disputed GF-1022/);
-    assert.equal(calls[0].decision, 'On Hold');
-  } finally { invoiceAuditMod.manualDecide = orig; }
+    assert.match(out.summary, /already approved or paid/);
+  } finally { invoiceAuditMod.manualDecide = origDecide; invoiceAuditMod.sendToAp = origSend; }
+});
+
+test('a Superseded invoice cannot be edited, decided or paid', () => {
+  const sup = { ...approved, status: 'Superseded', metadata: { superseded_by: { id: 'INV-9', number: 'GF-1001' } } };
+  refusedWith(() => audit.assertEditAllowed(sup, { notes: 'x' }), /Superseded by the corrected revision GF-1001/);
+  refusedWith(() => audit.assertEditAllowed(sup, { status: 'Paid' }), /Superseded/);
+  refusedWith(() => audit.assertNotSuperseded(sup), /act on the latest revision/);
+});
+
+test('the one-payable DB refusal becomes a plain 409', () => {
+  const e = audit.onePayableError(new Error('[DB] invoices update failed: duplicate key value violates unique constraint "uq_invoices_one_payable"'), 'GF-1001');
+  assert.equal(e.status, 409);
+  assert.equal(e.code, 'ONE_PAYABLE');
+  const other = new Error('boom');
+  assert.equal(audit.onePayableError(other, 'x'), other);
 });

@@ -83,6 +83,7 @@ const { assertPlannedHasShipment, countOrders: countOrdersService } = require('.
 // services/orderLines.js for the full rationale.
 const { buildLines: buildOrderLines } = require('./services/orderLines');
 const userMgmt = require('./services/userManagement');
+const microsoftSso = require('./services/auth/microsoftSso');
 const createUsersRouter = require('./routes/users');
 const createInvoicesRouter = require('./routes/invoices');
 const createAccessorialApprovalsRouter = require('./routes/accessorialApprovals');
@@ -663,6 +664,54 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// ── Microsoft (Entra ID) sign-in ───────────────────────────────────
+// Supabase's Azure provider signs the person in; these two routes tell
+// the login page whether to show the button, and turn a fresh Microsoft
+// session into TMS roles + domain (services/auth/microsoftSso.js).
+app.get('/api/auth/microsoft/config', (_req, res) => {
+  const c = microsoftSso.config();
+  res.json({ enabled: c.enabled, label: c.label, tenantId: c.enabled ? c.tenantId : null });
+});
+
+app.post('/api/auth/microsoft/session', async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Missing Authorization header' });
+    const token = auth.slice(7);
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + token } });
+    if (!r.ok) return res.status(401).json({ error: 'Microsoft sign-in expired. Please sign in again.' });
+    const user = await r.json();
+    const cfg = microsoftSso.config();
+    const decision = microsoftSso.decide(user, cfg);
+    if (!decision.ok) {
+      if (decision.status === 403) await microsoftSso.denyAccess({ user, db: require('./services/supabase') }).catch(() => {});
+      _invalidateProfileCache(user.id);
+      return res.status(decision.status).json({ error: decision.error });
+    }
+    await microsoftSso.grantAccess({ user, decision, cfg, db: require('./services/supabase') });
+    _invalidateProfileCache(user.id);
+    authUserCache.invalidate(token);
+    require('./services/domains/domainAccess').clearCache();
+    res.json({
+      token,
+      refresh_token: (req.body && req.body.refresh_token) || null,
+      user: {
+        id: user.id,
+        email: decision.email || user.email,
+        name: decision.name,
+        role: decision.activeRole,
+        roles: decision.roles,
+        activeRole: decision.activeRole,
+        disabled: false,
+        tenantId: 'zoree-default',
+        signIn: 'microsoft',
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── POST /api/auth/refresh ─────────────────────────────────────────
 // Mobile-bug 59 fix: clients that get a 401 (Supabase access_token
 // expired after ~1h) call this with their refresh_token instead of
@@ -818,6 +867,8 @@ app.use('/api/email-intake', createEmailIntakeRouter({ verifyToken, getUserRole,
 // Quote, carrier sourcing, track & trace, freight audit, POD. Agents
 // only propose; approving an action runs the owning service.
 app.use('/api/agents', createAgentsRouter({ verifyToken, getUserRole, canWriteTable, getTenantId }));
+// In-app chat assistant: the server calls Claude with its own key (no key in the browser).
+app.use('/api/assistant', require('./routes/assistantChat').createAssistantRouter({ verifyToken }));
 
 // ── MW Queue Admin (REQ-31) ───────────────────────────────────────
 // GET  /api/mw-queue/status     — worker state
